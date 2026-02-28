@@ -41,6 +41,18 @@ func (h *TeamHandler) Routes() chi.Router {
 	return r
 }
 
+// Create godoc
+// @Summary Create team
+// @Description Create a new team within an organization
+// @Tags Teams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param body body swaggerCreateTeamParams true "Team data"
+// @Success 201 {object} swaggerTeam
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams [post]
 func (h *TeamHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var params service.CreateTeamParams
 	if err := parseBody(r, &params); err != nil {
@@ -57,6 +69,17 @@ func (h *TeamHandler) Create(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, team)
 }
 
+// Get godoc
+// @Summary Get team
+// @Description Retrieve a team by ID
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Success 200 {object} swaggerTeam
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId} [get]
 func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "teamId")
 	if err != nil {
@@ -71,6 +94,15 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, team)
 }
 
+// List godoc
+// @Summary List teams
+// @Description List all teams in an organization
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Success 200 {array} swaggerTeam
+// @Router /orgs/{orgId}/teams [get]
 func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
 	teams, err := h.teamSvc.ListByOrg(r.Context(), orgID)
@@ -84,6 +116,20 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, teams)
 }
 
+// Update godoc
+// @Summary Update team
+// @Description Update an existing team
+// @Tags Teams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param body body swaggerUpdateTeamParams true "Updated team data"
+// @Success 200 {object} swaggerTeam
+// @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId} [put]
 func (h *TeamHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "teamId")
 	if err != nil {
@@ -103,6 +149,17 @@ func (h *TeamHandler) Update(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, team)
 }
 
+// Delete godoc
+// @Summary Delete team
+// @Description Delete a team by ID
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId} [delete]
 func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "teamId")
 	if err != nil {
@@ -116,6 +173,18 @@ func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListMembers godoc
+// @Summary List team members
+// @Description List all members of a team with pagination
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param limit query int false "Limit" default(20)
+// @Param offset query int false "Offset" default(0)
+// @Success 200 {object} ListResponse
+// @Router /orgs/{orgId}/teams/{teamId}/members [get]
 func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	teamID, err := uuidParam(r, "teamId")
 	if err != nil {
@@ -135,6 +204,20 @@ type addTeamMemberRequest struct {
 	Role   string `json:"role" validate:"required"`
 }
 
+// AddMember godoc
+// @Summary Add team member
+// @Description Add a user to a team
+// @Tags Teams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param body body addTeamMemberRequest true "Member details"
+// @Success 201 {object} swaggerTeamMember
+// @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId}/members [post]
 func (h *TeamHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	teamID, err := uuidParam(r, "teamId")
 	if err != nil {
@@ -158,6 +241,18 @@ func (h *TeamHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// RemoveMember godoc
+// @Summary Remove team member
+// @Description Remove a member from a team
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param userId path string true "User ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId}/members/{userId} [delete]
 func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	teamID, err := uuidParam(r, "teamId")
 	if err != nil {

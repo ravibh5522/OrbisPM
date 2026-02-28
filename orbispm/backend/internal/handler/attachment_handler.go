@@ -39,6 +39,20 @@ type createAttachmentRequest struct {
 	TaskID   *uuid.UUID `json:"task_id,omitempty"`
 }
 
+// Create godoc
+// @Summary Create attachment
+// @Description Upload a file attachment to a task (returns presigned upload URL)
+// @Tags Attachments
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param body body createAttachmentRequest true "Attachment metadata"
+// @Success 201 {object} map[string]interface{} "attachment object + upload_url"
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments [post]
 func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req createAttachmentRequest
 	if err := parseBody(r, &req); err != nil {
@@ -69,6 +83,17 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ListByTask godoc
+// @Summary List task attachments
+// @Description List all attachments for a task
+// @Tags Attachments
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Success 200 {array} swaggerAttachment
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments [get]
 func (h *AttachmentHandler) ListByTask(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
@@ -84,6 +109,19 @@ func (h *AttachmentHandler) ListByTask(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, atts)
 }
 
+// Download godoc
+// @Summary Download attachment
+// @Description Get a presigned download URL for an attachment
+// @Tags Attachments
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param attachmentId path string true "Attachment ID" format(uuid)
+// @Success 200 {object} map[string]string "download_url"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}/download [get]
 func (h *AttachmentHandler) Download(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "attachmentId")
 	if err != nil {
@@ -103,6 +141,19 @@ func (h *AttachmentHandler) Download(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Delete godoc
+// @Summary Delete attachment
+// @Description Delete an attachment from a task
+// @Tags Attachments
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param attachmentId path string true "Attachment ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId} [delete]
 func (h *AttachmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "attachmentId")
 	if err != nil {

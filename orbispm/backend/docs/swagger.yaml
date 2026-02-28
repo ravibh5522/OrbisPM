@@ -1,0 +1,4107 @@
+basePath: /api/v1
+definitions:
+  domain.Task:
+    description: Task entity
+    properties:
+      actual_hours:
+        type: number
+      assignee_id:
+        type: string
+      created_at:
+        type: string
+      depth:
+        type: integer
+      description:
+        type: string
+      due_date:
+        type: string
+      estimated_hours:
+        type: number
+      id:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      metadata:
+        additionalProperties: {}
+        type: object
+      org_id:
+        type: string
+      parent_task_id:
+        type: string
+      position:
+        type: integer
+      priority:
+        type: string
+      project_id:
+        type: string
+      reporter_id:
+        type: string
+      review_status:
+        type: string
+      start_date:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  domain.TaskTree:
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/domain.TaskTree'
+        type: array
+      task:
+        $ref: '#/definitions/domain.Task'
+    type: object
+  handler.ErrorResponse:
+    properties:
+      detail:
+        type: string
+      message:
+        type: string
+    type: object
+  handler.ListResponse:
+    properties:
+      data: {}
+      limit:
+        type: integer
+      offset:
+        type: integer
+      total:
+        type: integer
+    type: object
+  handler.addDependencyRequest:
+    properties:
+      depends_on_id:
+        type: string
+      type:
+        enum:
+        - blocked_by
+        - blocks
+        - relates_to
+        type: string
+    required:
+    - depends_on_id
+    - type
+    type: object
+  handler.addProjectMemberRequest:
+    properties:
+      role:
+        type: string
+      user_id:
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
+  handler.addTeamMemberRequest:
+    properties:
+      role:
+        type: string
+      user_id:
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
+  handler.createAttachmentRequest:
+    properties:
+      file_size:
+        type: integer
+      filename:
+        type: string
+      mime_type:
+        type: string
+      task_id:
+        type: string
+    required:
+    - file_size
+    - filename
+    - mime_type
+    type: object
+  handler.inviteMemberRequest:
+    properties:
+      role:
+        type: string
+      user_id:
+        type: string
+    required:
+    - role
+    - user_id
+    type: object
+  handler.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handler.refreshRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  handler.signupRequest:
+    properties:
+      data:
+        additionalProperties: {}
+        type: object
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        minLength: 8
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  handler.swaggerAPIKey:
+    description: API key
+    properties:
+      created_at:
+        type: string
+      expires_at:
+        type: string
+      id:
+        type: string
+      key_prefix:
+        type: string
+      last_used_at:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: string
+      scopes:
+        items:
+          type: string
+        type: array
+      user_id:
+        type: string
+    type: object
+  handler.swaggerAttachment:
+    description: File attachment
+    properties:
+      comment_id:
+        type: string
+      created_at:
+        type: string
+      file_size:
+        type: integer
+      filename:
+        type: string
+      id:
+        type: string
+      mime_type:
+        type: string
+      org_id:
+        type: string
+      task_id:
+        type: string
+      uploaded_by:
+        type: string
+    type: object
+  handler.swaggerBillingPlan:
+    description: Billing plan
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      limits:
+        additionalProperties: {}
+        type: object
+      name:
+        type: string
+      stripe_price_id:
+        type: string
+    type: object
+  handler.swaggerChecklist:
+    description: Checklist item
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_checked:
+        type: boolean
+      org_id:
+        type: string
+      position:
+        type: integer
+      task_id:
+        type: string
+      title:
+        type: string
+    type: object
+  handler.swaggerComment:
+    description: Comment on a task
+    properties:
+      body:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      org_id:
+        type: string
+      parent_id:
+        type: string
+      task_id:
+        type: string
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.swaggerCreateAPIKeyParams:
+    properties:
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      orgID:
+        type: string
+      scopes:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      userID:
+        type: string
+    required:
+    - name
+    - scopes
+    type: object
+  handler.swaggerCreateChecklistParams:
+    properties:
+      position:
+        type: integer
+      title:
+        maxLength: 500
+        minLength: 1
+        type: string
+    required:
+    - title
+    type: object
+  handler.swaggerCreateCommentParams:
+    properties:
+      body:
+        minLength: 1
+        type: string
+      parent_id:
+        type: string
+    required:
+    - body
+    type: object
+  handler.swaggerCreateCustomRoleParams:
+    properties:
+      description:
+        type: string
+      name:
+        maxLength: 50
+        minLength: 2
+        type: string
+      orgID:
+        type: string
+      permissions:
+        additionalProperties: {}
+        type: object
+    required:
+    - name
+    - permissions
+    type: object
+  handler.swaggerCreateOrgParams:
+    properties:
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      slug:
+        maxLength: 50
+        minLength: 2
+        type: string
+      userID:
+        type: string
+    required:
+    - name
+    - slug
+    type: object
+  handler.swaggerCreateProjectParams:
+    properties:
+      description:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      team_id:
+        type: string
+    required:
+    - name
+    - team_id
+    type: object
+  handler.swaggerCreateRuleParams:
+    properties:
+      is_required:
+        type: boolean
+      rule_config:
+        additionalProperties: {}
+        type: object
+      rule_type:
+        enum:
+        - all_checklists_done
+        - all_subtasks_complete
+        - reviewer_approved
+        - ai_approved
+        - custom
+        type: string
+    required:
+    - rule_type
+    type: object
+  handler.swaggerCreateTaskParams:
+    properties:
+      assignee_id:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      parent_task_id:
+        type: string
+      priority:
+        enum:
+        - critical
+        - high
+        - medium
+        - low
+        type: string
+      reporter_id:
+        type: string
+      start_date:
+        type: string
+      title:
+        maxLength: 500
+        minLength: 1
+        type: string
+    required:
+    - title
+    type: object
+  handler.swaggerCreateTeamParams:
+    properties:
+      description:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    required:
+    - name
+    type: object
+  handler.swaggerCreateTemplateParams:
+    properties:
+      description:
+        type: string
+      is_shared:
+        type: boolean
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      orgID:
+        type: string
+      structure:
+        additionalProperties: {}
+        type: object
+      userID:
+        type: string
+    required:
+    - name
+    - structure
+    type: object
+  handler.swaggerCreateWebhookParams:
+    properties:
+      events:
+        items:
+          type: string
+        minItems: 1
+        type: array
+      orgID:
+        type: string
+      url:
+        type: string
+    required:
+    - events
+    - url
+    type: object
+  handler.swaggerCustomRole:
+    description: Custom RBAC role
+    properties:
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: string
+      permissions:
+        additionalProperties: {}
+        type: object
+    type: object
+  handler.swaggerImportJob:
+    description: CSV import job
+    properties:
+      column_mapping:
+        additionalProperties: {}
+        type: object
+      completed_at:
+        type: string
+      created_at:
+        type: string
+      error_rows:
+        type: integer
+      errors:
+        items:
+          additionalProperties: {}
+          type: object
+        type: array
+      file_name:
+        type: string
+      id:
+        type: string
+      org_id:
+        type: string
+      processed_rows:
+        type: integer
+      project_id:
+        type: string
+      result:
+        additionalProperties: {}
+        type: object
+      status:
+        type: string
+      total_rows:
+        type: integer
+      user_id:
+        type: string
+    type: object
+  handler.swaggerNotificationPreference:
+    description: Notification preference setting
+    properties:
+      channel:
+        type: string
+      enabled:
+        type: boolean
+      event_type:
+        type: string
+      id:
+        type: string
+      org_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.swaggerOrg:
+    description: Organization entity
+    properties:
+      billing_customer_id:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      logo_url:
+        type: string
+      name:
+        type: string
+      plan:
+        type: string
+      settings:
+        additionalProperties: {}
+        type: object
+      slug:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handler.swaggerOrgMember:
+    description: Organization member with role
+    properties:
+      joined_at:
+        type: string
+      org_id:
+        type: string
+      role:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.swaggerOrgSubscription:
+    description: Organization subscription
+    properties:
+      created_at:
+        type: string
+      current_period_end:
+        type: string
+      current_period_start:
+        type: string
+      id:
+        type: string
+      org_id:
+        type: string
+      plan_id:
+        type: string
+      status:
+        type: string
+      stripe_sub_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handler.swaggerProject:
+    description: Project entity
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: string
+      settings:
+        additionalProperties: {}
+        type: object
+      status:
+        type: string
+      team_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handler.swaggerProjectMember:
+    description: Project member
+    properties:
+      joined_at:
+        type: string
+      project_id:
+        type: string
+      role:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.swaggerTask:
+    description: Task entity
+    properties:
+      actual_hours:
+        type: number
+      assignee_id:
+        type: string
+      created_at:
+        type: string
+      depth:
+        type: integer
+      description:
+        type: string
+      due_date:
+        type: string
+      estimated_hours:
+        type: number
+      id:
+        type: string
+      labels:
+        items:
+          type: string
+        type: array
+      metadata:
+        additionalProperties: {}
+        type: object
+      org_id:
+        type: string
+      parent_task_id:
+        type: string
+      position:
+        type: integer
+      priority:
+        type: string
+      project_id:
+        type: string
+      reporter_id:
+        type: string
+      review_status:
+        type: string
+      start_date:
+        type: string
+      status:
+        type: string
+      title:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handler.swaggerTaskDependency:
+    description: Task dependency relationship
+    properties:
+      depends_on_id:
+        type: string
+      task_id:
+        type: string
+      type:
+        type: string
+    type: object
+  handler.swaggerTaskRule:
+    description: Automation rule for a task
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_required:
+        type: boolean
+      org_id:
+        type: string
+      rule_config:
+        additionalProperties: {}
+        type: object
+      rule_type:
+        type: string
+      task_id:
+        type: string
+    type: object
+  handler.swaggerTaskTemplate:
+    description: Reusable task template
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_shared:
+        type: boolean
+      name:
+        type: string
+      org_id:
+        type: string
+      structure:
+        additionalProperties: {}
+        type: object
+      updated_at:
+        type: string
+    type: object
+  handler.swaggerTaskTree:
+    description: Task with subtask tree
+    properties:
+      children:
+        items:
+          $ref: '#/definitions/domain.TaskTree'
+        type: array
+      task:
+        $ref: '#/definitions/domain.Task'
+    type: object
+  handler.swaggerTaskWatcher:
+    description: Task watcher
+    properties:
+      task_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.swaggerTeam:
+    description: Team entity
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+      org_id:
+        type: string
+      updated_at:
+        type: string
+    type: object
+  handler.swaggerTeamMember:
+    description: Team member
+    properties:
+      joined_at:
+        type: string
+      role:
+        type: string
+      team_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.swaggerUpdateChecklistParams:
+    properties:
+      is_checked:
+        type: boolean
+      position:
+        type: integer
+      title:
+        maxLength: 500
+        minLength: 1
+        type: string
+    type: object
+  handler.swaggerUpdateCustomRoleParams:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      permissions:
+        additionalProperties: {}
+        type: object
+    type: object
+  handler.swaggerUpdateOrgParams:
+    properties:
+      logo_url:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      slug:
+        maxLength: 50
+        minLength: 2
+        type: string
+    type: object
+  handler.swaggerUpdateProjectParams:
+    properties:
+      description:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+      status:
+        enum:
+        - active
+        - archived
+        - completed
+        type: string
+    type: object
+  handler.swaggerUpdateTaskParams:
+    properties:
+      actual_hours:
+        type: number
+      assignee_id:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      estimated_hours:
+        type: number
+      labels:
+        items:
+          type: string
+        type: array
+      priority:
+        enum:
+        - critical
+        - high
+        - medium
+        - low
+        type: string
+      start_date:
+        type: string
+      status:
+        enum:
+        - todo
+        - in_progress
+        - done
+        - blocked
+        type: string
+      title:
+        maxLength: 500
+        minLength: 1
+        type: string
+    type: object
+  handler.swaggerUpdateTeamParams:
+    properties:
+      description:
+        type: string
+      name:
+        maxLength: 100
+        minLength: 2
+        type: string
+    type: object
+  handler.swaggerUpdateTemplateParams:
+    properties:
+      description:
+        type: string
+      is_shared:
+        type: boolean
+      name:
+        type: string
+      structure:
+        additionalProperties: {}
+        type: object
+    type: object
+  handler.swaggerUpdateWebhookParams:
+    properties:
+      events:
+        items:
+          type: string
+        type: array
+      is_active:
+        type: boolean
+      url:
+        type: string
+    type: object
+  handler.swaggerUpsertNotifPrefParams:
+    type: object
+  handler.swaggerWebhook:
+    description: Webhook configuration
+    properties:
+      created_at:
+        type: string
+      events:
+        items:
+          type: string
+        type: array
+      id:
+        type: string
+      is_active:
+        type: boolean
+      org_id:
+        type: string
+      secret:
+        type: string
+      url:
+        type: string
+    type: object
+  handler.updateRoleRequest:
+    properties:
+      role:
+        type: string
+    required:
+    - role
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@orbispm.dev
+    name: OrbisPM Support
+    url: https://orbispm.dev/support
+  description: OrbisPM — AI-native project management platform API.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  termsOfService: https://orbispm.dev/terms
+  title: OrbisPM API
+  version: "1.0"
+paths:
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate a user and receive tokens
+      parameters:
+      - description: Login credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: access_token, refresh_token
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: User login
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      description: Invalidate the current session
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: User logout
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchange a refresh token for a new access token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.refreshRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: access_token, refresh_token
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Refresh access token
+      tags:
+      - Auth
+  /auth/signup:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account via GoTrue
+      parameters:
+      - description: Signup credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.signupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: access_token, refresh_token, user
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      summary: Register a new user
+      tags:
+      - Auth
+  /auth/user:
+    get:
+      description: Retrieve the authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get current user
+      tags:
+      - Auth
+  /health:
+    get:
+      description: Returns basic health status
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - Health
+  /health/ready:
+    get:
+      description: Checks database and Redis connectivity
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Readiness check
+      tags:
+      - Health
+  /notifications:
+    get:
+      description: List notifications for the authenticated user
+      parameters:
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListResponse'
+      security:
+      - BearerAuth: []
+      summary: List notifications
+      tags:
+      - Notifications
+  /notifications/{notificationId}/read:
+    post:
+      description: Mark a single notification as read
+      parameters:
+      - description: Notification ID
+        format: uuid
+        in: path
+        name: notificationId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark notification as read
+      tags:
+      - Notifications
+  /notifications/read-all:
+    post:
+      description: Mark all of the user's notifications as read
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Mark all notifications as read
+      tags:
+      - Notifications
+  /orgs:
+    get:
+      description: List all organizations the user belongs to
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerOrg'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List organizations
+      tags:
+      - Organizations
+    post:
+      consumes:
+      - application/json
+      description: Create a new organization
+      parameters:
+      - description: Organization data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateOrgParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerOrg'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create organization
+      tags:
+      - Organizations
+  /orgs/{orgId}:
+    delete:
+      description: Delete an organization by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete organization
+      tags:
+      - Organizations
+    get:
+      description: Retrieve an organization by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerOrg'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get organization
+      tags:
+      - Organizations
+    put:
+      consumes:
+      - application/json
+      description: Update an existing organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Updated organization data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateOrgParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerOrg'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update organization
+      tags:
+      - Organizations
+  /orgs/{orgId}/activity:
+    get:
+      description: List activity logs for an entity within an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Entity type (task, project, etc.)
+        in: query
+        name: entity_type
+        required: true
+        type: string
+      - description: Entity ID
+        format: uuid
+        in: query
+        name: entity_id
+        required: true
+        type: string
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: List activity logs
+      tags:
+      - Activity
+  /orgs/{orgId}/api-keys:
+    get:
+      description: List all API keys in an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerAPIKey'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List API keys
+      tags:
+      - APIKeys
+    post:
+      consumes:
+      - application/json
+      description: Generate a new API key for an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: API key data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateAPIKeyParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: api_key object + raw_key
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create API key
+      tags:
+      - APIKeys
+  /orgs/{orgId}/api-keys/{keyId}:
+    delete:
+      description: Revoke and delete an API key
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: API Key ID
+        format: uuid
+        in: path
+        name: keyId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete API key
+      tags:
+      - APIKeys
+  /orgs/{orgId}/billing/plans:
+    get:
+      description: List all available billing plans
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerBillingPlan'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List billing plans
+      tags:
+      - Billing
+  /orgs/{orgId}/billing/subscription:
+    get:
+      description: Get the current subscription for an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerOrgSubscription'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get organization subscription
+      tags:
+      - Billing
+  /orgs/{orgId}/events:
+    get:
+      description: Subscribe to real-time organization events via SSE
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - text/event-stream
+      responses:
+        "200":
+          description: SSE stream
+          schema:
+            type: string
+      security:
+      - BearerAuth: []
+      summary: Server-Sent Events stream
+      tags:
+      - Events
+  /orgs/{orgId}/members:
+    get:
+      description: List all members of an organization with pagination
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListResponse'
+      security:
+      - BearerAuth: []
+      summary: List organization members
+      tags:
+      - Organizations
+    post:
+      consumes:
+      - application/json
+      description: Invite a user to an organization by email
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Invitation details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.inviteMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerOrgMember'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Invite member to organization
+      tags:
+      - Organizations
+  /orgs/{orgId}/members/{userId}:
+    delete:
+      description: Remove a member from an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: User ID
+        format: uuid
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove organization member
+      tags:
+      - Organizations
+    put:
+      consumes:
+      - application/json
+      description: Update an organization member's role
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: User ID
+        format: uuid
+        in: path
+        name: userId
+        required: true
+        type: string
+      - description: New role
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.updateRoleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerOrgMember'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update member role
+      tags:
+      - Organizations
+  /orgs/{orgId}/notification-preferences:
+    get:
+      description: List notification preferences for the current user
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerNotificationPreference'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List notification preferences
+      tags:
+      - NotificationPreferences
+    put:
+      consumes:
+      - application/json
+      description: Create or update a notification preference
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Notification preference data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpsertNotifPrefParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerNotificationPreference'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Upsert notification preference
+      tags:
+      - NotificationPreferences
+  /orgs/{orgId}/projects:
+    get:
+      description: List all projects in an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerProject'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List projects
+      tags:
+      - Projects
+    post:
+      consumes:
+      - application/json
+      description: Create a new project within an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateProjectParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerProject'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create project
+      tags:
+      - Projects
+  /orgs/{orgId}/projects/{projectId}:
+    delete:
+      description: Delete a project by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete project
+      tags:
+      - Projects
+    get:
+      description: Retrieve a project by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerProject'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get project
+      tags:
+      - Projects
+    put:
+      consumes:
+      - application/json
+      description: Update an existing project
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Updated project data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateProjectParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerProject'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update project
+      tags:
+      - Projects
+  /orgs/{orgId}/projects/{projectId}/imports:
+    get:
+      description: List all import jobs in a project
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerImportJob'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List import jobs
+      tags:
+      - Imports
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a CSV file to import tasks into a project
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: CSV file to import
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerImportJob'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create import job
+      tags:
+      - Imports
+  /orgs/{orgId}/projects/{projectId}/imports/{importId}:
+    get:
+      description: Retrieve an import job by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Import Job ID
+        format: uuid
+        in: path
+        name: importId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerImportJob'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get import job
+      tags:
+      - Imports
+  /orgs/{orgId}/projects/{projectId}/members:
+    get:
+      description: List all members of a project with pagination
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListResponse'
+      security:
+      - BearerAuth: []
+      summary: List project members
+      tags:
+      - Projects
+    post:
+      consumes:
+      - application/json
+      description: Add a user to a project
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Member details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.addProjectMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerProjectMember'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add project member
+      tags:
+      - Projects
+  /orgs/{orgId}/projects/{projectId}/members/{userId}:
+    delete:
+      description: Remove a member from a project
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: User ID
+        format: uuid
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove project member
+      tags:
+      - Projects
+  /orgs/{orgId}/projects/{projectId}/tasks:
+    get:
+      description: List tasks in a project with optional filters and pagination
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by priority
+        in: query
+        name: priority
+        type: string
+      - description: Filter by assignee ID
+        format: uuid
+        in: query
+        name: assignee_id
+        type: string
+      - description: Filter by parent task ID
+        format: uuid
+        in: query
+        name: parent_id
+        type: string
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListResponse'
+      security:
+      - BearerAuth: []
+      summary: List tasks
+      tags:
+      - Tasks
+    post:
+      consumes:
+      - application/json
+      description: Create a new task in a project
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateTaskParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create task
+      tags:
+      - Tasks
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}:
+    delete:
+      description: Delete a task by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete task
+      tags:
+      - Tasks
+    get:
+      description: Retrieve a task by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTask'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get task
+      tags:
+      - Tasks
+    put:
+      consumes:
+      - application/json
+      description: Update an existing task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Updated task data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateTaskParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update task
+      tags:
+      - Tasks
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments:
+    get:
+      description: List all attachments for a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerAttachment'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List task attachments
+      tags:
+      - Attachments
+    post:
+      consumes:
+      - application/json
+      description: Upload a file attachment to a task (returns presigned upload URL)
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Attachment metadata
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createAttachmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: attachment object + upload_url
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create attachment
+      tags:
+      - Attachments
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}:
+    delete:
+      description: Delete an attachment from a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Attachment ID
+        format: uuid
+        in: path
+        name: attachmentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete attachment
+      tags:
+      - Attachments
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/attachments/{attachmentId}/download:
+    get:
+      description: Get a presigned download URL for an attachment
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Attachment ID
+        format: uuid
+        in: path
+        name: attachmentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: download_url
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Download attachment
+      tags:
+      - Attachments
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/checklists:
+    get:
+      description: List all checklist items for a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerChecklist'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List checklist items
+      tags:
+      - Checklists
+    post:
+      consumes:
+      - application/json
+      description: Create a new checklist item for a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Checklist item data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateChecklistParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerChecklist'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create checklist item
+      tags:
+      - Checklists
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/checklists/{checklistId}:
+    delete:
+      description: Delete a checklist item
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Checklist ID
+        format: uuid
+        in: path
+        name: checklistId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete checklist item
+      tags:
+      - Checklists
+    put:
+      consumes:
+      - application/json
+      description: Update a checklist item (title, completed status, position)
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Checklist ID
+        format: uuid
+        in: path
+        name: checklistId
+        required: true
+        type: string
+      - description: Updated checklist data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateChecklistParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerChecklist'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update checklist item
+      tags:
+      - Checklists
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/comments:
+    get:
+      description: List all comments on a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerComment'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List comments
+      tags:
+      - Comments
+    post:
+      consumes:
+      - application/json
+      description: Add a comment to a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Comment data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateCommentParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerComment'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create comment
+      tags:
+      - Comments
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/comments/{commentId}:
+    delete:
+      description: Delete a comment from a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Comment ID
+        format: uuid
+        in: path
+        name: commentId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete comment
+      tags:
+      - Comments
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/complete:
+    post:
+      description: Mark a task as completed
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Mark task complete
+      tags:
+      - Tasks
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependencies:
+    get:
+      description: List all dependencies of a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTaskDependency'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List task dependencies
+      tags:
+      - Dependencies
+    post:
+      consumes:
+      - application/json
+      description: Add a dependency between two tasks
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Dependency data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.addDependencyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskDependency'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add task dependency
+      tags:
+      - Dependencies
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependencies/{depId}:
+    delete:
+      description: Remove a dependency from a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Dependency ID
+        format: uuid
+        in: path
+        name: depId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove task dependency
+      tags:
+      - Dependencies
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependents:
+    get:
+      description: List all tasks that depend on this task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTaskDependency'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List task dependents
+      tags:
+      - Dependencies
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/review:
+    post:
+      description: Transition a task to review status
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTask'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Submit task for review
+      tags:
+      - Tasks
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/rules:
+    get:
+      description: List all automation rules on a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTaskRule'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List task rules
+      tags:
+      - Rules
+    post:
+      consumes:
+      - application/json
+      description: Add an automation rule to a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: 'Rule data (rule_type: auto_assign|require_review|auto_close)'
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateRuleParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskRule'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create task rule
+      tags:
+      - Rules
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/rules/{ruleId}:
+    delete:
+      description: Remove an automation rule from a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      - description: Rule ID
+        format: uuid
+        in: path
+        name: ruleId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete task rule
+      tags:
+      - Rules
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/tree:
+    get:
+      description: Retrieve a task with its full subtask tree
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskTree'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get task tree
+      tags:
+      - Tasks
+  /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/watchers:
+    delete:
+      description: Remove the current user as a watcher on a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Unwatch a task
+      tags:
+      - Watchers
+    get:
+      description: List all watchers of a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTaskWatcher'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List task watchers
+      tags:
+      - Watchers
+    post:
+      description: Subscribe the current user as a watcher on a task
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Project ID
+        format: uuid
+        in: path
+        name: projectId
+        required: true
+        type: string
+      - description: Task ID
+        format: uuid
+        in: path
+        name: taskId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskWatcher'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Watch a task
+      tags:
+      - Watchers
+  /orgs/{orgId}/roles:
+    get:
+      description: List all custom roles in an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerCustomRole'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List custom roles
+      tags:
+      - CustomRoles
+    post:
+      consumes:
+      - application/json
+      description: Create a custom RBAC role within an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Role data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateCustomRoleParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerCustomRole'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create custom role
+      tags:
+      - CustomRoles
+  /orgs/{orgId}/roles/{roleId}:
+    delete:
+      description: Delete a custom role
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Role ID
+        format: uuid
+        in: path
+        name: roleId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete custom role
+      tags:
+      - CustomRoles
+    get:
+      description: Retrieve a custom role by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Role ID
+        format: uuid
+        in: path
+        name: roleId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerCustomRole'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get custom role
+      tags:
+      - CustomRoles
+    put:
+      consumes:
+      - application/json
+      description: Update a custom role's permissions
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Role ID
+        format: uuid
+        in: path
+        name: roleId
+        required: true
+        type: string
+      - description: Updated role data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateCustomRoleParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerCustomRole'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update custom role
+      tags:
+      - CustomRoles
+  /orgs/{orgId}/search/projects:
+    get:
+      description: Full-text search for projects using Meilisearch
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerProject'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search projects
+      tags:
+      - Search
+  /orgs/{orgId}/search/tasks:
+    get:
+      description: Full-text search for tasks using Meilisearch
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Search query
+        in: query
+        name: q
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTask'
+            type: array
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Search tasks
+      tags:
+      - Search
+  /orgs/{orgId}/teams:
+    get:
+      description: List all teams in an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTeam'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List teams
+      tags:
+      - Teams
+    post:
+      consumes:
+      - application/json
+      description: Create a new team within an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateTeamParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTeam'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create team
+      tags:
+      - Teams
+  /orgs/{orgId}/teams/{teamId}:
+    delete:
+      description: Delete a team by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team ID
+        format: uuid
+        in: path
+        name: teamId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete team
+      tags:
+      - Teams
+    get:
+      description: Retrieve a team by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team ID
+        format: uuid
+        in: path
+        name: teamId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTeam'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get team
+      tags:
+      - Teams
+    put:
+      consumes:
+      - application/json
+      description: Update an existing team
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team ID
+        format: uuid
+        in: path
+        name: teamId
+        required: true
+        type: string
+      - description: Updated team data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateTeamParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTeam'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update team
+      tags:
+      - Teams
+  /orgs/{orgId}/teams/{teamId}/members:
+    get:
+      description: List all members of a team with pagination
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team ID
+        format: uuid
+        in: path
+        name: teamId
+        required: true
+        type: string
+      - default: 20
+        description: Limit
+        in: query
+        name: limit
+        type: integer
+      - default: 0
+        description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ListResponse'
+      security:
+      - BearerAuth: []
+      summary: List team members
+      tags:
+      - Teams
+    post:
+      consumes:
+      - application/json
+      description: Add a user to a team
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team ID
+        format: uuid
+        in: path
+        name: teamId
+        required: true
+        type: string
+      - description: Member details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.addTeamMemberRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTeamMember'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Add team member
+      tags:
+      - Teams
+  /orgs/{orgId}/teams/{teamId}/members/{userId}:
+    delete:
+      description: Remove a member from a team
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Team ID
+        format: uuid
+        in: path
+        name: teamId
+        required: true
+        type: string
+      - description: User ID
+        format: uuid
+        in: path
+        name: userId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Remove team member
+      tags:
+      - Teams
+  /orgs/{orgId}/templates:
+    get:
+      description: List all task templates in an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerTaskTemplate'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List task templates
+      tags:
+      - Templates
+    post:
+      consumes:
+      - application/json
+      description: Create a reusable task template within an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Template data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateTemplateParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskTemplate'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create task template
+      tags:
+      - Templates
+  /orgs/{orgId}/templates/{templateId}:
+    delete:
+      description: Delete a task template
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Template ID
+        format: uuid
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete task template
+      tags:
+      - Templates
+    get:
+      description: Retrieve a task template by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Template ID
+        format: uuid
+        in: path
+        name: templateId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskTemplate'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get task template
+      tags:
+      - Templates
+    put:
+      consumes:
+      - application/json
+      description: Update a task template
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Template ID
+        format: uuid
+        in: path
+        name: templateId
+        required: true
+        type: string
+      - description: Updated template data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateTemplateParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerTaskTemplate'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update task template
+      tags:
+      - Templates
+  /orgs/{orgId}/webhooks:
+    get:
+      description: List all webhooks in an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/handler.swaggerWebhook'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List webhooks
+      tags:
+      - Webhooks
+    post:
+      consumes:
+      - application/json
+      description: Register a new webhook for an organization
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Webhook data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerCreateWebhookParams'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.swaggerWebhook'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Create webhook
+      tags:
+      - Webhooks
+  /orgs/{orgId}/webhooks/{webhookId}:
+    delete:
+      description: Delete a webhook
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Webhook ID
+        format: uuid
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Delete webhook
+      tags:
+      - Webhooks
+    get:
+      description: Retrieve a webhook by ID
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Webhook ID
+        format: uuid
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerWebhook'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get webhook
+      tags:
+      - Webhooks
+    put:
+      consumes:
+      - application/json
+      description: Update a webhook configuration
+      parameters:
+      - description: Organization ID
+        format: uuid
+        in: path
+        name: orgId
+        required: true
+        type: string
+      - description: Webhook ID
+        format: uuid
+        in: path
+        name: webhookId
+        required: true
+        type: string
+      - description: Updated webhook data
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.swaggerUpdateWebhookParams'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.swaggerWebhook'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Update webhook
+      tags:
+      - Webhooks
+securityDefinitions:
+  BearerAuth:
+    description: 'Enter your bearer token in the format: Bearer {token}'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

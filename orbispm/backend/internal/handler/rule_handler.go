@@ -33,6 +33,20 @@ func (h *RuleHandler) Routes() chi.Router {
 	return r
 }
 
+// Create godoc
+// @Summary Create task rule
+// @Description Add an automation rule to a task
+// @Tags Rules
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param body body swaggerCreateRuleParams true "Rule data (rule_type: auto_assign|require_review|auto_close)"
+// @Success 201 {object} swaggerTaskRule
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/rules [post]
 func (h *RuleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var params service.CreateRuleParams
 	if err := parseBody(r, &params); err != nil {
@@ -56,6 +70,17 @@ func (h *RuleHandler) Create(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, rule)
 }
 
+// List godoc
+// @Summary List task rules
+// @Description List all automation rules on a task
+// @Tags Rules
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Success 200 {array} swaggerTaskRule
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/rules [get]
 func (h *RuleHandler) List(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
@@ -73,6 +98,19 @@ func (h *RuleHandler) List(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, rules)
 }
 
+// Delete godoc
+// @Summary Delete task rule
+// @Description Remove an automation rule from a task
+// @Tags Rules
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param ruleId path string true "Rule ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/rules/{ruleId} [delete]
 func (h *RuleHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "ruleId")
 	if err != nil {

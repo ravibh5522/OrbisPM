@@ -1,4 +1,4 @@
-.PHONY: dev build test lint migrate-up migrate-down docker-up docker-down
+.PHONY: dev build test lint migrate-up migrate-down docker-up docker-down swagger
 
 # Development
 dev: docker-up
@@ -44,3 +44,8 @@ reset: docker-down
 	$(MAKE) docker-up
 	sleep 3
 	$(MAKE) migrate-up
+
+# Swagger docs
+swagger:
+	cd backend && ~/go/bin/swag init -g cmd/api/main.go -o docs/ --parseInternal
+	@echo "Swagger docs generated at backend/docs/"

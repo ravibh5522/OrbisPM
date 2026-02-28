@@ -27,6 +27,18 @@ func (h *NotifPrefHandler) Routes() chi.Router {
 	return r
 }
 
+// Upsert godoc
+// @Summary Upsert notification preference
+// @Description Create or update a notification preference
+// @Tags NotificationPreferences
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param body body swaggerUpsertNotifPrefParams true "Notification preference data"
+// @Success 200 {object} swaggerNotificationPreference
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/notification-preferences [put]
 func (h *NotifPrefHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var params service.UpsertPrefParams
 	if err := parseBody(r, &params); err != nil {
@@ -44,6 +56,15 @@ func (h *NotifPrefHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// List godoc
+// @Summary List notification preferences
+// @Description List notification preferences for the current user
+// @Tags NotificationPreferences
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Success 200 {array} swaggerNotificationPreference
+// @Router /orgs/{orgId}/notification-preferences [get]
 func (h *NotifPrefHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFromCtx(r.Context())
 	orgID := middleware.OrgIDFromCtx(r.Context())
@@ -77,6 +98,19 @@ func (h *ImportHandler) Routes() chi.Router {
 	return r
 }
 
+// Create godoc
+// @Summary Create import job
+// @Description Upload a CSV file to import tasks into a project
+// @Tags Imports
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param file formData file true "CSV file to import"
+// @Success 201 {object} swaggerImportJob
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/imports [post]
 func (h *ImportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	projectID, err := uuidParam(r, "projectId")
 	if err != nil {
@@ -111,6 +145,18 @@ func (h *ImportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, job)
 }
 
+// Get godoc
+// @Summary Get import job
+// @Description Retrieve an import job by ID
+// @Tags Imports
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param importId path string true "Import Job ID" format(uuid)
+// @Success 200 {object} swaggerImportJob
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/imports/{importId} [get]
 func (h *ImportHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "importId")
 	if err != nil {
@@ -125,6 +171,16 @@ func (h *ImportHandler) Get(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, job)
 }
 
+// List godoc
+// @Summary List import jobs
+// @Description List all import jobs in a project
+// @Tags Imports
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Success 200 {array} swaggerImportJob
+// @Router /orgs/{orgId}/projects/{projectId}/imports [get]
 func (h *ImportHandler) List(w http.ResponseWriter, r *http.Request) {
 	projectID, err := uuidParam(r, "projectId")
 	if err != nil {

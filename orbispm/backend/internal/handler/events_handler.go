@@ -28,6 +28,15 @@ func (h *EventsHandler) Routes() chi.Router {
 }
 
 // Stream handles SSE connections for real-time events.
+// Stream godoc
+// @Summary Server-Sent Events stream
+// @Description Subscribe to real-time organization events via SSE
+// @Tags Events
+// @Produce text/event-stream
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Success 200 {string} string "SSE stream"
+// @Router /orgs/{orgId}/events [get]
 func (h *EventsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFromCtx(r.Context())
 	orgID := middleware.OrgIDFromCtx(r.Context())

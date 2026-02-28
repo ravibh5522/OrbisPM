@@ -1,3 +1,69 @@
+// @title OrbisPM API
+// @version 1.0
+// @description OrbisPM — AI-native project management platform API.
+// @termsOfService https://orbispm.dev/terms
+//
+// @contact.name OrbisPM Support
+// @contact.url https://orbispm.dev/support
+// @contact.email support@orbispm.dev
+//
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+//
+// @host localhost:8080
+// @BasePath /api/v1
+//
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Enter your bearer token in the format: Bearer {token}
+//
+// @tag.name Auth
+// @tag.description Authentication (GoTrue proxy)
+// @tag.name Organizations
+// @tag.description Organization management
+// @tag.name Teams
+// @tag.description Team management within organizations
+// @tag.name Projects
+// @tag.description Project management within organizations
+// @tag.name Tasks
+// @tag.description Task management within projects
+// @tag.name Checklists
+// @tag.description Checklist items within tasks
+// @tag.name Comments
+// @tag.description Comments on tasks
+// @tag.name Rules
+// @tag.description Task completion rules
+// @tag.name Dependencies
+// @tag.description Task dependencies
+// @tag.name Watchers
+// @tag.description Task watchers
+// @tag.name Attachments
+// @tag.description File attachments on tasks
+// @tag.name Templates
+// @tag.description Task templates
+// @tag.name Webhooks
+// @tag.description Webhook configurations
+// @tag.name APIKeys
+// @tag.description API key management
+// @tag.name CustomRoles
+// @tag.description Custom role management
+// @tag.name Billing
+// @tag.description Billing plans and subscriptions
+// @tag.name NotificationPreferences
+// @tag.description Notification preference management
+// @tag.name Imports
+// @tag.description CSV/XLSX import jobs
+// @tag.name Search
+// @tag.description Full-text search
+// @tag.name Events
+// @tag.description Real-time SSE events
+// @tag.name Activity
+// @tag.description Activity audit log
+// @tag.name Notifications
+// @tag.description User notifications
+// @tag.name Health
+// @tag.description Health checks
 package main
 
 import (
@@ -14,6 +80,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	httpSwagger "github.com/swaggo/http-swagger/v2"
+
+	_ "github.com/orbispm/orbispm/docs"
 
 	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/config"
@@ -222,6 +291,11 @@ func main() {
 
 	// Health endpoints (no auth)
 	r.Mount("/health", healthHandler.Routes())
+
+	// Swagger UI (no auth)
+	r.Get("/swagger/*", httpSwagger.Handler(
+		httpSwagger.URL("/swagger/doc.json"),
+	))
 
 	// Auth endpoints (no auth needed — these are the GoTrue proxy)
 	r.Route("/api/v1/auth", func(r chi.Router) {

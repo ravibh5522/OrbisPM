@@ -33,6 +33,20 @@ func (h *CommentHandler) Routes() chi.Router {
 	return r
 }
 
+// Create godoc
+// @Summary Create comment
+// @Description Add a comment to a task
+// @Tags Comments
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param body body swaggerCreateCommentParams true "Comment data"
+// @Success 201 {object} swaggerComment
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/comments [post]
 func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var params service.CreateCommentParams
 	if err := parseBody(r, &params); err != nil {
@@ -57,6 +71,17 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusCreated, comment)
 }
 
+// List godoc
+// @Summary List comments
+// @Description List all comments on a task
+// @Tags Comments
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Success 200 {array} swaggerComment
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/comments [get]
 func (h *CommentHandler) List(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
@@ -74,6 +99,19 @@ func (h *CommentHandler) List(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, comments)
 }
 
+// Delete godoc
+// @Summary Delete comment
+// @Description Delete a comment from a task
+// @Tags Comments
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param commentId path string true "Comment ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/comments/{commentId} [delete]
 func (h *CommentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := uuidParam(r, "commentId")
 	if err != nil {

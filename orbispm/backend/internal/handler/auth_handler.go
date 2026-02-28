@@ -37,6 +37,17 @@ type signupRequest struct {
 	Data     map[string]any `json:"data,omitempty"`
 }
 
+// SignUp godoc
+// @Summary Register a new user
+// @Description Create a new user account via GoTrue
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param body body signupRequest true "Signup credentials"
+// @Success 201 {object} map[string]interface{} "access_token, refresh_token, user"
+// @Failure 400 {object} ErrorResponse
+// @Failure 422 {object} ErrorResponse
+// @Router /auth/signup [post]
 func (h *AuthHandler) SignUp(w http.ResponseWriter, r *http.Request) {
 	var req signupRequest
 	if err := parseBody(r, &req); err != nil {
@@ -69,6 +80,17 @@ type loginRequest struct {
 	Password string `json:"password" validate:"required"`
 }
 
+// Login godoc
+// @Summary User login
+// @Description Authenticate a user and receive tokens
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param body body loginRequest true "Login credentials"
+// @Success 200 {object} map[string]interface{} "access_token, refresh_token"
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req loginRequest
 	if err := parseBody(r, &req); err != nil {
@@ -88,6 +110,17 @@ type refreshRequest struct {
 	RefreshToken string `json:"refresh_token" validate:"required"`
 }
 
+// Refresh godoc
+// @Summary Refresh access token
+// @Description Exchange a refresh token for a new access token
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param body body refreshRequest true "Refresh token"
+// @Success 200 {object} map[string]interface{} "access_token, refresh_token"
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	var req refreshRequest
 	if err := parseBody(r, &req); err != nil {
@@ -103,6 +136,15 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, result)
 }
 
+// Logout godoc
+// @Summary User logout
+// @Description Invalidate the current session
+// @Tags Auth
+// @Produce json
+// @Security BearerAuth
+// @Success 204 "No Content"
+// @Failure 401 {object} ErrorResponse
+// @Router /auth/logout [post]
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	token := extractBearerToken(r)
 	if token == "" {
@@ -117,6 +159,15 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GetUser godoc
+// @Summary Get current user
+// @Description Retrieve the authenticated user's profile
+// @Tags Auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]interface{}
+// @Failure 401 {object} ErrorResponse
+// @Router /auth/user [get]
 func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	token := extractBearerToken(r)
 	if token == "" {

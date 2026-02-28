@@ -27,6 +27,17 @@ func (h *SearchHandler) Routes() chi.Router {
 	return r
 }
 
+// SearchTasks godoc
+// @Summary Search tasks
+// @Description Full-text search for tasks using Meilisearch
+// @Tags Search
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param q query string true "Search query"
+// @Success 200 {array} swaggerTask
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/search/tasks [get]
 func (h *SearchHandler) SearchTasks(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
 	query := r.URL.Query().Get("q")
@@ -46,6 +57,17 @@ func (h *SearchHandler) SearchTasks(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, result)
 }
 
+// SearchProjects godoc
+// @Summary Search projects
+// @Description Full-text search for projects using Meilisearch
+// @Tags Search
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param q query string true "Search query"
+// @Success 200 {array} swaggerProject
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/search/projects [get]
 func (h *SearchHandler) SearchProjects(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
 	query := r.URL.Query().Get("q")

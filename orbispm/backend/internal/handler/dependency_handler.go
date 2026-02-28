@@ -34,6 +34,21 @@ type addDependencyRequest struct {
 	Type        string `json:"type" validate:"required,oneof=blocked_by blocks relates_to"`
 }
 
+// Add godoc
+// @Summary Add task dependency
+// @Description Add a dependency between two tasks
+// @Tags Dependencies
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param body body addDependencyRequest true "Dependency data"
+// @Success 201 {object} swaggerTaskDependency
+// @Failure 400 {object} ErrorResponse
+// @Failure 409 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependencies [post]
 func (h *DependencyHandler) Add(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
@@ -64,6 +79,17 @@ func (h *DependencyHandler) Add(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusCreated)
 }
 
+// List godoc
+// @Summary List task dependencies
+// @Description List all dependencies of a task
+// @Tags Dependencies
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Success 200 {array} swaggerTaskDependency
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependencies [get]
 func (h *DependencyHandler) List(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
@@ -79,6 +105,17 @@ func (h *DependencyHandler) List(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, deps)
 }
 
+// ListDependents godoc
+// @Summary List task dependents
+// @Description List all tasks that depend on this task
+// @Tags Dependencies
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Success 200 {array} swaggerTaskDependency
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependents [get]
 func (h *DependencyHandler) ListDependents(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
@@ -94,6 +131,19 @@ func (h *DependencyHandler) ListDependents(w http.ResponseWriter, r *http.Reques
 	JSON(w, http.StatusOK, deps)
 }
 
+// Remove godoc
+// @Summary Remove task dependency
+// @Description Remove a dependency from a task
+// @Tags Dependencies
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param taskId path string true "Task ID" format(uuid)
+// @Param depId path string true "Dependency ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId}/dependencies/{depId} [delete]
 func (h *DependencyHandler) Remove(w http.ResponseWriter, r *http.Request) {
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
