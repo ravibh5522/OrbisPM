@@ -5,14 +5,15 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import type { DomainEvent } from "@/types/domain";
 
-const WS_BASE = process.env.NEXT_PUBLIC_WS_URL || "ws://localhost:8080";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 export function useWebSocket() {
-  const wsRef = useRef<WebSocket | null>(null);
+  const esRef = useRef<EventSource | null>(null);
   const qc = useQueryClient();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const reconnectTimeout = useRef<NodeJS.Timeout>(undefined);
+  const retryCount = useRef(0);
 
   const connect = useCallback(() => {
     if (!isAuthenticated || !currentOrg) return;
@@ -21,39 +22,51 @@ export function useWebSocket() {
     if (!token) return;
 
     // Close existing connection
-    if (wsRef.current) {
-      wsRef.current.close();
+    if (esRef.current) {
+      esRef.current.close();
+      esRef.current = null;
     }
 
     try {
-      const ws = new WebSocket(`${WS_BASE}/ws?token=${token}&org_id=${currentOrg.id}`);
+      const url = `${API_BASE}/api/v1/orgs/${currentOrg.id}/events/stream?token=${token}`;
+      const es = new EventSource(url);
 
-      ws.onopen = () => {
-        console.log("[WS] Connected");
+      es.onopen = () => {
+        console.log("[SSE] Connected");
+        retryCount.current = 0;
       };
 
-      ws.onmessage = (event) => {
+      es.onmessage = (event) => {
         try {
           const data: DomainEvent = JSON.parse(event.data);
-          handleEvent(data, qc, currentOrg.id);
+          handleEvent(data, qc);
         } catch {
           // ignore non-JSON messages
         }
       };
 
-      ws.onclose = () => {
-        console.log("[WS] Disconnected, reconnecting in 5s...");
-        reconnectTimeout.current = setTimeout(connect, 5000);
+      es.onerror = () => {
+        es.close();
+        esRef.current = null;
+        // Exponential backoff: 5s, 10s, 20s, 30s max
+        const delay = Math.min(5000 * Math.pow(2, retryCount.current), 30000);
+        retryCount.current++;
+        if (retryCount.current <= 10) {
+          console.log(`[SSE] Disconnected, reconnecting in ${delay / 1000}s...`);
+          reconnectTimeout.current = setTimeout(connect, delay);
+        } else {
+          console.log("[SSE] Max retries reached, stopping reconnection");
+        }
       };
 
-      ws.onerror = () => {
-        ws.close();
-      };
-
-      wsRef.current = ws;
+      esRef.current = es;
     } catch {
-      // WebSocket not supported or connection failed
-      reconnectTimeout.current = setTimeout(connect, 5000);
+      // EventSource not supported or connection failed
+      const delay = Math.min(5000 * Math.pow(2, retryCount.current), 30000);
+      retryCount.current++;
+      if (retryCount.current <= 10) {
+        reconnectTimeout.current = setTimeout(connect, delay);
+      }
     }
   }, [isAuthenticated, currentOrg, qc]);
 
@@ -61,12 +74,12 @@ export function useWebSocket() {
     connect();
     return () => {
       if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-      if (wsRef.current) wsRef.current.close();
+      if (esRef.current) esRef.current.close();
     };
   }, [connect]);
 }
 
-function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>, orgId: string) {
+function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) {
   const type = event.type;
 
   // Invalidate relevant queries based on event type
@@ -101,7 +114,7 @@ function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>, 
   qc.invalidateQueries({ queryKey: ["activity"] });
 }
 
-// Provider component to mount WebSocket connection
+// Provider component to mount SSE connection
 export function WebSocketProvider({ children }: { children: React.ReactNode }) {
   useWebSocket();
   return <>{children}</>;

@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/service"
 )
@@ -74,7 +75,10 @@ func (h *NotifPrefHandler) List(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, prefs)
+	if prefs == nil {
+		prefs = []*domain.NotificationPreference{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: prefs, Total: len(prefs), Limit: len(prefs), Offset: 0})
 }
 
 // --- Import Handler ---
@@ -192,5 +196,8 @@ func (h *ImportHandler) List(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, jobs)
+	if jobs == nil {
+		jobs = []*domain.ImportJob{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: jobs, Total: len(jobs), Limit: len(jobs), Offset: 0})
 }

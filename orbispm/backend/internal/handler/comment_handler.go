@@ -96,7 +96,7 @@ func (h *CommentHandler) List(w http.ResponseWriter, r *http.Request) {
 	if comments == nil {
 		comments = []*domain.Comment{}
 	}
-	JSON(w, http.StatusOK, comments)
+	JSON(w, http.StatusOK, ListResponse{Data: comments, Total: len(comments), Limit: len(comments), Offset: 0})
 }
 
 // Delete godoc

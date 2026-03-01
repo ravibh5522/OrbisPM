@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/service"
 )
@@ -105,5 +106,8 @@ func (h *WatcherHandler) List(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, watchers)
+	if watchers == nil {
+		watchers = []*domain.TaskWatcher{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: watchers, Total: len(watchers), Limit: len(watchers), Offset: 0})
 }

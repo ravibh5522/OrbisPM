@@ -112,7 +112,7 @@ func (h *OrgHandler) List(w http.ResponseWriter, r *http.Request) {
 	if orgs == nil {
 		orgs = []*domain.Org{}
 	}
-	JSON(w, http.StatusOK, orgs)
+	JSON(w, http.StatusOK, ListResponse{Data: orgs, Total: len(orgs), Limit: len(orgs), Offset: 0})
 }
 
 // Update godoc
@@ -192,7 +192,31 @@ func (h *OrgHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, members)
+	if members == nil {
+		members = []*domain.OrgMember{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
+}
+
+// GetMyMembership godoc
+// @Summary Get my membership in organization
+// @Description Returns the current user's role and membership details in the org
+// @Tags Organizations
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Success 200 {object} swaggerOrgMember
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/me [get]
+func (h *OrgHandler) GetMyMembership(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+	member, err := h.orgSvc.GetMember(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, member)
 }
 
 type inviteMemberRequest struct {

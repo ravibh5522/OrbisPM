@@ -113,7 +113,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	if projects == nil {
 		projects = []*domain.Project{}
 	}
-	JSON(w, http.StatusOK, projects)
+	JSON(w, http.StatusOK, ListResponse{Data: projects, Total: len(projects), Limit: len(projects), Offset: 0})
 }
 
 // Update godoc
@@ -196,7 +196,10 @@ func (h *ProjectHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, members)
+	if members == nil {
+		members = []*domain.ProjectMember{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
 }
 
 type addProjectMemberRequest struct {

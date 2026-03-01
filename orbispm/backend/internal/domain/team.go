@@ -18,8 +18,10 @@ type Team struct {
 
 // TeamMember represents a user's membership in a team.
 type TeamMember struct {
-	TeamID   uuid.UUID `json:"team_id"`
-	UserID   uuid.UUID `json:"user_id"`
-	Role     string    `json:"role"`
-	JoinedAt time.Time `json:"joined_at"`
+	TeamID      uuid.UUID `json:"team_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name,omitempty"`
+	Role        string    `json:"role"`
+	JoinedAt    time.Time `json:"joined_at"`
 }

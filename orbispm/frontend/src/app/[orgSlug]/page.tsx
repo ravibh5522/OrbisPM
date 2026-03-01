@@ -12,9 +12,10 @@ import {
   AlertTriangle,
   Clock,
   Users2,
+  ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
-import type { DashboardStats } from "@/types/domain";
+import type { DashboardStats, Project } from "@/types/domain";
 
 function StatCard({ label, value, icon, color }: { label: string; value: number; icon: React.ReactNode; color: string }) {
   return (
@@ -28,6 +29,8 @@ function StatCard({ label, value, icon, color }: { label: string; value: number;
 
 export default function DashboardPage({ params }: { params: Promise<{ orgSlug: string }> }) {
   const currentOrg = useAuthStore((s) => s.currentOrg);
+  const currentMembership = useAuthStore((s) => s.currentMembership);
+  const orgSlug = currentOrg?.slug || "";
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats", currentOrg?.id],
@@ -35,19 +38,39 @@ export default function DashboardPage({ params }: { params: Promise<{ orgSlug: s
     enabled: !!currentOrg,
   });
 
+  const { data: projects } = useQuery({
+    queryKey: ["projects", currentOrg?.id],
+    queryFn: () => api.projects.list(currentOrg!.id),
+    enabled: !!currentOrg,
+  });
+
   if (isLoading || !stats) return <LoadingPage />;
 
   const statusEntries = Object.entries(stats.tasks_by_status || {});
   const priorityEntries = Object.entries(stats.tasks_by_priority || {});
+  const projectList = projects?.data || [];
 
   return (
     <div>
-      <PageHeader title="Dashboard" description={`Overview of ${currentOrg?.name}`} />
+      <PageHeader
+        title="Dashboard"
+        description={`Overview of ${currentOrg?.name}`}
+      />
+
+      {/* Role badge */}
+      {currentMembership && (
+        <div className="mb-4">
+          <span className="badge badge-lg badge-outline">
+            Your role: <span className="font-semibold ml-1 capitalize">{currentMembership.role}</span>
+          </span>
+        </div>
+      )}
 
       {/* Stats grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
         <StatCard label="Projects" value={stats.total_projects} icon={<FolderKanban className="w-8 h-8" />} color="text-primary" />
         <StatCard label="Tasks" value={stats.total_tasks} icon={<ListTodo className="w-8 h-8" />} color="text-secondary" />
+        <StatCard label="Members" value={stats.total_members} icon={<Users className="w-8 h-8" />} color="text-info" />
         <StatCard label="Teams" value={stats.total_teams} icon={<Users2 className="w-8 h-8" />} color="text-accent" />
         <StatCard label="Overdue" value={stats.overdue_tasks} icon={<AlertTriangle className="w-8 h-8" />} color="text-error" />
       </div>
@@ -97,6 +120,32 @@ export default function DashboardPage({ params }: { params: Promise<{ orgSlug: s
         </Card>
       </div>
 
+      {/* Projects quick nav */}
+      {projectList.length > 0 && (
+        <Card title="Projects" className="mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {projectList.slice(0, 6).map((p: Project) => (
+              <Link
+                key={p.id}
+                href={`/${orgSlug}/projects/${p.id}`}
+                className="flex items-center justify-between p-3 rounded-lg border border-base-200 hover:bg-base-200 transition-colors"
+              >
+                <div>
+                  <p className="font-semibold">{p.name}</p>
+                  <p className="text-xs text-base-content/50 capitalize">{p.status}</p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-base-content/40" />
+              </Link>
+            ))}
+          </div>
+          {projectList.length > 6 && (
+            <div className="mt-3 text-center">
+              <Link href={`/${orgSlug}/projects`} className="link link-primary text-sm">View all {projectList.length} projects</Link>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* Recent Tasks */}
       <Card title="Recent Tasks">
         {(!stats.recent_tasks || stats.recent_tasks.length === 0) ? (
@@ -114,7 +163,7 @@ export default function DashboardPage({ params }: { params: Promise<{ orgSlug: s
               </thead>
               <tbody>
                 {stats.recent_tasks.map((task) => (
-                  <tr key={task.id} className="hover">
+                  <tr key={task.id} className="hover cursor-pointer" onClick={() => window.location.href = `/${orgSlug}/projects/${task.project_id}/tasks/${task.id}`}>
                     <td className="font-medium">{task.title}</td>
                     <td><Badge variant={statusColor(task.status)}>{statusLabel(task.status)}</Badge></td>
                     <td><Badge variant={priorityColor(task.priority)}>{statusLabel(task.priority)}</Badge></td>

@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/service"
 )
@@ -42,7 +43,10 @@ func (h *BillingHandler) ListPlans(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, plans)
+	if plans == nil {
+		plans = []*domain.BillingPlan{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: plans, Total: len(plans), Limit: len(plans), Offset: 0})
 }
 
 // GetSubscription godoc
@@ -159,7 +163,10 @@ func (h *CustomRoleHandler) List(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, roles)
+	if roles == nil {
+		roles = []*domain.CustomRole{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: roles, Total: len(roles), Limit: len(roles), Offset: 0})
 }
 
 // Update godoc

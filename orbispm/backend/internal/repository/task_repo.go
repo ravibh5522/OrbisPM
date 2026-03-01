@@ -83,6 +83,20 @@ func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain
 	return collectTasks(rows)
 }
 
+func (r *taskRepo) ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  labels, metadata, review_status, created_at, updated_at
+		FROM tasks WHERE project_id = $1
+		ORDER BY depth, position, created_at`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("list tree by project: %w", err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
 func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error) {
 	where := []string{"project_id = $1"}
 	args := []any{projectID}
@@ -230,4 +244,46 @@ func collectTasks(rows pgx.Rows) ([]*domain.Task, error) {
 		tasks = append(tasks, &t)
 	}
 	return tasks, rows.Err()
+}
+
+// ListByOrgAndAssignee returns tasks assigned to a user across all projects in an org.
+func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, limit, offset int) ([]*domain.Task, int, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	var total int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2`, orgID, assigneeID,
+	).Scan(&total)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count assigned tasks: %w", err)
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  labels, metadata, review_status, created_at, updated_at
+		 FROM tasks WHERE org_id = $1 AND assignee_id = $2
+		 ORDER BY
+		   CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'todo' THEN 1 WHEN status = 'blocked' THEN 2 ELSE 3 END,
+		   CASE WHEN due_date IS NOT NULL AND due_date < NOW() THEN 0 ELSE 1 END,
+		   due_date NULLS LAST,
+		   created_at DESC
+		 LIMIT $3 OFFSET $4`,
+		orgID, assigneeID, limit, offset,
+	)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list assigned tasks: %w", err)
+	}
+	defer rows.Close()
+
+	tasks, err := collectTasks(rows)
+	if err != nil {
+		return nil, 0, err
+	}
+	return tasks, total, nil
 }

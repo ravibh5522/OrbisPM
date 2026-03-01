@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/service"
 )
@@ -106,7 +107,10 @@ func (h *AttachmentHandler) ListByTask(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, atts)
+	if atts == nil {
+		atts = []*domain.Attachment{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: atts, Total: len(atts), Limit: len(atts), Offset: 0})
 }
 
 // Download godoc

@@ -96,7 +96,7 @@ func (h *ChecklistHandler) List(w http.ResponseWriter, r *http.Request) {
 	if items == nil {
 		items = []*domain.Checklist{}
 	}
-	JSON(w, http.StatusOK, items)
+	JSON(w, http.StatusOK, ListResponse{Data: items, Total: len(items), Limit: len(items), Offset: 0})
 }
 
 // Update godoc

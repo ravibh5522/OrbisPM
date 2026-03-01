@@ -6,6 +6,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -102,7 +103,10 @@ func (h *DependencyHandler) List(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, deps)
+	if deps == nil {
+		deps = []*domain.TaskDependency{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: deps, Total: len(deps), Limit: len(deps), Offset: 0})
 }
 
 // ListDependents godoc
@@ -128,7 +132,10 @@ func (h *DependencyHandler) ListDependents(w http.ResponseWriter, r *http.Reques
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, deps)
+	if deps == nil {
+		deps = []*domain.TaskDependency{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: deps, Total: len(deps), Limit: len(deps), Offset: 0})
 }
 
 // Remove godoc

@@ -105,7 +105,7 @@ func (h *WebhookHandler) List(w http.ResponseWriter, r *http.Request) {
 	if whs == nil {
 		whs = []*domain.Webhook{}
 	}
-	JSON(w, http.StatusOK, whs)
+	JSON(w, http.StatusOK, ListResponse{Data: whs, Total: len(whs), Limit: len(whs), Offset: 0})
 }
 
 // Update godoc
@@ -234,7 +234,7 @@ func (h *APIKeyHandler) List(w http.ResponseWriter, r *http.Request) {
 	if keys == nil {
 		keys = []*domain.APIKey{}
 	}
-	JSON(w, http.StatusOK, keys)
+	JSON(w, http.StatusOK, ListResponse{Data: keys, Total: len(keys), Limit: len(keys), Offset: 0})
 }
 
 // Delete godoc

@@ -21,8 +21,10 @@ type Project struct {
 
 // ProjectMember represents a user's role within a project.
 type ProjectMember struct {
-	ProjectID uuid.UUID `json:"project_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Role      string    `json:"role"`
-	JoinedAt  time.Time `json:"joined_at"`
+	ProjectID   uuid.UUID `json:"project_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name,omitempty"`
+	Role        string    `json:"role"`
+	JoinedAt    time.Time `json:"joined_at"`
 }

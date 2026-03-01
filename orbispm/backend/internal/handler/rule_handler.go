@@ -95,7 +95,7 @@ func (h *RuleHandler) List(w http.ResponseWriter, r *http.Request) {
 	if rules == nil {
 		rules = []*domain.TaskRule{}
 	}
-	JSON(w, http.StatusOK, rules)
+	JSON(w, http.StatusOK, ListResponse{Data: rules, Total: len(rules), Limit: len(rules), Offset: 0})
 }
 
 // Delete godoc

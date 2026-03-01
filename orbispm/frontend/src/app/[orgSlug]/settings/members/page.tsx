@@ -105,9 +105,10 @@ export default function MembersPage() {
                 <tr key={m.user_id}>
                   <td>
                     <div className="flex items-center gap-2">
-                      <Avatar name={m.user_id.slice(0, 4)} size="sm" />
+                      <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} size="sm" />
                       <div>
-                        <span className="font-mono text-sm">{m.user_id.slice(0, 12)}...</span>
+                        <span className="text-sm font-medium">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
+                        {m.email && m.display_name && <span className="block text-xs text-base-content/50">{m.email}</span>}
                         {m.user_id === currentUser?.id && (
                           <span className="badge badge-xs badge-primary ml-2">You</span>
                         )}
@@ -171,7 +172,7 @@ export default function MembersPage() {
       {editTarget && (
         <Modal open onClose={() => setEditTarget(null)} title="Change Role">
           <div className="space-y-4">
-            <p className="text-sm">Update role for user {editTarget.user_id.slice(0, 12)}...</p>
+            <p className="text-sm">Update role for <strong>{editTarget.display_name || editTarget.email || editTarget.user_id.slice(0, 12)}</strong></p>
             <div className="flex gap-2 flex-wrap">
               {ROLE_OPTIONS.map((r) => (
                 <button

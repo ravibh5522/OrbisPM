@@ -11,7 +11,7 @@ import { Input, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
 import { Plus, Users, Trash2, UserPlus } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import type { Team, TeamMember } from "@/types/domain";
+import type { Team, TeamMember, OrgMember } from "@/types/domain";
 
 interface TeamForm {
   name: string;
@@ -146,30 +146,107 @@ export default function TeamsPage() {
 }
 
 function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; onClose: () => void }) {
+  const qc = useQueryClient();
+  const [addUserId, setAddUserId] = useState("");
+  const [addRole, setAddRole] = useState("member");
+
   const { data: members, isLoading } = useQuery({
     queryKey: ["team-members", orgId, team.id],
     queryFn: () => api.teamMembers.list(orgId, team.id),
   });
 
+  const { data: orgMembers } = useQuery({
+    queryKey: ["org-members", orgId],
+    queryFn: () => api.members.list(orgId),
+  });
+
+  const addMutation = useMutation({
+    mutationFn: () => api.teamMembers.add(orgId, team.id, { user_id: addUserId, role: addRole }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
+      setAddUserId("");
+      setAddRole("member");
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (userId: string) => api.teamMembers.remove(orgId, team.id, userId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] }),
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      api.teamMembers.update(orgId, team.id, userId, { role }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] }),
+  });
+
+  const memberIds = new Set((members?.data || []).map((m: TeamMember) => m.user_id));
+  const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
+
   return (
     <Modal open onClose={onClose} title={team.name} className="max-w-lg">
       {team.description && <p className="text-base-content/60 mb-4">{team.description}</p>}
-      <h4 className="font-semibold mb-2">Members</h4>
+
+      {/* Current members */}
+      <h4 className="font-semibold mb-2">Members ({members?.data?.length ?? 0})</h4>
       {isLoading ? (
         <span className="loading loading-spinner loading-sm" />
       ) : (!members?.data || members.data.length === 0) ? (
-        <p className="text-sm text-base-content/50">No members</p>
+        <p className="text-sm text-base-content/50 mb-4">No members yet</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 mb-4">
           {members.data.map((m: TeamMember) => (
-            <li key={m.user_id} className="flex items-center gap-2 text-sm">
-              <Avatar name={m.user_id.slice(0, 4)} size="xs" />
-              <span className="font-mono text-xs">{m.user_id.slice(0, 12)}</span>
-              <span className="badge badge-sm badge-ghost">{m.role}</span>
+            <li key={m.user_id} className="flex items-center gap-2 text-sm group">
+              <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} size="xs" />
+              <span className="text-xs flex-1">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
+              <select
+                className="select select-ghost select-xs"
+                value={m.role}
+                onChange={(e) => updateRoleMutation.mutate({ userId: m.user_id, role: e.target.value })}
+              >
+                <option value="lead">Lead</option>
+                <option value="member">Member</option>
+                <option value="viewer">Viewer</option>
+              </select>
+              <button
+                className="btn btn-ghost btn-xs btn-square text-error opacity-0 group-hover:opacity-100"
+                onClick={() => removeMutation.mutate(m.user_id)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
             </li>
           ))}
         </ul>
       )}
+
+      {/* Add member form */}
+      <div className="divider text-xs">Add Member</div>
+      <form
+        className="flex gap-2 items-end"
+        onSubmit={(e) => { e.preventDefault(); if (addUserId) addMutation.mutate(); }}
+      >
+        <div className="flex-1">
+          <select
+            className="select select-bordered select-sm w-full"
+            value={addUserId}
+            onChange={(e) => setAddUserId(e.target.value)}
+          >
+            <option value="">Select org member…</option>
+            {availableOrg.map((m) => (
+              <option key={m.user_id} value={m.user_id}>{m.display_name || m.email || m.user_id.slice(0, 16)}</option>
+            ))}
+          </select>
+        </div>
+        <select className="select select-bordered select-sm" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
+          <option value="lead">Lead</option>
+          <option value="member">Member</option>
+          <option value="viewer">Viewer</option>
+        </select>
+        <Button type="submit" size="sm" loading={addMutation.isPending} disabled={!addUserId}>
+          <UserPlus className="w-4 h-4" />
+        </Button>
+      </form>
+
       <div className="modal-action">
         <Button variant="ghost" onClick={onClose}>Close</Button>
       </div>

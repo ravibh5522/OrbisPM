@@ -106,7 +106,7 @@ func (h *TemplateHandler) List(w http.ResponseWriter, r *http.Request) {
 	if templates == nil {
 		templates = []*domain.TaskTemplate{}
 	}
-	JSON(w, http.StatusOK, templates)
+	JSON(w, http.StatusOK, ListResponse{Data: templates, Total: len(templates), Limit: len(templates), Offset: 0})
 }
 
 // Update godoc

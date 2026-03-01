@@ -113,7 +113,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	if teams == nil {
 		teams = []*domain.Team{}
 	}
-	JSON(w, http.StatusOK, teams)
+	JSON(w, http.StatusOK, ListResponse{Data: teams, Total: len(teams), Limit: len(teams), Offset: 0})
 }
 
 // Update godoc
@@ -196,7 +196,10 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, members)
+	if members == nil {
+		members = []*domain.TeamMember{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
 }
 
 type addTeamMemberRequest struct {

@@ -21,3 +21,7 @@ func NewActivityService(activityRepo repository.ActivityRepository, txm *reposit
 func (s *ActivityService) ListByEntity(ctx context.Context, entityType string, entityID uuid.UUID, limit, offset int) ([]*domain.ActivityLog, error) {
 	return s.activityRepo.ListByEntity(ctx, entityType, entityID, repository.ListFilter{Limit: limit, Offset: offset})
 }
+
+func (s *ActivityService) ListByOrg(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.ActivityLog, int, error) {
+	return s.activityRepo.ListByOrg(ctx, orgID, repository.ListFilter{Limit: limit, Offset: offset})
+}

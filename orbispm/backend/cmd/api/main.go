@@ -76,6 +76,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
@@ -222,10 +223,10 @@ func main() {
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm)
-	projectSvc := service.NewProjectService(projectRepo, projectMemberRepo, txm)
-	taskSvc := service.NewTaskService(taskRepo, checklistRepo, ruleRepo, txm)
+	projectSvc := service.NewProjectService(projectRepo, projectMemberRepo, txm, workerSrv)
+	taskSvc := service.NewTaskService(taskRepo, checklistRepo, ruleRepo, txm, workerSrv)
 	checklistSvc := service.NewChecklistService(checklistRepo, txm)
-	commentSvc := service.NewCommentService(commentRepo, txm)
+	commentSvc := service.NewCommentService(commentRepo, txm, workerSrv)
 	ruleSvc := service.NewRuleService(ruleRepo, txm)
 	activitySvc := service.NewActivityService(activityRepo, txm)
 	notifSvc := service.NewNotificationService(notifRepo, txm)
@@ -265,7 +266,7 @@ func main() {
 	apikeyHandler := handler.NewAPIKeyHandler(apikeySvc)
 	importHandler := handler.NewImportHandler(importSvc)
 	billingHandler := handler.NewBillingHandler(billingSvc)
-	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
+	dashboardHandler := handler.NewDashboardHandler(dashboardSvc, taskSvc)
 	customRoleHandler := handler.NewCustomRoleHandler(customRoleSvc)
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
 	eventsHandler := handler.NewEventsHandler(hub)
@@ -317,86 +318,93 @@ func main() {
 				r.Use(middleware.RLSTenant())
 
 				r.Get("/", orgHandler.Get)
-				r.Patch("/", orgHandler.Update)
-				r.Delete("/", orgHandler.Delete)
 
-				// Org members
-				r.Get("/members", orgHandler.ListMembers)
-				r.Post("/members/invite", orgHandler.InviteMember)
-				r.Patch("/members/{userId}", orgHandler.UpdateMemberRole)
-				r.Delete("/members/{userId}", orgHandler.RemoveMember)
+				// Admin-only: org mutation + member management
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireOrgAdmin(pool))
+					r.Patch("/", orgHandler.Update)
+					r.Delete("/", orgHandler.Delete)
 
-				// Teams
-				r.Mount("/teams", teamHandler.Routes())
+					// Org members (admin manages)
+					r.Post("/members/invite", orgHandler.InviteMember)
+					r.Patch("/members/{userId}", orgHandler.UpdateMemberRole)
+					r.Delete("/members/{userId}", orgHandler.RemoveMember)
 
-				// Activity
-				r.Mount("/activity", activityHandler.Routes())
+					// Settings (admin-only)
+					r.Mount("/webhooks", webhookHandler.Routes())
+					r.Mount("/api-keys", apikeyHandler.Routes())
+					r.Mount("/roles", customRoleHandler.Routes())
+					r.Mount("/billing", billingHandler.Routes())
+				})
 
-				// Templates
-				r.Mount("/templates", templateHandler.Routes())
+				// Member access: read-only member list + read-accessible resources
+				r.Group(func(r chi.Router) {
+					r.Use(middleware.RequireOrgMember(pool))
 
-				// Webhooks
-				r.Mount("/webhooks", webhookHandler.Routes())
+					r.Get("/me", orgHandler.GetMyMembership)
+					r.Get("/members", orgHandler.ListMembers)
 
-				// API Keys
-				r.Mount("/api-keys", apikeyHandler.Routes())
+					// Teams
+					r.Mount("/teams", teamHandler.Routes())
 
-				// Custom Roles
-				r.Mount("/roles", customRoleHandler.Routes())
+					// Activity
+					r.Mount("/activity", activityHandler.Routes())
 
-				// Billing
-				r.Mount("/billing", billingHandler.Routes())
+					// Templates
+					r.Mount("/templates", templateHandler.Routes())
 
-				// Dashboard
-				r.Mount("/dashboard", dashboardHandler.Routes())
+					// Dashboard
+					r.Mount("/dashboard", dashboardHandler.Routes())
 
-				// Notification Preferences
-				r.Mount("/notification-preferences", notifPrefHandler.Routes())
+					// Notification Preferences
+					r.Mount("/notification-preferences", notifPrefHandler.Routes())
 
-				// Search
-				if searchHandler != nil {
-					r.Mount("/search", searchHandler.Routes())
-				}
+					// Search
+					if searchHandler != nil {
+						r.Mount("/search", searchHandler.Routes())
+					}
 
-				// Events (SSE)
-				r.Mount("/events", eventsHandler.Routes())
+					// Events (SSE)
+					r.Mount("/events", eventsHandler.Routes())
 
-				// Projects
-				r.Route("/projects", func(r chi.Router) {
-					r.Post("/", projectHandler.Create)
-					r.Get("/", projectHandler.List)
+					// Projects
+					r.Route("/projects", func(r chi.Router) {
+						r.Post("/", projectHandler.Create)
+						r.Get("/", projectHandler.List)
 
-					r.Route("/{projectId}", func(r chi.Router) {
-						r.Get("/", projectHandler.Get)
-						r.Patch("/", projectHandler.Update)
-						r.Delete("/", projectHandler.Delete)
-						r.Get("/members", projectHandler.ListMembers)
-						r.Post("/members", projectHandler.AddMember)
-						r.Delete("/members/{userId}", projectHandler.RemoveMember)
+						r.Route("/{projectId}", func(r chi.Router) {
+							r.Get("/", projectHandler.Get)
+							r.Patch("/", projectHandler.Update)
+							r.Delete("/", projectHandler.Delete)
+							r.Get("/members", projectHandler.ListMembers)
+							r.Post("/members", projectHandler.AddMember)
+							r.Delete("/members/{userId}", projectHandler.RemoveMember)
 
-						// Imports
-						r.Mount("/imports", importHandler.Routes())
+							// Imports
+							r.Mount("/imports", importHandler.Routes())
 
-						// Tasks
-						r.Route("/tasks", func(r chi.Router) {
-							r.Post("/", taskHandler.Create)
+							// Tasks
+							r.Route("/tasks", func(r chi.Router) {
+								r.Post("/", taskHandler.Create)
 							r.Get("/", taskHandler.List)
+							r.Get("/tree", taskHandler.ListTree) // project-level tree (must be before /{taskId})
 
-							r.Route("/{taskId}", func(r chi.Router) {
-								r.Get("/", taskHandler.Get)
-								r.Patch("/", taskHandler.Update)
-								r.Delete("/", taskHandler.Delete)
-								r.Get("/tree", taskHandler.GetTree)
-								r.Post("/submit-review", taskHandler.SubmitForReview)
-								r.Post("/complete", taskHandler.MarkComplete)
+								r.Route("/{taskId}", func(r chi.Router) {
+									r.Get("/", taskHandler.Get)
+									r.Patch("/", taskHandler.Update)
+									r.Delete("/", taskHandler.Delete)
+									r.Get("/tree", taskHandler.GetTree)
+									r.Post("/submit-review", taskHandler.SubmitForReview)
+									r.Post("/complete", taskHandler.MarkComplete)
 
-								// Task sub-resources
-								r.Mount("/checklists", checklistHandler.Routes())
-								r.Mount("/comments", commentHandler.Routes())
-								r.Mount("/rules", ruleHandler.Routes())
-								r.Mount("/attachments", attachmentHandler.Routes())
-								r.Mount("/dependencies", depHandler.Routes())
-								r.Mount("/watchers", watcherHandler.Routes())
+									// Task sub-resources
+									r.Mount("/checklists", checklistHandler.Routes())
+									r.Mount("/comments", commentHandler.Routes())
+									r.Mount("/rules", ruleHandler.Routes())
+									r.Mount("/attachments", attachmentHandler.Routes())
+									r.Mount("/dependencies", depHandler.Routes())
+									r.Mount("/watchers", watcherHandler.Routes())
+								})
 							})
 						})
 					})
@@ -408,8 +416,16 @@ func main() {
 		r.Mount("/notifications", notifHandler.Routes())
 	})
 
-	// Suppress unused variable warnings for worker
-	_ = workerSrv
+	// --- Background Worker (Start) ---
+	workerHandlers := &worker.Handlers{Pool: pool}
+	workerMux := asynq.NewServeMux()
+	workerHandlers.RegisterAll(workerMux)
+	go func() {
+		if err := workerSrv.Start(workerMux); err != nil {
+			log.Fatal().Err(err).Msg("asynq worker failed to start")
+		}
+	}()
+	log.Info().Msg("Asynq worker started")
 
 	// --- HTTP Server ---
 	srv := &http.Server{

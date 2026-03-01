@@ -14,6 +14,8 @@ export interface Org {
 export interface OrgMember {
   org_id: string;
   user_id: string;
+  email: string;
+  display_name?: string;
   role: OrgRole;
   joined_at: string;
 }
@@ -32,6 +34,8 @@ export interface Team {
 export interface TeamMember {
   team_id: string;
   user_id: string;
+  email: string;
+  display_name?: string;
   role: string;
   joined_at: string;
 }
@@ -53,6 +57,8 @@ export type ProjectStatus = "active" | "archived" | "completed";
 export interface ProjectMember {
   project_id: string;
   user_id: string;
+  email: string;
+  display_name?: string;
   role: string;
   joined_at: string;
 }

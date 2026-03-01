@@ -130,6 +130,33 @@ func (h *TaskHandler) GetTree(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, tree)
 }
 
+// ListTree godoc
+// @Summary List project task tree
+// @Description Retrieve all tasks in a project ordered for tree rendering
+// @Tags Tasks
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Success 200 {array} domain.Task
+// @Router /orgs/{orgId}/projects/{projectId}/tasks/tree [get]
+func (h *TaskHandler) ListTree(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	tasks, err := h.taskSvc.ListTreeByProject(r.Context(), projectID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if tasks == nil {
+		tasks = []*domain.Task{}
+	}
+	JSON(w, http.StatusOK, tasks)
+}
+
 // List godoc
 // @Summary List tasks
 // @Description List tasks in a project with optional filters and pagination

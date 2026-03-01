@@ -46,8 +46,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       let membership: OrgMember | null = null;
       if (currentOrg) {
         try {
-          const membersRes = await api.members.list(currentOrg.id);
-          membership = membersRes.data?.find((m) => m.user_id === storedUser.id) || null;
+          membership = await api.orgs.me(currentOrg.id);
         } catch {
           // ignore
         }
@@ -72,8 +71,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (currentOrg) {
       localStorage.setItem("current_org_id", currentOrg.id);
       try {
-        const membersRes = await api.members.list(currentOrg.id);
-        membership = membersRes.data?.find((m) => m.user_id === tokens.user.id) || null;
+        membership = await api.orgs.me(currentOrg.id);
       } catch {
         // ignore
       }
@@ -97,14 +95,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   setCurrentOrg: async (org: Org) => {
     localStorage.setItem("current_org_id", org.id);
     let membership: OrgMember | null = null;
-    const user = get().user;
-    if (user) {
-      try {
-        const membersRes = await api.members.list(org.id);
-        membership = membersRes.data?.find((m) => m.user_id === user.id) || null;
-      } catch {
-        // ignore
-      }
+    try {
+      membership = await api.orgs.me(org.id);
+    } catch {
+      // ignore
     }
     set({ currentOrg: org, currentMembership: membership });
   },

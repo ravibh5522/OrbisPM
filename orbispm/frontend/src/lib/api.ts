@@ -50,12 +50,18 @@ async function request<T>(
     delete headers["Content-Type"];
   }
 
+  const method = options.method || "GET";
+  console.log(`[API] ${method} ${path}`);
+
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
   });
 
-  if (res.status === 204) return undefined as T;
+  if (res.status === 204) {
+    console.log(`[API] ${method} ${path} → 204 (no content)`);
+    return undefined as T;
+  }
 
   if (!res.ok) {
     let msg = "Request failed";
@@ -67,10 +73,13 @@ async function request<T>(
     } catch {
       // ignore parse error
     }
+    console.error(`[API] ${method} ${path} → ${res.status} ERROR: ${msg}`, detail || "");
     throw new ApiError(res.status, msg, detail);
   }
 
-  return res.json();
+  const data = await res.json();
+  console.log(`[API] ${method} ${path} → ${res.status}`, data);
+  return data;
 }
 
 function get<T>(path: string): Promise<T> {
@@ -174,6 +183,7 @@ export const api = {
     create: (data: { name: string; slug: string }) => post<Org>(`${V1}/orgs`, data),
     update: (id: string, data: Partial<Org>) => put<Org>(`${V1}/orgs/${id}`, data),
     delete: (id: string) => del(`${V1}/orgs/${id}`),
+    me: (orgId: string) => get<OrgMember>(`${V1}/orgs/${orgId}/me`),
   },
 
   // Org Members
@@ -297,14 +307,14 @@ export const api = {
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules/${id}`),
   },
 
-  // Notifications
+  // Notifications (user-scoped, no org prefix)
   notifications: {
-    list: (orgId: string, params?: string) =>
-      get<ListResponse<Notification>>(`${V1}/orgs/${orgId}/notifications${params ? `?${params}` : ""}`),
-    markRead: (orgId: string, id: string) =>
-      patch<void>(`${V1}/orgs/${orgId}/notifications/${id}/read`, {}),
-    markAllRead: (orgId: string) =>
-      post<void>(`${V1}/orgs/${orgId}/notifications/read-all`, {}),
+    list: (_orgId: string, params?: string) =>
+      get<ListResponse<Notification>>(`${V1}/notifications${params ? `?${params}` : ""}`),
+    markRead: (_orgId: string, id: string) =>
+      patch<void>(`${V1}/notifications/${id}/read`, {}),
+    markAllRead: (_orgId: string) =>
+      post<void>(`${V1}/notifications/mark-all-read`, {}),
   },
 
   // Notification preferences
@@ -405,5 +415,7 @@ export const api = {
   // Dashboard
   dashboard: {
     stats: (orgId: string) => get<DashboardStats>(`${V1}/orgs/${orgId}/dashboard/stats`),
+    myTasks: (orgId: string, limit = 50, offset = 0) =>
+      get<ListResponse<Task>>(`${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`),
   },
 };

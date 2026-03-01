@@ -132,6 +132,11 @@ func (s *OrgService) ListByUser(ctx context.Context, userID uuid.UUID) ([]*domai
 
 // --- Members ---
 
+// GetMember returns a specific org member.
+func (s *OrgService) GetMember(ctx context.Context, orgID, userID uuid.UUID) (*domain.OrgMember, error) {
+	return s.orgMemberRepo.Get(ctx, orgID, userID)
+}
+
 // ListMembers lists members of an org.
 func (s *OrgService) ListMembers(ctx context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error) {
 	return s.orgMemberRepo.ListByOrg(ctx, orgID)

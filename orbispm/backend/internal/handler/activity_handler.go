@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/service"
 )
@@ -44,21 +45,31 @@ func (h *ActivityHandler) List(w http.ResponseWriter, r *http.Request) {
 	entityType := queryStr(r, "entity_type")
 	entityID := queryUUID(r, "entity_id")
 
-	if entityType == nil || entityID == nil {
-		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "entity_type and entity_id are required"})
-		return
-	}
-
-	// Ensure org context is set
-	_ = middleware.OrgIDFromCtx(r.Context())
-
+	orgID := middleware.OrgIDFromCtx(r.Context())
 	limit := queryInt(r, "limit", 50)
 	offset := queryInt(r, "offset", 0)
 
-	logs, err := h.activitySvc.ListByEntity(r.Context(), *entityType, *entityID, limit, offset)
+	// If entity filters are provided, list by entity; otherwise list all org activity
+	if entityType != nil && entityID != nil {
+		logs, err := h.activitySvc.ListByEntity(r.Context(), *entityType, *entityID, limit, offset)
+		if err != nil {
+			Error(w, r, err)
+			return
+		}
+		if logs == nil {
+			logs = []*domain.ActivityLog{}
+		}
+		JSON(w, http.StatusOK, ListResponse{Data: logs, Total: len(logs), Limit: limit, Offset: offset})
+		return
+	}
+
+	logs, total, err := h.activitySvc.ListByOrg(r.Context(), orgID, limit, offset)
 	if err != nil {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, logs)
+	if logs == nil {
+		logs = []*domain.ActivityLog{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: logs, Total: total, Limit: limit, Offset: offset})
 }

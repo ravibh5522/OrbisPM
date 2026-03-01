@@ -21,8 +21,10 @@ type Org struct {
 
 // OrgMember represents a user's membership in an organization.
 type OrgMember struct {
-	OrgID    uuid.UUID `json:"org_id"`
-	UserID   uuid.UUID `json:"user_id"`
-	Role     string    `json:"role"`
-	JoinedAt time.Time `json:"joined_at"`
+	OrgID       uuid.UUID `json:"org_id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name,omitempty"`
+	Role        string    `json:"role"`
+	JoinedAt    time.Time `json:"joined_at"`
 }
