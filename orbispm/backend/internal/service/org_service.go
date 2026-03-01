@@ -150,6 +150,21 @@ func (s *OrgService) InviteMember(ctx context.Context, orgID, userID uuid.UUID, 
 	})
 }
 
+// InviteByEmail looks up a user by email and adds them to the org.
+func (s *OrgService) InviteByEmail(ctx context.Context, orgID uuid.UUID, email, role string) (*domain.OrgMember, error) {
+	userID, err := s.orgMemberRepo.FindUserByEmail(ctx, email)
+	if err != nil {
+		return nil, fmt.Errorf("find user by email: %w", err)
+	}
+	member := &domain.OrgMember{OrgID: orgID, UserID: userID, Role: role}
+	if err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.orgMemberRepo.Add(ctx, tx, member)
+	}); err != nil {
+		return nil, err
+	}
+	return s.orgMemberRepo.Get(ctx, orgID, userID)
+}
+
 // UpdateMemberRole updates a member's role.
 func (s *OrgService) UpdateMemberRole(ctx context.Context, orgID, userID uuid.UUID, role string) error {
 	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {

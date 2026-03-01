@@ -16,6 +16,7 @@ export interface OrgMember {
   user_id: string;
   email: string;
   display_name?: string;
+  phone?: string;
   role: OrgRole;
   joined_at: string;
 }
@@ -239,6 +240,7 @@ export interface CustomRole {
   name: string;
   description?: string;
   permissions: Record<string, unknown>;
+  created_at?: string;
 }
 
 export interface ImportJob {

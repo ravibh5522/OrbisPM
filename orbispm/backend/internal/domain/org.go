@@ -25,6 +25,7 @@ type OrgMember struct {
 	UserID      uuid.UUID `json:"user_id"`
 	Email       string    `json:"email"`
 	DisplayName string    `json:"display_name,omitempty"`
+	Phone       string    `json:"phone,omitempty"`
 	Role        string    `json:"role"`
 	JoinedAt    time.Time `json:"joined_at"`
 }

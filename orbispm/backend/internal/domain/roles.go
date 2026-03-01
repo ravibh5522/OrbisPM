@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
@@ -41,4 +43,5 @@ type CustomRole struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description,omitempty"`
 	Permissions map[string]any `json:"permissions"`
+	CreatedAt   time.Time      `json:"created_at"`
 }

@@ -189,10 +189,10 @@ export const api = {
   // Org Members
   members: {
     list: (orgId: string) => get<ListResponse<OrgMember>>(`${V1}/orgs/${orgId}/members`),
-    add: (orgId: string, data: { user_id: string; role: string }) =>
+    add: (orgId: string, data: { email?: string; user_id?: string; role: string }) =>
       post<OrgMember>(`${V1}/orgs/${orgId}/members`, data),
     update: (orgId: string, userId: string, data: { role: string }) =>
-      put<OrgMember>(`${V1}/orgs/${orgId}/members/${userId}`, data),
+      patch<OrgMember>(`${V1}/orgs/${orgId}/members/${userId}`, data),
     remove: (orgId: string, userId: string) =>
       del(`${V1}/orgs/${orgId}/members/${userId}`),
   },

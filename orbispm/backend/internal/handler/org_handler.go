@@ -220,13 +220,14 @@ func (h *OrgHandler) GetMyMembership(w http.ResponseWriter, r *http.Request) {
 }
 
 type inviteMemberRequest struct {
-	UserID string `json:"user_id" validate:"required"`
+	UserID string `json:"user_id"`
+	Email  string `json:"email"`
 	Role   string `json:"role" validate:"required"`
 }
 
 // InviteMember godoc
 // @Summary Invite member to organization
-// @Description Invite a user to an organization by email
+// @Description Invite a user to an organization by email or user ID
 // @Tags Organizations
 // @Accept json
 // @Produce json
@@ -235,6 +236,7 @@ type inviteMemberRequest struct {
 // @Param body body inviteMemberRequest true "Invitation details"
 // @Success 201 {object} swaggerOrgMember
 // @Failure 400 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse "User not found"
 // @Failure 409 {object} ErrorResponse
 // @Router /orgs/{orgId}/members [post]
 func (h *OrgHandler) InviteMember(w http.ResponseWriter, r *http.Request) {
@@ -248,6 +250,23 @@ func (h *OrgHandler) InviteMember(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
 		return
 	}
+
+	// If email is provided, use invite-by-email; otherwise fall back to user_id
+	if req.Email != "" {
+		member, err := h.orgSvc.InviteByEmail(r.Context(), orgID, req.Email, req.Role)
+		if err != nil {
+			Error(w, r, err)
+			return
+		}
+		JSON(w, http.StatusCreated, member)
+		return
+	}
+
+	if req.UserID == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "email or user_id is required"})
+		return
+	}
+
 	userID, err := uuid.Parse(req.UserID)
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})

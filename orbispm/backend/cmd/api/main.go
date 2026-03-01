@@ -327,6 +327,7 @@ func main() {
 
 					// Org members (admin manages)
 					r.Post("/members/invite", orgHandler.InviteMember)
+					r.Post("/members", orgHandler.InviteMember) // alias
 					r.Patch("/members/{userId}", orgHandler.UpdateMemberRole)
 					r.Delete("/members/{userId}", orgHandler.RemoveMember)
 

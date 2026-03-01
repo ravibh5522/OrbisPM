@@ -41,6 +41,7 @@ type OrgMemberRepository interface {
 	Get(ctx context.Context, orgID, userID uuid.UUID) (*domain.OrgMember, error)
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error)
 	UpdateRole(ctx context.Context, tx pgx.Tx, orgID, userID uuid.UUID, role string) error
+	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 }
 
 // --- Team ---
