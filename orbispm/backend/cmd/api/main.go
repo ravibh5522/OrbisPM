@@ -386,8 +386,8 @@ func main() {
 							// Tasks
 							r.Route("/tasks", func(r chi.Router) {
 								r.Post("/", taskHandler.Create)
-							r.Get("/", taskHandler.List)
-							r.Get("/tree", taskHandler.ListTree) // project-level tree (must be before /{taskId})
+								r.Get("/", taskHandler.List)
+								r.Get("/tree", taskHandler.ListTree) // project-level tree (must be before /{taskId})
 
 								r.Route("/{taskId}", func(r chi.Router) {
 									r.Get("/", taskHandler.Get)
