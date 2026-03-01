@@ -386,12 +386,12 @@ export const api = {
 
   // Custom Roles
   customRoles: {
-    list: (orgId: string) => get<ListResponse<CustomRole>>(`${V1}/orgs/${orgId}/custom-roles`),
+    list: (orgId: string) => get<ListResponse<CustomRole>>(`${V1}/orgs/${orgId}/roles`),
     create: (orgId: string, data: Partial<CustomRole>) =>
-      post<CustomRole>(`${V1}/orgs/${orgId}/custom-roles`, data),
+      post<CustomRole>(`${V1}/orgs/${orgId}/roles`, data),
     update: (orgId: string, id: string, data: Partial<CustomRole>) =>
-      put<CustomRole>(`${V1}/orgs/${orgId}/custom-roles/${id}`, data),
-    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/custom-roles/${id}`),
+      patch<CustomRole>(`${V1}/orgs/${orgId}/roles/${id}`, data),
+    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/roles/${id}`),
   },
 
   // Import
