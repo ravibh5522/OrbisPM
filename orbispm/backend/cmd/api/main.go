@@ -239,6 +239,7 @@ func main() {
 	apikeySvc := service.NewAPIKeyService(apikeyRepo, txm)
 	importSvc := service.NewImportService(importJobRepo, txm)
 	billingSvc := service.NewBillingService(planRepo, subRepo, txm)
+	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, txm)
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
 
@@ -264,6 +265,7 @@ func main() {
 	apikeyHandler := handler.NewAPIKeyHandler(apikeySvc)
 	importHandler := handler.NewImportHandler(importSvc)
 	billingHandler := handler.NewBillingHandler(billingSvc)
+	dashboardHandler := handler.NewDashboardHandler(dashboardSvc)
 	customRoleHandler := handler.NewCustomRoleHandler(customRoleSvc)
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
 	eventsHandler := handler.NewEventsHandler(hub)
@@ -344,6 +346,9 @@ func main() {
 
 				// Billing
 				r.Mount("/billing", billingHandler.Routes())
+
+				// Dashboard
+				r.Mount("/dashboard", dashboardHandler.Routes())
 
 				// Notification Preferences
 				r.Mount("/notification-preferences", notifPrefHandler.Routes())

@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -64,4 +65,10 @@ func conn(pool *pgxpool.Pool, tx pgx.Tx) DBTX {
 		return tx
 	}
 	return pool
+}
+
+// isPgUniqueViolation returns true if the error is a PostgreSQL unique_violation (23505).
+func isPgUniqueViolation(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == "23505"
 }

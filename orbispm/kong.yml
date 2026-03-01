@@ -1,0 +1,73 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  # GoTrue Auth Service
+  - name: gotrue
+    url: http://gotrue:9999
+    routes:
+      - name: gotrue-auth
+        paths:
+          - /auth/v1
+        strip_path: true
+        preserve_host: false
+
+  # Go Backend API
+  - name: backend-api
+    url: http://api:8080
+    routes:
+      - name: backend-api-routes
+        paths:
+          - /api
+        strip_path: false
+        preserve_host: false
+
+  # WebSocket endpoint
+  - name: backend-ws
+    url: http://api:8080
+    routes:
+      - name: backend-ws-route
+        paths:
+          - /ws
+        strip_path: false
+        preserve_host: false
+        protocols:
+          - http
+          - https
+
+  # Storage (MinIO) proxy for direct file access
+  - name: storage
+    url: http://minio:9000
+    routes:
+      - name: storage-route
+        paths:
+          - /storage
+        strip_path: true
+        preserve_host: false
+
+plugins:
+  - name: cors
+    config:
+      origins:
+        - http://localhost:3000
+      methods:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+        - OPTIONS
+        - HEAD
+      headers:
+        - Accept
+        - Authorization
+        - Content-Type
+        - X-Requested-With
+        - X-Org-ID
+        - apikey
+      exposed_headers:
+        - X-Total-Count
+        - X-Request-Id
+      credentials: true
+      max_age: 3600
+      preflight_continue: false

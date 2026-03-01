@@ -29,7 +29,14 @@ func (r *orgRepo) Create(ctx context.Context, tx pgx.Tx, org *domain.Org) (*doma
 		 RETURNING id, name, slug, logo_url, plan, billing_customer_id, settings, created_at, updated_at`,
 		org.Name, org.Slug, nilStr(org.LogoURL), org.Plan, nilStr(org.BillingCustomerID), org.Settings,
 	)
-	return scanOrg(row)
+	result, err := scanOrg(row)
+	if err != nil {
+		if isPgUniqueViolation(err) {
+			return nil, domain.ErrConflict.WithDetail("slug already taken")
+		}
+		return nil, err
+	}
+	return result, nil
 }
 
 func (r *orgRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Org, error) {

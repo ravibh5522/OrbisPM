@@ -50,7 +50,7 @@ services:
       GOTRUE_DISABLE_SIGNUP: "false"
       GOTRUE_SMS_AUTOCONFIRM: "true"
       GOTRUE_LOG_LEVEL: "DEBUG"
-      API_EXTERNAL_URL: "http://localhost:9999"
+      API_EXTERNAL_URL: "http://localhost:8000/auth/v1"
     depends_on:
       postgres:
         condition: service_healthy
@@ -94,8 +94,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     environment:
       PORT: "8080"
       ENV: development
@@ -111,12 +111,33 @@ services:
       MEILI_URL: "http://meilisearch:7700"
       MEILI_MASTER_KEY: "masterkey-for-dev-only"
       FRONTEND_URL: http://localhost:3000
-      BASE_URL: http://localhost:8080
+      BASE_URL: http://localhost:8000
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  kong:
+    image: kong/kong-gateway:3.9
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "8443:8443"
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /kong/kong.yml
+      KONG_PROXY_ACCESS_LOG: /dev/stdout
+      KONG_ADMIN_ACCESS_LOG: /dev/stdout
+      KONG_PROXY_ERROR_LOG: /dev/stderr
+      KONG_ADMIN_ERROR_LOG: /dev/stderr
+      KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+      KONG_LOG_LEVEL: info
+    volumes:
+      - ./kong.yml:/kong/kong.yml:ro
+    depends_on:
+      - gotrue
+      - api
 
 volumes:
   pgdata:
