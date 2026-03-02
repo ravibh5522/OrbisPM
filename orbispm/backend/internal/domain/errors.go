@@ -8,17 +8,17 @@ import (
 
 // Sentinel errors for common domain cases.
 var (
-	ErrNotFound       = &AppError{Code: http.StatusNotFound, Message: "resource not found"}
-	ErrConflict       = &AppError{Code: http.StatusConflict, Message: "resource already exists"}
-	ErrForbidden      = &AppError{Code: http.StatusForbidden, Message: "access denied"}
-	ErrUnauthorized   = &AppError{Code: http.StatusUnauthorized, Message: "unauthorized"}
-	ErrBadRequest     = &AppError{Code: http.StatusBadRequest, Message: "bad request"}
-	ErrInternal       = &AppError{Code: http.StatusInternalServerError, Message: "internal server error"}
-	ErrMaxDepth       = &AppError{Code: http.StatusUnprocessableEntity, Message: fmt.Sprintf("maximum subtask depth exceeded (max %d levels)", MaxTaskDepth+1)}
-	ErrRulesNotMet    = &AppError{Code: http.StatusUnprocessableEntity, Message: "task completion rules not satisfied"}
-	ErrPlanLimitHit   = &AppError{Code: http.StatusPaymentRequired, Message: "plan limit reached"}
-	ErrCyclicDep      = &AppError{Code: http.StatusUnprocessableEntity, Message: "cyclic dependency detected"}
-	ErrInvalidStatus  = &AppError{Code: http.StatusUnprocessableEntity, Message: "invalid status transition"}
+	ErrNotFound      = &AppError{Code: http.StatusNotFound, Message: "resource not found"}
+	ErrConflict      = &AppError{Code: http.StatusConflict, Message: "resource already exists"}
+	ErrForbidden     = &AppError{Code: http.StatusForbidden, Message: "access denied"}
+	ErrUnauthorized  = &AppError{Code: http.StatusUnauthorized, Message: "unauthorized"}
+	ErrBadRequest    = &AppError{Code: http.StatusBadRequest, Message: "bad request"}
+	ErrInternal      = &AppError{Code: http.StatusInternalServerError, Message: "internal server error"}
+	ErrMaxDepth      = &AppError{Code: http.StatusUnprocessableEntity, Message: fmt.Sprintf("maximum subtask depth exceeded (max %d levels)", MaxTaskDepth+1)}
+	ErrRulesNotMet   = &AppError{Code: http.StatusUnprocessableEntity, Message: "task completion rules not satisfied"}
+	ErrPlanLimitHit  = &AppError{Code: http.StatusPaymentRequired, Message: "plan limit reached"}
+	ErrCyclicDep     = &AppError{Code: http.StatusUnprocessableEntity, Message: "cyclic dependency detected"}
+	ErrInvalidStatus = &AppError{Code: http.StatusUnprocessableEntity, Message: "invalid status transition"}
 )
 
 // AppError is the application-level error type that carries an HTTP status code.

@@ -409,11 +409,11 @@ func main() {
 							r.Route("/tasks", func(r chi.Router) {
 								r.Post("/", taskHandler.Create)
 								r.Get("/", taskHandler.List)
-								r.Get("/tree", taskHandler.ListTree) // project-level tree (must be before /{taskId})
-								r.Get("/export", taskHandler.Export) // CSV export (must be before /{taskId})
+								r.Get("/tree", taskHandler.ListTree)               // project-level tree (must be before /{taskId})
+								r.Get("/export", taskHandler.Export)               // CSV export (must be before /{taskId})
 								r.Get("/calendar.ics", taskHandler.CalendarExport) // iCal export (must be before /{taskId})
-								r.Post("/bulk", taskHandler.BulkUpdate) // must be before /{taskId}
-								r.Patch("/reorder", taskHandler.Reorder) // must be before /{taskId}
+								r.Post("/bulk", taskHandler.BulkUpdate)            // must be before /{taskId}
+								r.Patch("/reorder", taskHandler.Reorder)           // must be before /{taskId}
 
 								r.Route("/{taskId}", func(r chi.Router) {
 									r.Get("/", taskHandler.Get)

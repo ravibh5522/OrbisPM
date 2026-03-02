@@ -197,16 +197,16 @@ type MemberWorkload struct {
 
 // TeamDashboardStats holds aggregated analytics for a team.
 type TeamDashboardStats struct {
-	TotalProjects   int               `json:"total_projects"`
-	TotalTasks      int               `json:"total_tasks"`
-	TotalMembers    int               `json:"total_members"`
-	OverdueTasks    int               `json:"overdue_tasks"`
-	TasksByStatus   map[string]int    `json:"tasks_by_status"`
-	TasksByPriority map[string]int    `json:"tasks_by_priority"`
-	MemberWorkload  []MemberWorkload  `json:"member_workload"`
-	RecentTasks     []*domain.Task    `json:"recent_tasks,omitempty"`
-	CompletedLast7  int               `json:"completed_last_7_days"`
-	CreatedLast7    int               `json:"created_last_7_days"`
+	TotalProjects   int              `json:"total_projects"`
+	TotalTasks      int              `json:"total_tasks"`
+	TotalMembers    int              `json:"total_members"`
+	OverdueTasks    int              `json:"overdue_tasks"`
+	TasksByStatus   map[string]int   `json:"tasks_by_status"`
+	TasksByPriority map[string]int   `json:"tasks_by_priority"`
+	MemberWorkload  []MemberWorkload `json:"member_workload"`
+	RecentTasks     []*domain.Task   `json:"recent_tasks,omitempty"`
+	CompletedLast7  int              `json:"completed_last_7_days"`
+	CreatedLast7    int              `json:"created_last_7_days"`
 }
 
 // GetTeamDashboard returns aggregated analytics for a specific team.

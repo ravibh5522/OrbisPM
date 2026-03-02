@@ -142,14 +142,14 @@ func (s *ImportService) ProcessCSV(ctx context.Context, params ProcessCSVParams)
 	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		for rowIdx, row := range rows {
 			task := &domain.Task{
-				OrgID:     params.OrgID,
-				ProjectID: params.ProjectID,
+				OrgID:      params.OrgID,
+				ProjectID:  params.ProjectID,
 				ReporterID: &params.UserID,
-				Status:    domain.TaskStatusTodo,
-				Priority:  domain.PriorityMedium,
-				Labels:    []string{},
-				Metadata:  map[string]any{},
-				Depth:     0,
+				Status:     domain.TaskStatusTodo,
+				Priority:   domain.PriorityMedium,
+				Labels:     []string{},
+				Metadata:   map[string]any{},
+				Depth:      0,
 			}
 
 			rowNum := rowIdx + 2 // 1-indexed, skip header

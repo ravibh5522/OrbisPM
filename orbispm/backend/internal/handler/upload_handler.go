@@ -16,7 +16,7 @@ import (
 
 // UploadHandler handles general file uploads (avatars, logos, etc.).
 type UploadHandler struct {
-	store    *storage.Client
+	store     *storage.Client
 	publicURL string // e.g. "http://localhost:9000/orbispm"
 }
 

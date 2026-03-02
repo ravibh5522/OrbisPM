@@ -219,8 +219,8 @@ func (s *TaskService) ListMyTasks(ctx context.Context, orgID, userID uuid.UUID, 
 
 // BulkUpdateParams defines the shape for a bulk update request.
 type BulkUpdateParams struct {
-	TaskIDs []uuid.UUID       `json:"task_ids" validate:"required,min=1,max=100"`
-	Changes UpdateTaskParams  `json:"changes"`
+	TaskIDs []uuid.UUID      `json:"task_ids" validate:"required,min=1,max=100"`
+	Changes UpdateTaskParams `json:"changes"`
 }
 
 // BulkUpdate applies the same changes to multiple tasks in a single transaction.
