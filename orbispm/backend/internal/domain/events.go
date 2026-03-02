@@ -28,9 +28,9 @@ const (
 
 // DomainEvent carries event data for pub/sub and notifications.
 type DomainEvent struct {
-	Type      string         `json:"type"`
-	OrgID     string         `json:"org_id"`
-	ActorID   string         `json:"actor_id"`
-	EntityID  string         `json:"entity_id"`
-	Payload   map[string]any `json:"payload,omitempty"`
+	Type     string         `json:"type"`
+	OrgID    string         `json:"org_id"`
+	ActorID  string         `json:"actor_id"`
+	EntityID string         `json:"entity_id"`
+	Payload  map[string]any `json:"payload,omitempty"`
 }

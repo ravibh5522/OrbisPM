@@ -16,8 +16,8 @@ import (
 
 type CreateProjectParams struct {
 	OrgID       uuid.UUID   `json:"-"`
-	TeamID      uuid.UUID   `json:"team_id"`                                  // Legacy: primary team
-	TeamIDs     []uuid.UUID `json:"team_ids,omitempty"`                       // Multi-team: overrides TeamID if non-empty
+	TeamID      uuid.UUID   `json:"team_id"`            // Legacy: primary team
+	TeamIDs     []uuid.UUID `json:"team_ids,omitempty"` // Multi-team: overrides TeamID if non-empty
 	Name        string      `json:"name" validate:"required,min=2,max=100"`
 	Description string      `json:"description,omitempty"`
 }

@@ -79,8 +79,8 @@ func TestPartitionChanges_Mixed(t *testing.T) {
 		"labels":   []string{"bug"},
 	}
 	direct, review := service.ExportPartitionChanges(changes, []string{"status", "priority"})
-	assert.Len(t, direct, 2)  // title, labels
-	assert.Len(t, review, 2)  // status, priority
+	assert.Len(t, direct, 2) // title, labels
+	assert.Len(t, review, 2) // status, priority
 	assert.Contains(t, direct, "title")
 	assert.Contains(t, direct, "labels")
 	assert.Contains(t, review, "status")

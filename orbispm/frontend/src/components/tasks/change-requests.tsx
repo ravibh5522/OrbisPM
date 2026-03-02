@@ -43,7 +43,8 @@ export function TaskChangeRequests({ orgId, projectId, taskId, members }: TaskCh
 
   if (isLoading) return <div className="loading loading-spinner loading-sm" />;
 
-  const items: TaskChangeRequest[] = changeRequests?.data || changeRequests || [];
+  const rawCRs = changeRequests?.data ?? changeRequests;
+  const items: TaskChangeRequest[] = Array.isArray(rawCRs) ? rawCRs : [];
   if (items.length === 0) return null;
 
   const pending = items.filter((cr) => cr.status === "pending");
@@ -106,7 +107,8 @@ export function ProjectChangeRequests({ orgId, projectId, members }: ProjectChan
     enabled: !!orgId,
   });
 
-  const items: TaskChangeRequest[] = data?.data || data || [];
+  const rawItems = data?.data ?? data;
+  const items: TaskChangeRequest[] = Array.isArray(rawItems) ? rawItems : [];
 
   return (
     <div className="space-y-4">

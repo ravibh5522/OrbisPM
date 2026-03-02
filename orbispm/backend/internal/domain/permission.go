@@ -48,7 +48,7 @@ type EffectiveMember struct {
 	DisplayName    string     `json:"display_name,omitempty"`
 	AvatarURL      string     `json:"avatar_url,omitempty"`
 	Role           string     `json:"role"`
-	Source         string     `json:"source"`                    // "direct" or "team"
+	Source         string     `json:"source"` // "direct" or "team"
 	SourceTeamID   *uuid.UUID `json:"source_team_id,omitempty"`
 	SourceTeamName string     `json:"source_team_name,omitempty"`
 }
