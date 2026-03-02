@@ -16,11 +16,11 @@ import (
 
 // StripeSubscriptionInfo holds relevant subscription data from Stripe.
 type StripeSubscriptionInfo struct {
-	CustomerID  string
-	PlanID      string
-	Status      string
-	PeriodStart time.Time
-	PeriodEnd   time.Time
+	CustomerID   string
+	PlanID       string
+	Status       string
+	PeriodStart  time.Time
+	PeriodEnd    time.Time
 }
 
 // BillingService handles billing/subscription business logic.
