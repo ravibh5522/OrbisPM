@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { Plus, Shield, Trash2, Pencil, Calendar, Check, X, MoreHorizontal, Eye } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { CustomRole } from "@/types/domain";
+import { RequireAdmin } from "@/components/permission-gate";
 
 /**
  * Permission categories and their actions.
@@ -97,6 +98,14 @@ function totalPermissions(): number {
 }
 
 export default function RolesPage() {
+  return (
+    <RequireAdmin>
+      <RolesPageContent />
+    </RequireAdmin>
+  );
+}
+
+function RolesPageContent() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -215,7 +224,7 @@ export default function RolesPage() {
         />
       ) : (
         <Card>
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-visible">
             <table className="table">
               <thead>
                 <tr>
@@ -263,11 +272,11 @@ export default function RolesPage() {
                       </td>
                       <td>
                         <div className="flex gap-1 justify-end">
-                          <div className="dropdown dropdown-end">
-                            <label tabIndex={0} className="btn btn-ghost btn-xs btn-square">
+                          <div className="dropdown dropdown-end dropdown-left">
+                            <div tabIndex={0} role="button" className="btn btn-ghost btn-xs btn-square">
                               <MoreHorizontal className="w-4 h-4" />
-                            </label>
-                            <ul tabIndex={0} className="dropdown-content z-50 menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200">
+                            </div>
+                            <ul tabIndex={0} className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200">
                               <li>
                                 <button onClick={() => setViewTarget(role)} className="text-sm">
                                   <Eye className="w-3.5 h-3.5" /> View

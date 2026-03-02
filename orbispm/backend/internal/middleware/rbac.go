@@ -9,10 +9,57 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
+	"github.com/orbispm/orbispm/internal/service"
 )
+
+// PermissionResolverMiddleware creates middleware that checks permissions through the PermissionResolver.
+// scope is "org", "team", or "project". scopeIDParam is the chi URL param name (e.g. "projectId").
+func PermissionResolverMiddleware(resolver *service.PermissionResolver, scope, scopeIDParam, resource, action string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID := tenant.UserID(r.Context())
+			orgID := tenant.OrgID(r.Context())
+
+			if userID == uuid.Nil || orgID == uuid.Nil {
+				http.Error(w, `{"message":"unauthorized"}`, http.StatusUnauthorized)
+				return
+			}
+
+			var scopeID uuid.UUID
+			if scopeIDParam != "" {
+				idStr := chi.URLParam(r, scopeIDParam)
+				parsed, err := uuid.Parse(idStr)
+				if err != nil {
+					http.Error(w, `{"message":"invalid scope id"}`, http.StatusBadRequest)
+					return
+				}
+				scopeID = parsed
+			}
+
+			var scopeIDPtr *uuid.UUID
+			if scopeID != uuid.Nil {
+				scopeIDPtr = &scopeID
+			}
+
+			allowed, err := resolver.HasPermission(r.Context(), userID, orgID, scope, scopeIDPtr, resource, action)
+			if err != nil || !allowed {
+				http.Error(w, `{"message":"insufficient permissions"}`, http.StatusForbidden)
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// RequireResolvedPermission is a convenience for org-scope permission checks.
+func RequireResolvedPermission(resolver *service.PermissionResolver, resource, action string) func(http.Handler) http.Handler {
+	return PermissionResolverMiddleware(resolver, "org", "", resource, action)
+}
 
 // RBAC middleware checks role-based permissions for an endpoint.
 // It queries the membership tables to verify the user has the required role.
+// DEPRECATED: Use PermissionResolverMiddleware for new code.
 func RBAC(pool *pgxpool.Pool, requiredRoles ...string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

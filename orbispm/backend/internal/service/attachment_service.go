@@ -35,13 +35,14 @@ func NewAttachmentService(
 
 // CreateAttachmentParams holds parameters for creating an attachment.
 type CreateAttachmentParams struct {
-	OrgID     uuid.UUID
-	TaskID    *uuid.UUID
-	CommentID *uuid.UUID
-	UserID    uuid.UUID
-	Filename  string
-	FileSize  int64
-	MimeType  string
+	OrgID           uuid.UUID
+	TaskID          *uuid.UUID
+	CommentID       *uuid.UUID
+	ChangeRequestID *uuid.UUID
+	UserID          uuid.UUID
+	Filename        string
+	FileSize        int64
+	MimeType        string
 }
 
 // Create records an attachment in the database and returns a pre-signed upload URL.
@@ -50,14 +51,15 @@ func (s *AttachmentService) Create(ctx context.Context, params CreateAttachmentP
 		params.OrgID.String(), uuid.New().String(), params.Filename)
 
 	att := &domain.Attachment{
-		OrgID:       params.OrgID,
-		TaskID:      params.TaskID,
-		CommentID:   params.CommentID,
-		UploadedBy:  params.UserID,
-		Filename:    params.Filename,
-		StoragePath: storagePath,
-		FileSize:    params.FileSize,
-		MimeType:    params.MimeType,
+		OrgID:           params.OrgID,
+		TaskID:          params.TaskID,
+		CommentID:       params.CommentID,
+		ChangeRequestID: params.ChangeRequestID,
+		UploadedBy:      params.UserID,
+		Filename:        params.Filename,
+		StoragePath:     storagePath,
+		FileSize:        params.FileSize,
+		MimeType:        params.MimeType,
 	}
 
 	var created *domain.Attachment
@@ -97,6 +99,11 @@ func (s *AttachmentService) GetDownloadURL(ctx context.Context, id uuid.UUID) (*
 // ListByTask returns all attachments for a task.
 func (s *AttachmentService) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Attachment, error) {
 	return s.attachmentRepo.ListByTask(ctx, taskID)
+}
+
+// ListByChangeRequest returns all attachments for a change request.
+func (s *AttachmentService) ListByChangeRequest(ctx context.Context, crID uuid.UUID) ([]*domain.Attachment, error) {
+	return s.attachmentRepo.ListByChangeRequest(ctx, crID)
 }
 
 // Delete removes an attachment and its storage object.

@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { Plus, FileText, Trash2, Download, Upload } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TaskTemplate } from "@/types/domain";
+import { PermissionGate } from "@/components/permission-gate";
 
 interface TemplateForm {
   name: string;
@@ -83,12 +84,14 @@ export default function TemplatesPage() {
         description="Reusable task templates for your projects"
         actions={
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => importRef.current?.click()}>
-              <Upload className="w-4 h-4" /> Import JSON
-            </Button>
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="w-4 h-4" /> New Template
-            </Button>
+            <PermissionGate resource="projects" action="create">
+              <Button variant="outline" onClick={() => importRef.current?.click()}>
+                <Upload className="w-4 h-4" /> Import JSON
+              </Button>
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="w-4 h-4" /> New Template
+              </Button>
+            </PermissionGate>
             <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
           </div>
         }

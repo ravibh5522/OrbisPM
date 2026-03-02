@@ -30,6 +30,7 @@ type CreateTaskParams struct {
 }
 
 type UpdateTaskParams struct {
+	ActorID        *uuid.UUID `json:"-"` // Set by handler from auth context
 	Title          *string    `json:"title,omitempty" validate:"omitempty,min=1,max=500"`
 	Description    *string    `json:"description,omitempty"`
 	Status         *string    `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
@@ -47,6 +48,9 @@ type TaskService struct {
 	taskRepo      repository.TaskRepository
 	checklistRepo repository.ChecklistRepository
 	ruleRepo      repository.TaskRuleRepository
+	projectRepo   repository.ProjectRepository
+	crRepo        repository.TaskChangeRequestRepository
+	permResolver  *PermissionResolver
 	txm           *repository.TxManager
 	workerSrv     *worker.Server
 	publisher     EventPublisher
@@ -71,6 +75,14 @@ func NewTaskService(
 		s.publisher = publisher[0]
 	}
 	return s
+}
+
+// SetReviewDeps injects optional review-pipeline dependencies.
+// Kept separate so the constructor signature stays backward-compatible.
+func (s *TaskService) SetReviewDeps(projectRepo repository.ProjectRepository, crRepo repository.TaskChangeRequestRepository, resolver *PermissionResolver) {
+	s.projectRepo = projectRepo
+	s.crRepo = crRepo
+	s.permResolver = resolver
 }
 
 func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*domain.Task, error) {
@@ -284,63 +296,93 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 	return updated, nil
 }
 
-func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTaskParams) (*domain.Task, error) {
+func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTaskParams) (*domain.TaskUpdateResult, error) {
 	task, err := s.taskRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
+	// Build changes map from params
 	changes := map[string]any{}
 	if params.Title != nil {
 		changes["title"] = *params.Title
-		task.Title = strings.TrimSpace(*params.Title)
 	}
 	if params.Description != nil {
 		changes["description"] = *params.Description
-		task.Description = strings.TrimSpace(*params.Description)
 	}
 	if params.Status != nil {
 		changes["status"] = *params.Status
-		task.Status = *params.Status
 	}
 	if params.Priority != nil {
 		changes["priority"] = *params.Priority
-		task.Priority = *params.Priority
 	}
 	if params.AssigneeID != nil {
 		changes["assignee_id"] = (*params.AssigneeID).String()
-		task.AssigneeID = params.AssigneeID
 	}
 	if params.DueDate != nil {
 		changes["due_date"] = (*params.DueDate).Format(time.RFC3339)
-		task.DueDate = params.DueDate
 	}
 	if params.StartDate != nil {
 		changes["start_date"] = (*params.StartDate).Format(time.RFC3339)
-		task.StartDate = params.StartDate
 	}
 	if params.EstimatedHours != nil {
 		changes["estimated_hours"] = *params.EstimatedHours
-		task.EstimatedHours = params.EstimatedHours
 	}
 	if params.ActualHours != nil {
 		changes["actual_hours"] = *params.ActualHours
-		task.ActualHours = params.ActualHours
 	}
 	if params.Labels != nil {
 		changes["labels"] = params.Labels
-		task.Labels = params.Labels
 	}
 	if params.RecurrenceRule != nil {
 		changes["recurrence_rule"] = *params.RecurrenceRule
-		task.RecurrenceRule = params.RecurrenceRule
-		// Calculate next occurrence based on due date or now
-		if *params.RecurrenceRule != "" {
+	}
+
+	// --- Review pipeline ---
+	// If review deps are wired and project has reviewable_fields, partition changes.
+	var reviewableFields []string
+	if s.projectRepo != nil && s.crRepo != nil && s.permResolver != nil {
+		project, projErr := s.projectRepo.GetByID(ctx, task.ProjectID)
+		if projErr == nil {
+			reviewableFields = extractReviewableFields(project.Settings)
+		}
+	}
+
+	directChanges := changes
+	var reviewChanges map[string]any
+
+	if len(reviewableFields) > 0 {
+		directChanges, reviewChanges = partitionChanges(changes, reviewableFields)
+
+		// If there are reviewable changes, check if the actor can bypass review
+		if len(reviewChanges) > 0 && params.ActorID != nil && s.permResolver != nil {
+			projectID := task.ProjectID
+			canBypass, _ := s.permResolver.HasPermission(
+				ctx, *params.ActorID, task.OrgID,
+				domain.ScopeProject, &projectID,
+				"tasks", "direct_update",
+			)
+			if canBypass {
+				// Merge review changes back into direct changes
+				for k, v := range reviewChanges {
+					directChanges[k] = v
+				}
+				reviewChanges = nil
+			}
+		}
+	}
+
+	// Apply direct changes to the task struct
+	applyParamsToTask(task, directChanges)
+
+	// Handle recurrence rule
+	if rr, ok := directChanges["recurrence_rule"]; ok {
+		if rrStr, ok := rr.(string); ok && rrStr != "" {
 			base := time.Now()
 			if task.DueDate != nil {
 				base = *task.DueDate
 			}
-			next := calculateNextOccurrence(base, *params.RecurrenceRule)
+			next := calculateNextOccurrence(base, rrStr)
 			task.NextOccurrence = next
 		} else {
 			task.NextOccurrence = nil
@@ -356,14 +398,154 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 		return nil, err
 	}
 
+	result := &domain.TaskUpdateResult{
+		Task:           updated,
+		AppliedChanges: directChanges,
+	}
+
+	// Create change request for review fields if any
+	if len(reviewChanges) > 0 && s.crRepo != nil {
+		var proposerID uuid.UUID
+		if params.ActorID != nil {
+			proposerID = *params.ActorID
+		}
+		cr := &domain.TaskChangeRequest{
+			OrgID:      task.OrgID,
+			TaskID:     task.ID,
+			ProposerID: proposerID,
+			Changes:    reviewChanges,
+			Reason:     "Field requires review",
+		}
+		var created *domain.TaskChangeRequest
+		crErr := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+			var e error
+			created, e = s.crRepo.Create(ctx, tx, cr)
+			return e
+		})
+		if crErr == nil {
+			result.ChangeRequest = created
+			result.PendingReview = true
+			s.publishEvent(ctx, domain.EventChangeRequestCreated, task.OrgID.String(), created.ID.String(), map[string]any{
+				"task_id":     task.ID.String(),
+				"proposer_id": proposerID.String(),
+			})
+		}
+	}
+
 	// Enqueue activity log
-	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "updated", "", changes)
+	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "updated", "", directChanges)
 	// Enqueue search index update
 	s.enqueueSearchIndex("tasks", updated)
 	// Publish real-time event
-	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), changes)
+	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), directChanges)
 
-	return updated, nil
+	return result, nil
+}
+
+// applyParamsToTask applies a changes map to a task struct (used by Update).
+func applyParamsToTask(task *domain.Task, changes map[string]any) {
+	for key, val := range changes {
+		switch key {
+		case "title":
+			if s, ok := val.(string); ok {
+				task.Title = strings.TrimSpace(s)
+			}
+		case "description":
+			if s, ok := val.(string); ok {
+				task.Description = strings.TrimSpace(s)
+			}
+		case "status":
+			if s, ok := val.(string); ok {
+				task.Status = s
+			}
+		case "priority":
+			if s, ok := val.(string); ok {
+				task.Priority = s
+			}
+		case "assignee_id":
+			if s, ok := val.(string); ok {
+				if uid, err := uuid.Parse(s); err == nil {
+					task.AssigneeID = &uid
+				}
+			}
+		case "due_date":
+			if s, ok := val.(string); ok {
+				if t, err := time.Parse(time.RFC3339, s); err == nil {
+					task.DueDate = &t
+				}
+			}
+		case "start_date":
+			if s, ok := val.(string); ok {
+				if t, err := time.Parse(time.RFC3339, s); err == nil {
+					task.StartDate = &t
+				}
+			}
+		case "estimated_hours":
+			if f, ok := val.(float64); ok {
+				task.EstimatedHours = &f
+			}
+		case "actual_hours":
+			if f, ok := val.(float64); ok {
+				task.ActualHours = &f
+			}
+		case "labels":
+			if arr, ok := val.([]string); ok {
+				task.Labels = arr
+			} else if arr, ok := val.([]any); ok {
+				labels := make([]string, 0, len(arr))
+				for _, v := range arr {
+					if s, ok := v.(string); ok {
+						labels = append(labels, s)
+					}
+				}
+				task.Labels = labels
+			}
+		case "recurrence_rule":
+			if s, ok := val.(string); ok {
+				task.RecurrenceRule = &s
+			}
+		}
+	}
+}
+
+// extractReviewableFields returns the reviewable_fields from project settings.
+func extractReviewableFields(settings map[string]any) []string {
+	if settings == nil {
+		return nil
+	}
+	raw, ok := settings["reviewable_fields"]
+	if !ok {
+		return nil
+	}
+	arr, ok := raw.([]any)
+	if !ok {
+		return nil
+	}
+	fields := make([]string, 0, len(arr))
+	for _, v := range arr {
+		if s, ok := v.(string); ok {
+			fields = append(fields, s)
+		}
+	}
+	return fields
+}
+
+// partitionChanges splits changes into direct and review-required.
+func partitionChanges(changes map[string]any, reviewableFields []string) (direct, review map[string]any) {
+	rfSet := make(map[string]bool, len(reviewableFields))
+	for _, f := range reviewableFields {
+		rfSet[f] = true
+	}
+	direct = make(map[string]any)
+	review = make(map[string]any)
+	for k, v := range changes {
+		if rfSet[k] {
+			review[k] = v
+		} else {
+			direct[k] = v
+		}
+	}
+	return direct, review
 }
 
 func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) error {

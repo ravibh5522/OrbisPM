@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
 import { Plus, Webhook as WebhookIcon, Trash2 } from "lucide-react";
 import type { Webhook } from "@/types/domain";
+import { RequireAdmin } from "@/components/permission-gate";
 
 interface WebhookForm {
   url: string;
@@ -19,6 +20,14 @@ interface WebhookForm {
 }
 
 export default function WebhooksPage() {
+  return (
+    <RequireAdmin>
+      <WebhooksPageContent />
+    </RequireAdmin>
+  );
+}
+
+function WebhooksPageContent() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);

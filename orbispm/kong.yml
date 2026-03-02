@@ -45,6 +45,16 @@ services:
         strip_path: true
         preserve_host: false
 
+  # NocoDB UI
+  - name: nocodb
+    url: http://nocodb:8080
+    routes:
+      - name: nocodb-route
+        paths:
+          - /db
+        strip_path: true
+        preserve_host: false
+
 plugins:
   - name: cors
     config:

@@ -10,6 +10,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
@@ -277,12 +278,17 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
 		return
 	}
-	task, err := h.taskSvc.Update(r.Context(), id, params)
+
+	// Inject actor ID for review pipeline
+	userID := tenant.UserID(r.Context())
+	params.ActorID = &userID
+
+	result, err := h.taskSvc.Update(r.Context(), id, params)
 	if err != nil {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, task)
+	JSON(w, http.StatusOK, result)
 }
 
 // Delete godoc

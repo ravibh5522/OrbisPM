@@ -71,7 +71,7 @@ type ProjectRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Project, error)
 	Update(ctx context.Context, tx pgx.Tx, project *domain.Project) (*domain.Project, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
-	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Project, error)
+	ListByOrg(ctx context.Context, orgID uuid.UUID, teamID *uuid.UUID) ([]*domain.Project, error)
 }
 
 type ProjectMemberRepository interface {
@@ -79,6 +79,7 @@ type ProjectMemberRepository interface {
 	Remove(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID) error
 	UpdateRole(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID, role string) error
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error)
+	ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error)
 }
 
 // --- Task ---
@@ -148,6 +149,7 @@ type AttachmentRepository interface {
 	Create(ctx context.Context, tx pgx.Tx, a *domain.Attachment) (*domain.Attachment, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Attachment, error)
 	ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Attachment, error)
+	ListByChangeRequest(ctx context.Context, crID uuid.UUID) ([]*domain.Attachment, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 }
 
@@ -239,4 +241,46 @@ type CustomRoleRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, role *domain.CustomRole) (*domain.CustomRole, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.CustomRole, error)
+}
+
+// --- Permission ---
+
+type PermissionRepository interface {
+	List(ctx context.Context, scope *string) ([]*domain.Permission, error)
+	ListByRole(ctx context.Context, roleID uuid.UUID) ([]*domain.Permission, error)
+	GetByResourceAction(ctx context.Context, resource, action, scope string) (*domain.Permission, error)
+}
+
+// --- Role ---
+
+type RoleRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, role *domain.Role) (*domain.Role, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Role, error)
+	GetBySlug(ctx context.Context, orgID uuid.UUID, scope, slug string) (*domain.Role, error)
+	Update(ctx context.Context, tx pgx.Tx, role *domain.Role) (*domain.Role, error)
+	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
+	ListByOrg(ctx context.Context, orgID uuid.UUID, scope *string) ([]*domain.Role, error)
+	SetPermissions(ctx context.Context, tx pgx.Tx, roleID uuid.UUID, permIDs []uuid.UUID) error
+	GetPermissions(ctx context.Context, roleID uuid.UUID) ([]*domain.Permission, error)
+}
+
+// --- Project Team ---
+
+type ProjectTeamRepository interface {
+	Link(ctx context.Context, tx pgx.Tx, projectID, teamID uuid.UUID) error
+	Unlink(ctx context.Context, tx pgx.Tx, projectID, teamID uuid.UUID) error
+	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectTeam, error)
+	ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.ProjectTeam, error)
+	Count(ctx context.Context, projectID uuid.UUID) (int, error)
+}
+
+// --- Task Change Request ---
+
+type TaskChangeRequestRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, cr *domain.TaskChangeRequest) (*domain.TaskChangeRequest, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.TaskChangeRequest, error)
+	Update(ctx context.Context, tx pgx.Tx, cr *domain.TaskChangeRequest) (*domain.TaskChangeRequest, error)
+	ListByTask(ctx context.Context, taskID uuid.UUID, status *string) ([]*domain.TaskChangeRequest, error)
+	ListByProject(ctx context.Context, projectID uuid.UUID, status *string, limit, offset int) ([]*domain.TaskChangeRequest, int, error)
+	CountPendingByTask(ctx context.Context, taskID uuid.UUID) (int, error)
 }

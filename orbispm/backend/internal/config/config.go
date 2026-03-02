@@ -32,6 +32,7 @@ type Config struct {
 	MinIOSecretKey string
 	MinioBucket    string
 	MinIOUseSSL    bool
+	MinIOPublicURL string // browser-accessible base URL for uploaded objects
 
 	// Meilisearch
 	MeiliURL       string
@@ -78,6 +79,7 @@ func Load() (*Config, error) {
 		MinIOSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinioBucket:         getEnv("MINIO_BUCKET", "orbispm"),
 		MinIOUseSSL:         getEnvBool("MINIO_USE_SSL", false),
+		MinIOPublicURL:      getEnv("MINIO_PUBLIC_URL", "http://localhost:8000/storage/orbispm"),
 		MeiliURL:            getEnv("MEILI_URL", "http://localhost:7700"),
 		MeiliMasterKey:      getEnv("MEILI_MASTER_KEY", "masterkey-for-dev-only"),
 		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),

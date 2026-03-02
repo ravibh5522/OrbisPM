@@ -19,6 +19,11 @@ const (
 	EventExportReady       = "export.ready"
 	EventReviewRequested   = "review.requested"
 	EventReviewCompleted   = "review.completed"
+
+	// Change request events.
+	EventChangeRequestCreated  = "change_request.created"
+	EventChangeRequestApproved = "change_request.approved"
+	EventChangeRequestRejected = "change_request.rejected"
 )
 
 // DomainEvent carries event data for pub/sub and notifications.

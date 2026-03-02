@@ -120,6 +120,7 @@ services:
       MINIO_SECRET_KEY: minioadmin
       MINIO_BUCKET: orbispm
       MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_URL: "http://localhost:8000/storage/orbispm"
       MEILI_URL: "http://meilisearch:7700"
       MEILI_MASTER_KEY: "masterkey-for-dev-only"
       FRONTEND_URL: http://localhost:3000
@@ -154,9 +155,26 @@ services:
     depends_on:
       - gotrue
       - api
+      - nocodb
+
+  nocodb:
+    image: nocodb/nocodb:latest
+    restart: unless-stopped
+    ports:
+      - "8082:8080"
+    environment:
+      NC_DB: "pg://postgres:5432?u=orbispm&p=orbispm&d=orbispm"
+      NC_PUBLIC_URL: "http://localhost:8000/db"
+      NC_DISABLE_TELE: "true"
+    volumes:
+      - nocodbdata:/usr/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   pgdata:
   redisdata:
   miniodata:
   meilidata:
+  nocodbdata:

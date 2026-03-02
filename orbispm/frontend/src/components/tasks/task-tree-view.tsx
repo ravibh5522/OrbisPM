@@ -235,7 +235,7 @@ function TreeNode({
 
         {/* Title */}
         <Link
-          href={`/${orgSlug}/projects/${projectId}/tasks/${task.id}`}
+          href={`/${orgSlug}/projects/${projectId}?task=${task.id}`}
           className="flex-1 min-w-0 truncate font-medium hover:text-primary hover:underline"
         >
           {task.title}
@@ -296,7 +296,7 @@ function TreeNode({
           </div>
           <ul tabIndex={0} className="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-44">
             <li>
-              <Link href={`/${orgSlug}/projects/${projectId}/tasks/${task.id}`}>
+              <Link href={`/${orgSlug}/projects/${projectId}?task=${task.id}`}>
                 <ExternalLink className="w-4 h-4" /> Open
               </Link>
             </li>

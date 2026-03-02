@@ -40,9 +40,18 @@ export function Providers({ children }: { children: ReactNode }) {
       new QueryClient({
         defaultOptions: {
           queries: {
-            staleTime: 15 * 1000, // 15s default — SSE events trigger targeted invalidation
+            // Data remains fresh for 30 seconds - reduces redundant API calls
+            staleTime: 30 * 1000,
+            // Keep unused data in cache for 5 minutes before garbage collection
+            gcTime: 5 * 60 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
+            // Keep showing previous data while fetching new data
+            refetchOnReconnect: true,
+          },
+          mutations: {
+            // Retry failed mutations once
+            retry: 1,
           },
         },
       })

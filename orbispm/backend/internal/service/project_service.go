@@ -15,10 +15,11 @@ import (
 )
 
 type CreateProjectParams struct {
-	OrgID       uuid.UUID `json:"-"`
-	TeamID      uuid.UUID `json:"team_id" validate:"required"`
-	Name        string    `json:"name" validate:"required,min=2,max=100"`
-	Description string    `json:"description,omitempty"`
+	OrgID       uuid.UUID   `json:"-"`
+	TeamID      uuid.UUID   `json:"team_id"`                                  // Legacy: primary team
+	TeamIDs     []uuid.UUID `json:"team_ids,omitempty"`                       // Multi-team: overrides TeamID if non-empty
+	Name        string      `json:"name" validate:"required,min=2,max=100"`
+	Description string      `json:"description,omitempty"`
 }
 
 type UpdateProjectParams struct {
@@ -31,6 +32,7 @@ type UpdateProjectParams struct {
 type ProjectService struct {
 	projectRepo       repository.ProjectRepository
 	projectMemberRepo repository.ProjectMemberRepository
+	projectTeamRepo   repository.ProjectTeamRepository
 	txm               *repository.TxManager
 	workerSrv         *worker.Server
 	publisher         EventPublisher
@@ -50,25 +52,54 @@ func NewProjectService(
 	return s
 }
 
+// SetProjectTeamRepo injects the optional multi-team dependency.
+func (s *ProjectService) SetProjectTeamRepo(ptr repository.ProjectTeamRepository) {
+	s.projectTeamRepo = ptr
+}
+
 func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams) (*domain.Project, error) {
+	// Determine team IDs — prefer TeamIDs, fall back to single TeamID
+	teamIDs := params.TeamIDs
+	if len(teamIDs) == 0 && params.TeamID != uuid.Nil {
+		teamIDs = []uuid.UUID{params.TeamID}
+	}
+
 	project := &domain.Project{
 		OrgID:       params.OrgID,
-		TeamID:      params.TeamID,
 		Name:        strings.TrimSpace(params.Name),
 		Description: strings.TrimSpace(params.Description),
 		Status:      "active",
-		Settings:    map[string]any{},
+		Settings:    map[string]any{"reviewable_fields": []string{}},
+	}
+
+	// Set legacy TeamID for backward compat (first team)
+	if len(teamIDs) > 0 {
+		project.TeamID = &teamIDs[0]
 	}
 
 	var created *domain.Project
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		created, err = s.projectRepo.Create(ctx, tx, project)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Link teams via project_teams table
+		if s.projectTeamRepo != nil && len(teamIDs) > 0 {
+			for _, tID := range teamIDs {
+				if err := s.projectTeamRepo.Link(ctx, tx, created.ID, tID); err != nil {
+					return fmt.Errorf("link team %s: %w", tID, err)
+				}
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create project: %w", err)
 	}
+
+	created.TeamIDs = teamIDs
 
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "project", created.ID.String(), "created", "")
@@ -141,8 +172,12 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-func (s *ProjectService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Project, error) {
-	return s.projectRepo.ListByOrg(ctx, orgID)
+func (s *ProjectService) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID ...*uuid.UUID) ([]*domain.Project, error) {
+	var tid *uuid.UUID
+	if len(teamID) > 0 {
+		tid = teamID[0]
+	}
+	return s.projectRepo.ListByOrg(ctx, orgID, tid)
 }
 
 // --- Members ---

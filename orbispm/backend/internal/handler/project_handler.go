@@ -110,7 +110,14 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/projects [get]
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-	projects, err := h.projectSvc.ListByOrg(r.Context(), orgID)
+
+	// Optional team_id filter
+	var teamFilter *uuid.UUID
+	if tid := queryUUID(r, "team_id"); tid != nil {
+		teamFilter = tid
+	}
+
+	projects, err := h.projectSvc.ListByOrg(r.Context(), orgID, teamFilter)
 	if err != nil {
 		Error(w, r, err)
 		return

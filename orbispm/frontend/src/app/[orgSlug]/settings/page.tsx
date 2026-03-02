@@ -10,6 +10,7 @@ import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
 import { Building2, Mail, MapPin, Briefcase, Calendar, CheckCircle, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
+import { RequireAdmin } from "@/components/permission-gate";
 
 const INDUSTRY_OPTIONS = [
   { value: "", label: "Select industry" },
@@ -74,6 +75,14 @@ interface OrgSettingsForm {
 }
 
 export default function SettingsPage() {
+  return (
+    <RequireAdmin>
+      <SettingsPageContent />
+    </RequireAdmin>
+  );
+}
+
+function SettingsPageContent() {
   const { currentOrg, refreshOrgs } = useAuthStore();
   const qc = useQueryClient();
   const [error, setError] = useState("");

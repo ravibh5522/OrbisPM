@@ -59,10 +59,21 @@ func (r *projectRepo) Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	return err
 }
 
-func (r *projectRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Project, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, team_id, name, description, status, settings, created_at, updated_at
-		 FROM projects WHERE org_id = $1 ORDER BY name`, orgID)
+func (r *projectRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID *uuid.UUID) ([]*domain.Project, error) {
+	var rows pgx.Rows
+	var err error
+	if teamID != nil {
+		rows, err = r.pool.Query(ctx,
+			`SELECT p.id, p.org_id, p.team_id, p.name, p.description, p.status, p.settings, p.created_at, p.updated_at
+			 FROM projects p
+			 JOIN project_teams pt ON pt.project_id = p.id
+			 WHERE p.org_id = $1 AND pt.team_id = $2
+			 ORDER BY p.name`, orgID, *teamID)
+	} else {
+		rows, err = r.pool.Query(ctx,
+			`SELECT id, org_id, team_id, name, description, status, settings, created_at, updated_at
+			 FROM projects WHERE org_id = $1 ORDER BY name`, orgID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("list projects: %w", err)
 	}

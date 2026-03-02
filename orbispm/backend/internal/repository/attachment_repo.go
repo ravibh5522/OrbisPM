@@ -22,13 +22,13 @@ func NewAttachmentRepo(pool *pgxpool.Pool) AttachmentRepository {
 func (r *attachmentRepo) Create(ctx context.Context, tx pgx.Tx, a *domain.Attachment) (*domain.Attachment, error) {
 	q := conn(r.pool, tx)
 	row := q.QueryRow(ctx,
-		`INSERT INTO attachments (org_id, task_id, comment_id, uploaded_by, filename, storage_path, file_size, mime_type)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 RETURNING id, org_id, task_id, comment_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at`,
-		a.OrgID, a.TaskID, a.CommentID, a.UploadedBy, a.Filename, a.StoragePath, a.FileSize, a.MimeType)
+		`INSERT INTO attachments (org_id, task_id, comment_id, change_request_id, uploaded_by, filename, storage_path, file_size, mime_type)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		 RETURNING id, org_id, task_id, comment_id, change_request_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at`,
+		a.OrgID, a.TaskID, a.CommentID, a.ChangeRequestID, a.UploadedBy, a.Filename, a.StoragePath, a.FileSize, a.MimeType)
 
 	var att domain.Attachment
-	err := row.Scan(&att.ID, &att.OrgID, &att.TaskID, &att.CommentID, &att.UploadedBy,
+	err := row.Scan(&att.ID, &att.OrgID, &att.TaskID, &att.CommentID, &att.ChangeRequestID, &att.UploadedBy,
 		&att.Filename, &att.StoragePath, &att.FileSize, &att.MimeType, &att.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create attachment: %w", err)
@@ -39,9 +39,9 @@ func (r *attachmentRepo) Create(ctx context.Context, tx pgx.Tx, a *domain.Attach
 func (r *attachmentRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Attachment, error) {
 	var att domain.Attachment
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, org_id, task_id, comment_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at
+		`SELECT id, org_id, task_id, comment_id, change_request_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at
 		 FROM attachments WHERE id = $1`, id).
-		Scan(&att.ID, &att.OrgID, &att.TaskID, &att.CommentID, &att.UploadedBy,
+		Scan(&att.ID, &att.OrgID, &att.TaskID, &att.CommentID, &att.ChangeRequestID, &att.UploadedBy,
 			&att.Filename, &att.StoragePath, &att.FileSize, &att.MimeType, &att.CreatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get attachment: %w", err)
@@ -51,7 +51,7 @@ func (r *attachmentRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Att
 
 func (r *attachmentRepo) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Attachment, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, task_id, comment_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at
+		`SELECT id, org_id, task_id, comment_id, change_request_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at
 		 FROM attachments WHERE task_id = $1 ORDER BY created_at DESC`, taskID)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (r *attachmentRepo) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*d
 	var atts []*domain.Attachment
 	for rows.Next() {
 		var a domain.Attachment
-		if err := rows.Scan(&a.ID, &a.OrgID, &a.TaskID, &a.CommentID, &a.UploadedBy,
+		if err := rows.Scan(&a.ID, &a.OrgID, &a.TaskID, &a.CommentID, &a.ChangeRequestID, &a.UploadedBy,
 			&a.Filename, &a.StoragePath, &a.FileSize, &a.MimeType, &a.CreatedAt); err != nil {
 			return nil, err
 		}
@@ -74,4 +74,24 @@ func (r *attachmentRepo) Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) er
 	q := conn(r.pool, tx)
 	_, err := q.Exec(ctx, `DELETE FROM attachments WHERE id = $1`, id)
 	return err
+}
+func (r *attachmentRepo) ListByChangeRequest(ctx context.Context, crID uuid.UUID) ([]*domain.Attachment, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, org_id, task_id, comment_id, change_request_id, uploaded_by, filename, storage_path, file_size, mime_type, created_at
+		 FROM attachments WHERE change_request_id = $1 ORDER BY created_at DESC`, crID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var atts []*domain.Attachment
+	for rows.Next() {
+		var a domain.Attachment
+		if err := rows.Scan(&a.ID, &a.OrgID, &a.TaskID, &a.CommentID, &a.ChangeRequestID, &a.UploadedBy,
+			&a.Filename, &a.StoragePath, &a.FileSize, &a.MimeType, &a.CreatedAt); err != nil {
+			return nil, err
+		}
+		atts = append(atts, &a)
+	}
+	return atts, rows.Err()
 }

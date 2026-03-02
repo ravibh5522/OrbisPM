@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ConfirmDialog, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
@@ -53,8 +53,6 @@ const MAX_DEPTH = 3;
    Role-based access control helper
    ═══════════════════════════════════════════════════════ */
 
-type ProjectRole = "owner" | "admin" | "editor" | "viewer";
-
 interface AccessControl {
   canEdit: boolean;
   canDelete: boolean;
@@ -64,8 +62,8 @@ interface AccessControl {
 }
 
 function getAccessControl(role: string | undefined, isAssignee: boolean, isReporter: boolean): AccessControl {
-  const r = role as ProjectRole;
-  
+  const r = role ?? "";
+
   // Viewers can only read and comment
   if (r === "viewer") {
     return {
@@ -76,20 +74,9 @@ function getAccessControl(role: string | undefined, isAssignee: boolean, isRepor
       canAttach: false,
     };
   }
-  
-  // Editors can edit, comment, attach but not delete or manage
-  if (r === "editor" || isAssignee || isReporter) {
-    return {
-      canEdit: true,
-      canDelete: isAssignee || isReporter,
-      canManageMembers: false,
-      canComment: true,
-      canAttach: true,
-    };
-  }
-  
-  // Owners and admins have full access
-  if (r === "owner" || r === "admin") {
+
+  // Owners, admins, and project leads have full access
+  if (r === "owner" || r === "admin" || r === "lead") {
     return {
       canEdit: true,
       canDelete: true,
@@ -98,8 +85,19 @@ function getAccessControl(role: string | undefined, isAssignee: boolean, isRepor
       canAttach: true,
     };
   }
-  
-  // Default: read-only
+
+  // Members and editors (or assignee/reporter) can edit and attach
+  if (r === "member" || r === "editor" || isAssignee || isReporter) {
+    return {
+      canEdit: true,
+      canDelete: isAssignee || isReporter || r === "member",
+      canManageMembers: false,
+      canComment: true,
+      canAttach: true,
+    };
+  }
+
+  // Default: read-only (unknown/custom roles without explicit mapping)
   return {
     canEdit: false,
     canDelete: false,
@@ -193,30 +191,35 @@ export function TaskPreviewPanel({
     queryKey: ["checklists", orgId, projectId, task.id],
     queryFn: () => api.checklists.list(orgId, projectId, task.id),
     enabled: !!orgId,
+    placeholderData: keepPreviousData,
   });
   
   const { data: comments } = useQuery({
     queryKey: ["comments", orgId, projectId, task.id],
     queryFn: () => api.comments.list(orgId, projectId, task.id),
     enabled: !!orgId,
+    placeholderData: keepPreviousData,
   });
   
   const { data: attachments } = useQuery({
     queryKey: ["attachments", orgId, projectId, task.id],
     queryFn: () => api.attachments.list(orgId, projectId, task.id),
     enabled: !!orgId,
+    placeholderData: keepPreviousData,
   });
   
   const { data: dependencies } = useQuery({
     queryKey: ["dependencies", orgId, projectId, task.id],
     queryFn: () => api.dependencies.list(orgId, projectId, task.id),
     enabled: !!orgId,
+    placeholderData: keepPreviousData,
   });
   
   const { data: watchers } = useQuery({
     queryKey: ["watchers", orgId, projectId, task.id],
     queryFn: () => api.watchers.list(orgId, projectId, task.id),
     enabled: !!orgId,
+    placeholderData: keepPreviousData,
   });
 
   const checklistItems = checklists?.data || [];
@@ -774,12 +777,52 @@ function ChecklistTab({
   const toggleMutation = useMutation({
     mutationFn: ({ id, is_checked }: { id: string; is_checked: boolean }) =>
       api.checklists.update(orgId, projectId, taskId, id, { is_checked }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklists"] }),
+    onMutate: async ({ id, is_checked }) => {
+      // Cancel outgoing refetches
+      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
+      // Snapshot previous value
+      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
+      // Optimistically update
+      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.map((item) =>
+            item.id === id ? { ...item, is_checked } : item
+          ),
+        };
+      });
+      return { previousChecklists };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback on error
+      if (context?.previousChecklists) {
+        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.checklists.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklists"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
+      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
+      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.filter((item) => item.id !== id),
+        };
+      });
+      return { previousChecklists };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousChecklists) {
+        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
   });
 
   const total = items.length;
@@ -1214,7 +1257,31 @@ function RelationsTab({
       isWatching
         ? api.watchers.unwatch(orgId, projectId, taskId)
         : api.watchers.watch(orgId, projectId, taskId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchers"] }),
+    onMutate: async () => {
+      await qc.cancelQueries({ queryKey: ["watchers", orgId, projectId, taskId] });
+      const previousWatchers = qc.getQueryData(["watchers", orgId, projectId, taskId]);
+      qc.setQueryData(["watchers", orgId, projectId, taskId], (old: { data: TaskWatcher[] } | undefined) => {
+        if (!old) return old;
+        if (isWatching) {
+          return {
+            ...old,
+            data: old.data.filter((w) => w.user_id !== currentUserId),
+          };
+        } else {
+          return {
+            ...old,
+            data: [...old.data, { user_id: currentUserId, task_id: taskId, created_at: new Date().toISOString() }],
+          };
+        }
+      });
+      return { previousWatchers };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousWatchers) {
+        qc.setQueryData(["watchers", orgId, projectId, taskId], context.previousWatchers);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["watchers", orgId, projectId, taskId] }),
   });
 
   // Note: Watcher removal for other users would need a different API endpoint

@@ -39,17 +39,52 @@ interface TaskColumnsProps {
   projectId: string;
   members: ProjectMember[];
   orgMembers?: OrgMember[];
+  /** Optional task ID to auto-focus on mount */
+  focusTaskId?: string;
 }
 
-export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers }: TaskColumnsProps) {
+export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, focusTaskId }: TaskColumnsProps) {
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const orgMembership = useAuthStore((s) => s.currentMembership);
   const currentUserId = user?.id || "";
   const [selected, setSelected] = useState<(string | null)[]>([null, null, null, null]);
   const [createDepth, setCreateDepth] = useState<number | null>(null);
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [autoExpanded, setAutoExpanded] = useState(false);
+  const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
+
+  // Query for deep-linked task to get its path
+  const focusTaskQuery = useQuery({
+    queryKey: ["task", orgId, projectId, focusTaskId],
+    queryFn: () => api.tasks.get(orgId, projectId, focusTaskId!),
+    enabled: !!orgId && !!focusTaskId && !deepLinkProcessed,
+  });
+
+  // Effect to auto-expand deep-linked task
+  useEffect(() => {
+    if (focusTaskId && focusTaskQuery.data && !deepLinkProcessed) {
+      const task = focusTaskQuery.data;
+      // Build the path from root to this task
+      const path = task.path || [];
+      const newSelected: (string | null)[] = [null, null, null, null];
+      
+      // path contains UUIDs from root to task (excluding task itself)
+      // We need to select each ancestor, then the task itself
+      for (let i = 0; i < path.length && i < 4; i++) {
+        newSelected[i] = path[i];
+      }
+      // Set the task itself at its depth
+      if (task.depth < 4) {
+        newSelected[task.depth] = task.id;
+      }
+      
+      setSelected(newSelected);
+      setDeepLinkProcessed(true);
+      setAutoExpanded(true);
+    }
+  }, [focusTaskId, focusTaskQuery.data, deepLinkProcessed]);
 
   // Column customization: widths and names (persisted per project)
   const [columnWidths, setColumnWidths] = useState<number[]>(() => {
@@ -67,8 +102,10 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers }: 
     } catch { return DEFAULT_COL_NAMES; }
   });
 
-  // Get user's project role
-  const userProjectRole = members.find((m) => m.user_id === currentUserId)?.role;
+  // Get user's project role, fall back to org role for owners/admins not explicitly added as project members
+  const projectMemberRole = members.find((m) => m.user_id === currentUserId)?.role;
+  const userProjectRole = projectMemberRole
+    ?? (orgMembership?.role === "owner" || orgMembership?.role === "admin" ? orgMembership.role : undefined);
   const canEditColumns = userProjectRole === "lead" || userProjectRole === "admin" || userProjectRole === "owner";
 
   // Convert ProjectMember to OrgMember format if orgMembers not provided
@@ -304,6 +341,8 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers }: 
               />
             ),
         )}
+        {/* Filler: absorbs remaining space so columns flush against preview panel */}
+        <div className="flex-1 min-w-0 bg-base-100" />
       </div>
 
       {/* Detail panel — fixed 25% width, no gap */}

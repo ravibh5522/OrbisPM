@@ -171,3 +171,70 @@ func (h *AttachmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
+
+// CRRoutes registers attachment routes nested under /change-requests/{crId}.
+func (h *AttachmentHandler) CRRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Get("/", h.ListByCR)
+	r.Post("/", h.CreateForCR)
+	r.Route("/{attachmentId}", func(r chi.Router) {
+		r.Get("/download", h.Download)
+		r.Delete("/", h.Delete)
+	})
+	return r
+}
+
+// ListByCR returns all attachments for a change request.
+func (h *AttachmentHandler) ListByCR(w http.ResponseWriter, r *http.Request) {
+	crID, err := uuidParam(r, "crId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid change request id"})
+		return
+	}
+
+	atts, err := h.attSvc.ListByChangeRequest(r.Context(), crID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if atts == nil {
+		atts = []*domain.Attachment{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: atts, Total: len(atts), Limit: len(atts), Offset: 0})
+}
+
+// CreateForCR creates an attachment for a change request and returns a presigned upload URL.
+func (h *AttachmentHandler) CreateForCR(w http.ResponseWriter, r *http.Request) {
+	crID, err := uuidParam(r, "crId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid change request id"})
+		return
+	}
+
+	var req createAttachmentRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	att, uploadURL, err := h.attSvc.Create(r.Context(), service.CreateAttachmentParams{
+		OrgID:           orgID,
+		ChangeRequestID: &crID,
+		UserID:          userID,
+		Filename:        req.Filename,
+		FileSize:        req.FileSize,
+		MimeType:        req.MimeType,
+	})
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	JSON(w, http.StatusCreated, map[string]any{
+		"attachment": att,
+		"upload_url": uploadURL,
+	})
+}

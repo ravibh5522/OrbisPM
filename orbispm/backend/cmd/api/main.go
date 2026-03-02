@@ -223,6 +223,12 @@ func main() {
 	subRepo := repository.NewOrgSubscriptionRepo(pool)
 	customRoleRepo := repository.NewCustomRoleRepo(pool)
 
+	// --- Repositories (RBAC / Review) ---
+	permRepo := repository.NewPermissionRepo(pool)
+	roleRepo := repository.NewRoleRepo(pool)
+	projectTeamRepo := repository.NewProjectTeamRepo(pool)
+	changeReqRepo := repository.NewChangeRequestRepo(pool)
+
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
@@ -247,6 +253,16 @@ func main() {
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
 
+	// --- Services (RBAC / Review) ---
+	permSvc := service.NewPermissionService(permRepo, roleRepo, orgRepo, txm)
+	permResolver := service.NewPermissionResolver(orgMemberRepo, teamMemberRepo, projectMemberRepo, projectTeamRepo, roleRepo, orgRepo)
+	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, txm, workerSrv, publisher)
+	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, txm, workerSrv, publisher)
+
+	// Inject review deps into task service + project service
+	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
+	projectSvc.SetProjectTeamRepo(projectTeamRepo)
+
 	// --- Handlers (existing) ---
 	orgHandler := handler.NewOrgHandler(orgSvc)
 	teamHandler := handler.NewTeamHandler(teamSvc, dashboardSvc)
@@ -264,10 +280,9 @@ func main() {
 	attachmentHandler := handler.NewAttachmentHandler(attachmentSvc)
 
 	// Upload handler (avatar, logos, etc.) — public URL for MinIO objects
-	minioPublicURL := fmt.Sprintf("http://%s/%s", cfg.MinIOEndpoint, cfg.MinioBucket)
 	var uploadHandler *handler.UploadHandler
 	if storageClient != nil {
-		uploadHandler = handler.NewUploadHandler(storageClient, minioPublicURL)
+		uploadHandler = handler.NewUploadHandler(storageClient, cfg.MinIOPublicURL)
 	}
 
 	templateHandler := handler.NewTemplateHandler(templateSvc)
@@ -282,6 +297,11 @@ func main() {
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
 	eventsHandler := handler.NewEventsHandler(hub)
 	presenceHandler := handler.NewPresenceHandler(rdb, publisher)
+
+	// --- Handlers (RBAC / Review) ---
+	permHandler := handler.NewPermissionHandler(permSvc)
+	projectTeamHandler := handler.NewProjectTeamHandler(projectTeamSvc)
+	changeReqHandler := handler.NewChangeRequestHandler(changeReqSvc)
 
 	// Search handler (optional — only if Meilisearch is available)
 	var searchHandler *handler.SearchHandler
@@ -304,6 +324,7 @@ func main() {
 	r.Use(middleware.Recovery)
 	r.Use(rateLimiter.Handler)
 	r.Use(middleware.Metrics)
+	r.Use(middleware.CacheControl)
 
 	// Prometheus metrics (no auth)
 	r.Handle("/metrics", promhttp.Handler())
@@ -357,6 +378,8 @@ func main() {
 					r.Mount("/api-keys", apikeyHandler.Routes())
 					r.Mount("/roles", customRoleHandler.Routes())
 					r.Mount("/billing", billingHandler.Routes())
+
+	
 				})
 
 				// Member access: read-only member list + read-accessible resources
@@ -365,6 +388,9 @@ func main() {
 
 					r.Get("/me", orgHandler.GetMyMembership)
 					r.Get("/members", orgHandler.ListMembers)
+
+					// Permissions & Roles (combined: reads for members, mutations for admins)
+					r.Mount("/permissions", permHandler.CombinedRoutes(pool))
 
 					// Teams
 					r.Mount("/teams", teamHandler.Routes())
@@ -389,6 +415,14 @@ func main() {
 					// Events (SSE)
 					r.Mount("/events", eventsHandler.Routes())
 
+					// Change request review actions (org-level)
+					r.Mount("/change-requests", changeReqHandler.ReviewRoutes())
+
+					// Change request attachments
+					r.Route("/change-requests/{crId}/attachments", func(r chi.Router) {
+						r.Mount("/", attachmentHandler.CRRoutes())
+					})
+
 					// Presence indicators
 					r.Mount("/presence", presenceHandler.Routes())
 
@@ -410,6 +444,12 @@ func main() {
 							r.Post("/members", projectHandler.AddMember)
 							r.Delete("/members/{userId}", projectHandler.RemoveMember)
 							r.Get("/dashboard", projectHandler.Dashboard)
+
+							// Project teams (multi-team)
+							r.Mount("/teams", projectTeamHandler.Routes())
+
+							// Project-level change requests
+							r.Mount("/change-requests", changeReqHandler.ProjectRoutes())
 
 							// Imports
 							r.Mount("/imports", importHandler.Routes())
@@ -440,6 +480,9 @@ func main() {
 									r.Mount("/attachments", attachmentHandler.Routes())
 									r.Mount("/dependencies", depHandler.Routes())
 									r.Mount("/watchers", watcherHandler.Routes())
+
+									// Task-level change requests
+									r.Mount("/change-requests", changeReqHandler.TaskRoutes())
 								})
 							})
 						})

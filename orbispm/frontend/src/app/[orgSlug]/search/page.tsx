@@ -84,7 +84,7 @@ export default function SearchPage() {
                         key={task.id}
                         className="hover cursor-pointer"
                         onClick={() =>
-                          router.push(`/${currentOrg!.slug}/projects/${task.project_id}/tasks/${task.id}`)
+                          router.push(`/${currentOrg!.slug}/projects/${task.project_id}?task=${task.id}`)
                         }
                       >
                         <td className="font-medium">{task.title}</td>

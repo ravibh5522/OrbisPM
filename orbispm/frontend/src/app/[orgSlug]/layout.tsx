@@ -63,6 +63,7 @@ function getSettingsItems(orgSlug: string): NavItem[] {
     { href: `/${orgSlug}/settings/webhooks`, label: "Webhooks", icon: <Webhook className="w-5 h-5" />, roles: ["owner", "admin"] },
     { href: `/${orgSlug}/settings/api-keys`, label: "API Keys", icon: <KeyRound className="w-5 h-5" />, roles: ["owner", "admin"] },
     { href: `/${orgSlug}/settings/roles`, label: "Roles", icon: <Shield className="w-5 h-5" />, roles: ["owner", "admin"] },
+    { href: `/${orgSlug}/settings/permissions`, label: "Permissions", icon: <Shield className="w-5 h-5" />, roles: ["owner", "admin"] },
     { href: `/${orgSlug}/settings/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
   ];
 }

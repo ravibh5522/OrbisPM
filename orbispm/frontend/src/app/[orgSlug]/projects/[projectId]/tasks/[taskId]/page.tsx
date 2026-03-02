@@ -37,7 +37,9 @@ import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-ed
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { PresenceIndicator } from "@/components/ui/presence-indicator";
-import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskWatcher, TaskStatus, TaskPriority, OrgMember } from "@/types/domain";
+import { TaskChangeRequests, ChangeRequestToast } from "@/components/tasks/change-requests";
+import { usePermissions } from "@/hooks/use-permissions";
+import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskWatcher, TaskStatus, TaskPriority, OrgMember, TaskUpdateResult } from "@/types/domain";
 
 /* ─── helpers ─── */
 
@@ -81,6 +83,8 @@ export default function TaskDetailPage({
   const qc = useQueryClient();
   const orgId = currentOrg?.id || "";
 
+  const { can } = usePermissions();
+  const canEdit = can("tasks", "update");
   const { members } = useMemberMap(orgId);
 
   // ── Queries ──
@@ -127,11 +131,17 @@ export default function TaskDetailPage({
   });
 
   // ── Mutations ──
+  const [pendingReviewResult, setPendingReviewResult] = useState<TaskUpdateResult | null>(null);
   const updateTaskMutation = useMutation({
     mutationFn: (data: Partial<Task>) => api.tasks.update(orgId, projectId, taskId, data),
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["task", orgId, projectId, taskId] });
       qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["change-requests", orgId, projectId, taskId] });
+      // Show toast if some changes are pending review
+      if (result && typeof result === "object" && "pending_review" in result && result.pending_review) {
+        setPendingReviewResult(result as TaskUpdateResult);
+      }
     },
   });
 
@@ -161,6 +171,9 @@ export default function TaskDetailPage({
         />
       </div>
 
+      {/* Pending review toast */}
+      <ChangeRequestToast result={pendingReviewResult} onDismiss={() => setPendingReviewResult(null)} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Main content ── */}
         <div className="lg:col-span-2 space-y-6">
@@ -176,7 +189,7 @@ export default function TaskDetailPage({
                   key={s}
                   className={cn("btn btn-xs", task.status === s ? "btn-primary" : "btn-outline")}
                   onClick={() => patchField("status", s)}
-                  disabled={updateTaskMutation.isPending}
+                  disabled={updateTaskMutation.isPending || !canEdit}
                 >
                   {statusLabel(s)}
                 </button>
@@ -189,7 +202,7 @@ export default function TaskDetailPage({
                   key={p}
                   className={cn("btn btn-xs", task.priority === p ? "btn-secondary" : "btn-outline")}
                   onClick={() => patchField("priority", p)}
-                  disabled={updateTaskMutation.isPending}
+                  disabled={updateTaskMutation.isPending || !canEdit}
                 >
                   {statusLabel(p)}
                 </button>
@@ -300,6 +313,9 @@ export default function TaskDetailPage({
 
           {/* Rules */}
           <RulesSection orgId={orgId} projectId={projectId} taskId={taskId} items={rules?.data || []} />
+
+          {/* Change Requests */}
+          <TaskChangeRequests orgId={orgId} projectId={projectId} taskId={taskId} members={members} />
         </div>
       </div>
     </div>
@@ -632,12 +648,48 @@ function ChecklistSection({
   const toggleMutation = useMutation({
     mutationFn: ({ id, is_checked }: { id: string; is_checked: boolean }) =>
       api.checklists.update(orgId, projectId, taskId, id, { is_checked }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklists"] }),
+    onMutate: async ({ id, is_checked }) => {
+      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
+      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
+      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.map((item) =>
+            item.id === id ? { ...item, is_checked } : item
+          ),
+        };
+      });
+      return { previousChecklists };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousChecklists) {
+        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.checklists.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["checklists"] }),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
+      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
+      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.filter((item) => item.id !== id),
+        };
+      });
+      return { previousChecklists };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.previousChecklists) {
+        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
+      }
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
   });
 
   const total = items.length;

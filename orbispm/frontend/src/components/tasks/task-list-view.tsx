@@ -474,7 +474,7 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
                 onDelete={() => setDeleteTarget(task)}
                 onDuplicate={() => duplicateMutation.mutate(task.id)}
                 onNavigate={() =>
-                  router.push(`/${orgSlug}/projects/${projectId}/tasks/${task.id}`)
+                  router.push(`/${orgSlug}/projects/${projectId}?task=${task.id}`)
                 }
               />
             ))}

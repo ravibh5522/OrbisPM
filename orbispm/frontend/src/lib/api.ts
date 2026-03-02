@@ -162,6 +162,12 @@ import type {
   TeamDashboardStats,
   ProjectDashboardStats,
   AuthTokens,
+  Permission,
+  Role,
+  ProjectTeam,
+  EffectiveMember,
+  TaskChangeRequest,
+  TaskUpdateResult,
 } from "@/types/domain";
 
 const V1 = "/api/v1";
@@ -262,9 +268,10 @@ export const api = {
 
   // Projects
   projects: {
-    list: (orgId: string) => get<ListResponse<Project>>(`${V1}/orgs/${orgId}/projects`),
+    list: (orgId: string, teamId?: string) =>
+      get<ListResponse<Project>>(`${V1}/orgs/${orgId}/projects${teamId ? `?team_id=${teamId}` : ""}`),
     get: (orgId: string, id: string) => get<Project>(`${V1}/orgs/${orgId}/projects/${id}`),
-    create: (orgId: string, data: { name: string; team_id: string; description?: string }) =>
+    create: (orgId: string, data: { name: string; team_id?: string; team_ids?: string[]; description?: string }) =>
       post<Project>(`${V1}/orgs/${orgId}/projects`, data),
     update: (orgId: string, id: string, data: Partial<Project>) =>
       patch<Project>(`${V1}/orgs/${orgId}/projects/${id}`, data),
@@ -294,7 +301,7 @@ export const api = {
     create: (orgId: string, projId: string, data: Partial<Task>) =>
       post<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks`, data),
     update: (orgId: string, projId: string, id: string, data: Partial<Task>) =>
-      patch<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`, data),
+      patch<TaskUpdateResult>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`, data),
     delete: (orgId: string, projId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`),
     tree: (orgId: string, projId: string) =>
@@ -444,11 +451,12 @@ export const api = {
 
   // Billing
   billing: {
-    plans: () => get<ListResponse<BillingPlan>>(`${V1}/billing/plans`),
-    subscription: (orgId: string) => get<OrgSubscription>(`${V1}/orgs/${orgId}/subscription`),
-    subscribe: (orgId: string, data: { plan_id: string }) =>
-      post<OrgSubscription>(`${V1}/orgs/${orgId}/subscription`, data),
-    cancel: (orgId: string) => del(`${V1}/orgs/${orgId}/subscription`),
+    plans: (orgId: string) => get<ListResponse<BillingPlan>>(`${V1}/orgs/${orgId}/billing/plans`),
+    subscription: (orgId: string) => get<OrgSubscription>(`${V1}/orgs/${orgId}/billing/subscription`),
+    checkout: (orgId: string, data: { price_id: string; success_url?: string; cancel_url?: string }) =>
+      post<{ checkout_url: string; session_id: string }>(`${V1}/orgs/${orgId}/billing/checkout`, data),
+    portal: (orgId: string) =>
+      post<{ portal_url: string }>(`${V1}/orgs/${orgId}/billing/portal`, {}),
   },
 
   // Custom Roles
@@ -504,5 +512,79 @@ export const api = {
       get<{ user_id: string; display_name?: string; avatar_url?: string; viewing_since: string }[]>(
         `${V1}/orgs/${orgId}/presence?resource_type=${resourceType}&resource_id=${resourceId}`
       ),
+  },
+
+  // --- Permission System ---
+  permissions: {
+    list: (orgId: string, scope?: string) =>
+      get<Permission[]>(`${V1}/orgs/${orgId}/permissions${scope ? `?scope=${scope}` : ""}`),
+    roles: {
+      list: (orgId: string, scope?: string) =>
+        get<Role[]>(`${V1}/orgs/${orgId}/permissions/roles${scope ? `?scope=${scope}` : ""}`),
+      get: (orgId: string, roleId: string) =>
+        get<Role>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`),
+      create: (orgId: string, data: { scope: string; slug: string; name: string; description?: string }) =>
+        post<Role>(`${V1}/orgs/${orgId}/permissions/roles`, data),
+      update: (orgId: string, roleId: string, data: { name?: string; description?: string }) =>
+        patch<Role>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`, data),
+      delete: (orgId: string, roleId: string) =>
+        del(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`),
+      setPermissions: (orgId: string, roleId: string, permissionIds: string[]) =>
+        put<void>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}/permissions`, { permission_ids: permissionIds }),
+    },
+    teamProjectRoleMap: {
+      get: (orgId: string) =>
+        get<Record<string, string>>(`${V1}/orgs/${orgId}/permissions/team-project-role-map`),
+      set: (orgId: string, roleMap: Record<string, string>) =>
+        put<void>(`${V1}/orgs/${orgId}/permissions/team-project-role-map`, roleMap),
+    },
+  },
+
+  // --- Project Teams ---
+  projectTeams: {
+    list: (orgId: string, projId: string) =>
+      get<ProjectTeam[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams`),
+    link: (orgId: string, projId: string, teamIds: string[]) =>
+      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/teams`, { team_ids: teamIds }),
+    unlink: (orgId: string, projId: string, teamId: string) =>
+      del(`${V1}/orgs/${orgId}/projects/${projId}/teams/${teamId}`),
+    eligibleMembers: (orgId: string, projId: string) =>
+      get<EffectiveMember[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams/eligible-members`),
+  },
+
+  // --- Change Requests ---
+  changeRequests: {
+    listByTask: (orgId: string, projId: string, taskId: string, status?: string) =>
+      get<TaskChangeRequest[]>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/change-requests${status ? `?status=${status}` : ""}`
+      ),
+    create: (orgId: string, projId: string, taskId: string, data: { changes: Record<string, unknown>; reason?: string }) =>
+      post<TaskChangeRequest>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/change-requests`,
+        data
+      ),
+    listByProject: (orgId: string, projId: string, params?: string) =>
+      get<ListResponse<TaskChangeRequest>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/change-requests${params ? `?${params}` : ""}`
+      ),
+    approve: (orgId: string, crId: string, note?: string) =>
+      post<TaskChangeRequest>(`${V1}/orgs/${orgId}/change-requests/${crId}/approve`, { note: note || "" }),
+    reject: (orgId: string, crId: string, note?: string) =>
+      post<TaskChangeRequest>(`${V1}/orgs/${orgId}/change-requests/${crId}/reject`, { note: note || "" }),
+    attachments: {
+      list: (orgId: string, crId: string) =>
+        get<ListResponse<Attachment>>(`${V1}/orgs/${orgId}/change-requests/${crId}/attachments`),
+      create: (orgId: string, crId: string, data: { filename: string; file_size: number; mime_type: string }) =>
+        post<{ attachment: Attachment; upload_url: string }>(
+          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments`,
+          data
+        ),
+      download: (orgId: string, crId: string, attachmentId: string) =>
+        get<{ attachment: Attachment; download_url: string }>(
+          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}/download`
+        ),
+      delete: (orgId: string, crId: string, attachmentId: string) =>
+        del(`${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}`),
+    },
   },
 };

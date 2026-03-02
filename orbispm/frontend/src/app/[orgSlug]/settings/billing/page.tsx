@@ -1,20 +1,29 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { PageHeader, Card, LoadingPage } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Check } from "lucide-react";
 import type { BillingPlan } from "@/types/domain";
+import { RequireAdmin } from "@/components/permission-gate";
 
 export default function BillingPage() {
+  return (
+    <RequireAdmin>
+      <BillingPageContent />
+    </RequireAdmin>
+  );
+}
+
+function BillingPageContent() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
-  const qc = useQueryClient();
 
   const { data: plans, isLoading: plansLoading } = useQuery({
-    queryKey: ["billing-plans"],
-    queryFn: () => api.billing.plans(),
+    queryKey: ["billing-plans", currentOrg?.id],
+    queryFn: () => api.billing.plans(currentOrg!.id),
+    enabled: !!currentOrg,
   });
 
   const { data: subscription, isLoading: subLoading } = useQuery({
@@ -25,13 +34,18 @@ export default function BillingPage() {
   });
 
   const subscribeMutation = useMutation({
-    mutationFn: (planId: string) => api.billing.subscribe(currentOrg!.id, { plan_id: planId }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subscription"] }),
+    mutationFn: (plan: BillingPlan) =>
+      api.billing.checkout(currentOrg!.id, { price_id: plan.stripe_price_id! }),
+    onSuccess: (data) => {
+      window.location.href = data.checkout_url;
+    },
   });
 
   const cancelMutation = useMutation({
-    mutationFn: () => api.billing.cancel(currentOrg!.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["subscription"] }),
+    mutationFn: () => api.billing.portal(currentOrg!.id),
+    onSuccess: (data) => {
+      window.location.href = data.portal_url;
+    },
   });
 
   if (plansLoading || subLoading) return <LoadingPage />;
@@ -51,12 +65,12 @@ export default function BillingPage() {
               <p className="text-sm text-base-content/60">Status: {subscription.status}</p>
             </div>
             <Button
-              variant="error"
+              variant="outline"
               size="sm"
               onClick={() => cancelMutation.mutate()}
               loading={cancelMutation.isPending}
             >
-              Cancel Subscription
+              Manage Subscription
             </Button>
           </div>
         </Card>
@@ -89,10 +103,11 @@ export default function BillingPage() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => subscribeMutation.mutate(plan.id)}
+                  onClick={() => subscribeMutation.mutate(plan)}
+                  disabled={!plan.stripe_price_id}
                   loading={subscribeMutation.isPending}
                 >
-                  Select Plan
+                  {plan.stripe_price_id ? "Select Plan" : "Contact Us"}
                 </Button>
               )}
             </div>

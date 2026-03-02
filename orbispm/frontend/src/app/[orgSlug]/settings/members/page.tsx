@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { UserPlus, Trash2, Shield, Users, MoreHorizontal, Mail, Phone, Calendar, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { OrgMember } from "@/types/domain";
+import { RequireAdmin } from "@/components/permission-gate";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -44,6 +45,14 @@ interface CreateAccountForm {
 }
 
 export default function MembersPage() {
+  return (
+    <RequireAdmin>
+      <MembersPageContent />
+    </RequireAdmin>
+  );
+}
+
+function MembersPageContent() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const currentUser = useAuthStore((s) => s.user);
   const qc = useQueryClient();

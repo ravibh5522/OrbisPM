@@ -197,6 +197,9 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
         )}
       </Card>
 
+      {/* Reviewable Fields Configuration */}
+      <ReviewableFieldsSettings orgId={orgId} project={project} />
+
       {/* Project Info (Name/Description) */}
       <ProjectInfoSettings orgId={orgId} project={project} />
     </div>
@@ -431,6 +434,104 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
           </div>
         )}
       </div>
+    </Card>
+  );
+}
+
+/* ── Reviewable Fields Settings ── */
+
+const REVIEWABLE_FIELD_OPTIONS = [
+  { id: "status", label: "Status" },
+  { id: "priority", label: "Priority" },
+  { id: "assignee_id", label: "Assignee" },
+  { id: "due_date", label: "Due Date" },
+  { id: "start_date", label: "Start Date" },
+  { id: "estimated_hours", label: "Estimated Hours" },
+  { id: "labels", label: "Labels" },
+] as const;
+
+function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
+  const qc = useQueryClient();
+  const currentFields: string[] =
+    (project.settings?.reviewable_fields as string[]) || [];
+  const [selected, setSelected] = useState<Set<string>>(new Set(currentFields));
+  const [hasChanges, setHasChanges] = useState(false);
+
+  const saveMutation = useMutation({
+    mutationFn: (fields: string[]) =>
+      api.projects.update(orgId, project.id, {
+        settings: {
+          ...project.settings,
+          reviewable_fields: fields,
+        },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
+      setHasChanges(false);
+    },
+  });
+
+  const toggle = (fieldId: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(fieldId)) next.delete(fieldId);
+      else next.add(fieldId);
+      return next;
+    });
+    setHasChanges(true);
+  };
+
+  return (
+    <Card>
+      <div className="mb-4">
+        <h3 className="text-lg font-semibold">Review Required Fields</h3>
+        <p className="text-sm text-base-content/60">
+          Changes to these fields will require approval from a reviewer before being applied.
+          If no fields are selected, all updates are applied immediately.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {REVIEWABLE_FIELD_OPTIONS.map((field) => (
+          <label
+            key={field.id}
+            className={cn(
+              "flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors",
+              selected.has(field.id)
+                ? "border-primary bg-primary/5"
+                : "border-base-300 hover:bg-base-200"
+            )}
+          >
+            <input
+              type="checkbox"
+              className="checkbox checkbox-sm checkbox-primary"
+              checked={selected.has(field.id)}
+              onChange={() => toggle(field.id)}
+            />
+            <span className="text-sm font-medium">{field.label}</span>
+          </label>
+        ))}
+      </div>
+
+      {hasChanges && (
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setSelected(new Set(currentFields));
+              setHasChanges(false);
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => saveMutation.mutate(Array.from(selected))}
+            loading={saveMutation.isPending}
+          >
+            Save Changes
+          </Button>
+        </div>
+      )}
     </Card>
   );
 }

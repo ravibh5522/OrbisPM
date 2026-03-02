@@ -13,7 +13,7 @@ type User struct {
 	Name  string
 }
 
-// Org-level roles.
+// Org-level role slugs (reference only — actual roles are DB-driven via `roles` table).
 const (
 	RoleOrgOwner        = "owner"
 	RoleOrgAdmin        = "admin"
@@ -22,13 +22,13 @@ const (
 	RoleOrgBillingAdmin = "billing_admin"
 )
 
-// Team-level roles.
+// Team-level role slugs.
 const (
 	RoleTeamLead   = "team_lead"
 	RoleTeamMember = "member"
 )
 
-// Project-level roles.
+// Project-level role slugs.
 const (
 	RoleProjectLead        = "lead"
 	RoleProjectContributor = "contributor"
@@ -36,7 +36,8 @@ const (
 	RoleProjectObserver    = "observer"
 )
 
-// CustomRole represents an org-specific custom role.
+// Deprecated: CustomRole is replaced by domain.Role with DB-driven permissions.
+// Kept for backward compatibility during migration.
 type CustomRole struct {
 	ID          uuid.UUID      `json:"id"`
 	OrgID       uuid.UUID      `json:"org_id"`
@@ -44,4 +45,12 @@ type CustomRole struct {
 	Description string         `json:"description,omitempty"`
 	Permissions map[string]any `json:"permissions"`
 	CreatedAt   time.Time      `json:"created_at"`
+}
+
+// DefaultTeamProjectRoleMap is the default mapping of team roles to project roles.
+// Stored in orgs.settings.team_project_role_map JSONB and configurable per org.
+var DefaultTeamProjectRoleMap = map[string]string{
+	"team_lead": "lead",
+	"member":    "contributor",
+	"viewer":    "observer",
 }

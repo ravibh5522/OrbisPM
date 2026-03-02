@@ -46,7 +46,8 @@ export interface TeamMember {
 export interface Project {
   id: string;
   org_id: string;
-  team_id: string;
+  team_id?: string | null;
+  team_ids?: string[];
   name: string;
   description?: string;
   status: ProjectStatus;
@@ -80,7 +81,76 @@ export interface ProjectMember {
   display_name?: string;
   avatar_url?: string;
   role: string;
+  source?: string;
+  source_team_id?: string | null;
+  source_team_name?: string;
   joined_at: string;
+}
+
+// --- Permission System Types ---
+
+export type PermissionScope = "org" | "team" | "project";
+
+export interface Permission {
+  id: string;
+  resource: string;
+  action: string;
+  scope: PermissionScope;
+  description?: string;
+}
+
+export interface Role {
+  id: string;
+  org_id: string;
+  scope: PermissionScope;
+  slug: string;
+  name: string;
+  description?: string;
+  is_system: boolean;
+  permissions?: Permission[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectTeam {
+  project_id: string;
+  team_id: string;
+  team_name?: string;
+  added_at: string;
+}
+
+export interface EffectiveMember {
+  user_id: string;
+  email: string;
+  display_name?: string;
+  avatar_url?: string;
+  role: string;
+  source: string;
+  source_team_id?: string | null;
+  source_team_name?: string;
+}
+
+export type ChangeRequestStatus = "pending" | "approved" | "rejected";
+
+export interface TaskChangeRequest {
+  id: string;
+  org_id: string;
+  task_id: string;
+  proposer_id: string;
+  reviewer_id?: string | null;
+  status: ChangeRequestStatus;
+  changes: Record<string, unknown>;
+  reason?: string;
+  review_note?: string;
+  created_at: string;
+  reviewed_at?: string | null;
+}
+
+export interface TaskUpdateResult {
+  task: Task;
+  change_request?: TaskChangeRequest | null;
+  applied_changes?: Record<string, unknown>;
+  pending_review?: boolean;
 }
 
 export type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
@@ -228,6 +298,7 @@ export interface Attachment {
   org_id: string;
   task_id?: string | null;
   comment_id?: string | null;
+  change_request_id?: string | null;
   uploaded_by: string;
   filename: string;
   file_size: number;

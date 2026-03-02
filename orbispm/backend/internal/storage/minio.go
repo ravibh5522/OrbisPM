@@ -44,6 +44,23 @@ func NewClient(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*Cli
 		}
 		log.Info().Str("bucket", bucket).Msg("created MinIO bucket")
 	}
+
+	// Set public-read policy so browser can load avatars/logos directly.
+	publicPolicy := fmt.Sprintf(`{
+	"Version":"2012-10-17",
+	"Statement":[{
+		"Effect":"Allow",
+		"Principal":{"AWS":"*"},
+		"Action":["s3:GetObject"],
+		"Resource":["arn:aws:s3:::%s/*"]
+	}]
+}`, bucket)
+	if err := mc.SetBucketPolicy(ctx, bucket, publicPolicy); err != nil {
+		log.Warn().Err(err).Str("bucket", bucket).Msg("failed to set bucket public-read policy (objects may not be publicly accessible)")
+	} else {
+		log.Info().Str("bucket", bucket).Msg("MinIO bucket public-read policy set")
+	}
+
 	return c, nil
 }
 

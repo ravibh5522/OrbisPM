@@ -96,7 +96,7 @@ export default function MyTasksPage() {
                 <AlertTriangle className="w-5 h-5 text-error" />
                 <h3 className="font-semibold text-error">Overdue ({overdue.length})</h3>
               </div>
-              <TaskTable tasks={overdue} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}/tasks/${t.id}`)} />
+              <TaskTable tasks={overdue} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)} />
             </Card>
           )}
 
@@ -107,7 +107,7 @@ export default function MyTasksPage() {
                 <Loader2 className="w-5 h-5 text-info animate-spin" />
                 <h3 className="font-semibold">In Progress ({grouped.in_progress.length})</h3>
               </div>
-              <TaskTable tasks={grouped.in_progress} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}/tasks/${t.id}`)} />
+              <TaskTable tasks={grouped.in_progress} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)} />
             </Card>
           )}
 
@@ -118,7 +118,7 @@ export default function MyTasksPage() {
                 <Circle className="w-5 h-5 text-base-content/40" />
                 <h3 className="font-semibold">Todo ({grouped.todo.length})</h3>
               </div>
-              <TaskTable tasks={grouped.todo} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}/tasks/${t.id}`)} />
+              <TaskTable tasks={grouped.todo} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)} />
             </Card>
           )}
 
@@ -129,7 +129,7 @@ export default function MyTasksPage() {
                 <AlertTriangle className="w-5 h-5 text-warning" />
                 <h3 className="font-semibold">Blocked ({grouped.blocked.length})</h3>
               </div>
-              <TaskTable tasks={grouped.blocked} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}/tasks/${t.id}`)} />
+              <TaskTable tasks={grouped.blocked} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)} />
             </Card>
           )}
 
@@ -141,7 +141,7 @@ export default function MyTasksPage() {
                 Done ({grouped.done.length})
               </summary>
               <div className="collapse-content">
-                <TaskTable tasks={grouped.done} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}/tasks/${t.id}`)} />
+                <TaskTable tasks={grouped.done} statusIcon={statusIcon} onNavigate={(t) => router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)} />
               </div>
             </details>
           )}

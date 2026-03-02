@@ -2,7 +2,7 @@
 
 import { useState, use } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
@@ -13,6 +13,7 @@ import { TaskTreeView } from "@/components/tasks/task-tree-view";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectSettings } from "@/components/projects/project-settings";
+import { ProjectChangeRequests } from "@/components/tasks/change-requests";
 import {
   ArrowLeft,
   Settings,
@@ -26,16 +27,21 @@ import {
   Upload,
   Download,
   CalendarDays,
+  Link2,
+  Unlink,
+  GitPullRequest,
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import type { ProjectMember } from "@/types/domain";
+import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
 import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlug: string; projectId: string }> }) {
   const { projectId } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const focusTaskId = searchParams.get("task") || undefined;
   const currentOrg = useAuthStore((s) => s.currentOrg);
-  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "dashboard" | "settings">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "teams" | "reviews" | "dashboard" | "settings">("tasks");
   const [taskView, setTaskView] = useState<"columns" | "list" | "tree">("columns");
   const [importOpen, setImportOpen] = useState(false);
   const { can } = usePermissions();
@@ -88,6 +94,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               <Users className="w-3.5 h-3.5 mr-1" /> Members
             </button>
           )}
+          {can("projects", "manage_members") && (
+            <button role="tab" className={`tab tab-sm ${activeTab === "teams" ? "tab-active" : ""}`} onClick={() => setActiveTab("teams")}>
+              <Link2 className="w-3.5 h-3.5 mr-1" /> Teams
+            </button>
+          )}
+          <button role="tab" className={`tab tab-sm ${activeTab === "reviews" ? "tab-active" : ""}`} onClick={() => setActiveTab("reviews")}>
+            <GitPullRequest className="w-3.5 h-3.5 mr-1" /> Reviews
+          </button>
           {can("settings", "update") && (
             <button role="tab" className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`} onClick={() => setActiveTab("settings")}>
               <Settings className="w-3.5 h-3.5 mr-1" /> Settings
@@ -158,6 +172,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               orgSlug={currentOrg!.slug}
               projectId={projectId}
               members={members?.data || []}
+              focusTaskId={focusTaskId}
             />
           )}
           {taskView === "tree" && (
@@ -182,6 +197,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
       {/* Members tab */}
       {activeTab === "members" && (
         <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
+      )}
+
+      {/* Teams tab */}
+      {activeTab === "teams" && (
+        <ProjectTeamsSection orgId={currentOrg!.id} projectId={projectId} />
+      )}
+
+      {/* Reviews tab */}
+      {activeTab === "reviews" && (
+        <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
       )}
 
       {/* Settings tab */}
@@ -293,6 +318,7 @@ function ProjectMembersSection({
                 <tr>
                   <th>User</th>
                   <th>Role</th>
+                  <th>Source</th>
                   <th>Joined</th>
                   <th></th>
                 </tr>
@@ -314,19 +340,161 @@ function ProjectMembersSection({
                         className="select select-ghost select-xs capitalize"
                         value={m.role}
                         onChange={(e) => updateRoleMutation.mutate({ userId: m.user_id, role: e.target.value })}
+                        disabled={m.source === "team"}
                       >
                         {roleOptions.map((r) => (
                           <option key={r.value} value={r.value}>{r.label}</option>
                         ))}
                       </select>
                     </td>
+                    <td>
+                      {m.source === "team" ? (
+                        <span className="badge badge-outline badge-sm">
+                          Team: {m.source_team_name || "—"}
+                        </span>
+                      ) : (
+                        <span className="badge badge-primary badge-sm">Direct</span>
+                      )}
+                    </td>
                     <td className="text-sm text-base-content/60">{formatDate(m.joined_at)}</td>
                     <td>
                       <button
                         className="btn btn-ghost btn-xs text-error"
                         onClick={() => removeMutation.mutate(m.user_id)}
+                        disabled={m.source === "team"}
+                        title={m.source === "team" ? "Inherited from team — unlink team to remove" : "Remove member"}
                       >
                         <Trash2 className="w-3 h-3" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+/* ─── Project Teams Section ─── */
+
+function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: string }) {
+  const qc = useQueryClient();
+  const [showLink, setShowLink] = useState(false);
+
+  const { data: linkedTeams, isLoading } = useQuery({
+    queryKey: ["project-teams", orgId, projectId],
+    queryFn: () => api.projectTeams.list(orgId, projectId),
+    enabled: !!orgId,
+  });
+
+  const { data: allTeams, isLoading: teamsLoading } = useQuery({
+    queryKey: ["teams", orgId],
+    queryFn: () => api.teams.list(orgId),
+    enabled: !!orgId && showLink,
+  });
+
+  const linkMutation = useMutation({
+    mutationFn: (teamIds: string[]) => api.projectTeams.link(orgId, projectId, teamIds),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+      setShowLink(false);
+    },
+  });
+
+  const unlinkMutation = useMutation({
+    mutationFn: (teamId: string) => api.projectTeams.unlink(orgId, projectId, teamId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+    },
+  });
+
+  const linkedIds = new Set((linkedTeams || []).map((t: ProjectTeam) => t.team_id));
+  const availableTeams = (allTeams?.data || []).filter((t: Team) => !linkedIds.has(t.id));
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="font-semibold">Linked Teams</h3>
+            <p className="text-sm text-base-content/60">Teams linked to this project. Team members inherit project roles based on the role mapping.</p>
+          </div>
+          <Button 
+            size="sm" 
+            onClick={() => setShowLink(!showLink)}
+            variant={showLink ? "secondary" : "primary"}
+          >
+            <Link2 className="w-4 h-4 mr-1" /> {showLink ? "Cancel" : "Link Team"}
+          </Button>
+        </div>
+
+        {showLink && (
+          <div className="mb-4 p-3 bg-base-200 rounded-lg">
+            <p className="text-sm font-medium mb-2">Select teams to link:</p>
+            {teamsLoading ? (
+              <div className="flex justify-center py-2">
+                <div className="loading loading-spinner loading-sm" />
+              </div>
+            ) : availableTeams.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {availableTeams.map((team: Team) => (
+                  <button
+                    key={team.id}
+                    className="btn btn-outline btn-sm"
+                    onClick={() => linkMutation.mutate([team.id])}
+                    disabled={linkMutation.isPending}
+                  >
+                    {linkMutation.isPending ? (
+                      <span className="loading loading-spinner loading-xs" />
+                    ) : (
+                      <Link2 className="w-3 h-3 mr-1" />
+                    )}
+                    {team.name}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className="text-sm text-base-content/50">
+                All teams are already linked to this project.
+              </span>
+            )}
+          </div>
+        )}
+
+        {isLoading ? (
+          <div className="flex justify-center py-4"><div className="loading loading-spinner" /></div>
+        ) : !linkedTeams || linkedTeams.length === 0 ? (
+          <p className="text-center py-6 text-base-content/50">No teams linked yet</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Team</th>
+                  <th>Linked</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {linkedTeams.map((pt: ProjectTeam) => (
+                  <tr key={pt.team_id}>
+                    <td className="font-medium">{pt.team_name || pt.team_id.slice(0, 12)}</td>
+                    <td className="text-sm text-base-content/60">
+                      {pt.linked_at ? new Date(pt.linked_at).toLocaleDateString() : "—"}
+                    </td>
+                    <td>
+                      <button
+                        className="btn btn-ghost btn-xs text-error"
+                        onClick={() => unlinkMutation.mutate(pt.team_id)}
+                        disabled={unlinkMutation.isPending || (linkedTeams.length <= 1)}
+                        title={linkedTeams.length <= 1 ? "Cannot unlink the last team" : "Unlink team"}
+                      >
+                        <Unlink className="w-3 h-3" />
                       </button>
                     </td>
                   </tr>

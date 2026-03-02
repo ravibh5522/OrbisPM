@@ -12,6 +12,7 @@ import { useForm } from "react-hook-form";
 import { Plus, KeyRound, Trash2, Copy } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { APIKey } from "@/types/domain";
+import { RequireAdmin } from "@/components/permission-gate";
 
 interface ApiKeyForm {
   name: string;
@@ -19,6 +20,14 @@ interface ApiKeyForm {
 }
 
 export default function ApiKeysPage() {
+  return (
+    <RequireAdmin>
+      <ApiKeysPageContent />
+    </RequireAdmin>
+  );
+}
+
+function ApiKeysPageContent() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
