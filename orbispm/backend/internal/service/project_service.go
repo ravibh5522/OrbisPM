@@ -22,10 +22,10 @@ type CreateProjectParams struct {
 }
 
 type UpdateProjectParams struct {
-	Name        *string                 `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	Description *string                 `json:"description,omitempty"`
-	Status      *string                 `json:"status,omitempty" validate:"omitempty,oneof=active archived completed"`
-	Settings    map[string]any          `json:"settings,omitempty"`
+	Name        *string        `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+	Description *string        `json:"description,omitempty"`
+	Status      *string        `json:"status,omitempty" validate:"omitempty,oneof=active archived completed"`
+	Settings    map[string]any `json:"settings,omitempty"`
 }
 
 type ProjectService struct {

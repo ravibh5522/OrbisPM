@@ -19,11 +19,11 @@ import (
 
 // BillingHandler handles billing/subscription HTTP endpoints.
 type BillingHandler struct {
-	billingSvc      *service.BillingService
-	stripeKey       string
-	webhookSecret   string
-	frontendURL     string
-	stripeEnabled   bool
+	billingSvc    *service.BillingService
+	stripeKey     string
+	webhookSecret string
+	frontendURL   string
+	stripeEnabled bool
 }
 
 // NewBillingHandler creates a new BillingHandler.
@@ -119,7 +119,7 @@ func (h *BillingHandler) CreateCheckoutSession(w http.ResponseWriter, r *http.Re
 	orgSlug := chi.URLParam(r, "orgId") // Actually orgSlug in routes
 
 	var req struct {
-		PriceID   string `json:"price_id" validate:"required"`
+		PriceID    string `json:"price_id" validate:"required"`
 		SuccessURL string `json:"success_url,omitempty"`
 		CancelURL  string `json:"cancel_url,omitempty"`
 	}
