@@ -11,7 +11,7 @@ import { Input, Select } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
 import { UserPlus, Trash2, Shield, Users, MoreHorizontal, Mail, Phone, Calendar, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import type { OrgMember, OrgRole } from "@/types/domain";
+import type { OrgMember } from "@/types/domain";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },

@@ -4,15 +4,14 @@ import { useState, useRef, useEffect, useCallback, use } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, Badge, LoadingPage, ConfirmDialog, Avatar } from "@/components/ui/shared";
+import { api } from "@/lib/api";
+import { Card, Badge, LoadingPage, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea, Select } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
+
+
 import {
   ArrowLeft,
   CheckSquare,
-  MessageSquare,
   Paperclip,
   Link2,
   Shield,
@@ -22,7 +21,6 @@ import {
   Check,
   Upload,
   Clock,
-  User,
   Plus,
   Pencil,
   X,
@@ -36,6 +34,9 @@ import {
 } from "lucide-react";
 import { statusColor, priorityColor, statusLabel, formatRelative, formatDate, cn } from "@/lib/utils";
 import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-editor";
+import { TimeTracker } from "@/components/tasks/time-tracker";
+import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
+import { PresenceIndicator } from "@/components/ui/presence-indicator";
 import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskWatcher, TaskStatus, TaskPriority, OrgMember } from "@/types/domain";
 
 /* ─── helpers ─── */
@@ -64,29 +65,6 @@ function memberAvatarUrl(id: string | null | undefined, members: OrgMember[]): s
   if (!id) return undefined;
   const m = members.find((x) => x.user_id === id);
   return m?.avatar_url || undefined;
-}
-/* ─── Inline-edit hook ─── */
-
-function useInlineEdit<T>(
-  initial: T,
-  onSave: (val: T) => void,
-) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<T>(initial);
-
-  const open = useCallback(() => {
-    setDraft(initial);
-    setEditing(true);
-  }, [initial]);
-
-  const cancel = useCallback(() => setEditing(false), []);
-
-  const save = useCallback(() => {
-    onSave(draft);
-    setEditing(false);
-  }, [draft, onSave]);
-
-  return { editing, draft, setDraft, open, cancel, save };
 }
 
 /* ─── Main page ─── */
@@ -166,13 +144,21 @@ export default function TaskDetailPage({
 
   return (
     <div>
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between">
         <button
           className="btn btn-ghost btn-sm gap-1"
           onClick={() => router.push(`/${orgSlug}/projects/${projectId}`)}
         >
           <ArrowLeft className="w-4 h-4" /> Back to Tasks
         </button>
+        <PresenceIndicator
+          orgId={orgId}
+          resourceType="task"
+          resourceId={taskId}
+          currentUserId={user?.id || ""}
+          currentUserName={user?.user_metadata?.name as string | undefined}
+          currentUserAvatar={user?.user_metadata?.avatar_url as string | undefined}
+        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -261,7 +247,33 @@ export default function TaskDetailPage({
               <SidebarNumber label="Estimated" suffix="h" value={task.estimated_hours ?? null} onSave={(v) => patchField("estimated_hours", v)} />
               {/* Actual Hours */}
               <SidebarNumber label="Actual" suffix="h" value={task.actual_hours ?? null} onSave={(v) => patchField("actual_hours", v)} />
-              {/* Read-only fields */}
+            </div>
+
+            {/* Time Tracker */}
+            <div className="divider my-2"></div>
+            <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Clock className="w-4 h-4" /> Time Tracker
+            </h4>
+            <TimeTracker orgId={orgId} projectId={projectId} task={task} />
+
+            {/* Recurrence */}
+            <div className="divider my-2"></div>
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium flex items-center gap-2">Repeat</h4>
+              <RecurrenceSelector 
+                value={task.recurrence_rule} 
+                onChange={(rule) => patchField("recurrence_rule", rule)} 
+              />
+            </div>
+            {task.next_occurrence && (
+              <div className="text-xs text-base-content/60 mt-1">
+                Next: {formatDate(task.next_occurrence)}
+              </div>
+            )}
+
+            {/* Read-only fields */}
+            <div className="divider my-2"></div>
+            <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="text-base-content/60">Depth</span>
                 <span>{task.depth}</span>
@@ -763,7 +775,7 @@ function MentionInput({
   const insertMention = (member: OrgMember) => {
     const name = member.display_name
       ? member.display_name.replace(/\s/g, "")
-      : member.email.split("@")[0];
+      : member.email?.split("@")[0] || 'user';
     const textBefore = value.slice(0, cursorPos);
     const atIdx = textBefore.lastIndexOf("@");
     const before = value.slice(0, atIdx);
@@ -810,7 +822,7 @@ function MentionInput({
             >
               <Avatar name={m.display_name || m.email} src={m.avatar_url} size="xs" />
               <div className="truncate">
-                <span className="font-medium">{m.display_name || m.email.split("@")[0]}</span>
+                <span className="font-medium">{m.display_name || m.email?.split("@")[0] || 'User'}</span>
                 <span className="text-xs text-base-content/50 ml-1">{m.email}</span>
               </div>
             </button>

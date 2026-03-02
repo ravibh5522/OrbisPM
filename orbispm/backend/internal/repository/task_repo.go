@@ -26,15 +26,16 @@ func (r *taskRepo) Create(ctx context.Context, tx pgx.Tx, task *domain.Task) (*d
 	row := q.QueryRow(ctx,
 		`INSERT INTO tasks (org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
 		 RETURNING id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at`,
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at`,
 		task.OrgID, task.ProjectID, task.ParentTaskID, task.Title, nilStr(task.Description),
 		task.Status, task.Priority, task.AssigneeID, task.ReporterID,
 		task.Depth, task.Position, task.DueDate, task.StartDate,
 		task.EstimatedHours, task.ActualHours, task.Labels, task.Metadata, task.ReviewStatus,
+		task.RecurrenceRule, task.RecurrenceParentID, task.NextOccurrence,
 	)
 	return scanTask(row)
 }
@@ -43,7 +44,7 @@ func (r *taskRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Task, err
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at
 		 FROM tasks WHERE id = $1`, id)
 	t, err := scanTask(row)
 	if err != nil {
@@ -60,13 +61,13 @@ func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain
 		`WITH RECURSIVE task_tree AS (
 			SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 			  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-			  labels, metadata, review_status, created_at, updated_at,
+			  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at,
 			  ARRAY[id] AS path, ARRAY[position] AS sort_path
 			FROM tasks WHERE id = $1
 			UNION ALL
 			SELECT t.id, t.org_id, t.project_id, t.parent_task_id, t.title, t.description, t.status, t.priority,
 			  t.assignee_id, t.reporter_id, t.depth, t.position, t.due_date, t.start_date, t.estimated_hours, t.actual_hours,
-			  t.labels, t.metadata, t.review_status, t.created_at, t.updated_at,
+			  t.labels, t.metadata, t.review_status, t.recurrence_rule, t.recurrence_parent_id, t.next_occurrence, t.created_at, t.updated_at,
 			  tt.path || t.id, tt.sort_path || t.position
 			FROM tasks t
 			INNER JOIN task_tree tt ON t.parent_task_id = tt.id
@@ -74,7 +75,7 @@ func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain
 		)
 		SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at
 		FROM task_tree ORDER BY sort_path`, rootTaskID)
 	if err != nil {
 		return nil, fmt.Errorf("get task tree: %w", err)
@@ -87,7 +88,7 @@ func (r *taskRepo) ListTreeByProject(ctx context.Context, projectID uuid.UUID) (
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at
 		FROM tasks WHERE project_id = $1
 		ORDER BY depth, position, created_at`, projectID)
 	if err != nil {
@@ -174,7 +175,7 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 	query := fmt.Sprintf(
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at
 		 FROM tasks WHERE %s ORDER BY %s LIMIT %d OFFSET %d`,
 		whereClause, orderClause, limit, offset)
 
@@ -197,15 +198,16 @@ func (r *taskRepo) Update(ctx context.Context, tx pgx.Tx, task *domain.Task) (*d
 		`UPDATE tasks SET title=$1, description=$2, status=$3, priority=$4,
 		  assignee_id=$5, reporter_id=$6, depth=$7, position=$8, due_date=$9, start_date=$10,
 		  estimated_hours=$11, actual_hours=$12, labels=$13, metadata=$14, review_status=$15,
-		  parent_task_id=$16
-		 WHERE id=$17
+		  parent_task_id=$16, recurrence_rule=$17, recurrence_parent_id=$18, next_occurrence=$19
+		 WHERE id=$20
 		 RETURNING id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at`,
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at`,
 		task.Title, nilStr(task.Description), task.Status, task.Priority,
 		task.AssigneeID, task.ReporterID, task.Depth, task.Position,
 		task.DueDate, task.StartDate, task.EstimatedHours, task.ActualHours,
-		task.Labels, task.Metadata, task.ReviewStatus, task.ParentTaskID, task.ID,
+		task.Labels, task.Metadata, task.ReviewStatus, task.ParentTaskID,
+		task.RecurrenceRule, task.RecurrenceParentID, task.NextOccurrence, task.ID,
 	)
 	return scanTask(row)
 }
@@ -230,7 +232,8 @@ func scanTask(row pgx.Row) (*domain.Task, error) {
 		&t.Status, &t.Priority, &t.AssigneeID, &t.ReporterID,
 		&t.Depth, &t.Position, &t.DueDate, &t.StartDate,
 		&t.EstimatedHours, &t.ActualHours, &t.Labels, &t.Metadata,
-		&t.ReviewStatus, &t.CreatedAt, &t.UpdatedAt,
+		&t.ReviewStatus, &t.RecurrenceRule, &t.RecurrenceParentID, &t.NextOccurrence,
+		&t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -257,7 +260,8 @@ func collectTasks(rows pgx.Rows) ([]*domain.Task, error) {
 			&t.Status, &t.Priority, &t.AssigneeID, &t.ReporterID,
 			&t.Depth, &t.Position, &t.DueDate, &t.StartDate,
 			&t.EstimatedHours, &t.ActualHours, &t.Labels, &t.Metadata,
-			&t.ReviewStatus, &t.CreatedAt, &t.UpdatedAt,
+			&t.ReviewStatus, &t.RecurrenceRule, &t.RecurrenceParentID, &t.NextOccurrence,
+			&t.CreatedAt, &t.UpdatedAt,
 		)
 		if err != nil {
 			return nil, err
@@ -296,7 +300,7 @@ func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID u
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, created_at, updated_at
 		 FROM tasks WHERE org_id = $1 AND assignee_id = $2
 		 ORDER BY
 		   CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'todo' THEN 1 WHEN status = 'blocked' THEN 2 ELSE 3 END,

@@ -176,7 +176,7 @@ func main() {
 	}
 
 	// --- Event Bus (Redis Pub/Sub) ---
-	_ = eventbus.NewRedisPublisher(rdb)
+	publisher := eventbus.NewRedisPublisher(rdb)
 	subscriber := eventbus.NewRedisSubscriber(rdb)
 
 	// --- WebSocket Hub ---
@@ -225,9 +225,9 @@ func main() {
 
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
-	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm)
-	projectSvc := service.NewProjectService(projectRepo, projectMemberRepo, txm, workerSrv)
-	taskSvc := service.NewTaskService(taskRepo, checklistRepo, ruleRepo, txm, workerSrv)
+	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
+	projectSvc := service.NewProjectService(projectRepo, projectMemberRepo, txm, workerSrv, publisher)
+	taskSvc := service.NewTaskService(taskRepo, checklistRepo, ruleRepo, txm, workerSrv, publisher)
 	checklistSvc := service.NewChecklistService(checklistRepo, txm)
 	commentSvc := service.NewCommentService(commentRepo, orgMemberRepo, txm, workerSrv)
 	ruleSvc := service.NewRuleService(ruleRepo, txm)
@@ -276,11 +276,12 @@ func main() {
 	webhookHandler := handler.NewWebhookHandler(webhookSvc)
 	apikeyHandler := handler.NewAPIKeyHandler(apikeySvc)
 	importHandler := handler.NewImportHandler(importSvc)
-	billingHandler := handler.NewBillingHandler(billingSvc)
+	billingHandler := handler.NewBillingHandler(billingSvc, cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.FrontendURL, cfg.StripeEnabled)
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc, taskSvc)
 	customRoleHandler := handler.NewCustomRoleHandler(customRoleSvc)
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
 	eventsHandler := handler.NewEventsHandler(hub)
+	presenceHandler := handler.NewPresenceHandler(rdb, publisher)
 
 	// Search handler (optional — only if Meilisearch is available)
 	var searchHandler *handler.SearchHandler
@@ -318,6 +319,11 @@ func main() {
 	// Auth endpoints (no auth needed — these are the GoTrue proxy)
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Mount("/", authHandler.Routes())
+	})
+
+	// Stripe webhook (no auth — uses signature verification)
+	r.Route("/api/v1/webhooks/stripe", func(r chi.Router) {
+		r.Mount("/", billingHandler.WebhookRoutes())
 	})
 
 	// API v1 group — requires auth
@@ -382,6 +388,9 @@ func main() {
 
 					// Events (SSE)
 					r.Mount("/events", eventsHandler.Routes())
+
+					// Presence indicators
+					r.Mount("/presence", presenceHandler.Routes())
 
 					// File uploads (avatars, logos)
 					if uploadHandler != nil {

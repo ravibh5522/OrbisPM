@@ -8,7 +8,7 @@ import { PageHeader, Card, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { Building2, Globe, Mail, Phone, MapPin, Briefcase, Calendar, Clock, Users, CheckCircle, Camera } from "lucide-react";
+import { Building2, Mail, MapPin, Briefcase, Calendar, CheckCircle, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 const INDUSTRY_OPTIONS = [

@@ -5,7 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { PageHeader, Card, Badge, LoadingPage } from "@/components/ui/shared";
+import { PageHeader, Card, Badge } from "@/components/ui/shared";
 import { statusColor, priorityColor, statusLabel, formatRelative } from "@/lib/utils";
 import { Search as SearchIcon, ListTodo } from "lucide-react";
 import type { Task } from "@/types/domain";
@@ -16,7 +16,7 @@ export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
-  const { data: results, isLoading, isFetching } = useQuery({
+  const { data: results, isFetching } = useQuery({
     queryKey: ["search", currentOrg?.id, searchTerm],
     queryFn: () => api.search.tasks(currentOrg!.id, searchTerm),
     enabled: !!currentOrg && searchTerm.length >= 2,

@@ -26,7 +26,24 @@ func (r *billingPlanRepo) GetByID(ctx context.Context, id string) (*domain.Billi
 		`SELECT id, name, stripe_price_id, limits, created_at FROM billing_plans WHERE id = $1`, id).
 		Scan(&p.ID, &p.Name, &p.StripePriceID, &p.Limits, &p.CreatedAt)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
 		return nil, fmt.Errorf("get billing plan: %w", err)
+	}
+	return &p, nil
+}
+
+func (r *billingPlanRepo) GetByPriceID(ctx context.Context, priceID string) (*domain.BillingPlan, error) {
+	var p domain.BillingPlan
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, name, stripe_price_id, limits, created_at FROM billing_plans WHERE stripe_price_id = $1`, priceID).
+		Scan(&p.ID, &p.Name, &p.StripePriceID, &p.Limits, &p.CreatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get billing plan by price: %w", err)
 	}
 	return &p, nil
 }
@@ -75,9 +92,25 @@ func (r *orgSubscriptionRepo) GetByOrgID(ctx context.Context, orgID uuid.UUID) (
 	return &s, nil
 }
 
-func (r *orgSubscriptionRepo) Upsert(ctx context.Context, tx pgx.Tx, sub *domain.OrgSubscription) (*domain.OrgSubscription, error) {
-	q := conn(r.pool, tx)
-	row := q.QueryRow(ctx,
+func (r *orgSubscriptionRepo) GetByStripeSubID(ctx context.Context, stripeSubID string) (*domain.OrgSubscription, error) {
+	var s domain.OrgSubscription
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, org_id, plan_id, stripe_sub_id, status,
+		        current_period_start, current_period_end, created_at, updated_at
+		 FROM org_subscriptions WHERE stripe_sub_id = $1`, stripeSubID).
+		Scan(&s.ID, &s.OrgID, &s.PlanID, &s.StripeSubID, &s.Status,
+			&s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get subscription by stripe id: %w", err)
+	}
+	return &s, nil
+}
+
+func (r *orgSubscriptionRepo) Upsert(ctx context.Context, sub *domain.OrgSubscription) (*domain.OrgSubscription, error) {
+	row := r.pool.QueryRow(ctx,
 		`INSERT INTO org_subscriptions (org_id, plan_id, stripe_sub_id, status, current_period_start, current_period_end)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 ON CONFLICT (org_id) DO UPDATE SET

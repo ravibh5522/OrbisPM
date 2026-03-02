@@ -82,30 +82,62 @@ export function useWebSocket() {
 function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) {
   const type = event.type;
 
-  // Invalidate relevant queries based on event type
+  // --- Tasks ---
   if (type.startsWith("task.")) {
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["task-tree"] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    // Also refresh project dashboard if the task belongs to a project
+    if (event.payload?.project_id) {
+      qc.invalidateQueries({ queryKey: ["project-dashboard"] });
+    }
   }
 
+  // --- Projects ---
   if (type.startsWith("project.")) {
     qc.invalidateQueries({ queryKey: ["projects"] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    if (event.entity_id) {
+      qc.invalidateQueries({ queryKey: ["project", event.org_id, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["project-dashboard", event.org_id, event.entity_id] });
+    }
   }
 
+  // --- Teams ---
   if (type.startsWith("team.")) {
     qc.invalidateQueries({ queryKey: ["teams"] });
+    if (event.entity_id) {
+      qc.invalidateQueries({ queryKey: ["team", event.org_id, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["team-dashboard", event.org_id, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["team-members", event.org_id, event.entity_id] });
+    }
   }
 
+  // --- Members (org, team, project scope) ---
   if (type.startsWith("member.")) {
+    const scope = event.payload?.scope as string | undefined;
     qc.invalidateQueries({ queryKey: ["org-members"] });
+
+    if (scope === "team" && event.entity_id) {
+      qc.invalidateQueries({ queryKey: ["team-members"] });
+      qc.invalidateQueries({ queryKey: ["team-dashboard"] });
+    }
+    if (scope === "project" && event.entity_id) {
+      qc.invalidateQueries({ queryKey: ["project-members"] });
+      qc.invalidateQueries({ queryKey: ["project-dashboard"] });
+    }
+    // Role changes may affect custom-roles query too
+    if (type === "member.role_updated") {
+      qc.invalidateQueries({ queryKey: ["custom-roles"] });
+    }
   }
 
+  // --- Comments ---
   if (type.startsWith("comment.")) {
     qc.invalidateQueries({ queryKey: ["comments"] });
   }
 
+  // --- Notifications ---
   if (type.startsWith("notification.")) {
     qc.invalidateQueries({ queryKey: ["notifications"] });
   }

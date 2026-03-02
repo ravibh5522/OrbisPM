@@ -40,6 +40,7 @@ type UpdateTaskParams struct {
 	EstimatedHours *float64   `json:"estimated_hours,omitempty"`
 	ActualHours    *float64   `json:"actual_hours,omitempty"`
 	Labels         []string   `json:"labels,omitempty"`
+	RecurrenceRule *string    `json:"recurrence_rule,omitempty"`
 }
 
 type TaskService struct {
@@ -48,6 +49,7 @@ type TaskService struct {
 	ruleRepo      repository.TaskRuleRepository
 	txm           *repository.TxManager
 	workerSrv     *worker.Server
+	publisher     EventPublisher
 }
 
 func NewTaskService(
@@ -56,14 +58,19 @@ func NewTaskService(
 	ruleRepo repository.TaskRuleRepository,
 	txm *repository.TxManager,
 	workerSrv *worker.Server,
+	publisher ...EventPublisher,
 ) *TaskService {
-	return &TaskService{
+	s := &TaskService{
 		taskRepo:      taskRepo,
 		checklistRepo: checklistRepo,
 		ruleRepo:      ruleRepo,
 		txm:           txm,
 		workerSrv:     workerSrv,
 	}
+	if len(publisher) > 0 {
+		s.publisher = publisher[0]
+	}
+	return s
 }
 
 func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*domain.Task, error) {
@@ -119,6 +126,8 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	s.enqueueActivity(created.OrgID.String(), "task", created.ID.String(), "created", "", nil)
 	// Enqueue search index
 	s.enqueueSearchIndex("tasks", created)
+	// Publish real-time event
+	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), nil)
 
 	return created, nil
 }
@@ -322,6 +331,21 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 		changes["labels"] = params.Labels
 		task.Labels = params.Labels
 	}
+	if params.RecurrenceRule != nil {
+		changes["recurrence_rule"] = *params.RecurrenceRule
+		task.RecurrenceRule = params.RecurrenceRule
+		// Calculate next occurrence based on due date or now
+		if *params.RecurrenceRule != "" {
+			base := time.Now()
+			if task.DueDate != nil {
+				base = *task.DueDate
+			}
+			next := calculateNextOccurrence(base, *params.RecurrenceRule)
+			task.NextOccurrence = next
+		} else {
+			task.NextOccurrence = nil
+		}
+	}
 
 	var updated *domain.Task
 	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
@@ -336,6 +360,8 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "updated", "", changes)
 	// Enqueue search index update
 	s.enqueueSearchIndex("tasks", updated)
+	// Publish real-time event
+	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), changes)
 
 	return updated, nil
 }
@@ -356,6 +382,8 @@ func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) error {
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "deleted", "", nil)
 	// Enqueue search delete
 	s.enqueueSearchDelete("tasks", id.String())
+	// Publish real-time event
+	s.publishEvent(ctx, domain.EventTaskDeleted, task.OrgID.String(), task.ID.String(), nil)
 
 	return nil
 }
@@ -448,6 +476,22 @@ func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
 
 // --- Worker helpers (fire-and-forget, log errors) ---
 
+// publishEvent publishes a domain event for real-time propagation via SSE.
+func (s *TaskService) publishEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
+	if s.publisher == nil {
+		return
+	}
+	event := domain.DomainEvent{
+		Type:     eventType,
+		OrgID:    orgID,
+		EntityID: entityID,
+		Payload:  payload,
+	}
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		log.Warn().Err(err).Str("type", eventType).Msg("failed to publish event")
+	}
+}
+
 func (s *TaskService) enqueueActivity(orgID, entityType, entityID, action, actorID string, changes map[string]any) {
 	if s.workerSrv == nil {
 		return
@@ -513,4 +557,42 @@ func (s *TaskService) enqueueSearchDelete(index, docID string) {
 	if err := s.workerSrv.Enqueue(task); err != nil {
 		log.Error().Err(err).Msg("enqueue search delete task")
 	}
+}
+
+// calculateNextOccurrence calculates the next occurrence based on RRULE.
+func calculateNextOccurrence(current time.Time, rrule string) *time.Time {
+	// Simple RRULE parser for: FREQ=DAILY, FREQ=WEEKLY, FREQ=MONTHLY, FREQ=YEARLY
+	// Also supports INTERVAL=N
+	freq := "DAILY"
+	interval := 1
+
+	for _, part := range strings.Split(rrule, ";") {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		switch kv[0] {
+		case "FREQ":
+			freq = kv[1]
+		case "INTERVAL":
+			if i, err := fmt.Sscanf(kv[1], "%d", &interval); err == nil && i == 1 && interval > 0 {
+				// interval parsed
+			}
+		}
+	}
+
+	var next time.Time
+	switch freq {
+	case "DAILY":
+		next = current.AddDate(0, 0, interval)
+	case "WEEKLY":
+		next = current.AddDate(0, 0, 7*interval)
+	case "MONTHLY":
+		next = current.AddDate(0, interval, 0)
+	case "YEARLY":
+		next = current.AddDate(interval, 0, 0)
+	default:
+		next = current.AddDate(0, 0, 1) // Default to daily
+	}
+	return &next
 }

@@ -36,6 +36,20 @@ func (r *projectMemberRepo) Remove(ctx context.Context, tx pgx.Tx, projectID, us
 	return err
 }
 
+func (r *projectMemberRepo) UpdateRole(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID, role string) error {
+	q := conn(r.pool, tx)
+	tag, err := q.Exec(ctx,
+		`UPDATE project_members SET role = $3 WHERE project_id = $1 AND user_id = $2`,
+		projectID, userID, role)
+	if err != nil {
+		return fmt.Errorf("update project member role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("project member not found")
+	}
+	return nil
+}
+
 func (r *projectMemberRepo) ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at

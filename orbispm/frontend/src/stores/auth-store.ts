@@ -42,7 +42,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const orgs = orgsRes.data || [];
       // Try to restore last selected org
       const lastOrgId = localStorage.getItem("current_org_id");
-      let currentOrg = orgs.find((o) => o.id === lastOrgId) || orgs[0] || null;
+      const currentOrg = orgs.find((o) => o.id === lastOrgId) || orgs[0] || null;
       let membership: OrgMember | null = null;
       if (currentOrg) {
         try {

@@ -4,7 +4,7 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Badge, ConfirmDialog } from "@/components/ui/shared";
+import { ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select } from "@/components/ui/form-fields";
@@ -41,9 +41,6 @@ import {
   GripVertical,
 } from "lucide-react";
 import {
-  statusColor,
-  priorityColor,
-  statusLabel,
   formatDate,
   cn,
 } from "@/lib/utils";
@@ -116,7 +113,26 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
   const updateMutation = useMutation({
     mutationFn: ({ id, changes }: { id: string; changes: Partial<Task> }) =>
       api.tasks.update(orgId, projectId, id, changes),
-    onSuccess: () => {
+    onMutate: async ({ id, changes }) => {
+      await qc.cancelQueries({ queryKey: ["task-list", orgId, projectId] });
+      const prev = qc.getQueriesData({ queryKey: ["task-list", orgId, projectId] });
+      qc.setQueriesData(
+        { queryKey: ["task-list", orgId, projectId] },
+        (old: { data: Task[]; total: number; limit: number; offset: number } | undefined) => {
+          if (!old?.data) return old;
+          return { ...old, data: old.data.map((t: Task) => (t.id === id ? { ...t, ...changes } : t)) };
+        },
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.prev) {
+        for (const [key, data] of context.prev) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
     },
   });
@@ -540,8 +556,8 @@ interface TaskRowProps {
 function TaskRow({
   task,
   members,
-  memberName,
-  memberAvatar,
+  memberName: _memberName,
+  memberAvatar: _memberAvatar,
   isSelected,
   onToggleSelect,
   onUpdate,

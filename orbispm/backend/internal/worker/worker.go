@@ -11,13 +11,14 @@ import (
 
 // Task type constants.
 const (
-	TypeActivityLog   = "activity:log"
-	TypeNotification  = "notification:send"
-	TypeSearchIndex   = "search:index"
-	TypeSearchDelete  = "search:delete"
-	TypeWebhookDeliver = "webhook:deliver"
-	TypeImportProcess = "import:process"
-	TypeExportGenerate = "export:generate"
+	TypeActivityLog       = "activity:log"
+	TypeNotification      = "notification:send"
+	TypeSearchIndex       = "search:index"
+	TypeSearchDelete      = "search:delete"
+	TypeWebhookDeliver    = "webhook:deliver"
+	TypeImportProcess     = "import:process"
+	TypeExportGenerate    = "export:generate"
+	TypeRecurringGenerate = "recurring:generate"
 )
 
 // ActivityLogPayload holds data for creating an activity log entry.
@@ -59,6 +60,12 @@ type WebhookDeliverPayload struct {
 	Secret    string         `json:"secret"`
 	Event     string         `json:"event"`
 	Payload   map[string]any `json:"payload"`
+}
+
+// RecurringGeneratePayload holds data for creating a recurring task instance.
+type RecurringGeneratePayload struct {
+	TaskID string `json:"task_id"`
+	OrgID  string `json:"org_id"`
 }
 
 // --- Task creators ---
@@ -106,6 +113,15 @@ func NewWebhookDeliverTask(p WebhookDeliverPayload) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeWebhookDeliver, data), nil
+}
+
+// NewRecurringGenerateTask creates a task to generate the next recurring instance.
+func NewRecurringGenerateTask(p RecurringGeneratePayload) (*asynq.Task, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeRecurringGenerate, data), nil
 }
 
 // Server wraps asynq server and client for background job processing.

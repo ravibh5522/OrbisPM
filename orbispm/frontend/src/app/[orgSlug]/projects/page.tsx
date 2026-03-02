@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Textarea, Select } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { FolderKanban, Plus, Trash2, ExternalLink } from "lucide-react";
+import { FolderKanban, Plus, Trash2 } from "lucide-react";
 import { formatDate, statusLabel } from "@/lib/utils";
 import type { Project, Team } from "@/types/domain";
 

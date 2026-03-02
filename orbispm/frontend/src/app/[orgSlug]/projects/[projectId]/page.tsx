@@ -5,12 +5,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { PageHeader, Card, LoadingPage, Avatar } from "@/components/ui/shared";
+import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskListView } from "@/components/tasks/task-list-view";
+import { TaskTreeView } from "@/components/tasks/task-tree-view";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
+import { ProjectSettings } from "@/components/projects/project-settings";
 import {
   ArrowLeft,
   Settings,
@@ -18,6 +20,7 @@ import {
   ListTodo,
   Columns3,
   List,
+  GitFork,
   Trash2,
   UserPlus,
   Upload,
@@ -26,14 +29,16 @@ import {
 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { ProjectMember } from "@/types/domain";
+import { usePermissions } from "@/hooks/use-permissions";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlug: string; projectId: string }> }) {
   const { projectId } = use(params);
   const router = useRouter();
   const currentOrg = useAuthStore((s) => s.currentOrg);
-  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "dashboard">("tasks");
-  const [taskView, setTaskView] = useState<"columns" | "list">("columns");
+  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "dashboard" | "settings">("tasks");
+  const [taskView, setTaskView] = useState<"columns" | "list" | "tree">("columns");
   const [importOpen, setImportOpen] = useState(false);
+  const { can } = usePermissions();
 
   const { data: project, isLoading: projLoading } = useQuery({
     queryKey: ["project", currentOrg?.id, projectId],
@@ -41,7 +46,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     enabled: !!currentOrg,
   });
 
-  const { data: tasks, isLoading: tasksLoading } = useQuery({
+  const { isLoading: tasksLoading } = useQuery({
     queryKey: ["tasks", currentOrg?.id, projectId],
     queryFn: () => api.tasks.list(currentOrg!.id, projectId),
     enabled: !!currentOrg,
@@ -57,47 +62,58 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
   if (!project) return <div className="text-center py-12">Project not found</div>;
 
   return (
-    <div>
-      <div className="mb-4">
-        <button className="btn btn-ghost btn-sm gap-1" onClick={() => router.push(`/${currentOrg!.slug}/projects`)}>
-          <ArrowLeft className="w-4 h-4" /> Back to Projects
-        </button>
-      </div>
-
-      <PageHeader
-        title={project.name}
-        description={project.description || ""}
-      />
-
-      {/* Tabs */}
-      <div role="tablist" className="tabs tabs-bordered mb-4">
-        <button role="tab" className={`tab ${activeTab === "dashboard" ? "tab-active" : ""}`} onClick={() => setActiveTab("dashboard")}>
-          <Settings className="w-4 h-4 mr-1" /> Dashboard
-        </button>
-        <button role="tab" className={`tab ${activeTab === "tasks" ? "tab-active" : ""}`} onClick={() => setActiveTab("tasks")}>
-          <ListTodo className="w-4 h-4 mr-1" /> Tasks
-        </button>
-        <button role="tab" className={`tab ${activeTab === "members" ? "tab-active" : ""}`} onClick={() => setActiveTab("members")}>
-          <Users className="w-4 h-4 mr-1" /> Members
-        </button>
+    <div className="h-full flex flex-col">
+      {/* Compact header row */}
+      <div className="flex items-center justify-between gap-4 py-2 border-b border-base-200 mb-2">
+        <div className="flex items-center gap-3 min-w-0">
+          <button className="btn btn-ghost btn-xs gap-1 flex-shrink-0" onClick={() => router.push(`/${currentOrg!.slug}/projects`)}>
+            <ArrowLeft className="w-3.5 h-3.5" /> Back to Projects
+          </button>
+          <div className="min-w-0">
+            <h1 className="text-lg font-bold truncate">{project.name}</h1>
+            {project.description && <p className="text-xs text-base-content/60 truncate">{project.description}</p>}
+          </div>
+        </div>
+        
+        {/* Tabs inline */}
+        <div role="tablist" className="tabs tabs-boxed bg-base-200/50 flex-shrink-0">
+          <button role="tab" className={`tab tab-sm ${activeTab === "dashboard" ? "tab-active" : ""}`} onClick={() => setActiveTab("dashboard")}>
+            <ListTodo className="w-3.5 h-3.5 mr-1" /> Dashboard
+          </button>
+          <button role="tab" className={`tab tab-sm ${activeTab === "tasks" ? "tab-active" : ""}`} onClick={() => setActiveTab("tasks")}>
+            <Columns3 className="w-3.5 h-3.5 mr-1" /> Tasks
+          </button>
+          {can("projects", "manage_members") && (
+            <button role="tab" className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`} onClick={() => setActiveTab("members")}>
+              <Users className="w-3.5 h-3.5 mr-1" /> Members
+            </button>
+          )}
+          {can("settings", "update") && (
+            <button role="tab" className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`} onClick={() => setActiveTab("settings")}>
+              <Settings className="w-3.5 h-3.5 mr-1" /> Settings
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Dashboard tab */}
       {activeTab === "dashboard" && (
-        <ProjectDashboard orgId={currentOrg!.id} projectId={projectId} />
+        <div className="flex-1 overflow-auto">
+          <ProjectDashboard orgId={currentOrg!.id} projectId={projectId} />
+        </div>
       )}
 
       {/* Tasks tab — columns or list view */}
       {activeTab === "tasks" && (
-        <div>
-          {/* View toggle + Import/Export */}
-          <div className="flex items-center justify-end mb-3 gap-2">
-            <Button variant="outline" size="sm" onClick={() => setImportOpen(true)}>
-              <Upload className="w-4 h-4 mr-1" /> Import CSV
+        <div className="flex-1 flex flex-col min-h-0">
+          {/* View toggle + Import/Export - compact */}
+          <div className="flex items-center justify-end py-1.5 gap-2">
+            <Button variant="outline" size="xs" onClick={() => setImportOpen(true)}>
+              <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
             </Button>
             <div className="dropdown dropdown-end">
-              <div tabIndex={0} role="button" className="btn btn-outline btn-sm">
-                <Download className="w-4 h-4 mr-1" /> Export
+              <div tabIndex={0} role="button" className="btn btn-outline btn-xs">
+                <Download className="w-3.5 h-3.5 mr-1" /> Export
               </div>
               <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-44">
                 <li><a onClick={() => api.tasks.export(currentOrg!.id, projectId)}><Download className="w-4 h-4" /> CSV</a></li>
@@ -111,6 +127,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
                 title="Miller Columns"
               >
                 <Columns3 className="w-4 h-4" />
+              </button>
+              <button
+                className={`join-item btn btn-sm ${taskView === "tree" ? "btn-active" : ""}`}
+                onClick={() => setTaskView("tree")}
+                title="Tree View"
+              >
+                <GitFork className="w-4 h-4" />
               </button>
               <button
                 className={`join-item btn btn-sm ${taskView === "list" ? "btn-active" : ""}`}
@@ -129,14 +152,23 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
             onClose={() => setImportOpen(false)}
           />
 
-          {taskView === "columns" ? (
+          {taskView === "columns" && (
             <TaskColumns
               orgId={currentOrg!.id}
               orgSlug={currentOrg!.slug}
               projectId={projectId}
               members={members?.data || []}
             />
-          ) : (
+          )}
+          {taskView === "tree" && (
+            <TaskTreeView
+              orgId={currentOrg!.id}
+              orgSlug={currentOrg!.slug}
+              projectId={projectId}
+              members={members?.data || []}
+            />
+          )}
+          {taskView === "list" && (
             <TaskListView
               orgId={currentOrg!.id}
               orgSlug={currentOrg!.slug}
@@ -150,6 +182,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
       {/* Members tab */}
       {activeTab === "members" && (
         <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
+      )}
+
+      {/* Settings tab */}
+      {activeTab === "settings" && (
+        <ProjectSettings orgId={currentOrg!.id} project={project} />
       )}
     </div>
   );
@@ -175,6 +212,11 @@ function ProjectMembersSection({
     queryFn: () => api.members.list(orgId),
   });
 
+  const { data: customRoles } = useQuery({
+    queryKey: ["custom-roles", orgId],
+    queryFn: () => api.customRoles.list(orgId),
+  });
+
   const addMutation = useMutation({
     mutationFn: () => api.projectMembers.add(orgId, projectId, { user_id: addUserId, role: addRole }),
     onSuccess: () => {
@@ -197,6 +239,12 @@ function ProjectMembersSection({
 
   const memberIds = new Set(members.map((m) => m.user_id));
   const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
+  const roleOptions = [
+    { value: "lead", label: "Lead" },
+    { value: "member", label: "Member" },
+    { value: "viewer", label: "Viewer" },
+    ...(customRoles?.data || []).map((r) => ({ value: r.name, label: r.name })),
+  ];
 
   return (
     <div className="space-y-4">
@@ -223,9 +271,9 @@ function ProjectMembersSection({
           <div>
             <label className="label"><span className="label-text text-xs">Role</span></label>
             <select className="select select-bordered select-sm" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
-              <option value="lead">Lead</option>
-              <option value="member">Member</option>
-              <option value="viewer">Viewer</option>
+              {roleOptions.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
             </select>
           </div>
           <Button type="submit" size="sm" loading={addMutation.isPending} disabled={!addUserId}>
@@ -263,13 +311,13 @@ function ProjectMembersSection({
                     </td>
                     <td>
                       <select
-                        className="select select-ghost select-xs"
+                        className="select select-ghost select-xs capitalize"
                         value={m.role}
                         onChange={(e) => updateRoleMutation.mutate({ userId: m.user_id, role: e.target.value })}
                       >
-                        <option value="lead">Lead</option>
-                        <option value="member">Member</option>
-                        <option value="viewer">Viewer</option>
+                        {roleOptions.map((r) => (
+                          <option key={r.value} value={r.value}>{r.label}</option>
+                        ))}
                       </select>
                     </td>
                     <td className="text-sm text-base-content/60">{formatDate(m.joined_at)}</td>

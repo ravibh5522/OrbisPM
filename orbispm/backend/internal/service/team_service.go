@@ -27,10 +27,15 @@ type TeamService struct {
 	teamRepo       repository.TeamRepository
 	teamMemberRepo repository.TeamMemberRepository
 	txm            *repository.TxManager
+	publisher      EventPublisher
 }
 
-func NewTeamService(teamRepo repository.TeamRepository, teamMemberRepo repository.TeamMemberRepository, txm *repository.TxManager) *TeamService {
-	return &TeamService{teamRepo: teamRepo, teamMemberRepo: teamMemberRepo, txm: txm}
+func NewTeamService(teamRepo repository.TeamRepository, teamMemberRepo repository.TeamMemberRepository, txm *repository.TxManager, publisher ...EventPublisher) *TeamService {
+	s := &TeamService{teamRepo: teamRepo, teamMemberRepo: teamMemberRepo, txm: txm}
+	if len(publisher) > 0 {
+		s.publisher = publisher[0]
+	}
+	return s
 }
 
 func (s *TeamService) Create(ctx context.Context, params CreateTeamParams) (*domain.Team, error) {
@@ -49,6 +54,7 @@ func (s *TeamService) Create(ctx context.Context, params CreateTeamParams) (*dom
 	if err != nil {
 		return nil, fmt.Errorf("create team: %w", err)
 	}
+	s.publishEvent(ctx, domain.EventTeamCreated, created.OrgID.String(), created.ID.String(), nil)
 	return created, nil
 }
 
@@ -73,13 +79,24 @@ func (s *TeamService) Update(ctx context.Context, id uuid.UUID, params UpdateTea
 		updated, err = s.teamRepo.Update(ctx, tx, team)
 		return err
 	})
+	if err == nil && updated != nil {
+		s.publishEvent(ctx, domain.EventTeamUpdated, updated.OrgID.String(), updated.ID.String(), nil)
+	}
 	return updated, err
 }
 
 func (s *TeamService) Delete(ctx context.Context, id uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	team, err := s.teamRepo.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.teamRepo.Delete(ctx, tx, id)
 	})
+	if err == nil {
+		s.publishEvent(ctx, "team.deleted", team.OrgID.String(), id.String(), nil)
+	}
+	return err
 }
 
 func (s *TeamService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error) {
@@ -93,17 +110,55 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 		role = domain.RoleTeamMember
 	}
 	m := &domain.TeamMember{TeamID: teamID, UserID: userID, Role: role}
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.teamMemberRepo.Add(ctx, tx, m)
 	})
+	if err == nil {
+		s.publishEvent(ctx, domain.EventMemberInvited, "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
+	}
+	return err
 }
 
 func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.teamMemberRepo.Remove(ctx, tx, teamID, userID)
 	})
+	if err == nil {
+		s.publishEvent(ctx, "member.removed", "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
+	}
+	return err
+}
+
+func (s *TeamService) UpdateMemberRole(ctx context.Context, teamID, userID uuid.UUID, role string) error {
+	if role == "" {
+		return fmt.Errorf("role is required")
+	}
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.teamMemberRepo.UpdateRole(ctx, tx, teamID, userID, role)
+	})
+	if err == nil {
+		s.publishEvent(ctx, "member.role_updated", "", teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
+	}
+	return err
 }
 
 func (s *TeamService) ListMembers(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
 	return s.teamMemberRepo.ListByTeam(ctx, teamID)
+}
+
+// publishEvent publishes a domain event for real-time propagation via SSE.
+func (s *TeamService) publishEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
+	if s.publisher == nil {
+		return
+	}
+	event := domain.DomainEvent{
+		Type:     eventType,
+		OrgID:    orgID,
+		EntityID: entityID,
+		Payload:  payload,
+	}
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		// Log but don't fail the operation
+		_ = err
+	}
 }

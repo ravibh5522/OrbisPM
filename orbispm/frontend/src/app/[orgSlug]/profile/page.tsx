@@ -8,7 +8,7 @@ import { PageHeader, Card, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { User, Briefcase, Globe, CheckCircle, Calendar, Camera, Upload } from "lucide-react";
+import { User, Briefcase, Globe, CheckCircle, Calendar, Camera } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 
 const TIMEZONE_OPTIONS = [

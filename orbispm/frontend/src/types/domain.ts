@@ -57,6 +57,22 @@ export interface Project {
 
 export type ProjectStatus = "active" | "archived" | "completed";
 
+// Custom task status configuration (stored in project.settings.task_statuses)
+export interface TaskStatusConfig {
+  id: string;        // e.g. "todo", "in_progress", "review", "done"
+  label: string;     // Display name
+  color: string;     // DaisyUI color: primary, secondary, accent, info, success, warning, error
+  done?: boolean;    // Marks task as completed (for burndown/progress calculations)
+}
+
+// Default statuses used when project has none configured
+export const DEFAULT_TASK_STATUSES: TaskStatusConfig[] = [
+  { id: "todo", label: "To Do", color: "secondary" },
+  { id: "in_progress", label: "In Progress", color: "info" },
+  { id: "done", label: "Done", color: "success", done: true },
+  { id: "blocked", label: "Blocked", color: "error" },
+];
+
 export interface ProjectMember {
   project_id: string;
   user_id: string;
@@ -90,6 +106,9 @@ export interface Task {
   labels?: string[];
   metadata?: Record<string, unknown>;
   review_status?: string | null;
+  recurrence_rule?: string | null;
+  recurrence_parent_id?: string | null;
+  next_occurrence?: string | null;
   created_at: string;
   updated_at: string;
 }

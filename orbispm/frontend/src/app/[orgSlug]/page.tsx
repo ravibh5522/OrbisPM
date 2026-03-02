@@ -27,7 +27,7 @@ function StatCard({ label, value, icon, color }: { label: string; value: number;
   );
 }
 
-export default function DashboardPage({ params }: { params: Promise<{ orgSlug: string }> }) {
+export default function DashboardPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const currentMembership = useAuthStore((s) => s.currentMembership);
   const orgSlug = currentOrg?.slug || "";

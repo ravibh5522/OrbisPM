@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { Plus, KeyRound, Trash2, Copy, Eye, EyeOff } from "lucide-react";
+import { Plus, KeyRound, Trash2, Copy } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { APIKey } from "@/types/domain";
 

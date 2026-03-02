@@ -39,6 +39,7 @@ func (h *TeamHandler) Routes() chi.Router {
 		// Members
 		r.Get("/members", h.ListMembers)
 		r.Post("/members", h.AddMember)
+		r.Patch("/members/{userId}", h.UpdateMemberRole)
 		r.Delete("/members/{userId}", h.RemoveMember)
 	})
 
@@ -272,6 +273,47 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.teamSvc.RemoveMember(r.Context(), teamID, userID); err != nil {
+		Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateTeamMemberRoleRequest struct {
+	Role string `json:"role" validate:"required"`
+}
+
+// UpdateMemberRole godoc
+// @Summary Update team member role
+// @Description Update the role of a team member
+// @Tags Teams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param userId path string true "User ID" format(uuid)
+// @Param body body updateTeamMemberRoleRequest true "New role"
+// @Success 204 "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId}/members/{userId} [patch]
+func (h *TeamHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
+	teamID, err := uuidParam(r, "teamId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	var req updateTeamMemberRoleRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	if err := h.teamSvc.UpdateMemberRole(r.Context(), teamID, userID, req.Role); err != nil {
 		Error(w, r, err)
 		return
 	}

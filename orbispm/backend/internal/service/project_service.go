@@ -22,9 +22,10 @@ type CreateProjectParams struct {
 }
 
 type UpdateProjectParams struct {
-	Name        *string `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	Description *string `json:"description,omitempty"`
-	Status      *string `json:"status,omitempty" validate:"omitempty,oneof=active archived completed"`
+	Name        *string                 `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+	Description *string                 `json:"description,omitempty"`
+	Status      *string                 `json:"status,omitempty" validate:"omitempty,oneof=active archived completed"`
+	Settings    map[string]any          `json:"settings,omitempty"`
 }
 
 type ProjectService struct {
@@ -32,6 +33,7 @@ type ProjectService struct {
 	projectMemberRepo repository.ProjectMemberRepository
 	txm               *repository.TxManager
 	workerSrv         *worker.Server
+	publisher         EventPublisher
 }
 
 func NewProjectService(
@@ -39,8 +41,13 @@ func NewProjectService(
 	projectMemberRepo repository.ProjectMemberRepository,
 	txm *repository.TxManager,
 	workerSrv *worker.Server,
+	publisher ...EventPublisher,
 ) *ProjectService {
-	return &ProjectService{projectRepo: projectRepo, projectMemberRepo: projectMemberRepo, txm: txm, workerSrv: workerSrv}
+	s := &ProjectService{projectRepo: projectRepo, projectMemberRepo: projectMemberRepo, txm: txm, workerSrv: workerSrv}
+	if len(publisher) > 0 {
+		s.publisher = publisher[0]
+	}
+	return s
 }
 
 func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams) (*domain.Project, error) {
@@ -66,6 +73,8 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "project", created.ID.String(), "created", "")
 
+	s.publishEvent(ctx, domain.EventProjectCreated, created.OrgID.String(), created.ID.String(), nil)
+
 	return created, nil
 }
 
@@ -87,6 +96,15 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, params Update
 	if params.Status != nil {
 		project.Status = *params.Status
 	}
+	if params.Settings != nil {
+		// Merge settings instead of replacing
+		if project.Settings == nil {
+			project.Settings = make(map[string]any)
+		}
+		for k, v := range params.Settings {
+			project.Settings[k] = v
+		}
+	}
 
 	var updated *domain.Project
 	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
@@ -98,6 +116,8 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, params Update
 	}
 
 	s.enqueueActivity(project.OrgID.String(), "project", project.ID.String(), "updated", "")
+
+	s.publishEvent(ctx, domain.EventProjectUpdated, updated.OrgID.String(), updated.ID.String(), nil)
 
 	return updated, nil
 }
@@ -116,6 +136,8 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 
 	s.enqueueActivity(project.OrgID.String(), "project", id.String(), "deleted", "")
 
+	s.publishEvent(ctx, "project.deleted", project.OrgID.String(), id.String(), nil)
+
 	return nil
 }
 
@@ -130,19 +152,59 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.U
 		role = domain.RoleProjectContributor
 	}
 	m := &domain.ProjectMember{ProjectID: projectID, UserID: userID, Role: role}
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.Add(ctx, tx, m)
 	})
+	if err != nil {
+		return err
+	}
+	s.publishEvent(ctx, domain.EventMemberInvited, "", projectID.String(), map[string]any{"user_id": userID.String(), "scope": "project"})
+	return nil
 }
 
 func (s *ProjectService) RemoveMember(ctx context.Context, projectID, userID uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.Remove(ctx, tx, projectID, userID)
 	})
+	if err != nil {
+		return err
+	}
+	s.publishEvent(ctx, "member.removed", "", projectID.String(), map[string]any{"user_id": userID.String(), "scope": "project"})
+	return nil
+}
+
+func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID uuid.UUID, role string) error {
+	if role == "" {
+		return fmt.Errorf("role is required")
+	}
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.projectMemberRepo.UpdateRole(ctx, tx, projectID, userID, role)
+	})
+	if err != nil {
+		return err
+	}
+	s.publishEvent(ctx, "member.role_updated", "", projectID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "project"})
+	return nil
 }
 
 func (s *ProjectService) ListMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
 	return s.projectMemberRepo.ListByProject(ctx, projectID)
+}
+
+// publishEvent publishes a domain event for real-time propagation via SSE.
+func (s *ProjectService) publishEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
+	if s.publisher == nil {
+		return
+	}
+	event := domain.DomainEvent{
+		Type:     eventType,
+		OrgID:    orgID,
+		EntityID: entityID,
+		Payload:  payload,
+	}
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		_ = err
+	}
 }
 
 // --- Worker helper ---

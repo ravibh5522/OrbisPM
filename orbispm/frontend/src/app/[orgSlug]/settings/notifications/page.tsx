@@ -18,8 +18,12 @@ export default function NotificationsPage() {
   });
 
   const toggleMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
-      api.notificationPreferences.update(currentOrg!.id, id, { enabled }),
+    mutationFn: ({ pref }: { pref: NotificationPreference }) =>
+      api.notificationPreferences.upsert(currentOrg!.id, {
+        event_type: pref.event_type,
+        channel: pref.channel,
+        enabled: !pref.enabled,
+      }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-prefs"] }),
   });
 
@@ -61,7 +65,7 @@ export default function NotificationsPage() {
                         className="toggle toggle-primary toggle-sm"
                         checked={pref.enabled}
                         onChange={() =>
-                          toggleMutation.mutate({ id: pref.id, enabled: !pref.enabled })
+                          toggleMutation.mutate({ pref })
                         }
                         disabled={toggleMutation.isPending}
                       />

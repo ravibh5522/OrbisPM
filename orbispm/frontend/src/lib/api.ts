@@ -207,7 +207,7 @@ export const api = {
     list: () => get<ListResponse<Org>>(`${V1}/orgs`),
     get: (id: string) => get<Org>(`${V1}/orgs/${id}`),
     create: (data: { name: string; slug: string }) => post<Org>(`${V1}/orgs`, data),
-    update: (id: string, data: Partial<Org>) => put<Org>(`${V1}/orgs/${id}`, data),
+    update: (id: string, data: Partial<Org>) => patch<Org>(`${V1}/orgs/${id}`, data),
     delete: (id: string) => del(`${V1}/orgs/${id}`),
     me: (orgId: string) => get<OrgMember>(`${V1}/orgs/${orgId}/me`),
   },
@@ -242,7 +242,7 @@ export const api = {
     create: (orgId: string, data: { name: string; description?: string }) =>
       post<Team>(`${V1}/orgs/${orgId}/teams`, data),
     update: (orgId: string, id: string, data: Partial<Team>) =>
-      put<Team>(`${V1}/orgs/${orgId}/teams/${id}`, data),
+      patch<Team>(`${V1}/orgs/${orgId}/teams/${id}`, data),
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/teams/${id}`),
     dashboard: (orgId: string, teamId: string) =>
       get<TeamDashboardStats>(`${V1}/orgs/${orgId}/teams/${teamId}/dashboard`),
@@ -255,7 +255,7 @@ export const api = {
     add: (orgId: string, teamId: string, data: { user_id: string; role: string }) =>
       post<TeamMember>(`${V1}/orgs/${orgId}/teams/${teamId}/members`, data),
     update: (orgId: string, teamId: string, userId: string, data: { role: string }) =>
-      put<TeamMember>(`${V1}/orgs/${orgId}/teams/${teamId}/members/${userId}`, data),
+      patch<TeamMember>(`${V1}/orgs/${orgId}/teams/${teamId}/members/${userId}`, data),
     remove: (orgId: string, teamId: string, userId: string) =>
       del(`${V1}/orgs/${orgId}/teams/${teamId}/members/${userId}`),
   },
@@ -267,7 +267,7 @@ export const api = {
     create: (orgId: string, data: { name: string; team_id: string; description?: string }) =>
       post<Project>(`${V1}/orgs/${orgId}/projects`, data),
     update: (orgId: string, id: string, data: Partial<Project>) =>
-      put<Project>(`${V1}/orgs/${orgId}/projects/${id}`, data),
+      patch<Project>(`${V1}/orgs/${orgId}/projects/${id}`, data),
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/projects/${id}`),
     dashboard: (orgId: string, projId: string) =>
       get<ProjectDashboardStats>(`${V1}/orgs/${orgId}/projects/${projId}/dashboard`),
@@ -280,7 +280,7 @@ export const api = {
     add: (orgId: string, projId: string, data: { user_id: string; role: string }) =>
       post<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members`, data),
     update: (orgId: string, projId: string, userId: string, data: { role: string }) =>
-      put<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`, data),
+      patch<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`, data),
     remove: (orgId: string, projId: string, userId: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`),
   },
@@ -330,7 +330,7 @@ export const api = {
     create: (orgId: string, projId: string, taskId: string, data: { title: string }) =>
       post<Checklist>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists`, data),
     update: (orgId: string, projId: string, taskId: string, id: string, data: Partial<Checklist>) =>
-      put<Checklist>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`, data),
+      patch<Checklist>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`, data),
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`),
   },
@@ -341,8 +341,7 @@ export const api = {
       get<ListResponse<Comment>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments`),
     create: (orgId: string, projId: string, taskId: string, data: { body: string; parent_id?: string }) =>
       post<Comment>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments`, data),
-    update: (orgId: string, projId: string, taskId: string, id: string, data: { body: string }) =>
-      put<Comment>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments/${id}`, data),
+    // Note: Backend does not support comment updates
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments/${id}`),
   },
@@ -371,8 +370,8 @@ export const api = {
   notificationPreferences: {
     list: (orgId: string) =>
       get<ListResponse<NotificationPreference>>(`${V1}/orgs/${orgId}/notification-preferences`),
-    update: (orgId: string, id: string, data: Partial<NotificationPreference>) =>
-      put<NotificationPreference>(`${V1}/orgs/${orgId}/notification-preferences/${id}`, data),
+    upsert: (orgId: string, data: Partial<NotificationPreference>) =>
+      put<void>(`${V1}/orgs/${orgId}/notification-preferences`, data),
   },
 
   // Activity logs
@@ -388,7 +387,7 @@ export const api = {
     create: (orgId: string, data: Partial<TaskTemplate>) =>
       post<TaskTemplate>(`${V1}/orgs/${orgId}/templates`, data),
     update: (orgId: string, id: string, data: Partial<TaskTemplate>) =>
-      put<TaskTemplate>(`${V1}/orgs/${orgId}/templates/${id}`, data),
+      patch<TaskTemplate>(`${V1}/orgs/${orgId}/templates/${id}`, data),
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/templates/${id}`),
     apply: (orgId: string, projId: string, templateId: string) =>
       post<void>(`${V1}/orgs/${orgId}/projects/${projId}/apply-template`, { template_id: templateId }),
@@ -404,7 +403,7 @@ export const api = {
     create: (orgId: string, data: Partial<Webhook>) =>
       post<Webhook>(`${V1}/orgs/${orgId}/webhooks`, data),
     update: (orgId: string, id: string, data: Partial<Webhook>) =>
-      put<Webhook>(`${V1}/orgs/${orgId}/webhooks/${id}`, data),
+      patch<Webhook>(`${V1}/orgs/${orgId}/webhooks/${id}`, data),
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/webhooks/${id}`),
   },
 
@@ -487,5 +486,23 @@ export const api = {
     stats: (orgId: string) => get<DashboardStats>(`${V1}/orgs/${orgId}/dashboard/stats`),
     myTasks: (orgId: string, limit = 50, offset = 0) =>
       get<ListResponse<Task>>(`${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`),
+  },
+
+  // Presence (real-time indicators)
+  presence: {
+    heartbeat: (
+      orgId: string,
+      params: {
+        resource_type: "task" | "project";
+        resource_id: string;
+        display_name?: string;
+        avatar_url?: string;
+      }
+    ) => post<void>(`${V1}/orgs/${orgId}/presence/heartbeat`, params),
+
+    get: (orgId: string, resourceType: "task" | "project", resourceId: string) =>
+      get<{ user_id: string; display_name?: string; avatar_url?: string; viewing_since: string }[]>(
+        `${V1}/orgs/${orgId}/presence?resource_type=${resourceType}&resource_id=${resourceId}`
+      ),
   },
 };

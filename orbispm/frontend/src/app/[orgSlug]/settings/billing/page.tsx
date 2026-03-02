@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { PageHeader, Card, LoadingPage } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Check } from "lucide-react";
-import type { BillingPlan, OrgSubscription } from "@/types/domain";
+import type { BillingPlan } from "@/types/domain";
 
 export default function BillingPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);

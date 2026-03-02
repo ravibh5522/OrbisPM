@@ -11,7 +11,8 @@ import { Input, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
 import { Plus, Users, Trash2, UserPlus, BarChart3 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
-import type { Team, TeamMember, OrgMember } from "@/types/domain";
+import type { Team, TeamMember } from "@/types/domain";
+import { usePermissions } from "@/hooks/use-permissions";
 import Link from "next/link";
 
 interface TeamForm {
@@ -27,6 +28,7 @@ export default function TeamsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [error, setError] = useState("");
+  const { can } = usePermissions();
 
   const { data: teams, isLoading } = useQuery({
     queryKey: ["teams", currentOrg?.id],
@@ -63,9 +65,11 @@ export default function TeamsPage() {
         title="Teams"
         description="Organize members into teams"
         actions={
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> New Team
-          </Button>
+          can("teams", "create") && (
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" /> New Team
+            </Button>
+          )
         }
       />
 
@@ -74,7 +78,7 @@ export default function TeamsPage() {
           icon={<Users className="w-16 h-16" />}
           title="No teams yet"
           description="Create your first team to organize members"
-          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Team</Button>}
+          action={can("teams", "create") ? <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Team</Button> : undefined}
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -97,12 +101,14 @@ export default function TeamsPage() {
                     >
                       <BarChart3 className="w-3 h-3" />
                     </Link>
-                    <button
-                      className="btn btn-ghost btn-xs btn-square"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(team); }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    {can("teams", "delete") && (
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(team); }}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-3">
@@ -181,6 +187,11 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
     queryFn: () => api.members.list(orgId),
   });
 
+  const { data: customRoles } = useQuery({
+    queryKey: ["custom-roles", orgId],
+    queryFn: () => api.customRoles.list(orgId),
+  });
+
   const addMutation = useMutation({
     mutationFn: () => api.teamMembers.add(orgId, team.id, { user_id: addUserId, role: addRole }),
     onSuccess: () => {
@@ -203,6 +214,12 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
 
   const memberIds = new Set((members?.data || []).map((m: TeamMember) => m.user_id));
   const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
+  const roleOptions = [
+    { value: "lead", label: "Lead" },
+    { value: "member", label: "Member" },
+    { value: "viewer", label: "Viewer" },
+    ...(customRoles?.data || []).map((r) => ({ value: r.name, label: r.name })),
+  ];
 
   return (
     <Modal open onClose={onClose} title={team.name} className="max-w-lg">
@@ -221,13 +238,13 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
               <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} src={m.avatar_url} size="xs" />
               <span className="text-xs flex-1">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
               <select
-                className="select select-ghost select-xs"
+                className="select select-ghost select-xs capitalize"
                 value={m.role}
                 onChange={(e) => updateRoleMutation.mutate({ userId: m.user_id, role: e.target.value })}
               >
-                <option value="lead">Lead</option>
-                <option value="member">Member</option>
-                <option value="viewer">Viewer</option>
+                {roleOptions.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
+                ))}
               </select>
               <button
                 className="btn btn-ghost btn-xs btn-square text-error opacity-0 group-hover:opacity-100"
@@ -259,9 +276,9 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
           </select>
         </div>
         <select className="select select-bordered select-sm" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
-          <option value="lead">Lead</option>
-          <option value="member">Member</option>
-          <option value="viewer">Viewer</option>
+          {roleOptions.map((r) => (
+            <option key={r.value} value={r.value}>{r.label}</option>
+          ))}
         </select>
         <Button type="submit" size="sm" loading={addMutation.isPending} disabled={!addUserId}>
           <UserPlus className="w-4 h-4" />

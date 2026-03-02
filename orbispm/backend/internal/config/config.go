@@ -56,6 +56,11 @@ type Config struct {
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
 	IdleTimeout  time.Duration
+
+	// Stripe
+	StripeSecretKey     string
+	StripeWebhookSecret string
+	StripeEnabled       bool
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -87,6 +92,9 @@ func Load() (*Config, error) {
 		ReadTimeout:        time.Duration(getEnvInt("READ_TIMEOUT_SECONDS", 15)) * time.Second,
 		WriteTimeout:       time.Duration(getEnvInt("WRITE_TIMEOUT_SECONDS", 15)) * time.Second,
 		IdleTimeout:        time.Duration(getEnvInt("IDLE_TIMEOUT_SECONDS", 60)) * time.Second,
+		StripeSecretKey:    getEnv("STRIPE_SECRET_KEY", ""),
+		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
+		StripeEnabled:      getEnvBool("STRIPE_ENABLED", false),
 	}
 
 	if cfg.Env == "production" && cfg.JWTSecret == "super-secret-jwt-token-with-at-least-32-characters-long" {

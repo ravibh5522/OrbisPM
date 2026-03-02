@@ -30,6 +30,7 @@ func (h *Handlers) RegisterAll(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeSearchIndex, h.HandleSearchIndex)
 	mux.HandleFunc(TypeSearchDelete, h.HandleSearchDelete)
 	mux.HandleFunc(TypeWebhookDeliver, h.HandleWebhookDeliver)
+	mux.HandleFunc(TypeRecurringGenerate, h.HandleRecurringGenerate)
 }
 
 // HandleActivityLog inserts an activity log entry into the database.
@@ -228,4 +229,111 @@ func (h *Handlers) HandleWebhookDeliver(ctx context.Context, t *asynq.Task) erro
 
 	log.Debug().Str("url", p.URL).Str("event", p.Event).Msg("webhook delivered")
 	return nil
+}
+
+// HandleRecurringGenerate creates the next instance of a recurring task.
+func (h *Handlers) HandleRecurringGenerate(ctx context.Context, t *asynq.Task) error {
+	var p RecurringGeneratePayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("unmarshal recurring payload: %w", err)
+	}
+
+	taskID, err := uuid.Parse(p.TaskID)
+	if err != nil {
+		return fmt.Errorf("parse task_id: %w", err)
+	}
+	orgID, err := uuid.Parse(p.OrgID)
+	if err != nil {
+		return fmt.Errorf("parse org_id: %w", err)
+	}
+
+	// Fetch the template task
+	var title, description, status, priority, recurrenceRule string
+	var projectID uuid.UUID
+	var assigneeID, reporterID *uuid.UUID
+	var labels []string
+	var metadata map[string]any
+	var estimatedHours *float64
+	var nextOccurrence *time.Time
+
+	err = h.Pool.QueryRow(ctx,
+		`SELECT title, description, status, priority, project_id, assignee_id, reporter_id,
+		  labels, metadata, estimated_hours, recurrence_rule, next_occurrence
+		 FROM tasks WHERE id = $1 AND org_id = $2 AND recurrence_rule IS NOT NULL`,
+		taskID, orgID,
+	).Scan(&title, &description, &status, &priority, &projectID, &assigneeID, &reporterID,
+		&labels, &metadata, &estimatedHours, &recurrenceRule, &nextOccurrence)
+	if err != nil {
+		return fmt.Errorf("fetch recurring task: %w", err)
+	}
+
+	if nextOccurrence == nil || time.Now().Before(*nextOccurrence) {
+		// Not yet due
+		return nil
+	}
+
+	// Create new task instance
+	dueDate := *nextOccurrence
+	newTaskID := uuid.New()
+	_, err = h.Pool.Exec(ctx,
+		`INSERT INTO tasks (id, org_id, project_id, title, description, status, priority,
+		  assignee_id, reporter_id, labels, metadata, estimated_hours, due_date, recurrence_parent_id, depth, position)
+		 VALUES ($1, $2, $3, $4, $5, 'todo', $6, $7, $8, $9, $10, $11, $12, $13, 0, 0)`,
+		newTaskID, orgID, projectID, title, description, priority,
+		assigneeID, reporterID, labels, metadata, estimatedHours, dueDate, taskID,
+	)
+	if err != nil {
+		return fmt.Errorf("create recurring instance: %w", err)
+	}
+
+	// Calculate and update next occurrence
+	next := calculateNextOccurrence(*nextOccurrence, recurrenceRule)
+	_, err = h.Pool.Exec(ctx,
+		`UPDATE tasks SET next_occurrence = $1 WHERE id = $2`,
+		next, taskID,
+	)
+	if err != nil {
+		return fmt.Errorf("update next occurrence: %w", err)
+	}
+
+	log.Debug().Str("task_id", taskID.String()).Str("new_id", newTaskID.String()).Time("due_date", dueDate).Msg("recurring task instance created")
+	return nil
+}
+
+// calculateNextOccurrence calculates the next occurrence based on RRULE.
+func calculateNextOccurrence(current time.Time, rrule string) *time.Time {
+	// Simple RRULE parser for: FREQ=DAILY, FREQ=WEEKLY, FREQ=MONTHLY, FREQ=YEARLY
+	// Also supports INTERVAL=N
+	freq := "DAILY"
+	interval := 1
+
+	for _, part := range strings.Split(rrule, ";") {
+		kv := strings.SplitN(part, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		switch kv[0] {
+		case "FREQ":
+			freq = kv[1]
+		case "INTERVAL":
+			if i, err := fmt.Sscanf(kv[1], "%d", &interval); err == nil && i == 1 && interval > 0 {
+				// interval parsed
+			}
+		}
+	}
+
+	var next time.Time
+	switch freq {
+	case "DAILY":
+		next = current.AddDate(0, 0, interval)
+	case "WEEKLY":
+		next = current.AddDate(0, 0, 7*interval)
+	case "MONTHLY":
+		next = current.AddDate(0, interval, 0)
+	case "YEARLY":
+		next = current.AddDate(interval, 0, 0)
+	default:
+		next = current.AddDate(0, 0, 1) // Default to daily
+	}
+	return &next
 }

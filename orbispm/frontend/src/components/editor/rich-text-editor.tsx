@@ -51,6 +51,7 @@ export function RichTextEditor({
   autoFocus = false,
 }: RichTextEditorProps) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({
         heading: { levels: [1, 2, 3] },
@@ -106,6 +107,7 @@ export function RichTextEditor({
 /* ── Read-only rich text viewer (no toolbar, no border) ── */
 export function RichTextViewer({ content, className }: { content: string; className?: string }) {
   const editor = useEditor({
+    immediatelyRender: false,
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
       Link.configure({

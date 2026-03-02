@@ -1,26 +1,33 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import { Badge, ConfirmDialog, Avatar } from "@/components/ui/shared";
+import { ConfirmDialog, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useAuthStore } from "@/stores/auth-store";
+import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
 import {
   Plus,
-  Trash2,
   ChevronRight,
-  ExternalLink,
-  Copy,
   Loader2,
+  GripVertical,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
-import { statusColor, priorityColor, statusLabel, formatDate, cn } from "@/lib/utils";
-import type { Task, TaskStatus, TaskPriority, ProjectMember } from "@/types/domain";
+import { cn } from "@/lib/utils";
+import type { Task, TaskStatus, TaskPriority, ProjectMember, OrgMember } from "@/types/domain";
 
 const MAX_DEPTH = 3;
+const DEFAULT_COL_WIDTHS = [220, 220, 200, 200];
+const DEFAULT_COL_NAMES = ["TASKS", "SUBTASKS", "LEVEL 3", "LEVEL 4"];
+const LS_WIDTHS_KEY = "task-column-widths";
+const LS_NAMES_KEY = "task-column-names";
 
 /* ═══════════════════════════════════════════════════════
    Main 5-column component
@@ -31,14 +38,49 @@ interface TaskColumnsProps {
   orgSlug: string;
   projectId: string;
   members: ProjectMember[];
+  orgMembers?: OrgMember[];
 }
 
-export function TaskColumns({ orgId, orgSlug, projectId, members }: TaskColumnsProps) {
+export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers }: TaskColumnsProps) {
   const qc = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const currentUserId = user?.id || "";
   const [selected, setSelected] = useState<(string | null)[]>([null, null, null, null]);
   const [createDepth, setCreateDepth] = useState<number | null>(null);
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [autoExpanded, setAutoExpanded] = useState(false);
+
+  // Column customization: widths and names (persisted per project)
+  const [columnWidths, setColumnWidths] = useState<number[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_COL_WIDTHS;
+    try {
+      const stored = localStorage.getItem(`${LS_WIDTHS_KEY}-${projectId}`);
+      return stored ? JSON.parse(stored) : DEFAULT_COL_WIDTHS;
+    } catch { return DEFAULT_COL_WIDTHS; }
+  });
+  const [columnNames, setColumnNames] = useState<string[]>(() => {
+    if (typeof window === "undefined") return DEFAULT_COL_NAMES;
+    try {
+      const stored = localStorage.getItem(`${LS_NAMES_KEY}-${projectId}`);
+      return stored ? JSON.parse(stored) : DEFAULT_COL_NAMES;
+    } catch { return DEFAULT_COL_NAMES; }
+  });
+
+  // Get user's project role
+  const userProjectRole = members.find((m) => m.user_id === currentUserId)?.role;
+  const canEditColumns = userProjectRole === "lead" || userProjectRole === "admin" || userProjectRole === "owner";
+
+  // Convert ProjectMember to OrgMember format if orgMembers not provided
+  const effectiveMembers: OrgMember[] = orgMembers || members.map((m) => ({
+    org_id: orgId,
+    user_id: m.user_id,
+    email: m.email || "",
+    display_name: m.display_name || m.email || "",
+    avatar_url: m.avatar_url,
+    role: "member" as const, // ProjectMember role is different from OrgRole, default to member
+    joined_at: m.joined_at,
+  }));
 
   const selectTask = useCallback((depth: number, taskId: string | null) => {
     setSelected((prev) => {
@@ -89,6 +131,15 @@ export function TaskColumns({ orgId, orgSlug, projectId, members }: TaskColumnsP
     d3Q.data?.data || [],
   ];
 
+  // Auto-expand first task when project loads (select first task and its subtasks)
+  useEffect(() => {
+    if (!autoExpanded && rootQ.data?.data && rootQ.data.data.length > 0) {
+      const firstTask = rootQ.data.data[0];
+      selectTask(0, firstTask.id);
+      setAutoExpanded(true);
+    }
+  }, [rootQ.data, autoExpanded, selectTask]);
+
   const focusedTask =
     focusedDepth >= 0
       ? columnData[focusedDepth]?.find((t) => t.id === selected[focusedDepth]) ?? null
@@ -115,7 +166,33 @@ export function TaskColumns({ orgId, orgSlug, projectId, members }: TaskColumnsP
   const updateMutation = useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: Partial<Task> }) =>
       api.tasks.update(orgId, projectId, taskId, data),
-    onSuccess: () => {
+    onMutate: async ({ taskId, data }) => {
+      // Cancel ongoing refetches
+      await qc.cancelQueries({ queryKey: ["tasks", orgId, projectId] });
+      // Snapshot all task queries for rollback
+      const previousData = qc.getQueriesData({ queryKey: ["tasks", orgId, projectId] });
+      // Optimistically update the task in all matching queries
+      qc.setQueriesData(
+        { queryKey: ["tasks", orgId, projectId] },
+        (old: { data: Task[]; total: number; limit: number; offset: number } | undefined) => {
+          if (!old?.data) return old;
+          return {
+            ...old,
+            data: old.data.map((t: Task) => (t.id === taskId ? { ...t, ...data } : t)),
+          };
+        },
+      );
+      return { previousData };
+    },
+    onError: (_err, _vars, context) => {
+      // Rollback on failure
+      if (context?.previousData) {
+        for (const [key, data] of context.previousData) {
+          qc.setQueryData(key, data);
+        }
+      }
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
     },
   });
@@ -133,23 +210,81 @@ export function TaskColumns({ orgId, orgSlug, projectId, members }: TaskColumnsP
     setCreateParentId(depth > 0 ? selected[depth - 1] : null);
   };
 
+  /* ── Column resize handlers ── */
+  const handleResizeStart = useCallback((colIndex: number, e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = columnWidths[colIndex];
+    let currentWidths = [...columnWidths];
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX;
+      const newWidth = Math.max(120, Math.min(400, startWidth + delta));
+      currentWidths = [...currentWidths];
+      currentWidths[colIndex] = newWidth;
+      setColumnWidths(currentWidths);
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      // Save directly to localStorage with current widths
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`${LS_WIDTHS_KEY}-${projectId}`, JSON.stringify(currentWidths));
+      }
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [columnWidths, projectId]);
+
+  /* ── Column rename handlers ── */
+  const [editingColumn, setEditingColumn] = useState<number | null>(null);
+  const [editingName, setEditingName] = useState("");
+
+  const startEditingName = useCallback((colIndex: number) => {
+    if (!canEditColumns) return;
+    setEditingColumn(colIndex);
+    setEditingName(columnNames[colIndex]);
+  }, [canEditColumns, columnNames]);
+
+  const confirmEditName = useCallback((colIndex: number) => {
+    if (editingName.trim()) {
+      const updatedNames = [...columnNames];
+      updatedNames[colIndex] = editingName.trim();
+      setColumnNames(updatedNames);
+      // Save directly to localStorage
+      if (typeof window !== "undefined") {
+        localStorage.setItem(`${LS_NAMES_KEY}-${projectId}`, JSON.stringify(updatedNames));
+      }
+    }
+    setEditingColumn(null);
+    setEditingName("");
+  }, [editingName, columnNames, projectId]);
+
+  const cancelEditName = useCallback(() => {
+    setEditingColumn(null);
+    setEditingName("");
+  }, []);
+
   /* ── Render ── */
   const columnMeta = [
-    { depth: 0, label: "Tasks", tasks: columnData[0], loading: rootQ.isLoading, show: true },
-    { depth: 1, label: "Subtasks", tasks: columnData[1], loading: d1Q.isLoading, show: !!selected[0] },
-    { depth: 2, label: "Level 3", tasks: columnData[2], loading: d2Q.isLoading, show: !!selected[1] },
-    { depth: 3, label: "Level 4", tasks: columnData[3], loading: d3Q.isLoading, show: !!selected[2] },
+    { depth: 0, label: columnNames[0], tasks: columnData[0], loading: rootQ.isLoading, show: true },
+    { depth: 1, label: columnNames[1], tasks: columnData[1], loading: d1Q.isLoading, show: !!selected[0] },
+    { depth: 2, label: columnNames[2], tasks: columnData[2], loading: d2Q.isLoading, show: !!selected[1] },
+    { depth: 3, label: columnNames[3], tasks: columnData[3], loading: d3Q.isLoading, show: !!selected[2] },
   ];
 
   return (
-    <div className="flex h-[calc(100vh-260px)] min-h-[500px] border border-base-200 rounded-lg overflow-hidden bg-base-100">
-      {/* Scrollable columns area */}
-      <div className="flex flex-1 min-w-0 overflow-x-auto">
+    <div className="flex flex-col lg:flex-row h-[calc(100vh-180px)] min-h-[500px] border border-base-200 rounded-lg overflow-hidden bg-base-100">
+      {/* Columns area — scrollable, takes 75% of available width */}
+      <div className="flex flex-row flex-1 min-w-0 overflow-x-auto">
         {columnMeta.map(
           (col) =>
             col.show && (
               <TaskColumn
                 key={col.depth}
+                depth={col.depth}
                 label={col.label}
                 tasks={col.tasks}
                 loading={col.loading}
@@ -157,19 +292,32 @@ export function TaskColumns({ orgId, orgSlug, projectId, members }: TaskColumnsP
                 onSelect={(id) => selectTask(col.depth, id)}
                 onAdd={() => openCreate(col.depth)}
                 members={members}
+                width={columnWidths[col.depth]}
+                canEdit={canEditColumns}
+                isEditing={editingColumn === col.depth}
+                editingName={editingName}
+                onEditingNameChange={setEditingName}
+                onStartEdit={() => startEditingName(col.depth)}
+                onConfirmEdit={() => confirmEditName(col.depth)}
+                onCancelEdit={cancelEditName}
+                onResizeStart={(e) => handleResizeStart(col.depth, e)}
               />
             ),
         )}
       </div>
 
-      {/* Detail panel */}
-      <div className="w-[380px] min-w-[340px] border-l border-base-200 overflow-y-auto">
+      {/* Detail panel — fixed 25% width, no gap */}
+      <div className="w-full lg:w-1/4 lg:min-w-[280px] lg:max-w-[480px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
         {focusedTask ? (
-          <TaskDetailPanel
+          <TaskPreviewPanel
             task={focusedTask}
+            orgId={orgId}
             orgSlug={orgSlug}
             projectId={projectId}
-            members={members}
+            members={effectiveMembers}
+            projectMembers={members}
+            currentUserId={currentUserId}
+            userProjectRole={userProjectRole}
             updating={updateMutation.isPending}
             onUpdate={(data) => updateMutation.mutate({ taskId: focusedTask.id, data })}
             onDelete={() => setDeleteTarget(focusedTask)}
@@ -221,10 +369,11 @@ export function TaskColumns({ orgId, orgSlug, projectId, members }: TaskColumnsP
 }
 
 /* ═══════════════════════════════════════════════════════
-   Single column
+   Single column with Virtual Scrolling
    ═══════════════════════════════════════════════════════ */
 
 function TaskColumn({
+  depth: _depth,
   label,
   tasks,
   loading,
@@ -232,7 +381,17 @@ function TaskColumn({
   onSelect,
   onAdd,
   members,
+  width,
+  canEdit,
+  isEditing,
+  editingName,
+  onEditingNameChange,
+  onStartEdit,
+  onConfirmEdit,
+  onCancelEdit,
+  onResizeStart,
 }: {
+  depth: number;
   label: string;
   tasks: Task[];
   loading: boolean;
@@ -240,15 +399,74 @@ function TaskColumn({
   onSelect: (id: string) => void;
   onAdd: () => void;
   members: ProjectMember[];
+  width: number;
+  canEdit: boolean;
+  isEditing: boolean;
+  editingName: string;
+  onEditingNameChange: (name: string) => void;
+  onStartEdit: () => void;
+  onConfirmEdit: () => void;
+  onCancelEdit: () => void;
+  onResizeStart: (e: React.MouseEvent) => void;
 }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  
+  const virtualizer = useVirtualizer({
+    count: tasks.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 52, // approximate row height
+    overscan: 5,
+  });
+
   return (
-    <div className="w-56 min-w-56 flex flex-col border-r border-base-200 shrink-0">
+    <div 
+      className="flex flex-col border-r border-base-200 shrink-0 relative"
+      style={{ width: `${width}px`, minWidth: `${width}px` }}
+    >
       {/* Header */}
       <div className="px-3 py-2 border-b border-base-200 flex items-center justify-between bg-base-200/30">
-        <span className="text-xs font-semibold uppercase tracking-wide text-base-content/60">
-          {label}
-        </span>
+        {isEditing ? (
+          <div className="flex items-center gap-1 flex-1">
+            <input
+              type="text"
+              value={editingName}
+              onChange={(e) => onEditingNameChange(e.target.value)}
+              className="input input-xs input-bordered flex-1 min-w-0 text-xs uppercase tracking-wide font-semibold"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') onConfirmEdit();
+                if (e.key === 'Escape') onCancelEdit();
+              }}
+            />
+            <button className="btn btn-ghost btn-xs btn-square text-success" onClick={onConfirmEdit}>
+              <Check className="w-3 h-3" />
+            </button>
+            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={onCancelEdit}>
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        ) : (
+          <span 
+            className={cn(
+              "text-xs font-semibold uppercase tracking-wide text-base-content/60",
+              canEdit && "cursor-pointer hover:text-base-content"
+            )}
+            onDoubleClick={onStartEdit}
+            title={canEdit ? "Double-click to rename" : undefined}
+          >
+            {label}
+          </span>
+        )}
         <div className="flex items-center gap-1">
+          {canEdit && !isEditing && (
+            <button 
+              className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 hover:opacity-100"
+              onClick={onStartEdit}
+              title="Rename column"
+            >
+              <Pencil className="w-3 h-3" />
+            </button>
+          )}
           <span className="text-xs text-base-content/40">{tasks.length}</span>
           <button className="btn btn-ghost btn-xs btn-square" onClick={onAdd} title={`Add ${label.toLowerCase()}`}>
             <Plus className="w-3.5 h-3.5" />
@@ -256,8 +474,8 @@ function TaskColumn({
         </div>
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* List with Virtual Scrolling */}
+      <div ref={parentRef} className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-4 h-4 animate-spin text-base-content/30" />
@@ -270,14 +488,29 @@ function TaskColumn({
             </button>
           </div>
         ) : (
-          <div className="py-0.5">
-            {tasks.map((task) => {
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualizer.getVirtualItems().map((virtualItem) => {
+              const task = tasks[virtualItem.index];
               const isSelected = task.id === selectedId;
               const assignee = members.find((m) => m.user_id === task.assignee_id);
               return (
                 <button
                   key={task.id}
                   onClick={() => onSelect(task.id)}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualItem.size}px`,
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
                   className={cn(
                     "w-full text-left px-3 py-2 flex items-center gap-2 transition-colors border-l-2",
                     "hover:bg-base-200/50",
@@ -326,298 +559,16 @@ function TaskColumn({
           </div>
         )}
       </div>
-    </div>
-  );
-}
 
-/* ═══════════════════════════════════════════════════════
-   Detail panel
-   ═══════════════════════════════════════════════════════ */
-
-function TaskDetailPanel({
-  task,
-  orgSlug,
-  projectId,
-  members,
-  updating,
-  onUpdate,
-  onDelete,
-  onDuplicate,
-  onAddSubtask,
-}: {
-  task: Task;
-  orgSlug: string;
-  projectId: string;
-  members: ProjectMember[];
-  updating: boolean;
-  onUpdate: (data: Partial<Task>) => void;
-  onDelete: () => void;
-  onDuplicate: () => void;
-  onAddSubtask: () => void;
-}) {
-  const router = useRouter();
-
-  /* inline-edit state */
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [titleDraft, setTitleDraft] = useState(task.title);
-  const [editingDesc, setEditingDesc] = useState(false);
-  const [descDraft, setDescDraft] = useState(task.description || "");
-
-  /* reset drafts when focused task changes */
-  const [prevId, setPrevId] = useState(task.id);
-  if (task.id !== prevId) {
-    setPrevId(task.id);
-    setEditingTitle(false);
-    setEditingDesc(false);
-    setTitleDraft(task.title);
-    setDescDraft(task.description || "");
-  }
-
-  return (
-    <div className="p-4 space-y-4">
-      {/* ── Title ── */}
-      {editingTitle ? (
-        <div className="space-y-1">
-          <input
-            type="text"
-            className="input input-bordered input-sm w-full font-semibold"
-            value={titleDraft}
-            onChange={(e) => setTitleDraft(e.target.value)}
-            autoFocus
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && titleDraft.trim()) {
-                onUpdate({ title: titleDraft.trim() });
-                setEditingTitle(false);
-              }
-              if (e.key === "Escape") setEditingTitle(false);
-            }}
-          />
-          <div className="flex gap-1">
-            <button
-              className="btn btn-primary btn-xs"
-              onClick={() => {
-                if (titleDraft.trim()) {
-                  onUpdate({ title: titleDraft.trim() });
-                  setEditingTitle(false);
-                }
-              }}
-            >
-              Save
-            </button>
-            <button className="btn btn-ghost btn-xs" onClick={() => setEditingTitle(false)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <h2
-          className="text-lg font-semibold cursor-pointer hover:text-primary transition-colors"
-          onClick={() => {
-            setTitleDraft(task.title);
-            setEditingTitle(true);
-          }}
-        >
-          {task.title}
-        </h2>
-      )}
-
-      {/* ── Status & Priority ── */}
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <label className="text-xs text-base-content/50 block mb-1">Status</label>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={task.status}
-            onChange={(e) => onUpdate({ status: e.target.value as TaskStatus })}
-          >
-            <option value="todo">Todo</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-            <option value="blocked">Blocked</option>
-          </select>
-        </div>
-        <div className="flex-1">
-          <label className="text-xs text-base-content/50 block mb-1">Priority</label>
-          <select
-            className="select select-bordered select-sm w-full"
-            value={task.priority}
-            onChange={(e) => onUpdate({ priority: e.target.value as TaskPriority })}
-          >
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+      {/* Resize handle */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary transition-colors z-10 group"
+        onMouseDown={onResizeStart}
+      >
+        <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+          <GripVertical className="w-3 h-3 text-base-content/40" />
         </div>
       </div>
-
-      {/* ── Assignee ── */}
-      <div>
-        <label className="text-xs text-base-content/50 block mb-1">Assignee</label>
-        <select
-          className="select select-bordered select-sm w-full"
-          value={task.assignee_id || ""}
-          onChange={(e) => onUpdate({ assignee_id: e.target.value || null })}
-        >
-          <option value="">Unassigned</option>
-          {members.map((m) => (
-            <option key={m.user_id} value={m.user_id}>
-              {m.display_name || m.email || m.user_id.slice(0, 12)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* ── Description ── */}
-      <div>
-        <label className="text-xs text-base-content/50 block mb-1">Description</label>
-        {editingDesc ? (
-          <div className="space-y-1">
-            <textarea
-              className="textarea textarea-bordered w-full text-sm"
-              rows={4}
-              value={descDraft}
-              onChange={(e) => setDescDraft(e.target.value)}
-              autoFocus
-            />
-            <div className="flex gap-1">
-              <button
-                className="btn btn-primary btn-xs"
-                onClick={() => {
-                  onUpdate({ description: descDraft });
-                  setEditingDesc(false);
-                }}
-              >
-                Save
-              </button>
-              <button className="btn btn-ghost btn-xs" onClick={() => setEditingDesc(false)}>
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div
-            className="text-sm text-base-content/70 min-h-[40px] p-2 rounded border border-transparent hover:border-base-300 cursor-pointer whitespace-pre-wrap"
-            onClick={() => {
-              setDescDraft(task.description || "");
-              setEditingDesc(true);
-            }}
-          >
-            {task.description || (
-              <span className="text-base-content/30 italic">Click to add description…</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      <div className="divider my-1" />
-
-      {/* ── Dates ── */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Start</label>
-          <input
-            type="date"
-            className="input input-bordered input-xs w-full"
-            value={task.start_date ? task.start_date.split("T")[0] : ""}
-            onChange={(e) =>
-              onUpdate({ start_date: e.target.value ? new Date(e.target.value).toISOString() : null })
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Due</label>
-          <input
-            type="date"
-            className="input input-bordered input-xs w-full"
-            value={task.due_date ? task.due_date.split("T")[0] : ""}
-            onChange={(e) =>
-              onUpdate({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })
-            }
-          />
-        </div>
-      </div>
-
-      {/* ── Hours ── */}
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Est. Hours</label>
-          <input
-            type="number"
-            className="input input-bordered input-xs w-full"
-            step="0.5"
-            min="0"
-            placeholder="0"
-            value={task.estimated_hours ?? ""}
-            onChange={(e) =>
-              onUpdate({ estimated_hours: e.target.value ? parseFloat(e.target.value) : null })
-            }
-          />
-        </div>
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Actual Hours</label>
-          <input
-            type="number"
-            className="input input-bordered input-xs w-full"
-            step="0.5"
-            min="0"
-            placeholder="0"
-            value={task.actual_hours ?? ""}
-            onChange={(e) =>
-              onUpdate({ actual_hours: e.target.value ? parseFloat(e.target.value) : null })
-            }
-          />
-        </div>
-      </div>
-
-      {/* ── Labels ── */}
-      {task.labels && task.labels.length > 0 && (
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Labels</label>
-          <div className="flex flex-wrap gap-1">
-            {task.labels.map((l) => (
-              <span key={l} className="badge badge-xs badge-outline">
-                {l}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Meta ── */}
-      <div className="text-[11px] text-base-content/40 space-y-0.5 pt-1">
-        <p>Created {formatDate(task.created_at)} · Updated {formatDate(task.updated_at)}</p>
-        {task.parent_task_id && <p>Depth {task.depth}</p>}
-      </div>
-
-      <div className="divider my-1" />
-
-      {/* ── Actions ── */}
-      <div className="space-y-2">
-        {task.depth < MAX_DEPTH && (
-          <button className="btn btn-sm btn-outline btn-primary w-full gap-1" onClick={onAddSubtask}>
-            <Plus className="w-3.5 h-3.5" /> Add Subtask
-          </button>
-        )}
-        <button
-          className="btn btn-sm btn-ghost w-full gap-1"
-          onClick={() => router.push(`/${orgSlug}/projects/${projectId}/tasks/${task.id}`)}
-        >
-          <ExternalLink className="w-3.5 h-3.5" /> Full Details
-        </button>
-        <button className="btn btn-sm btn-ghost w-full gap-1" onClick={onDuplicate}>
-          <Copy className="w-3.5 h-3.5" /> Duplicate
-        </button>
-        <button className="btn btn-sm btn-ghost text-error w-full gap-1" onClick={onDelete}>
-          <Trash2 className="w-3.5 h-3.5" /> Delete
-        </button>
-      </div>
-
-      {updating && (
-        <div className="text-center">
-          <Loader2 className="w-4 h-4 animate-spin inline text-primary" />
-        </div>
-      )}
     </div>
   );
 }

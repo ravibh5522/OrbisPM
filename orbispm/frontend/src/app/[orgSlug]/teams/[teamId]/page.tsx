@@ -231,7 +231,7 @@ export default function TeamDashboardPage({
                         />
                         <div>
                           <p className="font-medium text-sm">
-                            {m.display_name || m.email.split("@")[0]}
+                            {m.display_name || m.email?.split("@")[0] || 'User'}
                           </p>
                           <p className="text-xs text-base-content/50">{m.email}</p>
                         </div>

@@ -23,7 +23,6 @@ import {
   ChevronRight,
   Menu,
   LogOut,
-  Building2,
   Palette,
   Activity,
   ChevronDown,
@@ -101,6 +100,7 @@ function Sidebar() {
     <aside
       className={cn(
         "fixed left-0 top-0 h-full bg-base-100 border-r border-base-200 z-40 transition-all duration-200",
+        "hidden lg:flex", // Hide on mobile
         sidebarCollapsed ? "w-16" : "w-64"
       )}
     >
@@ -111,7 +111,7 @@ function Sidebar() {
             <div className="dropdown dropdown-bottom w-full">
               <label tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-base-200 rounded-lg p-1 w-full">
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm">
-                  {currentOrg.name[0].toUpperCase()}
+                  {(currentOrg.name?.[0] || '?').toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">{currentOrg.name}</div>
@@ -127,7 +127,7 @@ function Sidebar() {
                       onClick={() => handleOrgSwitch(org.slug)}
                     >
                       <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-content font-bold text-xs">
-                        {org.name[0].toUpperCase()}
+                        {(org.name?.[0] || '?').toUpperCase()}
                       </div>
                       {org.name}
                     </button>
@@ -217,7 +217,8 @@ function TopBar() {
     <header
       className={cn(
         "sticky top-0 z-30 h-14 bg-base-100 border-b border-base-200 flex items-center px-4 gap-4 transition-all duration-200",
-        sidebarCollapsed ? "ml-16" : "ml-64"
+        "lg:ml-64", // Desktop sidebar offset
+        sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
       )}
     >
       <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={() => setMobileMenuOpen(true)}>
@@ -252,6 +253,167 @@ function TopBar() {
   );
 }
 
+/* Mobile Sidebar Overlay */
+function MobileSidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { orgs, currentOrg, setCurrentOrg, user } = useAuthStore();
+  const { mobileMenuOpen, setMobileMenuOpen } = useUIStore();
+  const currentMembership = useAuthStore((s) => s.currentMembership);
+  const userRole = currentMembership?.role as OrgRole | undefined;
+  const orgSlug = currentOrg?.slug || "";
+
+  const mainItems: NavItem[] = [
+    { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
+    { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
+    { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
+    { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
+    { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
+    { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
+  ];
+
+  const settingsItems: NavItem[] = [
+    { href: `/${orgSlug}/settings`, label: "General", icon: <Settings className="w-5 h-5" />, roles: ["owner", "admin"] },
+    { href: `/${orgSlug}/settings/billing`, label: "Billing", icon: <CreditCard className="w-5 h-5" />, roles: ["owner", "billing_admin"] },
+  ];
+
+  const filteredSettings = settingsItems.filter(
+    (item) => !item.roles || (userRole && item.roles.includes(userRole))
+  );
+
+  const isActive = (href: string) => pathname === href || (href !== `/${orgSlug}` && pathname.startsWith(href));
+
+  const handleOrgSwitch = async (orgSlug: string) => {
+    const org = orgs.find((o) => o.slug === orgSlug);
+    if (org) {
+      await setCurrentOrg(org);
+      router.push(`/${org.slug}`);
+      setMobileMenuOpen(false);
+    }
+  };
+
+  if (!mobileMenuOpen || !currentOrg) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+        onClick={() => setMobileMenuOpen(false)}
+      />
+      
+      {/* Drawer */}
+      <aside className="fixed left-0 top-0 h-full w-72 bg-base-100 z-50 lg:hidden shadow-xl">
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-base-200">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm">
+                {(currentOrg.name?.[0] || '?').toUpperCase()}
+              </div>
+              <div>
+                <div className="font-semibold text-sm">{currentOrg.name}</div>
+                <div className="text-xs text-base-content/50">{userRole || "member"}</div>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm btn-square" onClick={() => setMobileMenuOpen(false)}>
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Nav */}
+          <nav className="flex-1 overflow-y-auto py-2">
+            <ul className="menu menu-md px-2 gap-1">
+              {mainItems.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={cn(isActive(item.href) && "active")}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+
+            {filteredSettings.length > 0 && (
+              <>
+                <div className="px-4 py-2 mt-2">
+                  <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+                    Settings
+                  </span>
+                </div>
+                <ul className="menu menu-md px-2 gap-1">
+                  {filteredSettings.map((item) => (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(isActive(item.href) && "active")}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {/* Org Switcher */}
+            {orgs.length > 1 && (
+              <>
+                <div className="px-4 py-2 mt-2">
+                  <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+                    Organizations
+                  </span>
+                </div>
+                <ul className="menu menu-md px-2 gap-1">
+                  {orgs.map((org) => (
+                    <li key={org.id}>
+                      <button
+                        className={cn(org.id === currentOrg.id && "active")}
+                        onClick={() => handleOrgSwitch(org.slug)}
+                      >
+                        <div className="w-6 h-6 bg-primary/20 rounded flex items-center justify-center text-primary font-bold text-xs">
+                          {(org.name?.[0] || '?').toUpperCase()}
+                        </div>
+                        {org.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </nav>
+
+          {/* User footer */}
+          <div className="border-t border-base-200 p-3">
+            <Link
+              href={`/${currentOrg.slug}/profile`}
+              className="flex items-center gap-2 hover:bg-base-200 rounded-lg p-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Avatar
+                name={user?.user_metadata?.name as string || user?.email || "U"}
+                src={user?.user_metadata?.avatar_url as string | undefined}
+                size="sm"
+              />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
+                <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
+              </div>
+            </Link>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, hasOrgs } = useRequireAuth();
   const { sidebarCollapsed } = useUIStore();
@@ -268,8 +430,13 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
     <WebSocketProvider>
       <div className="min-h-screen">
         <Sidebar />
+        <MobileSidebar />
         <TopBar />
-        <main className={cn("transition-all duration-200 p-6", sidebarCollapsed ? "ml-16" : "ml-64")}>
+        <main className={cn(
+          "transition-all duration-200 p-4 md:p-6",
+          "lg:ml-64",
+          sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+        )}>
           {children}
         </main>
       </div>

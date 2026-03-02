@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { Plus, FileText, Trash2, Copy, Download, Upload } from "lucide-react";
+import { Plus, FileText, Trash2, Download, Upload } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TaskTemplate } from "@/types/domain";
 

@@ -36,6 +36,20 @@ func (r *teamMemberRepo) Remove(ctx context.Context, tx pgx.Tx, teamID, userID u
 	return err
 }
 
+func (r *teamMemberRepo) UpdateRole(ctx context.Context, tx pgx.Tx, teamID, userID uuid.UUID, role string) error {
+	q := conn(r.pool, tx)
+	tag, err := q.Exec(ctx,
+		`UPDATE team_members SET role = $3 WHERE team_id = $1 AND user_id = $2`,
+		teamID, userID, role)
+	if err != nil {
+		return fmt.Errorf("update team member role: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("team member not found")
+	}
+	return nil
+}
+
 func (r *teamMemberRepo) ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT m.team_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at

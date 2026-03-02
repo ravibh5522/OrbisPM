@@ -60,6 +60,7 @@ type TeamRepository interface {
 type TeamMemberRepository interface {
 	Add(ctx context.Context, tx pgx.Tx, m *domain.TeamMember) error
 	Remove(ctx context.Context, tx pgx.Tx, teamID, userID uuid.UUID) error
+	UpdateRole(ctx context.Context, tx pgx.Tx, teamID, userID uuid.UUID, role string) error
 	ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error)
 }
 
@@ -76,6 +77,7 @@ type ProjectRepository interface {
 type ProjectMemberRepository interface {
 	Add(ctx context.Context, tx pgx.Tx, m *domain.ProjectMember) error
 	Remove(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID) error
+	UpdateRole(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID, role string) error
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error)
 }
 
@@ -219,12 +221,14 @@ type NotificationPrefRepository interface {
 
 type BillingPlanRepository interface {
 	GetByID(ctx context.Context, id string) (*domain.BillingPlan, error)
+	GetByPriceID(ctx context.Context, priceID string) (*domain.BillingPlan, error)
 	List(ctx context.Context) ([]*domain.BillingPlan, error)
 }
 
 type OrgSubscriptionRepository interface {
 	GetByOrgID(ctx context.Context, orgID uuid.UUID) (*domain.OrgSubscription, error)
-	Upsert(ctx context.Context, tx pgx.Tx, sub *domain.OrgSubscription) (*domain.OrgSubscription, error)
+	GetByStripeSubID(ctx context.Context, stripeSubID string) (*domain.OrgSubscription, error)
+	Upsert(ctx context.Context, sub *domain.OrgSubscription) (*domain.OrgSubscription, error)
 }
 
 // --- Custom Role ---

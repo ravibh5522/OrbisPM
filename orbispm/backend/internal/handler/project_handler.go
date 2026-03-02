@@ -36,6 +36,7 @@ func (h *ProjectHandler) Routes() chi.Router {
 		// Members
 		r.Get("/members", h.ListMembers)
 		r.Post("/members", h.AddMember)
+		r.Patch("/members/{userId}", h.UpdateMemberRole)
 		r.Delete("/members/{userId}", h.RemoveMember)
 
 		// Dashboard
@@ -272,6 +273,47 @@ func (h *ProjectHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.projectSvc.RemoveMember(r.Context(), projectID, userID); err != nil {
+		Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateProjectMemberRoleRequest struct {
+	Role string `json:"role" validate:"required"`
+}
+
+// UpdateMemberRole godoc
+// @Summary Update project member role
+// @Description Update the role of a project member
+// @Tags Projects
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param userId path string true "User ID" format(uuid)
+// @Param body body updateProjectMemberRoleRequest true "New role"
+// @Success 204 "No Content"
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/members/{userId} [patch]
+func (h *ProjectHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	var req updateProjectMemberRoleRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	if err := h.projectSvc.UpdateMemberRole(r.Context(), projectID, userID, req.Role); err != nil {
 		Error(w, r, err)
 		return
 	}

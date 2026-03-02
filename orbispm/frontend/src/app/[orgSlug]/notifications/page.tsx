@@ -6,7 +6,7 @@ import { api } from "@/lib/api";
 import { PageHeader, Card, Badge, LoadingPage, EmptyState } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { formatRelative, cn } from "@/lib/utils";
-import { Bell, Check, CheckCheck, Trash2, Filter } from "lucide-react";
+import { Bell, Check, CheckCheck } from "lucide-react";
 import { useState } from "react";
 import type { Notification } from "@/types/domain";
 

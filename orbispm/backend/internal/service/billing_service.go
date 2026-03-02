@@ -6,10 +6,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+	"github.com/stripe/stripe-go/v82"
+	"github.com/stripe/stripe-go/v82/subscription"
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/repository"
 )
+
+// StripeSubscriptionInfo holds relevant subscription data from Stripe.
+type StripeSubscriptionInfo struct {
+	CustomerID  string
+	PlanID      string
+	Status      string
+	PeriodStart time.Time
+	PeriodEnd   time.Time
+}
 
 // BillingService handles billing/subscription business logic.
 type BillingService struct {
@@ -36,6 +48,158 @@ func (s *BillingService) GetPlan(ctx context.Context, id string) (*domain.Billin
 // GetSubscription returns the current subscription for an org.
 func (s *BillingService) GetSubscription(ctx context.Context, orgID uuid.UUID) (*domain.OrgSubscription, error) {
 	return s.subRepo.GetByOrgID(ctx, orgID)
+}
+
+// GetStripeSubscription fetches subscription details from Stripe.
+func (s *BillingService) GetStripeSubscription(ctx context.Context, stripeSubID string) (*StripeSubscriptionInfo, error) {
+	sub, err := subscription.Get(stripeSubID, nil)
+	if err != nil {
+		return nil, fmt.Errorf("get stripe subscription: %w", err)
+	}
+
+	// Period info is on SubscriptionItem in Stripe SDK v82+
+	var periodStart, periodEnd time.Time
+	if len(sub.Items.Data) > 0 {
+		periodStart = time.Unix(sub.Items.Data[0].CurrentPeriodStart, 0)
+		periodEnd = time.Unix(sub.Items.Data[0].CurrentPeriodEnd, 0)
+	}
+
+	return &StripeSubscriptionInfo{
+		CustomerID:  sub.Customer.ID,
+		Status:      string(sub.Status),
+		PeriodStart: periodStart,
+		PeriodEnd:   periodEnd,
+	}, nil
+}
+
+// HandleCheckoutCompleted processes checkout.session.completed webhook events.
+func (s *BillingService) HandleCheckoutCompleted(ctx context.Context, sess *stripe.CheckoutSession) error {
+	orgIDStr, ok := sess.Metadata["org_id"]
+	if !ok || orgIDStr == "" {
+		return fmt.Errorf("missing org_id in session metadata")
+	}
+	orgID, err := uuid.Parse(orgIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid org_id: %w", err)
+	}
+
+	// Get subscription details
+	subID := sess.Subscription.ID
+	stripeSub, err := subscription.Get(subID, nil)
+	if err != nil {
+		return fmt.Errorf("get subscription: %w", err)
+	}
+
+	// Find plan by price ID
+	priceID := ""
+	if len(stripeSub.Items.Data) > 0 {
+		priceID = stripeSub.Items.Data[0].Price.ID
+	}
+	plan, err := s.planRepo.GetByPriceID(ctx, priceID)
+	if err != nil {
+		log.Warn().Str("price_id", priceID).Msg("plan not found for price, using first plan")
+		// Fallback: just use any plan ID (not ideal but prevents errors)
+		plans, _ := s.planRepo.List(ctx)
+		if len(plans) > 0 {
+			plan = plans[0]
+		} else {
+			return fmt.Errorf("no billing plans configured")
+		}
+	}
+
+	// Get period from items
+	var periodStart, periodEnd *time.Time
+	if len(stripeSub.Items.Data) > 0 {
+		ps := time.Unix(stripeSub.Items.Data[0].CurrentPeriodStart, 0)
+		pe := time.Unix(stripeSub.Items.Data[0].CurrentPeriodEnd, 0)
+		periodStart = &ps
+		periodEnd = &pe
+	}
+
+	sub := &domain.OrgSubscription{
+		OrgID:              orgID,
+		PlanID:             plan.ID,
+		StripeSubID:        &subID,
+		Status:             string(stripeSub.Status),
+		CurrentPeriodStart: periodStart,
+		CurrentPeriodEnd:   periodEnd,
+	}
+
+	_, err = s.subRepo.Upsert(ctx, sub)
+	if err != nil {
+		return fmt.Errorf("upsert subscription: %w", err)
+	}
+
+	log.Info().Str("org_id", orgIDStr).Str("sub_id", subID).Msg("subscription created from checkout")
+	return nil
+}
+
+// HandleSubscriptionUpdated processes customer.subscription.updated webhook events.
+func (s *BillingService) HandleSubscriptionUpdated(ctx context.Context, stripeSub *stripe.Subscription) error {
+	// Find existing subscription by stripe_sub_id
+	sub, err := s.subRepo.GetByStripeSubID(ctx, stripeSub.ID)
+	if err != nil {
+		log.Warn().Str("stripe_sub_id", stripeSub.ID).Msg("subscription not found for update")
+		return nil
+	}
+
+	sub.Status = string(stripeSub.Status)
+	if len(stripeSub.Items.Data) > 0 {
+		ps := time.Unix(stripeSub.Items.Data[0].CurrentPeriodStart, 0)
+		pe := time.Unix(stripeSub.Items.Data[0].CurrentPeriodEnd, 0)
+		sub.CurrentPeriodStart = &ps
+		sub.CurrentPeriodEnd = &pe
+	}
+
+	_, err = s.subRepo.Upsert(ctx, sub)
+	if err != nil {
+		return fmt.Errorf("update subscription: %w", err)
+	}
+
+	log.Info().Str("stripe_sub_id", stripeSub.ID).Str("status", sub.Status).Msg("subscription updated")
+	return nil
+}
+
+// HandleSubscriptionDeleted processes customer.subscription.deleted webhook events.
+func (s *BillingService) HandleSubscriptionDeleted(ctx context.Context, stripeSub *stripe.Subscription) error {
+	sub, err := s.subRepo.GetByStripeSubID(ctx, stripeSub.ID)
+	if err != nil {
+		log.Warn().Str("stripe_sub_id", stripeSub.ID).Msg("subscription not found for deletion")
+		return nil
+	}
+
+	sub.Status = "canceled"
+	_, err = s.subRepo.Upsert(ctx, sub)
+	if err != nil {
+		return fmt.Errorf("cancel subscription: %w", err)
+	}
+
+	log.Info().Str("stripe_sub_id", stripeSub.ID).Msg("subscription canceled")
+	return nil
+}
+
+// HandlePaymentFailed processes invoice.payment_failed webhook events.
+func (s *BillingService) HandlePaymentFailed(ctx context.Context, inv *stripe.Invoice) error {
+	// In Stripe SDK v82, subscription info is in Parent.SubscriptionDetails
+	if inv.Parent == nil || inv.Parent.SubscriptionDetails == nil || inv.Parent.SubscriptionDetails.Subscription == nil {
+		return nil
+	}
+
+	stripeSub := inv.Parent.SubscriptionDetails.Subscription
+	sub, err := s.subRepo.GetByStripeSubID(ctx, stripeSub.ID)
+	if err != nil {
+		log.Warn().Str("stripe_sub_id", stripeSub.ID).Msg("subscription not found for payment failure")
+		return nil
+	}
+
+	sub.Status = "past_due"
+	_, err = s.subRepo.Upsert(ctx, sub)
+	if err != nil {
+		return fmt.Errorf("mark subscription past_due: %w", err)
+	}
+
+	log.Warn().Str("stripe_sub_id", stripeSub.ID).Msg("subscription payment failed")
+	return nil
 }
 
 // DashboardService handles dashboard/analytics queries.
