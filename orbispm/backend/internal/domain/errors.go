@@ -14,7 +14,7 @@ var (
 	ErrUnauthorized   = &AppError{Code: http.StatusUnauthorized, Message: "unauthorized"}
 	ErrBadRequest     = &AppError{Code: http.StatusBadRequest, Message: "bad request"}
 	ErrInternal       = &AppError{Code: http.StatusInternalServerError, Message: "internal server error"}
-	ErrMaxDepth       = &AppError{Code: http.StatusUnprocessableEntity, Message: "maximum subtask depth exceeded (max 5)"}
+	ErrMaxDepth       = &AppError{Code: http.StatusUnprocessableEntity, Message: fmt.Sprintf("maximum subtask depth exceeded (max %d levels)", MaxTaskDepth+1)}
 	ErrRulesNotMet    = &AppError{Code: http.StatusUnprocessableEntity, Message: "task completion rules not satisfied"}
 	ErrPlanLimitHit   = &AppError{Code: http.StatusPaymentRequired, Message: "plan limit reached"}
 	ErrCyclicDep      = &AppError{Code: http.StatusUnprocessableEntity, Message: "cyclic dependency detected"}

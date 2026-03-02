@@ -15,10 +15,10 @@ type User struct {
 
 // Org-level roles.
 const (
-	RoleOrgOwner       = "owner"
-	RoleOrgAdmin       = "admin"
-	RoleOrgMember      = "member"
-	RoleOrgViewer      = "viewer"
+	RoleOrgOwner        = "owner"
+	RoleOrgAdmin        = "admin"
+	RoleOrgMember       = "member"
+	RoleOrgViewer       = "viewer"
 	RoleOrgBillingAdmin = "billing_admin"
 )
 

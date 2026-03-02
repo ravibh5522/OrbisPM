@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import { api, ApiError } from "@/lib/api";
@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { Plus, FileText, Trash2, Copy } from "lucide-react";
+import { Plus, FileText, Trash2, Copy, Download, Upload } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { TaskTemplate } from "@/types/domain";
 
@@ -25,6 +25,7 @@ export default function TemplatesPage() {
   const [deleteTarget, setDeleteTarget] = useState<TaskTemplate | null>(null);
   const [viewTarget, setViewTarget] = useState<TaskTemplate | null>(null);
   const [error, setError] = useState("");
+  const importRef = useRef<HTMLInputElement>(null);
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ["templates", currentOrg?.id],
@@ -54,6 +55,25 @@ export default function TemplatesPage() {
     },
   });
 
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    try {
+      const text = await f.text();
+      const data = JSON.parse(text);
+      await api.templates.import(currentOrg!.id, {
+        name: data.name || f.name.replace(/\.json$/, ""),
+        description: data.description || "",
+        structure: data.structure || {},
+        is_shared: data.is_shared ?? true,
+      });
+      qc.invalidateQueries({ queryKey: ["templates"] });
+    } catch {
+      setError("Failed to import template. Make sure the file is valid JSON.");
+    }
+    if (importRef.current) importRef.current.value = "";
+  };
+
   if (isLoading) return <LoadingPage />;
 
   return (
@@ -62,9 +82,15 @@ export default function TemplatesPage() {
         title="Templates"
         description="Reusable task templates for your projects"
         actions={
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> New Template
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => importRef.current?.click()}>
+              <Upload className="w-4 h-4" /> Import JSON
+            </Button>
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" /> New Template
+            </Button>
+            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
+          </div>
         }
       />
 
@@ -93,12 +119,21 @@ export default function TemplatesPage() {
                 </div>
                 <div className="flex items-center justify-between mt-3 text-sm text-base-content/50">
                   <span>Created {formatDate(tpl.created_at)}</span>
-                  <button
-                    className="btn btn-ghost btn-xs btn-square"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(tpl); }}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      className="btn btn-ghost btn-xs btn-square"
+                      title="Export JSON"
+                      onClick={(e) => { e.stopPropagation(); api.templates.export(currentOrg!.id, tpl.id, tpl.name); }}
+                    >
+                      <Download className="w-3 h-3" />
+                    </button>
+                    <button
+                      className="btn btn-ghost btn-xs btn-square"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(tpl); }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </Card>

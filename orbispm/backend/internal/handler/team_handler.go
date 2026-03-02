@@ -13,11 +13,12 @@ import (
 
 // TeamHandler handles team HTTP endpoints.
 type TeamHandler struct {
-	teamSvc *service.TeamService
+	teamSvc      *service.TeamService
+	dashboardSvc *service.DashboardService
 }
 
-func NewTeamHandler(teamSvc *service.TeamService) *TeamHandler {
-	return &TeamHandler{teamSvc: teamSvc}
+func NewTeamHandler(teamSvc *service.TeamService, dashboardSvc *service.DashboardService) *TeamHandler {
+	return &TeamHandler{teamSvc: teamSvc, dashboardSvc: dashboardSvc}
 }
 
 // Routes registers team routes. Mounted under /orgs/{orgId}/teams.
@@ -31,6 +32,9 @@ func (h *TeamHandler) Routes() chi.Router {
 		r.Get("/", h.Get)
 		r.Patch("/", h.Update)
 		r.Delete("/", h.Delete)
+
+		// Dashboard
+		r.Get("/dashboard", h.Dashboard)
 
 		// Members
 		r.Get("/members", h.ListMembers)
@@ -272,4 +276,30 @@ func (h *TeamHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Dashboard godoc
+// @Summary Get team dashboard
+// @Description Returns workload, velocity, and blocker analytics for a team
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Success 200 {object} service.TeamDashboardStats
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId}/dashboard [get]
+func (h *TeamHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	tidStr := chi.URLParam(r, "teamId")
+	tid, err := uuid.Parse(tidStr)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
+		return
+	}
+	stats, err := h.dashboardSvc.GetTeamDashboard(r.Context(), tid)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, stats)
 }

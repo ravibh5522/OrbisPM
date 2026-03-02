@@ -70,7 +70,7 @@ func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain
 			  tt.path || t.id, tt.sort_path || t.position
 			FROM tasks t
 			INNER JOIN task_tree tt ON t.parent_task_id = tt.id
-			WHERE t.depth <= 5 AND NOT t.id = ANY(tt.path)
+			WHERE t.depth <= 3 AND NOT t.id = ANY(tt.path)
 		)
 		SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
@@ -122,6 +122,15 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 		args = append(args, "%"+*filter.Search+"%")
 		argIdx++
 	}
+	if filter.ParentID != nil {
+		if *filter.ParentID == "root" {
+			where = append(where, "parent_task_id IS NULL")
+		} else {
+			where = append(where, fmt.Sprintf("parent_task_id = $%d", argIdx))
+			args = append(args, *filter.ParentID)
+			argIdx++
+		}
+	}
 
 	whereClause := strings.Join(where, " AND ")
 
@@ -141,12 +150,33 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 		offset = 0
 	}
 
+	// Determine ORDER BY clause
+	orderClause := "position, created_at"
+	allowedSortCols := map[string]string{
+		"title":      "title",
+		"status":     "status",
+		"priority":   "priority",
+		"due_date":   "due_date",
+		"created_at": "created_at",
+		"updated_at": "updated_at",
+		"position":   "position",
+	}
+	if filter.SortBy != "" {
+		if col, ok := allowedSortCols[filter.SortBy]; ok {
+			dir := "ASC"
+			if filter.SortOrder == "desc" {
+				dir = "DESC"
+			}
+			orderClause = fmt.Sprintf("%s %s, created_at", col, dir)
+		}
+	}
+
 	query := fmt.Sprintf(
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, created_at, updated_at
-		 FROM tasks WHERE %s ORDER BY position, created_at LIMIT %d OFFSET %d`,
-		whereClause, limit, offset)
+		 FROM tasks WHERE %s ORDER BY %s LIMIT %d OFFSET %d`,
+		whereClause, orderClause, limit, offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {
@@ -286,4 +316,35 @@ func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID u
 		return nil, 0, err
 	}
 	return tasks, total, nil
+}
+
+// UpdatePosition updates the position of a task among its siblings.
+func (r *taskRepo) UpdatePosition(ctx context.Context, tx pgx.Tx, id uuid.UUID, position int) error {
+	_, err := tx.Exec(ctx, `UPDATE tasks SET position = $1, updated_at = NOW() WHERE id = $2`, position, id)
+	if err != nil {
+		return fmt.Errorf("update task position: %w", err)
+	}
+	return nil
+}
+
+// Reparent moves a task under a new parent (or to root if newParentID is nil) and sets its position.
+func (r *taskRepo) Reparent(ctx context.Context, tx pgx.Tx, id uuid.UUID, newParentID *uuid.UUID, position int) error {
+	newDepth := 0
+	if newParentID != nil {
+		var parentDepth int
+		err := tx.QueryRow(ctx, `SELECT depth FROM tasks WHERE id = $1`, *newParentID).Scan(&parentDepth)
+		if err != nil {
+			return fmt.Errorf("get parent depth: %w", err)
+		}
+		newDepth = parentDepth + 1
+	}
+
+	_, err := tx.Exec(ctx,
+		`UPDATE tasks SET parent_task_id = $1, depth = $2, position = $3, updated_at = NOW() WHERE id = $4`,
+		newParentID, newDepth, position, id,
+	)
+	if err != nil {
+		return fmt.Errorf("reparent task: %w", err)
+	}
+	return nil
 }

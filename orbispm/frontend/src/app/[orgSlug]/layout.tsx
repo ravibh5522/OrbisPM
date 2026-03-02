@@ -27,6 +27,7 @@ import {
   Palette,
   Activity,
   ChevronDown,
+  UserCircle,
 } from "lucide-react";
 import type { OrgRole } from "@/types/domain";
 import { cn } from "@/lib/utils";
@@ -51,6 +52,7 @@ function getSidebarItems(orgSlug: string): NavItem[] {
     { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
     { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
     { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
+    { href: `/${orgSlug}/profile`, label: "My Profile", icon: <UserCircle className="w-5 h-5" /> },
   ];
 }
 
@@ -186,13 +188,18 @@ function Sidebar() {
         {/* User footer */}
         {!sidebarCollapsed && (
           <div className="border-t border-base-200 p-3">
-            <div className="flex items-center gap-2">
-              <Avatar name={user?.user_metadata?.name as string || user?.email || "U"} size="sm" />
+            <Link href={`/${currentOrg.slug}/profile`} className="flex items-center gap-2 hover:bg-base-200 rounded-lg p-1 transition-colors">
+              <Avatar
+                name={user?.user_metadata?.name as string || user?.email || "U"}
+                src={user?.user_metadata?.avatar_url as string | undefined}
+                size="sm"
+              />
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
                 <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
               </div>
-            </div>
+              <UserCircle className="w-4 h-4 text-base-content/30" />
+            </Link>
           </div>
         )}
       </div>

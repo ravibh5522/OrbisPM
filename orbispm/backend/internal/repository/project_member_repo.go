@@ -38,7 +38,7 @@ func (r *projectMemberRepo) Remove(ctx context.Context, tx pgx.Tx, projectID, us
 
 func (r *projectMemberRepo) ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), m.role, m.joined_at
+		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at
 		 FROM project_members m
 		 LEFT JOIN auth.users u ON u.id = m.user_id
 		 WHERE m.project_id = $1 ORDER BY m.joined_at`, projectID)
@@ -50,7 +50,7 @@ func (r *projectMemberRepo) ListByProject(ctx context.Context, projectID uuid.UU
 	var members []*domain.ProjectMember
 	for rows.Next() {
 		var m domain.ProjectMember
-		if err := rows.Scan(&m.ProjectID, &m.UserID, &m.Email, &m.DisplayName, &m.Role, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.ProjectID, &m.UserID, &m.Email, &m.DisplayName, &m.AvatarURL, &m.Role, &m.JoinedAt); err != nil {
 			return nil, err
 		}
 		members = append(members, &m)

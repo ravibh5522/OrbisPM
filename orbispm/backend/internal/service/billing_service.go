@@ -178,3 +178,541 @@ func (s *DashboardService) GetStats(ctx context.Context, orgID uuid.UUID) (*Dash
 
 	return stats, nil
 }
+
+// ─── Team Dashboard ──────────────────────────────────────────
+
+// MemberWorkload represents task load for a single team member.
+type MemberWorkload struct {
+	UserID      uuid.UUID `json:"user_id"`
+	DisplayName string    `json:"display_name"`
+	Email       string    `json:"email"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
+	Total       int       `json:"total"`
+	Todo        int       `json:"todo"`
+	InProgress  int       `json:"in_progress"`
+	Done        int       `json:"done"`
+	Blocked     int       `json:"blocked"`
+	Overdue     int       `json:"overdue"`
+}
+
+// TeamDashboardStats holds aggregated analytics for a team.
+type TeamDashboardStats struct {
+	TotalProjects   int               `json:"total_projects"`
+	TotalTasks      int               `json:"total_tasks"`
+	TotalMembers    int               `json:"total_members"`
+	OverdueTasks    int               `json:"overdue_tasks"`
+	TasksByStatus   map[string]int    `json:"tasks_by_status"`
+	TasksByPriority map[string]int    `json:"tasks_by_priority"`
+	MemberWorkload  []MemberWorkload  `json:"member_workload"`
+	RecentTasks     []*domain.Task    `json:"recent_tasks,omitempty"`
+	CompletedLast7  int               `json:"completed_last_7_days"`
+	CreatedLast7    int               `json:"created_last_7_days"`
+}
+
+// GetTeamDashboard returns aggregated analytics for a specific team.
+func (s *DashboardService) GetTeamDashboard(ctx context.Context, teamID uuid.UUID) (*TeamDashboardStats, error) {
+	pool := s.txm.Pool()
+	stats := &TeamDashboardStats{
+		TasksByStatus:   make(map[string]int),
+		TasksByPriority: make(map[string]int),
+	}
+	now := time.Now()
+	sevenDaysAgo := now.AddDate(0, 0, -7)
+
+	// Total projects for this team
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM projects WHERE team_id = $1`, teamID,
+	).Scan(&stats.TotalProjects); err != nil {
+		return nil, fmt.Errorf("team projects count: %w", err)
+	}
+
+	// Total tasks for this team (via projects)
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks t JOIN projects p ON t.project_id = p.id WHERE p.team_id = $1`, teamID,
+	).Scan(&stats.TotalTasks); err != nil {
+		return nil, fmt.Errorf("team tasks count: %w", err)
+	}
+
+	// Total members
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM team_members WHERE team_id = $1`, teamID,
+	).Scan(&stats.TotalMembers); err != nil {
+		return nil, fmt.Errorf("team members count: %w", err)
+	}
+
+	// Overdue tasks
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks t JOIN projects p ON t.project_id = p.id
+		 WHERE p.team_id = $1 AND t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < $2`,
+		teamID, now,
+	).Scan(&stats.OverdueTasks); err != nil {
+		return nil, fmt.Errorf("team overdue count: %w", err)
+	}
+
+	// Tasks by status
+	rows, err := pool.Query(ctx,
+		`SELECT t.status, COUNT(*) FROM tasks t JOIN projects p ON t.project_id = p.id
+		 WHERE p.team_id = $1 GROUP BY t.status`, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("team tasks by status: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var s string
+		var c int
+		if err := rows.Scan(&s, &c); err != nil {
+			return nil, fmt.Errorf("scan status: %w", err)
+		}
+		stats.TasksByStatus[s] = c
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("status rows: %w", err)
+	}
+
+	// Tasks by priority
+	rows2, err := pool.Query(ctx,
+		`SELECT t.priority, COUNT(*) FROM tasks t JOIN projects p ON t.project_id = p.id
+		 WHERE p.team_id = $1 GROUP BY t.priority`, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("team tasks by priority: %w", err)
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var p string
+		var c int
+		if err := rows2.Scan(&p, &c); err != nil {
+			return nil, fmt.Errorf("scan priority: %w", err)
+		}
+		stats.TasksByPriority[p] = c
+	}
+	if err := rows2.Err(); err != nil {
+		return nil, fmt.Errorf("priority rows: %w", err)
+	}
+
+	// Velocity: completed last 7 days
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks t JOIN projects p ON t.project_id = p.id
+		 WHERE p.team_id = $1 AND t.status = 'done' AND t.updated_at >= $2`,
+		teamID, sevenDaysAgo,
+	).Scan(&stats.CompletedLast7); err != nil {
+		return nil, fmt.Errorf("completed last 7: %w", err)
+	}
+
+	// Created last 7 days
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks t JOIN projects p ON t.project_id = p.id
+		 WHERE p.team_id = $1 AND t.created_at >= $2`,
+		teamID, sevenDaysAgo,
+	).Scan(&stats.CreatedLast7); err != nil {
+		return nil, fmt.Errorf("created last 7: %w", err)
+	}
+
+	// Per-member workload
+	workloadRows, err := pool.Query(ctx,
+		`SELECT tm.user_id,
+		        COALESCE(u.raw_user_meta_data->>'name','') AS display_name,
+		        COALESCE(u.email,'') AS email,
+		        COALESCE(u.raw_user_meta_data->>'avatar_url','') AS avatar_url,
+		        COUNT(t.id) AS total,
+		        COUNT(t.id) FILTER (WHERE t.status = 'todo') AS todo,
+		        COUNT(t.id) FILTER (WHERE t.status = 'in_progress') AS in_progress,
+		        COUNT(t.id) FILTER (WHERE t.status = 'done') AS done,
+		        COUNT(t.id) FILTER (WHERE t.status = 'blocked') AS blocked,
+		        COUNT(t.id) FILTER (WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < $2) AS overdue
+		 FROM team_members tm
+		 LEFT JOIN auth.users u ON u.id = tm.user_id
+		 LEFT JOIN tasks t ON t.assignee_id = tm.user_id
+		     AND t.project_id IN (SELECT id FROM projects WHERE team_id = $1)
+		 WHERE tm.team_id = $1
+		 GROUP BY tm.user_id, u.raw_user_meta_data, u.email
+		 ORDER BY total DESC`,
+		teamID, now)
+	if err != nil {
+		return nil, fmt.Errorf("member workload: %w", err)
+	}
+	defer workloadRows.Close()
+	for workloadRows.Next() {
+		var mw MemberWorkload
+		if err := workloadRows.Scan(
+			&mw.UserID, &mw.DisplayName, &mw.Email, &mw.AvatarURL,
+			&mw.Total, &mw.Todo, &mw.InProgress, &mw.Done, &mw.Blocked, &mw.Overdue,
+		); err != nil {
+			return nil, fmt.Errorf("scan workload: %w", err)
+		}
+		stats.MemberWorkload = append(stats.MemberWorkload, mw)
+	}
+	if err := workloadRows.Err(); err != nil {
+		return nil, fmt.Errorf("workload rows: %w", err)
+	}
+
+	// Recent tasks (last 10)
+	rows3, err := pool.Query(ctx,
+		`SELECT t.id, t.org_id, t.project_id, t.parent_task_id, t.title, t.description,
+		        t.status, t.priority, t.assignee_id, t.reporter_id, t.depth, t.position,
+		        t.due_date, t.start_date, t.estimated_hours, t.actual_hours,
+		        t.labels, t.metadata, t.review_status, t.created_at, t.updated_at
+		 FROM tasks t JOIN projects p ON t.project_id = p.id
+		 WHERE p.team_id = $1 ORDER BY t.updated_at DESC LIMIT 10`, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("team recent tasks: %w", err)
+	}
+	defer rows3.Close()
+	for rows3.Next() {
+		var tk domain.Task
+		var desc *string
+		if err := rows3.Scan(
+			&tk.ID, &tk.OrgID, &tk.ProjectID, &tk.ParentTaskID, &tk.Title, &desc,
+			&tk.Status, &tk.Priority, &tk.AssigneeID, &tk.ReporterID,
+			&tk.Depth, &tk.Position, &tk.DueDate, &tk.StartDate,
+			&tk.EstimatedHours, &tk.ActualHours, &tk.Labels, &tk.Metadata,
+			&tk.ReviewStatus, &tk.CreatedAt, &tk.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan recent task: %w", err)
+		}
+		if desc != nil {
+			tk.Description = *desc
+		}
+		if tk.Labels == nil {
+			tk.Labels = []string{}
+		}
+		if tk.Metadata == nil {
+			tk.Metadata = map[string]any{}
+		}
+		stats.RecentTasks = append(stats.RecentTasks, &tk)
+	}
+	if err := rows3.Err(); err != nil {
+		return nil, fmt.Errorf("recent tasks rows: %w", err)
+	}
+
+	return stats, nil
+}
+
+// ─── Project Dashboard ──────────────────────────────────────────
+
+// DailyCount represents a single day's count for time-series charts.
+type DailyCount struct {
+	Date  string `json:"date"`
+	Count int    `json:"count"`
+}
+
+// LabelCount represents a label with its task count.
+type LabelCount struct {
+	Label string `json:"label"`
+	Count int    `json:"count"`
+}
+
+// ProjectDashboardStats holds aggregated analytics for a project.
+type ProjectDashboardStats struct {
+	TotalTasks      int              `json:"total_tasks"`
+	TotalMembers    int              `json:"total_members"`
+	OverdueTasks    int              `json:"overdue_tasks"`
+	CompletionRate  float64          `json:"completion_rate"`
+	EstimatedHours  float64          `json:"estimated_hours"`
+	ActualHours     float64          `json:"actual_hours"`
+	TasksByStatus   map[string]int   `json:"tasks_by_status"`
+	TasksByPriority map[string]int   `json:"tasks_by_priority"`
+	MemberWorkload  []MemberWorkload `json:"member_workload"`
+	CompletedLast7  int              `json:"completed_last_7_days"`
+	CreatedLast7    int              `json:"created_last_7_days"`
+	BurndownData    []DailyCount     `json:"burndown_data"`
+	CreatedOverTime []DailyCount     `json:"created_over_time"`
+	LabelCounts     []LabelCount     `json:"label_counts"`
+	RecentTasks     []*domain.Task   `json:"recent_tasks,omitempty"`
+	DueSoonTasks    []*domain.Task   `json:"due_soon_tasks,omitempty"`
+}
+
+// GetProjectDashboard returns aggregated analytics for a specific project.
+func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID uuid.UUID) (*ProjectDashboardStats, error) {
+	pool := s.txm.Pool()
+	stats := &ProjectDashboardStats{
+		TasksByStatus:   make(map[string]int),
+		TasksByPriority: make(map[string]int),
+	}
+	now := time.Now()
+	sevenDaysAgo := now.AddDate(0, 0, -7)
+	thirtyDaysAgo := now.AddDate(0, 0, -30)
+
+	// Total tasks
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE project_id = $1`, projectID,
+	).Scan(&stats.TotalTasks); err != nil {
+		return nil, fmt.Errorf("project tasks count: %w", err)
+	}
+
+	// Total members
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM project_members WHERE project_id = $1`, projectID,
+	).Scan(&stats.TotalMembers); err != nil {
+		return nil, fmt.Errorf("project members count: %w", err)
+	}
+
+	// Overdue tasks
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE project_id = $1 AND status != 'done' AND due_date IS NOT NULL AND due_date < $2`,
+		projectID, now,
+	).Scan(&stats.OverdueTasks); err != nil {
+		return nil, fmt.Errorf("project overdue count: %w", err)
+	}
+
+	// Completion rate
+	var doneCount int
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE project_id = $1 AND status = 'done'`, projectID,
+	).Scan(&doneCount); err != nil {
+		return nil, fmt.Errorf("done count: %w", err)
+	}
+	if stats.TotalTasks > 0 {
+		stats.CompletionRate = float64(doneCount) / float64(stats.TotalTasks) * 100
+	}
+
+	// Time tracking (estimated vs actual hours)
+	if err := pool.QueryRow(ctx,
+		`SELECT COALESCE(SUM(estimated_hours), 0), COALESCE(SUM(actual_hours), 0) FROM tasks WHERE project_id = $1`, projectID,
+	).Scan(&stats.EstimatedHours, &stats.ActualHours); err != nil {
+		return nil, fmt.Errorf("time tracking: %w", err)
+	}
+
+	// Tasks by status
+	statusRows, err := pool.Query(ctx,
+		`SELECT status, COUNT(*) FROM tasks WHERE project_id = $1 GROUP BY status`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("tasks by status: %w", err)
+	}
+	defer statusRows.Close()
+	for statusRows.Next() {
+		var st string
+		var c int
+		if err := statusRows.Scan(&st, &c); err != nil {
+			return nil, fmt.Errorf("scan status: %w", err)
+		}
+		stats.TasksByStatus[st] = c
+	}
+	if err := statusRows.Err(); err != nil {
+		return nil, fmt.Errorf("status rows: %w", err)
+	}
+
+	// Tasks by priority
+	priorityRows, err := pool.Query(ctx,
+		`SELECT priority, COUNT(*) FROM tasks WHERE project_id = $1 GROUP BY priority`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("tasks by priority: %w", err)
+	}
+	defer priorityRows.Close()
+	for priorityRows.Next() {
+		var p string
+		var c int
+		if err := priorityRows.Scan(&p, &c); err != nil {
+			return nil, fmt.Errorf("scan priority: %w", err)
+		}
+		stats.TasksByPriority[p] = c
+	}
+	if err := priorityRows.Err(); err != nil {
+		return nil, fmt.Errorf("priority rows: %w", err)
+	}
+
+	// Velocity: completed last 7 days
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE project_id = $1 AND status = 'done' AND updated_at >= $2`,
+		projectID, sevenDaysAgo,
+	).Scan(&stats.CompletedLast7); err != nil {
+		return nil, fmt.Errorf("completed last 7: %w", err)
+	}
+
+	// Created last 7 days
+	if err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE project_id = $1 AND created_at >= $2`,
+		projectID, sevenDaysAgo,
+	).Scan(&stats.CreatedLast7); err != nil {
+		return nil, fmt.Errorf("created last 7: %w", err)
+	}
+
+	// Burndown data: tasks remaining per day over last 30 days
+	burnRows, err := pool.Query(ctx,
+		`SELECT d::date AS day, COUNT(t.id)
+		 FROM generate_series($2::date, $3::date, '1 day'::interval) d
+		 LEFT JOIN tasks t ON t.project_id = $1 AND t.status = 'done'
+		     AND t.updated_at::date = d::date
+		 GROUP BY d::date ORDER BY d::date`,
+		projectID, thirtyDaysAgo, now)
+	if err != nil {
+		return nil, fmt.Errorf("burndown data: %w", err)
+	}
+	defer burnRows.Close()
+	remaining := stats.TotalTasks
+	for burnRows.Next() {
+		var completedToday int
+		var day time.Time
+		if err := burnRows.Scan(&day, &completedToday); err != nil {
+			return nil, fmt.Errorf("scan burndown: %w", err)
+		}
+		remaining -= completedToday
+		stats.BurndownData = append(stats.BurndownData, DailyCount{
+			Date:  day.Format("Jan 02"),
+			Count: remaining,
+		})
+	}
+	if err := burnRows.Err(); err != nil {
+		return nil, fmt.Errorf("burndown rows: %w", err)
+	}
+
+	// Created over time: tasks created per day over last 30 days
+	createdRows, err := pool.Query(ctx,
+		`SELECT d::date AS day, COUNT(t.id)
+		 FROM generate_series($2::date, $3::date, '1 day'::interval) d
+		 LEFT JOIN tasks t ON t.project_id = $1 AND t.created_at::date = d::date
+		 GROUP BY d::date ORDER BY d::date`,
+		projectID, thirtyDaysAgo, now)
+	if err != nil {
+		return nil, fmt.Errorf("created over time: %w", err)
+	}
+	defer createdRows.Close()
+	for createdRows.Next() {
+		var dc DailyCount
+		var day time.Time
+		if err := createdRows.Scan(&day, &dc.Count); err != nil {
+			return nil, fmt.Errorf("scan created: %w", err)
+		}
+		dc.Date = day.Format("Jan 02")
+		stats.CreatedOverTime = append(stats.CreatedOverTime, dc)
+	}
+	if err := createdRows.Err(); err != nil {
+		return nil, fmt.Errorf("created rows: %w", err)
+	}
+
+	// Label distribution
+	labelRows, err := pool.Query(ctx,
+		`SELECT lbl, COUNT(*) FROM tasks, LATERAL unnest(labels) AS lbl
+		 WHERE project_id = $1 GROUP BY lbl ORDER BY COUNT(*) DESC LIMIT 10`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("label counts: %w", err)
+	}
+	defer labelRows.Close()
+	for labelRows.Next() {
+		var lc LabelCount
+		if err := labelRows.Scan(&lc.Label, &lc.Count); err != nil {
+			return nil, fmt.Errorf("scan label: %w", err)
+		}
+		stats.LabelCounts = append(stats.LabelCounts, lc)
+	}
+	if err := labelRows.Err(); err != nil {
+		return nil, fmt.Errorf("label rows: %w", err)
+	}
+
+	// Per-member workload
+	workloadRows, err := pool.Query(ctx,
+		`SELECT pm.user_id,
+		        COALESCE(u.raw_user_meta_data->>'name','') AS display_name,
+		        COALESCE(u.email,'') AS email,
+		        COALESCE(u.raw_user_meta_data->>'avatar_url','') AS avatar_url,
+		        COUNT(t.id) AS total,
+		        COUNT(t.id) FILTER (WHERE t.status = 'todo') AS todo,
+		        COUNT(t.id) FILTER (WHERE t.status = 'in_progress') AS in_progress,
+		        COUNT(t.id) FILTER (WHERE t.status = 'done') AS done,
+		        COUNT(t.id) FILTER (WHERE t.status = 'blocked') AS blocked,
+		        COUNT(t.id) FILTER (WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < $2) AS overdue
+		 FROM project_members pm
+		 LEFT JOIN auth.users u ON u.id = pm.user_id
+		 LEFT JOIN tasks t ON t.assignee_id = pm.user_id AND t.project_id = $1
+		 WHERE pm.project_id = $1
+		 GROUP BY pm.user_id, u.raw_user_meta_data, u.email
+		 ORDER BY total DESC`,
+		projectID, now)
+	if err != nil {
+		return nil, fmt.Errorf("member workload: %w", err)
+	}
+	defer workloadRows.Close()
+	for workloadRows.Next() {
+		var mw MemberWorkload
+		if err := workloadRows.Scan(
+			&mw.UserID, &mw.DisplayName, &mw.Email, &mw.AvatarURL,
+			&mw.Total, &mw.Todo, &mw.InProgress, &mw.Done, &mw.Blocked, &mw.Overdue,
+		); err != nil {
+			return nil, fmt.Errorf("scan workload: %w", err)
+		}
+		stats.MemberWorkload = append(stats.MemberWorkload, mw)
+	}
+	if err := workloadRows.Err(); err != nil {
+		return nil, fmt.Errorf("workload rows: %w", err)
+	}
+
+	// Recent tasks (last 10)
+	recentRows, err := pool.Query(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description,
+		        status, priority, assignee_id, reporter_id, depth, position,
+		        due_date, start_date, estimated_hours, actual_hours,
+		        labels, metadata, review_status, created_at, updated_at
+		 FROM tasks WHERE project_id = $1 ORDER BY updated_at DESC LIMIT 10`, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("recent tasks: %w", err)
+	}
+	defer recentRows.Close()
+	for recentRows.Next() {
+		var tk domain.Task
+		var desc *string
+		if err := recentRows.Scan(
+			&tk.ID, &tk.OrgID, &tk.ProjectID, &tk.ParentTaskID, &tk.Title, &desc,
+			&tk.Status, &tk.Priority, &tk.AssigneeID, &tk.ReporterID,
+			&tk.Depth, &tk.Position, &tk.DueDate, &tk.StartDate,
+			&tk.EstimatedHours, &tk.ActualHours, &tk.Labels, &tk.Metadata,
+			&tk.ReviewStatus, &tk.CreatedAt, &tk.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan recent task: %w", err)
+		}
+		if desc != nil {
+			tk.Description = *desc
+		}
+		if tk.Labels == nil {
+			tk.Labels = []string{}
+		}
+		if tk.Metadata == nil {
+			tk.Metadata = map[string]any{}
+		}
+		stats.RecentTasks = append(stats.RecentTasks, &tk)
+	}
+	if err := recentRows.Err(); err != nil {
+		return nil, fmt.Errorf("recent tasks rows: %w", err)
+	}
+
+	// Due soon tasks (next 7 days, not done)
+	dueSoonRows, err := pool.Query(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description,
+		        status, priority, assignee_id, reporter_id, depth, position,
+		        due_date, start_date, estimated_hours, actual_hours,
+		        labels, metadata, review_status, created_at, updated_at
+		 FROM tasks WHERE project_id = $1 AND status != 'done'
+		   AND due_date IS NOT NULL AND due_date BETWEEN $2 AND $3
+		 ORDER BY due_date ASC LIMIT 10`,
+		projectID, now, now.AddDate(0, 0, 7))
+	if err != nil {
+		return nil, fmt.Errorf("due soon tasks: %w", err)
+	}
+	defer dueSoonRows.Close()
+	for dueSoonRows.Next() {
+		var tk domain.Task
+		var desc *string
+		if err := dueSoonRows.Scan(
+			&tk.ID, &tk.OrgID, &tk.ProjectID, &tk.ParentTaskID, &tk.Title, &desc,
+			&tk.Status, &tk.Priority, &tk.AssigneeID, &tk.ReporterID,
+			&tk.Depth, &tk.Position, &tk.DueDate, &tk.StartDate,
+			&tk.EstimatedHours, &tk.ActualHours, &tk.Labels, &tk.Metadata,
+			&tk.ReviewStatus, &tk.CreatedAt, &tk.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan due soon task: %w", err)
+		}
+		if desc != nil {
+			tk.Description = *desc
+		}
+		if tk.Labels == nil {
+			tk.Labels = []string{}
+		}
+		if tk.Metadata == nil {
+			tk.Metadata = map[string]any{}
+		}
+		stats.DueSoonTasks = append(stats.DueSoonTasks, &tk)
+	}
+	if err := dueSoonRows.Err(); err != nil {
+		return nil, fmt.Errorf("due soon tasks rows: %w", err)
+	}
+
+	return stats, nil
+}

@@ -131,6 +131,79 @@ func (s *TaskService) GetTree(ctx context.Context, rootID uuid.UUID) ([]*domain.
 	return s.taskRepo.GetTree(ctx, rootID)
 }
 
+// Duplicate deep-copies a task and all its descendants, returning the new root task.
+func (s *TaskService) Duplicate(ctx context.Context, taskID uuid.UUID) (*domain.Task, error) {
+	// Get the full subtree (root + descendants, ordered by depth/sort_path)
+	tree, err := s.taskRepo.GetTree(ctx, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("get tree for duplicate: %w", err)
+	}
+	if len(tree) == 0 {
+		return nil, domain.ErrNotFound
+	}
+
+	// Map old IDs → new IDs for parent remapping
+	idMap := make(map[uuid.UUID]uuid.UUID, len(tree))
+	var createdTasks []*domain.Task
+	var root *domain.Task
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, src := range tree {
+			clone := &domain.Task{
+				OrgID:       src.OrgID,
+				ProjectID:   src.ProjectID,
+				Title:       src.Title + " (copy)",
+				Description: src.Description,
+				Status:      domain.TaskStatusTodo,
+				Priority:    src.Priority,
+				AssigneeID:  src.AssigneeID,
+				ReporterID:  src.ReporterID,
+				Depth:       src.Depth,
+				Position:    src.Position,
+				DueDate:     src.DueDate,
+				StartDate:   src.StartDate,
+				Labels:      src.Labels,
+				Metadata:    src.Metadata,
+			}
+			if clone.Labels == nil {
+				clone.Labels = []string{}
+			}
+			if clone.Metadata == nil {
+				clone.Metadata = map[string]any{}
+			}
+
+			// Remap parent
+			if src.ParentTaskID != nil {
+				if newParent, ok := idMap[*src.ParentTaskID]; ok {
+					clone.ParentTaskID = &newParent
+				}
+			}
+
+			created, err := s.taskRepo.Create(ctx, tx, clone)
+			if err != nil {
+				return fmt.Errorf("duplicate task %s: %w", src.ID, err)
+			}
+			idMap[src.ID] = created.ID
+			createdTasks = append(createdTasks, created)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("duplicate: %w", err)
+	}
+
+	// Enqueue async jobs for all created tasks
+	for _, t := range createdTasks {
+		s.enqueueActivity(t.OrgID.String(), "task", t.ID.String(), "created", "", nil)
+		s.enqueueSearchIndex("tasks", t)
+	}
+
+	if len(createdTasks) > 0 {
+		root = createdTasks[0]
+	}
+	return root, nil
+}
+
 func (s *TaskService) ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error) {
 	return s.taskRepo.ListTreeByProject(ctx, projectID)
 }
@@ -142,6 +215,64 @@ func (s *TaskService) List(ctx context.Context, projectID uuid.UUID, filter repo
 // ListMyTasks returns tasks assigned to the user across all projects in the org.
 func (s *TaskService) ListMyTasks(ctx context.Context, orgID, userID uuid.UUID, limit, offset int) ([]*domain.Task, int, error) {
 	return s.taskRepo.ListByOrgAndAssignee(ctx, orgID, userID, limit, offset)
+}
+
+// BulkUpdateParams defines the shape for a bulk update request.
+type BulkUpdateParams struct {
+	TaskIDs []uuid.UUID       `json:"task_ids" validate:"required,min=1,max=100"`
+	Changes UpdateTaskParams  `json:"changes"`
+}
+
+// BulkUpdate applies the same changes to multiple tasks in a single transaction.
+func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) ([]*domain.Task, error) {
+	if len(params.TaskIDs) == 0 {
+		return nil, fmt.Errorf("no task IDs provided")
+	}
+
+	updated := make([]*domain.Task, 0, len(params.TaskIDs))
+
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, id := range params.TaskIDs {
+			task, err := s.taskRepo.GetByID(ctx, id)
+			if err != nil {
+				return fmt.Errorf("get task %s: %w", id, err)
+			}
+
+			if params.Changes.Status != nil {
+				task.Status = *params.Changes.Status
+			}
+			if params.Changes.Priority != nil {
+				task.Priority = *params.Changes.Priority
+			}
+			if params.Changes.AssigneeID != nil {
+				task.AssigneeID = params.Changes.AssigneeID
+			}
+			if params.Changes.Labels != nil {
+				task.Labels = params.Changes.Labels
+			}
+			if params.Changes.DueDate != nil {
+				task.DueDate = params.Changes.DueDate
+			}
+
+			result, err := s.taskRepo.Update(ctx, tx, task)
+			if err != nil {
+				return fmt.Errorf("update task %s: %w", id, err)
+			}
+			updated = append(updated, result)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bulk update: %w", err)
+	}
+
+	// Enqueue async jobs
+	for _, t := range updated {
+		s.enqueueActivity(t.OrgID.String(), "task", t.ID.String(), "updated", "", nil)
+		s.enqueueSearchIndex("tasks", t)
+	}
+
+	return updated, nil
 }
 
 func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTaskParams) (*domain.Task, error) {
@@ -287,6 +418,32 @@ func (s *TaskService) MarkComplete(ctx context.Context, id uuid.UUID) (*domain.T
 		return err
 	})
 	return updated, err
+}
+
+// ReorderItem represents a single task reorder operation.
+type ReorderItem struct {
+	ID       uuid.UUID  `json:"id" validate:"required"`
+	Position int        `json:"position" validate:"min=0"`
+	ParentID *uuid.UUID `json:"parent_id,omitempty"`
+}
+
+// Reorder updates the positions (and optionally parents) of multiple tasks in a single transaction.
+func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
+	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, item := range items {
+			if item.ParentID != nil {
+				// Reparent + reposition
+				if err := s.taskRepo.Reparent(ctx, tx, item.ID, item.ParentID, item.Position); err != nil {
+					return fmt.Errorf("reparent task %s: %w", item.ID, err)
+				}
+			} else {
+				if err := s.taskRepo.UpdatePosition(ctx, tx, item.ID, item.Position); err != nil {
+					return fmt.Errorf("reorder task %s: %w", item.ID, err)
+				}
+			}
+		}
+		return nil
+	})
 }
 
 // --- Worker helpers (fire-and-forget, log errors) ---

@@ -22,9 +22,10 @@ type CreateOrgParams struct {
 
 // UpdateOrgParams holds parameters for updating an organization.
 type UpdateOrgParams struct {
-	Name    *string `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
-	Slug    *string `json:"slug,omitempty" validate:"omitempty,min=2,max=50"`
-	LogoURL *string `json:"logo_url,omitempty"`
+	Name     *string         `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
+	Slug     *string         `json:"slug,omitempty" validate:"omitempty,min=2,max=50"`
+	LogoURL  *string         `json:"logo_url,omitempty"`
+	Settings *map[string]any `json:"settings,omitempty"`
 }
 
 // OrgService handles organization business logic.
@@ -108,6 +109,14 @@ func (s *OrgService) Update(ctx context.Context, id uuid.UUID, params UpdateOrgP
 	}
 	if params.LogoURL != nil {
 		org.LogoURL = *params.LogoURL
+	}
+	if params.Settings != nil {
+		if org.Settings == nil {
+			org.Settings = make(map[string]any)
+		}
+		for k, v := range *params.Settings {
+			org.Settings[k] = v
+		}
 	}
 
 	var updated *domain.Org

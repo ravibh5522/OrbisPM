@@ -38,7 +38,7 @@ func (r *teamMemberRepo) Remove(ctx context.Context, tx pgx.Tx, teamID, userID u
 
 func (r *teamMemberRepo) ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.team_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), m.role, m.joined_at
+		`SELECT m.team_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at
 		 FROM team_members m
 		 LEFT JOIN auth.users u ON u.id = m.user_id
 		 WHERE m.team_id = $1 ORDER BY m.joined_at`, teamID)
@@ -50,7 +50,7 @@ func (r *teamMemberRepo) ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*d
 	var members []*domain.TeamMember
 	for rows.Next() {
 		var m domain.TeamMember
-		if err := rows.Scan(&m.TeamID, &m.UserID, &m.Email, &m.DisplayName, &m.Role, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.TeamID, &m.UserID, &m.Email, &m.DisplayName, &m.AvatarURL, &m.Role, &m.JoinedAt); err != nil {
 			return nil, err
 		}
 		members = append(members, &m)

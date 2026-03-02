@@ -17,6 +17,7 @@ export interface OrgMember {
   email: string;
   display_name?: string;
   phone?: string;
+  avatar_url?: string;
   role: OrgRole;
   joined_at: string;
 }
@@ -37,6 +38,7 @@ export interface TeamMember {
   user_id: string;
   email: string;
   display_name?: string;
+  avatar_url?: string;
   role: string;
   joined_at: string;
 }
@@ -60,6 +62,7 @@ export interface ProjectMember {
   user_id: string;
   email: string;
   display_name?: string;
+  avatar_url?: string;
   role: string;
   joined_at: string;
 }
@@ -214,6 +217,11 @@ export interface Attachment {
   created_at: string;
 }
 
+export interface TaskWatcher {
+  task_id: string;
+  user_id: string;
+}
+
 export interface BillingPlan {
   id: string;
   name: string;
@@ -271,6 +279,61 @@ export interface DashboardStats {
   recent_tasks: Task[];
 }
 
+export interface MemberWorkload {
+  user_id: string;
+  display_name: string;
+  email: string;
+  avatar_url?: string;
+  total: number;
+  todo: number;
+  in_progress: number;
+  done: number;
+  blocked: number;
+  overdue: number;
+}
+
+export interface TeamDashboardStats {
+  total_projects: number;
+  total_tasks: number;
+  total_members: number;
+  overdue_tasks: number;
+  tasks_by_status: Record<string, number>;
+  tasks_by_priority: Record<string, number>;
+  member_workload: MemberWorkload[] | null;
+  recent_tasks: Task[];
+  completed_last_7_days: number;
+  created_last_7_days: number;
+}
+
+export interface DailyCount {
+  date: string;
+  count: number;
+}
+
+export interface LabelCount {
+  label: string;
+  count: number;
+}
+
+export interface ProjectDashboardStats {
+  total_tasks: number;
+  total_members: number;
+  overdue_tasks: number;
+  completion_rate: number;
+  estimated_hours: number;
+  actual_hours: number;
+  tasks_by_status: Record<string, number>;
+  tasks_by_priority: Record<string, number>;
+  member_workload: MemberWorkload[] | null;
+  completed_last_7_days: number;
+  created_last_7_days: number;
+  burndown_data: DailyCount[] | null;
+  created_over_time: DailyCount[] | null;
+  label_counts: LabelCount[] | null;
+  recent_tasks: Task[] | null;
+  due_soon_tasks: Task[] | null;
+}
+
 export interface DomainEvent {
   type: string;
   org_id: string;
@@ -283,8 +346,15 @@ export interface DomainEvent {
 export interface AuthUser {
   id: string;
   email: string;
+  phone?: string;
   user_metadata?: {
     name?: string;
+    avatar_url?: string;
+    bio?: string;
+    job_title?: string;
+    department?: string;
+    timezone?: string;
+    language?: string;
     [key: string]: unknown;
   };
   app_metadata?: Record<string, unknown>;

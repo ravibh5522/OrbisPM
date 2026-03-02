@@ -78,6 +78,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -87,8 +88,10 @@ import (
 
 	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/config"
+	"github.com/orbispm/orbispm/internal/email"
 	"github.com/orbispm/orbispm/internal/eventbus"
 	"github.com/orbispm/orbispm/internal/handler"
+	appMetrics "github.com/orbispm/orbispm/internal/metrics"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/search"
@@ -226,7 +229,7 @@ func main() {
 	projectSvc := service.NewProjectService(projectRepo, projectMemberRepo, txm, workerSrv)
 	taskSvc := service.NewTaskService(taskRepo, checklistRepo, ruleRepo, txm, workerSrv)
 	checklistSvc := service.NewChecklistService(checklistRepo, txm)
-	commentSvc := service.NewCommentService(commentRepo, txm, workerSrv)
+	commentSvc := service.NewCommentService(commentRepo, orgMemberRepo, txm, workerSrv)
 	ruleSvc := service.NewRuleService(ruleRepo, txm)
 	activitySvc := service.NewActivityService(activityRepo, txm)
 	notifSvc := service.NewNotificationService(notifRepo, txm)
@@ -238,7 +241,7 @@ func main() {
 	watcherSvc := service.NewWatcherService(watcherRepo, txm)
 	webhookSvc := service.NewWebhookService(webhookRepo, txm)
 	apikeySvc := service.NewAPIKeyService(apikeyRepo, txm)
-	importSvc := service.NewImportService(importJobRepo, txm)
+	importSvc := service.NewImportService(importJobRepo, taskRepo, txm)
 	billingSvc := service.NewBillingService(planRepo, subRepo, txm)
 	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, txm)
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
@@ -246,8 +249,8 @@ func main() {
 
 	// --- Handlers (existing) ---
 	orgHandler := handler.NewOrgHandler(orgSvc)
-	teamHandler := handler.NewTeamHandler(teamSvc)
-	projectHandler := handler.NewProjectHandler(projectSvc)
+	teamHandler := handler.NewTeamHandler(teamSvc, dashboardSvc)
+	projectHandler := handler.NewProjectHandler(projectSvc, dashboardSvc)
 	taskHandler := handler.NewTaskHandler(taskSvc)
 	checklistHandler := handler.NewChecklistHandler(checklistSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc)
@@ -259,6 +262,14 @@ func main() {
 	// --- Handlers (new) ---
 	authHandler := handler.NewAuthHandler(gotrueClient)
 	attachmentHandler := handler.NewAttachmentHandler(attachmentSvc)
+
+	// Upload handler (avatar, logos, etc.) — public URL for MinIO objects
+	minioPublicURL := fmt.Sprintf("http://%s/%s", cfg.MinIOEndpoint, cfg.MinioBucket)
+	var uploadHandler *handler.UploadHandler
+	if storageClient != nil {
+		uploadHandler = handler.NewUploadHandler(storageClient, minioPublicURL)
+	}
+
 	templateHandler := handler.NewTemplateHandler(templateSvc)
 	depHandler := handler.NewDependencyHandler(depSvc)
 	watcherHandler := handler.NewWatcherHandler(watcherSvc)
@@ -291,6 +302,10 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recovery)
 	r.Use(rateLimiter.Handler)
+	r.Use(middleware.Metrics)
+
+	// Prometheus metrics (no auth)
+	r.Handle("/metrics", promhttp.Handler())
 
 	// Health endpoints (no auth)
 	r.Mount("/health", healthHandler.Routes())
@@ -368,6 +383,11 @@ func main() {
 					// Events (SSE)
 					r.Mount("/events", eventsHandler.Routes())
 
+					// File uploads (avatars, logos)
+					if uploadHandler != nil {
+						r.Mount("/uploads", uploadHandler.Routes())
+					}
+
 					// Projects
 					r.Route("/projects", func(r chi.Router) {
 						r.Post("/", projectHandler.Create)
@@ -380,6 +400,7 @@ func main() {
 							r.Get("/members", projectHandler.ListMembers)
 							r.Post("/members", projectHandler.AddMember)
 							r.Delete("/members/{userId}", projectHandler.RemoveMember)
+							r.Get("/dashboard", projectHandler.Dashboard)
 
 							// Imports
 							r.Mount("/imports", importHandler.Routes())
@@ -389,6 +410,10 @@ func main() {
 								r.Post("/", taskHandler.Create)
 								r.Get("/", taskHandler.List)
 								r.Get("/tree", taskHandler.ListTree) // project-level tree (must be before /{taskId})
+								r.Get("/export", taskHandler.Export) // CSV export (must be before /{taskId})
+								r.Get("/calendar.ics", taskHandler.CalendarExport) // iCal export (must be before /{taskId})
+								r.Post("/bulk", taskHandler.BulkUpdate) // must be before /{taskId}
+								r.Patch("/reorder", taskHandler.Reorder) // must be before /{taskId}
 
 								r.Route("/{taskId}", func(r chi.Router) {
 									r.Get("/", taskHandler.Get)
@@ -397,6 +422,7 @@ func main() {
 									r.Get("/tree", taskHandler.GetTree)
 									r.Post("/submit-review", taskHandler.SubmitForReview)
 									r.Post("/complete", taskHandler.MarkComplete)
+									r.Post("/duplicate", taskHandler.Duplicate)
 
 									// Task sub-resources
 									r.Mount("/checklists", checklistHandler.Routes())
@@ -418,7 +444,19 @@ func main() {
 	})
 
 	// --- Background Worker (Start) ---
-	workerHandlers := &worker.Handlers{Pool: pool}
+	emailSender := email.NewSender(email.Config{
+		Host:     cfg.SMTPHost,
+		Port:     cfg.SMTPPort,
+		User:     cfg.SMTPUser,
+		Password: cfg.SMTPPassword,
+		From:     cfg.SMTPFrom,
+		Enabled:  cfg.SMTPEnabled,
+	})
+	workerHandlers := &worker.Handlers{
+		Pool:        pool,
+		EmailSender: emailSender,
+		FrontendURL: cfg.FrontendURL,
+	}
 	workerMux := asynq.NewServeMux()
 	workerHandlers.RegisterAll(workerMux)
 	go func() {
@@ -427,6 +465,22 @@ func main() {
 		}
 	}()
 	log.Info().Msg("Asynq worker started")
+
+	// --- DB Pool Metrics (background goroutine) ---
+	go func() {
+		ticker := time.NewTicker(15 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				stat := pool.Stat()
+				appMetrics.DBPoolActive.Set(float64(stat.AcquiredConns()))
+				appMetrics.DBPoolIdle.Set(float64(stat.IdleConns()))
+			}
+		}
+	}()
 
 	// --- HTTP Server ---
 	srv := &http.Server{

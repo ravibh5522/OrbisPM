@@ -22,6 +22,9 @@ type TaskFilter struct {
 	Priority   *string
 	AssigneeID *uuid.UUID
 	Search     *string
+	ParentID   *string // "root" for root tasks (parent IS NULL), UUID for children of a specific task, nil for all
+	SortBy     string  // column to sort by (title, status, priority, due_date, created_at, updated_at, position)
+	SortOrder  string  // "asc" or "desc"
 }
 
 // --- Organisation ---
@@ -88,6 +91,8 @@ type TaskRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, task *domain.Task) (*domain.Task, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	CountByProject(ctx context.Context, projectID uuid.UUID) (int, error)
+	UpdatePosition(ctx context.Context, tx pgx.Tx, id uuid.UUID, position int) error
+	Reparent(ctx context.Context, tx pgx.Tx, id uuid.UUID, newParentID *uuid.UUID, position int) error
 }
 
 // --- Checklist ---

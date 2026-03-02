@@ -38,13 +38,13 @@ func (r *orgMemberRepo) Remove(ctx context.Context, tx pgx.Tx, orgID, userID uui
 
 func (r *orgMemberRepo) Get(ctx context.Context, orgID, userID uuid.UUID) (*domain.OrgMember, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT m.org_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.phone, ''), m.role, m.joined_at
+		`SELECT m.org_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.phone, ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at
 		 FROM org_members m
 		 LEFT JOIN auth.users u ON u.id = m.user_id
 		 WHERE m.org_id = $1 AND m.user_id = $2`,
 		orgID, userID)
 	var m domain.OrgMember
-	if err := row.Scan(&m.OrgID, &m.UserID, &m.Email, &m.DisplayName, &m.Phone, &m.Role, &m.JoinedAt); err != nil {
+	if err := row.Scan(&m.OrgID, &m.UserID, &m.Email, &m.DisplayName, &m.Phone, &m.AvatarURL, &m.Role, &m.JoinedAt); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, domain.ErrNotFound
 		}
@@ -55,7 +55,7 @@ func (r *orgMemberRepo) Get(ctx context.Context, orgID, userID uuid.UUID) (*doma
 
 func (r *orgMemberRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.org_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.phone, ''), m.role, m.joined_at
+		`SELECT m.org_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.phone, ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at
 		 FROM org_members m
 		 LEFT JOIN auth.users u ON u.id = m.user_id
 		 WHERE m.org_id = $1 ORDER BY m.joined_at`, orgID)
@@ -67,7 +67,7 @@ func (r *orgMemberRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*doma
 	var members []*domain.OrgMember
 	for rows.Next() {
 		var m domain.OrgMember
-		if err := rows.Scan(&m.OrgID, &m.UserID, &m.Email, &m.DisplayName, &m.Phone, &m.Role, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.OrgID, &m.UserID, &m.Email, &m.DisplayName, &m.Phone, &m.AvatarURL, &m.Role, &m.JoinedAt); err != nil {
 			return nil, err
 		}
 		members = append(members, &m)

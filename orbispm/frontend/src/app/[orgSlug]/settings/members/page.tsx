@@ -180,7 +180,7 @@ export default function MembersPage() {
                     {/* Member */}
                     <td>
                       <div className="flex items-center gap-3">
-                        <Avatar name={getMemberName(m)} size="sm" />
+                        <Avatar name={getMemberName(m)} src={m.avatar_url} size="sm" />
                         <div>
                           <span className="font-medium text-sm">
                             {m.display_name || "—"}
@@ -358,7 +358,7 @@ export default function MembersPage() {
         <Modal open onClose={() => setEditTarget(null)} title="Change Role">
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-              <Avatar name={getMemberName(editTarget)} size="sm" />
+              <Avatar name={getMemberName(editTarget)} src={editTarget.avatar_url} size="sm" />
               <div>
                 <div className="font-medium text-sm">{getMemberName(editTarget)}</div>
                 {editTarget.email && <div className="text-xs text-base-content/50">{editTarget.email}</div>}

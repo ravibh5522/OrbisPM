@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -24,11 +26,13 @@ func NewTemplateHandler(tmplSvc *service.TemplateService) *TemplateHandler {
 func (h *TemplateHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.Create)
+	r.Post("/import", h.Import)
 	r.Get("/", h.List)
 	r.Route("/{templateId}", func(r chi.Router) {
 		r.Get("/", h.Get)
 		r.Patch("/", h.Update)
 		r.Delete("/", h.Delete)
+		r.Get("/export", h.Export)
 	})
 	return r
 }
@@ -164,4 +168,97 @@ func (h *TemplateHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Export godoc
+// @Summary Export template as JSON
+// @Description Download a task template as a portable JSON file
+// @Tags Templates
+// @Produce application/json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param templateId path string true "Template ID" format(uuid)
+// @Success 200
+// @Router /orgs/{orgId}/templates/{templateId}/export [get]
+func (h *TemplateHandler) Export(w http.ResponseWriter, r *http.Request) {
+	id, err := uuidParam(r, "templateId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid template id"})
+		return
+	}
+	tmpl, err := h.tmplSvc.Get(r.Context(), id)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	envelope := map[string]any{
+		"version":     "1.0",
+		"name":        tmpl.Name,
+		"description": tmpl.Description,
+		"structure":   tmpl.Structure,
+		"is_shared":   tmpl.IsShared,
+		"exported_at": tmpl.UpdatedAt,
+	}
+
+	data, err := json.MarshalIndent(envelope, "", "  ")
+	if err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to serialize template"})
+		return
+	}
+
+	filename := fmt.Sprintf("template_%s.json", tmpl.Name)
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	w.Write(data)
+}
+
+// Import godoc
+// @Summary Import template from JSON
+// @Description Create a task template from an uploaded JSON file
+// @Tags Templates
+// @Accept application/json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param body body object true "Template JSON"
+// @Success 201 {object} swaggerTaskTemplate
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/templates/import [post]
+func (h *TemplateHandler) Import(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	var envelope struct {
+		Name        string         `json:"name"`
+		Description string         `json:"description"`
+		Structure   map[string]any `json:"structure"`
+		IsShared    bool           `json:"is_shared"`
+	}
+	if err := parseBody(r, &envelope); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid JSON", Detail: err.Error()})
+		return
+	}
+
+	if envelope.Name == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "name is required"})
+		return
+	}
+	if envelope.Structure == nil {
+		envelope.Structure = map[string]any{}
+	}
+
+	tmpl, err := h.tmplSvc.Create(r.Context(), service.CreateTemplateParams{
+		OrgID:       orgID,
+		UserID:      userID,
+		Name:        envelope.Name,
+		Description: envelope.Description,
+		Structure:   envelope.Structure,
+		IsShared:    envelope.IsShared,
+	})
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusCreated, tmpl)
 }

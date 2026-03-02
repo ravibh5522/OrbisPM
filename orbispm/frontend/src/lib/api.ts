@@ -1,3 +1,5 @@
+import type { AuthUser } from "@/types/domain";
+
 // API response shapes
 export interface ListResponse<T> {
   data: T[];
@@ -115,6 +117,21 @@ function upload<T>(path: string, formData: FormData): Promise<T> {
   return request<T>(path, { method: "POST", body: formData });
 }
 
+async function downloadBlob(path: string, filename: string): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+  const res = await fetch(`${API_BASE}${path}`, { headers });
+  if (!res.ok) throw new Error("Download failed");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // API namespaces
 import type {
   Org,
@@ -136,11 +153,14 @@ import type {
   Webhook,
   APIKey,
   Attachment,
+  TaskWatcher,
   BillingPlan,
   OrgSubscription,
   CustomRole,
   ImportJob,
   DashboardStats,
+  TeamDashboardStats,
+  ProjectDashboardStats,
   AuthTokens,
 } from "@/types/domain";
 
@@ -171,8 +191,14 @@ export const api = {
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
     },
-    getUser(): Promise<{ id: string; email: string; user_metadata?: Record<string, unknown> }> {
+    getUser(): Promise<AuthUser> {
       return get("/auth/v1/user");
+    },
+    updateUser(data: { data?: Record<string, unknown>; email?: string; phone?: string }): Promise<AuthUser> {
+      return request<AuthUser>("/auth/v1/user", {
+        method: "PUT",
+        body: JSON.stringify(data),
+      });
     },
   },
 
@@ -184,6 +210,18 @@ export const api = {
     update: (id: string, data: Partial<Org>) => put<Org>(`${V1}/orgs/${id}`, data),
     delete: (id: string) => del(`${V1}/orgs/${id}`),
     me: (orgId: string) => get<OrgMember>(`${V1}/orgs/${orgId}/me`),
+  },
+
+  // File uploads (avatars, logos — stores in MinIO, returns URL)
+  uploads: {
+    upload: (orgId: string, file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return upload<{ url: string; filename: string; mime_type: string; object: string }>(
+        `${V1}/orgs/${orgId}/uploads`,
+        fd,
+      );
+    },
   },
 
   // Org Members
@@ -206,6 +244,8 @@ export const api = {
     update: (orgId: string, id: string, data: Partial<Team>) =>
       put<Team>(`${V1}/orgs/${orgId}/teams/${id}`, data),
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/teams/${id}`),
+    dashboard: (orgId: string, teamId: string) =>
+      get<TeamDashboardStats>(`${V1}/orgs/${orgId}/teams/${teamId}/dashboard`),
   },
 
   // Team members
@@ -229,6 +269,8 @@ export const api = {
     update: (orgId: string, id: string, data: Partial<Project>) =>
       put<Project>(`${V1}/orgs/${orgId}/projects/${id}`, data),
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/projects/${id}`),
+    dashboard: (orgId: string, projId: string) =>
+      get<ProjectDashboardStats>(`${V1}/orgs/${orgId}/projects/${projId}/dashboard`),
   },
 
   // Project members
@@ -252,7 +294,7 @@ export const api = {
     create: (orgId: string, projId: string, data: Partial<Task>) =>
       post<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks`, data),
     update: (orgId: string, projId: string, id: string, data: Partial<Task>) =>
-      put<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`, data),
+      patch<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`, data),
     delete: (orgId: string, projId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`),
     tree: (orgId: string, projId: string) =>
@@ -261,6 +303,14 @@ export const api = {
       post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}/move`, data),
     bulkUpdate: (orgId: string, projId: string, data: { task_ids: string[]; changes: Partial<Task> }) =>
       post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/bulk`, data),
+    reorder: (orgId: string, projId: string, items: { id: string; position: number; parent_id?: string }[]) =>
+      patch<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/reorder`, { items }),
+    duplicate: (orgId: string, projId: string, id: string) =>
+      post<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}/duplicate`),
+    export: (orgId: string, projId: string) =>
+      downloadBlob(`${V1}/orgs/${orgId}/projects/${projId}/tasks/export`, "tasks_export.csv"),
+    exportCalendar: (orgId: string, projId: string) =>
+      downloadBlob(`${V1}/orgs/${orgId}/projects/${projId}/tasks/calendar.ics`, "tasks.ics"),
   },
 
   // Task dependencies
@@ -342,6 +392,10 @@ export const api = {
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/templates/${id}`),
     apply: (orgId: string, projId: string, templateId: string) =>
       post<void>(`${V1}/orgs/${orgId}/projects/${projId}/apply-template`, { template_id: templateId }),
+    export: (orgId: string, id: string, name: string) =>
+      downloadBlob(`${V1}/orgs/${orgId}/templates/${id}/export`, `template_${name}.json`),
+    import: (orgId: string, data: { name: string; description?: string; structure: Record<string, unknown>; is_shared?: boolean }) =>
+      post<TaskTemplate>(`${V1}/orgs/${orgId}/templates/import`, data),
   },
 
   // Webhooks
@@ -371,8 +425,22 @@ export const api = {
       fd.append("file", file);
       return upload<Attachment>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`, fd);
     },
+    download: (orgId: string, projId: string, taskId: string, id: string) =>
+      get<{ attachment: Attachment; download_url: string }>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}/download`,
+      ),
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}`),
+  },
+
+  // Watchers
+  watchers: {
+    list: (orgId: string, projId: string, taskId: string) =>
+      get<ListResponse<TaskWatcher>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`),
+    watch: (orgId: string, projId: string, taskId: string) =>
+      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`, {}),
+    unwatch: (orgId: string, projId: string, taskId: string) =>
+      del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`),
   },
 
   // Billing
@@ -400,10 +468,12 @@ export const api = {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("column_mapping", JSON.stringify(columnMapping));
-      return upload<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/import`, fd);
+      return upload<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/imports`, fd);
     },
     status: (orgId: string, projId: string, jobId: string) =>
-      get<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/import/${jobId}`),
+      get<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/imports/${jobId}`),
+    list: (orgId: string, projId: string) =>
+      get<ListResponse<ImportJob>>(`${V1}/orgs/${orgId}/projects/${projId}/imports`),
   },
 
   // Search

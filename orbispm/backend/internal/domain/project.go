@@ -25,6 +25,7 @@ type ProjectMember struct {
 	UserID      uuid.UUID `json:"user_id"`
 	Email       string    `json:"email"`
 	DisplayName string    `json:"display_name,omitempty"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
 	Role        string    `json:"role"`
 	JoinedAt    time.Time `json:"joined_at"`
 }

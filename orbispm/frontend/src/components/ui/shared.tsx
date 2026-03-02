@@ -118,18 +118,29 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
 
 interface AvatarProps {
   name: string;
+  src?: string;
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }
 
-export function Avatar({ name, size = "md", className }: AvatarProps) {
-  const sizeMap = { xs: "w-6 h-6 text-xs", sm: "w-8 h-8 text-sm", md: "w-10 h-10", lg: "w-12 h-12 text-lg" };
-  const initials = name
+export function Avatar({ name, src, size = "md", className }: AvatarProps) {
+  const sizeMap = { xs: "w-6 h-6 text-xs", sm: "w-8 h-8 text-sm", md: "w-10 h-10", lg: "w-16 h-16 text-lg" };
+  const initials = (name || "?")
     .split(" ")
     .map((w) => w[0])
     .join("")
     .toUpperCase()
     .slice(0, 2);
+  if (src) {
+    return (
+      <div className={cn("avatar", className)}>
+        <div className={cn("rounded-full overflow-hidden", sizeMap[size])}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={src} alt={name} className="object-cover w-full h-full" />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className={cn("avatar placeholder", className)}>
       <div className={cn("bg-primary text-primary-content rounded-full", sizeMap[size])}>

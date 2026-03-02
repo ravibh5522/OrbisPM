@@ -13,11 +13,12 @@ import (
 
 // ProjectHandler handles project HTTP endpoints.
 type ProjectHandler struct {
-	projectSvc *service.ProjectService
+	projectSvc   *service.ProjectService
+	dashboardSvc *service.DashboardService
 }
 
-func NewProjectHandler(projectSvc *service.ProjectService) *ProjectHandler {
-	return &ProjectHandler{projectSvc: projectSvc}
+func NewProjectHandler(projectSvc *service.ProjectService, dashboardSvc *service.DashboardService) *ProjectHandler {
+	return &ProjectHandler{projectSvc: projectSvc, dashboardSvc: dashboardSvc}
 }
 
 // Routes registers project routes. Mounted under /orgs/{orgId}/projects.
@@ -36,6 +37,9 @@ func (h *ProjectHandler) Routes() chi.Router {
 		r.Get("/members", h.ListMembers)
 		r.Post("/members", h.AddMember)
 		r.Delete("/members/{userId}", h.RemoveMember)
+
+		// Dashboard
+		r.Get("/dashboard", h.Dashboard)
 	})
 
 	return r
@@ -272,4 +276,29 @@ func (h *ProjectHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// Dashboard godoc
+// @Summary Get project dashboard analytics
+// @Description Returns aggregated analytics including burndown, distribution, velocity, and member workload for a project
+// @Tags Projects
+// @Produce json
+// @Param orgId path string true "Organization ID"
+// @Param projectId path string true "Project ID"
+// @Success 200 {object} service.ProjectDashboardStats
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /orgs/{orgId}/projects/{projectId}/dashboard [get]
+func (h *ProjectHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
+	projID, err := uuid.Parse(chi.URLParam(r, "projectId"))
+	if err != nil {
+		JSON(w, http.StatusBadRequest, map[string]string{"message": "invalid project id"})
+		return
+	}
+	stats, err := h.dashboardSvc.GetProjectDashboard(r.Context(), projID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, stats)
 }

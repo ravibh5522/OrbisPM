@@ -12,11 +12,15 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
+
+	"github.com/orbispm/orbispm/internal/email"
 )
 
 // Handlers holds dependencies for task handler functions.
 type Handlers struct {
-	Pool *pgxpool.Pool
+	Pool        *pgxpool.Pool
+	EmailSender *email.Sender
+	FrontendURL string
 }
 
 // RegisterAll registers all task handlers on the mux.
@@ -61,7 +65,7 @@ func (h *Handlers) HandleActivityLog(ctx context.Context, t *asynq.Task) error {
 	return nil
 }
 
-// HandleNotification inserts a notification for a user.
+// HandleNotification inserts a notification for a user and sends email if enabled.
 func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error {
 	var p NotificationPayload
 	if err := json.Unmarshal(t.Payload(), &p); err != nil {
@@ -77,6 +81,7 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 		return fmt.Errorf("parse org_id: %w", err)
 	}
 
+	// 1. Always create in-app notification
 	_, err = h.Pool.Exec(ctx,
 		`INSERT INTO notifications (id, user_id, org_id, type, title, body, payload, created_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
@@ -85,8 +90,47 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 	if err != nil {
 		return fmt.Errorf("insert notification: %w", err)
 	}
-
 	log.Debug().Str("type", p.Type).Str("user_id", p.UserID).Msg("notification created")
+
+	// 2. Check if email channel is enabled for this event type
+	if h.EmailSender != nil && h.EmailSender.IsEnabled() {
+		var emailEnabled bool
+		err := h.Pool.QueryRow(ctx,
+			`SELECT COALESCE(
+				(SELECT enabled FROM notification_preferences
+				 WHERE user_id = $1 AND org_id = $2 AND event_type = $3 AND channel = 'email'),
+				true
+			)`, userID, orgID, p.Type,
+		).Scan(&emailEnabled)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to check email preference, defaulting to send")
+			emailEnabled = true
+		}
+
+		if emailEnabled {
+			// Lookup user email from auth.users
+			var userEmail string
+			err := h.Pool.QueryRow(ctx,
+				`SELECT COALESCE(email, '') FROM auth.users WHERE id = $1`, userID,
+			).Scan(&userEmail)
+			if err != nil || userEmail == "" {
+				log.Warn().Err(err).Str("user_id", p.UserID).Msg("could not find user email")
+			} else {
+				htmlBody := email.FormatNotificationEmail(p.Title, p.Body, h.FrontendURL)
+				if sendErr := h.EmailSender.Send(email.Message{
+					To:      userEmail,
+					Subject: fmt.Sprintf("[OrbisPM] %s", p.Title),
+					Body:    htmlBody,
+				}); sendErr != nil {
+					log.Error().Err(sendErr).Str("to", userEmail).Msg("failed to send notification email")
+					// Don't fail the task — in-app notification was already created
+				} else {
+					log.Debug().Str("to", userEmail).Str("type", p.Type).Msg("notification email sent")
+				}
+			}
+		}
+	}
+
 	return nil
 }
 

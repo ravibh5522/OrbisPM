@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { Plus, Users, Trash2, UserPlus } from "lucide-react";
+import { Plus, Users, Trash2, UserPlus, BarChart3 } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { Team, TeamMember, OrgMember } from "@/types/domain";
+import Link from "next/link";
 
 interface TeamForm {
   name: string;
@@ -20,6 +21,7 @@ interface TeamForm {
 
 export default function TeamsPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
+  const orgSlug = currentOrg?.slug || "";
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
@@ -86,15 +88,34 @@ export default function TeamsPage() {
                       <p className="text-sm text-base-content/60 mt-1 line-clamp-2">{team.description}</p>
                     )}
                   </div>
-                  <button
-                    className="btn btn-ghost btn-xs btn-square"
-                    onClick={(e) => { e.stopPropagation(); setDeleteTarget(team); }}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                  <div className="flex gap-1">
+                    <Link
+                      href={`/${orgSlug}/teams/${team.id}`}
+                      className="btn btn-ghost btn-xs btn-square"
+                      onClick={(e) => e.stopPropagation()}
+                      title="Team Dashboard"
+                    >
+                      <BarChart3 className="w-3 h-3" />
+                    </Link>
+                    <button
+                      className="btn btn-ghost btn-xs btn-square"
+                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(team); }}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
-                <div className="text-sm text-base-content/50 mt-3">
-                  Created {formatDate(team.created_at)}
+                <div className="flex items-center justify-between mt-3">
+                  <span className="text-sm text-base-content/50">
+                    Created {formatDate(team.created_at)}
+                  </span>
+                  <Link
+                    href={`/${orgSlug}/teams/${team.id}`}
+                    className="btn btn-ghost btn-xs gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <BarChart3 className="w-3 h-3" /> Dashboard
+                  </Link>
                 </div>
               </div>
             </Card>
@@ -197,7 +218,7 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
         <ul className="space-y-2 mb-4">
           {members.data.map((m: TeamMember) => (
             <li key={m.user_id} className="flex items-center gap-2 text-sm group">
-              <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} size="xs" />
+              <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} src={m.avatar_url} size="xs" />
               <span className="text-xs flex-1">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
               <select
                 className="select select-ghost select-xs"

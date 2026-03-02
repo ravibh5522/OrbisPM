@@ -40,6 +40,14 @@ type Config struct {
 	// CORS
 	FrontendURL string
 
+	// SMTP / Email
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPEnabled  bool
+
 	// Rate Limiting
 	RateLimitPerMinute int
 	RateLimitBurst     int
@@ -68,6 +76,12 @@ func Load() (*Config, error) {
 		MeiliURL:           getEnv("MEILI_URL", "http://localhost:7700"),
 		MeiliMasterKey:     getEnv("MEILI_MASTER_KEY", "masterkey-for-dev-only"),
 		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
+		SMTPHost:           getEnv("SMTP_HOST", "localhost"),
+		SMTPPort:           getEnvInt("SMTP_PORT", 1025),
+		SMTPUser:           getEnv("SMTP_USER", ""),
+		SMTPPassword:       getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:           getEnv("SMTP_FROM", "noreply@orbispm.local"),
+		SMTPEnabled:        getEnvBool("SMTP_ENABLED", true),
 		RateLimitPerMinute: getEnvInt("RATE_LIMIT_PER_MINUTE", 100),
 		RateLimitBurst:     getEnvInt("RATE_LIMIT_BURST", 20),
 		ReadTimeout:        time.Duration(getEnvInt("READ_TIMEOUT_SECONDS", 15)) * time.Second,

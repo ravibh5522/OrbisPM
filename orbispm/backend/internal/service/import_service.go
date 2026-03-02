@@ -2,9 +2,15 @@ package service
 
 import (
 	"context"
+	"encoding/csv"
+	"fmt"
+	"io"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/repository"
@@ -13,12 +19,13 @@ import (
 // ImportService handles import job business logic.
 type ImportService struct {
 	importRepo repository.ImportJobRepository
+	taskRepo   repository.TaskRepository
 	txm        *repository.TxManager
 }
 
 // NewImportService creates a new ImportService.
-func NewImportService(importRepo repository.ImportJobRepository, txm *repository.TxManager) *ImportService {
-	return &ImportService{importRepo: importRepo, txm: txm}
+func NewImportService(importRepo repository.ImportJobRepository, taskRepo repository.TaskRepository, txm *repository.TxManager) *ImportService {
+	return &ImportService{importRepo: importRepo, taskRepo: taskRepo, txm: txm}
 }
 
 // CreateImportParams holds parameters for creating an import job.
@@ -58,6 +65,232 @@ func (s *ImportService) Get(ctx context.Context, id uuid.UUID) (*domain.ImportJo
 // ListByProject returns all import jobs for a project.
 func (s *ImportService) ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ImportJob, error) {
 	return s.importRepo.ListByProject(ctx, projectID)
+}
+
+// ProcessCSVParams holds parameters for CSV import processing.
+type ProcessCSVParams struct {
+	OrgID         uuid.UUID
+	ProjectID     uuid.UUID
+	UserID        uuid.UUID
+	FileName      string
+	Reader        io.Reader
+	ColumnMapping map[string]string // csv_header -> task_field
+}
+
+// allowedTaskFields maps accepted task field names to true.
+var allowedTaskFields = map[string]bool{
+	"title": true, "description": true, "status": true, "priority": true,
+	"due_date": true, "start_date": true, "labels": true,
+}
+
+// ProcessCSV parses a CSV file and creates tasks from it.
+func (s *ImportService) ProcessCSV(ctx context.Context, params ProcessCSVParams) (*domain.ImportJob, error) {
+	reader := csv.NewReader(params.Reader)
+	reader.TrimLeadingSpace = true
+	reader.LazyQuotes = true
+
+	// Read header row
+	headers, err := reader.Read()
+	if err != nil {
+		return nil, fmt.Errorf("read CSV headers: %w", err)
+	}
+
+	// Build column index: position -> task_field
+	colMap := make(map[int]string) // index -> task_field
+	for i, h := range headers {
+		h = strings.TrimSpace(h)
+		if field, ok := params.ColumnMapping[h]; ok && allowedTaskFields[field] {
+			colMap[i] = field
+		}
+	}
+
+	// Ensure title is mapped
+	hasTitle := false
+	for _, f := range colMap {
+		if f == "title" {
+			hasTitle = true
+			break
+		}
+	}
+	if !hasTitle {
+		return nil, fmt.Errorf("column mapping must include 'title' field")
+	}
+
+	// Read all data rows
+	var rows [][]string
+	for {
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			// Skip malformed rows
+			continue
+		}
+		rows = append(rows, record)
+	}
+
+	totalRows := len(rows)
+	processedRows := 0
+	errorRows := 0
+	var rowErrors []map[string]any
+
+	// Valid status/priority values
+	validStatuses := map[string]bool{"todo": true, "in_progress": true, "done": true, "blocked": true}
+	validPriorities := map[string]bool{"low": true, "medium": true, "high": true, "critical": true}
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		for rowIdx, row := range rows {
+			task := &domain.Task{
+				OrgID:     params.OrgID,
+				ProjectID: params.ProjectID,
+				ReporterID: &params.UserID,
+				Status:    domain.TaskStatusTodo,
+				Priority:  domain.PriorityMedium,
+				Labels:    []string{},
+				Metadata:  map[string]any{},
+				Depth:     0,
+			}
+
+			rowNum := rowIdx + 2 // 1-indexed, skip header
+			var rowErr string
+
+			for colIdx, field := range colMap {
+				if colIdx >= len(row) {
+					continue
+				}
+				val := strings.TrimSpace(row[colIdx])
+				if val == "" {
+					continue
+				}
+				switch field {
+				case "title":
+					task.Title = val
+				case "description":
+					task.Description = val
+				case "status":
+					s := strings.ToLower(strings.ReplaceAll(val, " ", "_"))
+					if validStatuses[s] {
+						task.Status = s
+					}
+				case "priority":
+					p := strings.ToLower(val)
+					if validPriorities[p] {
+						task.Priority = p
+					}
+				case "due_date":
+					if t, err := parseFlexibleDate(val); err == nil {
+						task.DueDate = &t
+					}
+				case "start_date":
+					if t, err := parseFlexibleDate(val); err == nil {
+						task.StartDate = &t
+					}
+				case "labels":
+					labels := strings.Split(val, ",")
+					for i, l := range labels {
+						labels[i] = strings.TrimSpace(l)
+					}
+					task.Labels = labels
+				}
+			}
+
+			if task.Title == "" {
+				rowErr = "title is empty"
+			}
+
+			if rowErr != "" {
+				errorRows++
+				rowErrors = append(rowErrors, map[string]any{"row": rowNum, "error": rowErr})
+				continue
+			}
+
+			if _, err := s.taskRepo.Create(ctx, tx, task); err != nil {
+				errorRows++
+				rowErrors = append(rowErrors, map[string]any{"row": rowNum, "error": err.Error()})
+				log.Warn().Err(err).Int("row", rowNum).Msg("import: failed to create task")
+				continue
+			}
+			processedRows++
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("import transaction: %w", err)
+	}
+
+	// Record the job: first create, then update with results
+	now := time.Now()
+	status := "completed"
+	if errorRows > 0 && processedRows == 0 {
+		status = "failed"
+	} else if errorRows > 0 {
+		status = "completed_with_errors"
+	}
+
+	var result *domain.ImportJob
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		// Create the base job record
+		job := &domain.ImportJob{
+			OrgID:         params.OrgID,
+			ProjectID:     params.ProjectID,
+			UserID:        params.UserID,
+			Status:        "pending",
+			FilePath:      "",
+			FileName:      params.FileName,
+			ColumnMapping: toAnyMap(params.ColumnMapping),
+		}
+		created, err := s.importRepo.Create(ctx, tx, job)
+		if err != nil {
+			return fmt.Errorf("create import job: %w", err)
+		}
+
+		// Update with final results
+		created.Status = status
+		created.TotalRows = &totalRows
+		created.ProcessedRows = processedRows
+		created.ErrorRows = errorRows
+		created.Errors = rowErrors
+		if created.Errors == nil {
+			created.Errors = []map[string]any{}
+		}
+		created.Result = map[string]any{"created": processedRows}
+		created.CompletedAt = &now
+
+		result, err = s.importRepo.Update(ctx, tx, created)
+		return err
+	})
+	if err != nil {
+		return nil, fmt.Errorf("save import job: %w", err)
+	}
+	return result, nil
+}
+
+// parseFlexibleDate parses dates in multiple common formats.
+func parseFlexibleDate(s string) (time.Time, error) {
+	formats := []string{
+		time.RFC3339,
+		"2006-01-02",
+		"01/02/2006",
+		"02-01-2006",
+		"Jan 2, 2006",
+		"2006-01-02 15:04:05",
+	}
+	for _, f := range formats {
+		if t, err := time.Parse(f, s); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unrecognized date: %s", s)
+}
+
+// toAnyMap converts map[string]string to map[string]any.
+func toAnyMap(m map[string]string) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = v
+	}
+	return out
 }
 
 // CustomRoleService handles custom role business logic.

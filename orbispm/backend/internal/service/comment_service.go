@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -13,6 +15,9 @@ import (
 	"github.com/orbispm/orbispm/internal/worker"
 )
 
+// mentionRe matches @word where word is alphanumeric, dot, dash, or underscore.
+var mentionRe = regexp.MustCompile(`@([a-zA-Z0-9._-]+)`)
+
 type CreateCommentParams struct {
 	OrgID    uuid.UUID  `json:"-"`
 	TaskID   uuid.UUID  `json:"-"`
@@ -22,13 +27,14 @@ type CreateCommentParams struct {
 }
 
 type CommentService struct {
-	commentRepo repository.CommentRepository
-	txm         *repository.TxManager
-	workerSrv   *worker.Server
+	commentRepo   repository.CommentRepository
+	orgMemberRepo repository.OrgMemberRepository
+	txm           *repository.TxManager
+	workerSrv     *worker.Server
 }
 
-func NewCommentService(commentRepo repository.CommentRepository, txm *repository.TxManager, workerSrv *worker.Server) *CommentService {
-	return &CommentService{commentRepo: commentRepo, txm: txm, workerSrv: workerSrv}
+func NewCommentService(commentRepo repository.CommentRepository, orgMemberRepo repository.OrgMemberRepository, txm *repository.TxManager, workerSrv *worker.Server) *CommentService {
+	return &CommentService{commentRepo: commentRepo, orgMemberRepo: orgMemberRepo, txm: txm, workerSrv: workerSrv}
 }
 
 func (s *CommentService) Create(ctx context.Context, params CreateCommentParams) (*domain.Comment, error) {
@@ -53,7 +59,62 @@ func (s *CommentService) Create(ctx context.Context, params CreateCommentParams)
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "comment", created.ID.String(), "created", created.UserID.String())
 
+	// Parse @mentions and notify mentioned users
+	go s.processMentions(context.Background(), created)
+
 	return created, nil
+}
+
+// processMentions extracts @name tokens from the body, resolves them to org members, and sends notifications.
+func (s *CommentService) processMentions(ctx context.Context, comment *domain.Comment) {
+	matches := mentionRe.FindAllStringSubmatch(comment.Body, -1)
+	if len(matches) == 0 {
+		return
+	}
+
+	// Collect unique mention tokens (lowercased)
+	tokenSet := make(map[string]struct{}, len(matches))
+	for _, m := range matches {
+		tokenSet[strings.ToLower(m[1])] = struct{}{}
+	}
+
+	// Load all org members
+	members, err := s.orgMemberRepo.ListByOrg(ctx, comment.OrgID)
+	if err != nil {
+		log.Error().Err(err).Msg("load org members for mentions")
+		return
+	}
+
+	// Build a lookup: lowercase(name or email-prefix) → userID
+	mentioned := make(map[uuid.UUID]struct{})
+	for _, member := range members {
+		nameKey := strings.ToLower(strings.ReplaceAll(member.DisplayName, " ", ""))
+		emailKey := strings.ToLower(strings.Split(member.Email, "@")[0])
+
+		for token := range tokenSet {
+			if token == nameKey || token == emailKey {
+				// Don't notify the comment author
+				if member.UserID != comment.UserID {
+					mentioned[member.UserID] = struct{}{}
+				}
+			}
+		}
+	}
+
+	// Send notifications
+	for userID := range mentioned {
+		s.enqueueNotification(
+			userID.String(),
+			comment.OrgID.String(),
+			"mention",
+			"You were mentioned in a comment",
+			comment.Body,
+			map[string]any{
+				"task_id":    comment.TaskID.String(),
+				"comment_id": comment.ID.String(),
+			},
+		)
+	}
 }
 
 func (s *CommentService) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Comment, error) {
@@ -66,7 +127,7 @@ func (s *CommentService) Delete(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-// --- Worker helper ---
+// --- Worker helpers ---
 
 func (s *CommentService) enqueueActivity(orgID, entityType, entityID, action, actorID string) {
 	if s.workerSrv == nil {
@@ -85,5 +146,26 @@ func (s *CommentService) enqueueActivity(orgID, entityType, entityID, action, ac
 	}
 	if err := s.workerSrv.Enqueue(task); err != nil {
 		log.Error().Err(err).Msg("enqueue activity log task")
+	}
+}
+
+func (s *CommentService) enqueueNotification(userID, orgID, ntype, title, body string, payload map[string]any) {
+	if s.workerSrv == nil {
+		return
+	}
+	task, err := worker.NewNotificationTask(worker.NotificationPayload{
+		UserID:  userID,
+		OrgID:   orgID,
+		Type:    ntype,
+		Title:   title,
+		Body:    body,
+		Payload: payload,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("build notification task for mention")
+		return
+	}
+	if err := s.workerSrv.Enqueue(task); err != nil {
+		log.Error().Err(err).Msg("enqueue notification task for mention")
 	}
 }

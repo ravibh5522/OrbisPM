@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -112,6 +113,7 @@ func (h *ImportHandler) Routes() chi.Router {
 // @Param orgId path string true "Organization ID" format(uuid)
 // @Param projectId path string true "Project ID" format(uuid)
 // @Param file formData file true "CSV file to import"
+// @Param column_mapping formData string true "JSON column mapping"
 // @Success 201 {object} swaggerImportJob
 // @Failure 400 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId}/imports [post]
@@ -125,22 +127,40 @@ func (h *ImportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
 	userID := middleware.UserIDFromCtx(r.Context())
 
-	// For now, accept JSON with file path (full file upload would be via MinIO pre-signed URL)
-	var req struct {
-		FilePath string `json:"file_path" validate:"required"`
-		FileName string `json:"file_name" validate:"required"`
-	}
-	if err := parseBody(r, &req); err != nil {
-		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+	// Limit upload to 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 10MB)", Detail: err.Error()})
 		return
 	}
 
-	job, err := h.importSvc.Create(r.Context(), service.CreateImportParams{
-		OrgID:     orgID,
-		ProjectID: projectID,
-		UserID:    userID,
-		FilePath:  req.FilePath,
-		FileName:  req.FileName,
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing file field", Detail: err.Error()})
+		return
+	}
+	defer file.Close()
+
+	// Parse column mapping from form field
+	mappingStr := r.FormValue("column_mapping")
+	if mappingStr == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing column_mapping field"})
+		return
+	}
+
+	var columnMapping map[string]string
+	if err := json.Unmarshal([]byte(mappingStr), &columnMapping); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid column_mapping JSON", Detail: err.Error()})
+		return
+	}
+
+	job, err := h.importSvc.ProcessCSV(r.Context(), service.ProcessCSVParams{
+		OrgID:         orgID,
+		ProjectID:     projectID,
+		UserID:        userID,
+		FileName:      header.Filename,
+		Reader:        file,
+		ColumnMapping: columnMapping,
 	})
 	if err != nil {
 		Error(w, r, err)

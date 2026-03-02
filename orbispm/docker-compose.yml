@@ -89,6 +89,18 @@ services:
       timeout: 5s
       retries: 5
 
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+      - "1025:1025"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025/api/v1/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   api:
     build:
       context: ./backend
@@ -112,6 +124,10 @@ services:
       MEILI_MASTER_KEY: "masterkey-for-dev-only"
       FRONTEND_URL: http://localhost:3000
       BASE_URL: http://localhost:8000
+      SMTP_HOST: mailpit
+      SMTP_PORT: "1025"
+      SMTP_FROM: "noreply@orbispm.local"
+      SMTP_ENABLED: "true"
     depends_on:
       postgres:
         condition: service_healthy

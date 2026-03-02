@@ -6,8 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// MaxTaskDepth is the maximum allowed depth for subtasks.
-const MaxTaskDepth = 5
+// MaxTaskDepth is the maximum allowed depth for subtasks (0-based: 0,1,2,3 = 4 levels).
+const MaxTaskDepth = 3
 
 // Task status constants.
 const (

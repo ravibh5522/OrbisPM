@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, Badge, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
+import { PageHeader, Card, Badge, LoadingPage, ConfirmDialog, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea, Select } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
@@ -28,9 +28,15 @@ import {
   X,
   Tag,
   Calendar,
+  Download,
+  Eye,
+  EyeOff,
+  FileText,
+  Image as ImageIcon,
 } from "lucide-react";
 import { statusColor, priorityColor, statusLabel, formatRelative, formatDate, cn } from "@/lib/utils";
-import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskStatus, TaskPriority, OrgMember } from "@/types/domain";
+import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-editor";
+import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskWatcher, TaskStatus, TaskPriority, OrgMember } from "@/types/domain";
 
 /* ─── helpers ─── */
 
@@ -54,7 +60,11 @@ function memberLabel(id: string | null | undefined, members: OrgMember[]): strin
   const m = members.find((x) => x.user_id === id);
   return m ? (m.display_name || m.email || m.user_id.slice(0, 8) + "…") : id.slice(0, 8) + "…";
 }
-
+function memberAvatarUrl(id: string | null | undefined, members: OrgMember[]): string | undefined {
+  if (!id) return undefined;
+  const m = members.find((x) => x.user_id === id);
+  return m?.avatar_url || undefined;
+}
 /* ─── Inline-edit hook ─── */
 
 function useInlineEdit<T>(
@@ -129,6 +139,12 @@ export default function TaskDetailPage({
   const { data: dependencies } = useQuery({
     queryKey: ["dependencies", orgId, projectId, taskId],
     queryFn: () => api.dependencies.list(orgId, projectId, taskId),
+    enabled: !!orgId,
+  });
+
+  const { data: watchers } = useQuery({
+    queryKey: ["watchers", orgId, projectId, taskId],
+    queryFn: () => api.watchers.list(orgId, projectId, taskId),
     enabled: !!orgId,
   });
 
@@ -218,6 +234,7 @@ export default function TaskDetailPage({
                 label="Assignee"
                 value={task.assignee_id || ""}
                 displayValue={memberLabel(task.assignee_id, members)}
+                avatarSrc={memberAvatarUrl(task.assignee_id, members)}
                 options={[
                   { value: "", label: "Unassigned" },
                   ...members.map((m) => ({ value: m.user_id, label: m.display_name || m.email || m.user_id.slice(0, 12) })),
@@ -229,6 +246,7 @@ export default function TaskDetailPage({
                 label="Reporter"
                 value={task.reporter_id || ""}
                 displayValue={memberLabel(task.reporter_id, members)}
+                avatarSrc={memberAvatarUrl(task.reporter_id, members)}
                 options={[
                   { value: "", label: "None" },
                   ...members.map((m) => ({ value: m.user_id, label: m.display_name || m.email || m.user_id.slice(0, 12) })),
@@ -258,6 +276,16 @@ export default function TaskDetailPage({
           {/* Dependencies */}
           <DependenciesSection orgId={orgId} projectId={projectId} taskId={taskId} items={dependencies?.data || []} />
 
+          {/* Watchers */}
+          <WatchersSection
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            watchers={watchers?.data || []}
+            userId={user?.id || ""}
+            members={members}
+          />
+
           {/* Rules */}
           <RulesSection orgId={orgId} projectId={projectId} taskId={taskId} items={rules?.data || []} />
         </div>
@@ -282,14 +310,10 @@ function TaskHeaderCard({
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState(task.description || "");
   const titleRef = useRef<HTMLInputElement>(null);
-  const descRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (editingTitle) titleRef.current?.focus();
   }, [editingTitle]);
-  useEffect(() => {
-    if (editingDesc) descRef.current?.focus();
-  }, [editingDesc]);
 
   return (
     <Card>
@@ -327,14 +351,11 @@ function TaskHeaderCard({
       {/* Description */}
       {editingDesc ? (
         <div className="space-y-2">
-          <textarea
-            ref={descRef}
-            className="textarea textarea-bordered w-full min-h-24"
-            value={descDraft}
-            onChange={(e) => setDescDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") { setDescDraft(task.description || ""); setEditingDesc(false); }
-            }}
+          <RichTextEditor
+            content={descDraft}
+            onChange={(html) => setDescDraft(html)}
+            placeholder="Write a description…"
+            autoFocus
           />
           <div className="flex gap-2">
             <button className="btn btn-sm btn-primary" onClick={() => { onPatch("description", descDraft); setEditingDesc(false); }} disabled={isPending}>Save</button>
@@ -347,7 +368,7 @@ function TaskHeaderCard({
           onClick={() => { setDescDraft(task.description || ""); setEditingDesc(true); }}
         >
           {task.description ? (
-            <p className="text-base-content/70 whitespace-pre-wrap">{task.description}</p>
+            <RichTextViewer content={task.description} className="text-base-content/70" />
           ) : (
             <p className="text-base-content/40 italic">Click to add description…</p>
           )}
@@ -432,12 +453,14 @@ function SidebarSelect({
   label,
   value,
   displayValue,
+  avatarSrc,
   options,
   onSave,
 }: {
   label: string;
   value: string;
   displayValue: string;
+  avatarSrc?: string;
   options: { value: string; label: string }[];
   onSave: (v: string) => void;
 }) {
@@ -462,7 +485,10 @@ function SidebarSelect({
           className="flex justify-between items-center cursor-pointer hover:bg-base-200 rounded px-1 py-0.5 -mx-1 group"
           onClick={() => setEditing(true)}
         >
-          <span>{displayValue}</span>
+          <div className="flex items-center gap-1.5">
+            {value && <Avatar name={displayValue} src={avatarSrc} size="xs" />}
+            <span>{displayValue}</span>
+          </div>
           <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
         </div>
       )}
@@ -656,6 +682,145 @@ function ChecklistSection({
   );
 }
 
+/* ═══════════════════════════════════════════════════════
+   @Mention rendering — highlights @name in comment body
+   ═══════════════════════════════════════════════════════ */
+const MENTION_REGEX = /(@[a-zA-Z0-9._-]+)/g;
+
+function MentionText({ body, members }: { body: string; members: OrgMember[] }) {
+  // Build set of known names for highlighting
+  const knownNames = new Set(
+    members.flatMap((m) => {
+      const names: string[] = [];
+      if (m.display_name) names.push(`@${m.display_name.replace(/\s/g, "").toLowerCase()}`);
+      if (m.email) names.push(`@${m.email.split("@")[0].toLowerCase()}`);
+      return names;
+    }),
+  );
+
+  const parts = body.split(MENTION_REGEX);
+  return (
+    <p className="text-sm whitespace-pre-wrap">
+      {parts.map((part, i) => {
+        if (MENTION_REGEX.test(part) && knownNames.has(part.toLowerCase())) {
+          return (
+            <span key={i} className="bg-primary/15 text-primary font-medium rounded px-0.5">
+              {part}
+            </span>
+          );
+        }
+        return <span key={i}>{part}</span>;
+      })}
+    </p>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   MentionInput — textarea with @autocomplete dropdown
+   ═══════════════════════════════════════════════════════ */
+function MentionInput({
+  value,
+  onChange,
+  members,
+  placeholder,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  members: OrgMember[];
+  placeholder?: string;
+}) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [query, setQuery] = useState("");
+  const [cursorPos, setCursorPos] = useState(0);
+
+  const suggestions = members.filter((m) => {
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return (
+      (m.display_name && m.display_name.toLowerCase().includes(q)) ||
+      m.email.toLowerCase().includes(q)
+    );
+  }).slice(0, 6);
+
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    const pos = e.target.selectionStart || 0;
+    onChange(val);
+    setCursorPos(pos);
+
+    // Check if we're in a @mention context
+    const textBefore = val.slice(0, pos);
+    const atMatch = textBefore.match(/@([a-zA-Z0-9._-]*)$/);
+    if (atMatch) {
+      setQuery(atMatch[1]);
+      setShowSuggestions(true);
+    } else {
+      setShowSuggestions(false);
+    }
+  };
+
+  const insertMention = (member: OrgMember) => {
+    const name = member.display_name
+      ? member.display_name.replace(/\s/g, "")
+      : member.email.split("@")[0];
+    const textBefore = value.slice(0, cursorPos);
+    const atIdx = textBefore.lastIndexOf("@");
+    const before = value.slice(0, atIdx);
+    const after = value.slice(cursorPos);
+    const newVal = `${before}@${name} ${after}`;
+    onChange(newVal);
+    setShowSuggestions(false);
+
+    // Refocus textarea
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        const newPos = atIdx + name.length + 2; // @name + space
+        el.focus();
+        el.setSelectionRange(newPos, newPos);
+      }
+    }, 0);
+  };
+
+  return (
+    <div className="relative flex-1">
+      <textarea
+        ref={textareaRef}
+        className="textarea textarea-bordered w-full textarea-sm"
+        placeholder={placeholder}
+        value={value}
+        onChange={handleInput}
+        onKeyDown={(e) => {
+          if (e.key === "Escape") setShowSuggestions(false);
+        }}
+        rows={2}
+      />
+      {showSuggestions && suggestions.length > 0 && (
+        <div className="absolute left-0 bottom-full mb-1 w-64 bg-base-100 border border-base-300 rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
+          {suggestions.map((m) => (
+            <button
+              key={m.user_id}
+              type="button"
+              className="flex items-center gap-2 w-full p-2 hover:bg-base-200 text-left text-sm"
+              onMouseDown={(e) => {
+                e.preventDefault(); // prevent blur
+                insertMention(m);
+              }}
+            >
+              <Avatar name={m.display_name || m.email} src={m.avatar_url} size="xs" />
+              <div className="truncate">
+                <span className="font-medium">{m.display_name || m.email.split("@")[0]}</span>
+                <span className="text-xs text-base-content/50 ml-1">{m.email}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Comments sub-component
 function CommentsSection({
   orgId,
@@ -693,9 +858,7 @@ function CommentsSection({
       <div className="space-y-4 mb-4">
         {items.map((comment) => (
           <div key={comment.id} className="flex gap-3 group">
-            <div className="w-8 h-8 bg-base-200 rounded-full flex items-center justify-center flex-shrink-0">
-              <User className="w-4 h-4" />
-            </div>
+            <Avatar name={memberLabel(comment.user_id, members)} src={memberAvatarUrl(comment.user_id, members)} size="sm" />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="font-medium text-sm">{memberLabel(comment.user_id, members)}</span>
@@ -709,7 +872,7 @@ function CommentsSection({
                   </button>
                 )}
               </div>
-              <p className="text-sm whitespace-pre-wrap">{comment.body}</p>
+              <MentionText body={comment.body} members={members} />
             </div>
           </div>
         ))}
@@ -721,12 +884,11 @@ function CommentsSection({
           if (body.trim()) createMutation.mutate(body.trim());
         }}
       >
-        <textarea
-          className="textarea textarea-bordered flex-1 textarea-sm"
-          placeholder="Add a comment..."
+        <MentionInput
           value={body}
-          onChange={(e) => setBody(e.target.value)}
-          rows={2}
+          onChange={setBody}
+          members={members}
+          placeholder="Add a comment... (use @ to mention)"
         />
         <Button type="submit" size="sm" disabled={!body.trim()} loading={createMutation.isPending}>
           <Send className="w-4 h-4" />
@@ -736,7 +898,7 @@ function CommentsSection({
   );
 }
 
-// Attachments sub-component
+// Attachments sub-component with preview
 function AttachmentsSection({
   orgId,
   projectId,
@@ -750,6 +912,8 @@ function AttachmentsSection({
 }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
+  const [preview, setPreview] = useState<{ url: string; mime: string; name: string } | null>(null);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.attachments.delete(orgId, projectId, taskId, id),
@@ -769,29 +933,140 @@ function AttachmentsSection({
     }
   };
 
+  const handleDownload = async (att: Attachment) => {
+    try {
+      setLoadingId(att.id);
+      const res = await api.attachments.download(orgId, projectId, taskId, att.id);
+      window.open(res.download_url, "_blank");
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const handlePreview = async (att: Attachment) => {
+    try {
+      setLoadingId(att.id);
+      const res = await api.attachments.download(orgId, projectId, taskId, att.id);
+      setPreview({ url: res.download_url, mime: att.mime_type, name: att.filename });
+    } catch {
+      // silently fail
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  const isImage = (mime: string) => mime.startsWith("image/");
+  const isPDF = (mime: string) => mime === "application/pdf";
+  const isPreviewable = (mime: string) => isImage(mime) || isPDF(mime);
+
+  const fileIcon = (mime: string) => {
+    if (isImage(mime)) return <ImageIcon className="w-4 h-4 text-primary" />;
+    if (isPDF(mime)) return <FileText className="w-4 h-4 text-error" />;
+    return <Paperclip className="w-4 h-4" />;
+  };
+
   return (
-    <Card title={`Attachments (${items.length})`}>
-      <ul className="space-y-2 mb-3">
-        {items.map((att) => (
-          <li key={att.id} className="flex items-center gap-2 text-sm group">
-            <Paperclip className="w-4 h-4" />
-            <span className="flex-1">{att.filename}</span>
-            <span className="text-base-content/50">{(att.file_size / 1024).toFixed(1)} KB</span>
-            <button
-              className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
-              onClick={() => deleteMutation.mutate(att.id)}
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
-          </li>
-        ))}
-      </ul>
-      <label className="btn btn-outline btn-sm gap-1">
-        <Upload className="w-4 h-4" />
-        {uploading ? "Uploading..." : "Upload File"}
-        <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
-      </label>
-    </Card>
+    <>
+      <Card title={`Attachments (${items.length})`}>
+        {items.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            {items.map((att) => (
+              <div
+                key={att.id}
+                className="flex items-center gap-3 p-2 rounded-lg border border-base-200 hover:bg-base-200/50 transition-colors group"
+              >
+                {/* Icon / thumbnail placeholder */}
+                <div className="shrink-0">{fileIcon(att.mime_type)}</div>
+
+                {/* File info */}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" title={att.filename}>
+                    {att.filename}
+                  </p>
+                  <p className="text-xs text-base-content/50">
+                    {(att.file_size / 1024).toFixed(1)} KB &middot; {att.mime_type.split("/")[1]?.toUpperCase() || att.mime_type}
+                  </p>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {isPreviewable(att.mime_type) && (
+                    <button
+                      className="btn btn-ghost btn-xs btn-square"
+                      title="Preview"
+                      disabled={loadingId === att.id}
+                      onClick={() => handlePreview(att)}
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-ghost btn-xs btn-square"
+                    title="Download"
+                    disabled={loadingId === att.id}
+                    onClick={() => handleDownload(att)}
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-xs btn-square text-error"
+                    title="Delete"
+                    onClick={() => deleteMutation.mutate(att.id)}
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <label className="btn btn-outline btn-sm gap-1">
+          <Upload className="w-4 h-4" />
+          {uploading ? "Uploading..." : "Upload File"}
+          <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+      </Card>
+
+      {/* Preview Modal / Lightbox */}
+      {preview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreview(null)}>
+          <div
+            className="relative bg-base-100 rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between px-4 py-2 border-b border-base-200">
+              <h3 className="font-semibold text-sm truncate">{preview.name}</h3>
+              <div className="flex gap-2">
+                <a
+                  href={preview.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="btn btn-ghost btn-xs gap-1"
+                >
+                  <Download className="w-3 h-3" /> Open
+                </a>
+                <button className="btn btn-ghost btn-xs btn-square" onClick={() => setPreview(null)}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {/* Content */}
+            <div className="flex items-center justify-center overflow-auto p-4" style={{ maxHeight: "calc(90vh - 56px)" }}>
+              {isImage(preview.mime) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={preview.url} alt={preview.name} className="max-w-full max-h-[75vh] object-contain rounded" />
+              )}
+              {isPDF(preview.mime) && (
+                <iframe src={preview.url} className="w-full h-[75vh] rounded" title={preview.name} />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -966,6 +1241,72 @@ function RulesSection({
         <button className="btn btn-ghost btn-xs gap-1" onClick={() => setAdding(true)}>
           <Plus className="w-3 h-3" /> Add Rule
         </button>
+      )}
+    </Card>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Watchers — watch/unwatch toggle + watcher list
+   ═══════════════════════════════════════════════════════ */
+function WatchersSection({
+  orgId,
+  projectId,
+  taskId,
+  watchers,
+  userId,
+  members,
+}: {
+  orgId: string;
+  projectId: string;
+  taskId: string;
+  watchers: TaskWatcher[];
+  userId: string;
+  members: OrgMember[];
+}) {
+  const qc = useQueryClient();
+  const isWatching = watchers.some((w) => w.user_id === userId);
+
+  const watchMutation = useMutation({
+    mutationFn: () => api.watchers.watch(orgId, projectId, taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchers", orgId, projectId, taskId] }),
+  });
+
+  const unwatchMutation = useMutation({
+    mutationFn: () => api.watchers.unwatch(orgId, projectId, taskId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchers", orgId, projectId, taskId] }),
+  });
+
+  const pending = watchMutation.isPending || unwatchMutation.isPending;
+
+  return (
+    <Card title="Watchers">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm text-base-content/60">{watchers.length} watching</span>
+        <button
+          className={cn("btn btn-sm gap-1", isWatching ? "btn-primary" : "btn-outline")}
+          disabled={pending}
+          onClick={() => (isWatching ? unwatchMutation.mutate() : watchMutation.mutate())}
+        >
+          {isWatching ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {isWatching ? "Unwatch" : "Watch"}
+        </button>
+      </div>
+      {watchers.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {watchers.map((w) => {
+            const m = members.find((x) => x.user_id === w.user_id);
+            return (
+              <div key={w.user_id} className="tooltip" data-tip={m?.display_name || m?.email || w.user_id.slice(0, 8)}>
+                <Avatar
+                  name={m?.display_name || m?.email || "?"}
+                  src={m?.avatar_url}
+                  size="sm"
+                />
+              </div>
+            );
+          })}
+        </div>
       )}
     </Card>
   );
