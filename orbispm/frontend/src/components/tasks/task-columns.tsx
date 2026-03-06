@@ -54,6 +54,13 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
+  const [prevFocusTaskId, setPrevFocusTaskId] = useState(focusTaskId);
+
+  // Reset deep-link state when focusTaskId changes
+  if (focusTaskId !== prevFocusTaskId) {
+    setPrevFocusTaskId(focusTaskId);
+    setDeepLinkProcessed(false);
+  }
 
   // Query for deep-linked task to get its path
   const focusTaskQuery = useQuery({
@@ -314,7 +321,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
 
   return (
     <div className="flex flex-col lg:flex-row h-[calc(100vh-180px)] min-h-[500px] border border-base-200 rounded-lg overflow-hidden bg-base-100">
-      {/* Columns area — scrollable, takes 75% of available width */}
+      {/* Columns area — scrollable, fills space beside preview panel */}
       <div className="flex flex-row flex-1 min-w-0 overflow-x-auto">
         {columnMeta.map(
           (col) =>
@@ -341,8 +348,6 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
               />
             ),
         )}
-        {/* Filler: absorbs remaining space so columns flush against preview panel */}
-        <div className="flex-1 min-w-0 bg-base-100" />
       </div>
 
       {/* Detail panel — fixed 25% width, no gap */}
@@ -459,8 +464,8 @@ function TaskColumn({
 
   return (
     <div 
-      className="flex flex-col border-r border-base-200 shrink-0 relative"
-      style={{ width: `${width}px`, minWidth: `${width}px` }}
+      className="flex flex-col border-r border-base-200 shrink-0 relative flex-1"
+      style={{ minWidth: `${width}px`, flex: width }}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-base-200 flex items-center justify-between bg-base-200/30">

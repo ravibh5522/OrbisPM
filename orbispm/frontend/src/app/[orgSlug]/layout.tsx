@@ -210,10 +210,11 @@ function Sidebar() {
 }
 
 function TopBar() {
-  const { sidebarCollapsed } = useUIStore();
+  const { sidebarCollapsed, breadcrumb } = useUIStore();
   const { setMobileMenuOpen } = useUIStore();
   const logout = useAuthStore((s) => s.logout);
   const { theme, setTheme } = useUIStore();
+  const router = useRouter();
 
   return (
     <header
@@ -226,6 +227,19 @@ function TopBar() {
       <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={() => setMobileMenuOpen(true)}>
         <Menu className="w-5 h-5" />
       </button>
+
+      {/* Breadcrumb / project name */}
+      {breadcrumb && (
+        <div className="flex items-center gap-2 min-w-0">
+          {breadcrumb.backHref && (
+            <button className="btn btn-ghost btn-xs btn-square flex-shrink-0" onClick={() => router.push(breadcrumb.backHref!)}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+          <span className="text-sm font-semibold truncate">{breadcrumb.label}</span>
+        </div>
+      )}
+
       <div className="flex-1" />
 
       {/* Notifications */}

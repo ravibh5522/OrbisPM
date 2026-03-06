@@ -35,7 +35,8 @@ type UpdateTaskParams struct {
 	Description    *string    `json:"description,omitempty"`
 	Status         *string    `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
 	Priority       *string    `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
-	AssigneeID     *uuid.UUID `json:"assignee_id,omitempty"`
+	AssigneeID     *string    `json:"assignee_id"`
+	ReporterID     *string    `json:"reporter_id"`
 	DueDate        *time.Time `json:"due_date,omitempty"`
 	StartDate      *time.Time `json:"start_date,omitempty"`
 	EstimatedHours *float64   `json:"estimated_hours,omitempty"`
@@ -266,7 +267,11 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 				task.Priority = *params.Changes.Priority
 			}
 			if params.Changes.AssigneeID != nil {
-				task.AssigneeID = params.Changes.AssigneeID
+				if *params.Changes.AssigneeID == "" {
+					task.AssigneeID = nil
+				} else if uid, parseErr := uuid.Parse(*params.Changes.AssigneeID); parseErr == nil {
+					task.AssigneeID = &uid
+				}
 			}
 			if params.Changes.Labels != nil {
 				task.Labels = params.Changes.Labels
@@ -317,7 +322,24 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 		changes["priority"] = *params.Priority
 	}
 	if params.AssigneeID != nil {
-		changes["assignee_id"] = (*params.AssigneeID).String()
+		if *params.AssigneeID == "" {
+			changes["assignee_id"] = nil
+		} else {
+			uid, parseErr := uuid.Parse(*params.AssigneeID)
+			if parseErr == nil {
+				changes["assignee_id"] = uid.String()
+			}
+		}
+	}
+	if params.ReporterID != nil {
+		if *params.ReporterID == "" {
+			changes["reporter_id"] = nil
+		} else {
+			uid, parseErr := uuid.Parse(*params.ReporterID)
+			if parseErr == nil {
+				changes["reporter_id"] = uid.String()
+			}
+		}
 	}
 	if params.DueDate != nil {
 		changes["due_date"] = (*params.DueDate).Format(time.RFC3339)
@@ -463,9 +485,19 @@ func applyParamsToTask(task *domain.Task, changes map[string]any) {
 				task.Priority = s
 			}
 		case "assignee_id":
-			if s, ok := val.(string); ok {
+			if val == nil {
+				task.AssigneeID = nil
+			} else if s, ok := val.(string); ok {
 				if uid, err := uuid.Parse(s); err == nil {
 					task.AssigneeID = &uid
+				}
+			}
+		case "reporter_id":
+			if val == nil {
+				task.ReporterID = nil
+			} else if s, ok := val.(string); ok {
+				if uid, err := uuid.Parse(s); err == nil {
+					task.ReporterID = &uid
 				}
 			}
 		case "due_date":

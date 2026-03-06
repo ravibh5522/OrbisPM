@@ -1,3 +1,5 @@
+//go:build gotrue
+
 package auth
 
 import (

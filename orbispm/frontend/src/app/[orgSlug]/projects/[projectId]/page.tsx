@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, use } from "react";
+import { useState, use, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import { api } from "@/lib/api";
 import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
@@ -39,12 +40,21 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
   const { projectId } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const focusTaskId = searchParams.get("task") || undefined;
+  const initialFocusTaskId = searchParams.get("task") || undefined;
+  const [openedTaskId, setOpenedTaskId] = useState<string | undefined>(undefined);
+  const focusTaskId = openedTaskId || initialFocusTaskId;
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const [activeTab, setActiveTab] = useState<"tasks" | "members" | "teams" | "reviews" | "dashboard" | "settings">("tasks");
   const [taskView, setTaskView] = useState<"columns" | "list" | "tree">("columns");
   const [importOpen, setImportOpen] = useState(false);
   const { can } = usePermissions();
+  const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
+
+  // Callback for tree/list view "Open" action — switch to columns and expand the task
+  const handleOpenTask = useCallback((taskId: string) => {
+    setOpenedTaskId(taskId);
+    setTaskView("columns");
+  }, []);
 
   const { data: project, isLoading: projLoading } = useQuery({
     queryKey: ["project", currentOrg?.id, projectId],
@@ -64,24 +74,22 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     enabled: !!currentOrg,
   });
 
+  // Set breadcrumb in top bar
+  useEffect(() => {
+    if (project && currentOrg) {
+      setBreadcrumb({ label: project.name, backHref: `/${currentOrg.slug}/projects` });
+    }
+    return () => setBreadcrumb(null);
+  }, [project, currentOrg, setBreadcrumb]);
+
   if (projLoading || tasksLoading) return <LoadingPage />;
   if (!project) return <div className="text-center py-12">Project not found</div>;
 
   return (
     <div className="h-full flex flex-col">
-      {/* Compact header row */}
-      <div className="flex items-center justify-between gap-4 py-2 border-b border-base-200 mb-2">
-        <div className="flex items-center gap-3 min-w-0">
-          <button className="btn btn-ghost btn-xs gap-1 flex-shrink-0" onClick={() => router.push(`/${currentOrg!.slug}/projects`)}>
-            <ArrowLeft className="w-3.5 h-3.5" /> Back to Projects
-          </button>
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold truncate">{project.name}</h1>
-            {project.description && <p className="text-xs text-base-content/60 truncate">{project.description}</p>}
-          </div>
-        </div>
-        
-        {/* Tabs inline */}
+      {/* Single consolidated toolbar row */}
+      <div className="flex items-center justify-between gap-2 py-1.5 border-b border-base-200 mb-2 flex-wrap">
+        {/* Tabs */}
         <div role="tablist" className="tabs tabs-boxed bg-base-200/50 flex-shrink-0">
           <button role="tab" className={`tab tab-sm ${activeTab === "dashboard" ? "tab-active" : ""}`} onClick={() => setActiveTab("dashboard")}>
             <ListTodo className="w-3.5 h-3.5 mr-1" /> Dashboard
@@ -108,20 +116,10 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
             </button>
           )}
         </div>
-      </div>
 
-      {/* Dashboard tab */}
-      {activeTab === "dashboard" && (
-        <div className="flex-1 overflow-auto">
-          <ProjectDashboard orgId={currentOrg!.id} projectId={projectId} />
-        </div>
-      )}
-
-      {/* Tasks tab — columns or list view */}
-      {activeTab === "tasks" && (
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* View toggle + Import/Export - compact */}
-          <div className="flex items-center justify-end py-1.5 gap-2">
+        {/* Actions: Import/Export + View toggle (only visible when Tasks tab is active) */}
+        {activeTab === "tasks" && (
+          <div className="flex items-center gap-2 flex-shrink-0">
             <Button variant="outline" size="xs" onClick={() => setImportOpen(true)}>
               <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
             </Button>
@@ -158,7 +156,19 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               </button>
             </div>
           </div>
+        )}
+      </div>
 
+      {/* Dashboard tab */}
+      {activeTab === "dashboard" && (
+        <div className="flex-1 overflow-auto">
+          <ProjectDashboard orgId={currentOrg!.id} projectId={projectId} />
+        </div>
+      )}
+
+      {/* Tasks tab — columns or list view */}
+      {activeTab === "tasks" && (
+        <div className="flex-1 flex flex-col min-h-0">
           <CSVImportDialog
             orgId={currentOrg!.id}
             projectId={projectId}
@@ -181,6 +191,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               orgSlug={currentOrg!.slug}
               projectId={projectId}
               members={members?.data || []}
+              onOpenTask={handleOpenTask}
             />
           )}
           {taskView === "list" && (

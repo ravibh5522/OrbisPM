@@ -505,7 +505,7 @@ function DetailsTab({
           <select
             className="select select-bordered select-xs w-full"
             value={task.assignee_id || ""}
-            onChange={(e) => onUpdate({ assignee_id: e.target.value || null })}
+            onChange={(e) => onUpdate({ assignee_id: e.target.value })}
             disabled={!access.canEdit}
           >
             <option value="">Unassigned</option>
@@ -521,7 +521,7 @@ function DetailsTab({
           <select
             className="select select-bordered select-xs w-full"
             value={task.reporter_id || ""}
-            onChange={(e) => onUpdate({ reporter_id: e.target.value || null })}
+            onChange={(e) => onUpdate({ reporter_id: e.target.value })}
             disabled={!access.canEdit}
           >
             <option value="">None</option>

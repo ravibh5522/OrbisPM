@@ -2,7 +2,6 @@
 
 import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
 import { api } from "@/lib/api";
 import { Badge, Avatar, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
@@ -33,9 +32,10 @@ interface TaskTreeViewProps {
   orgSlug: string;
   projectId: string;
   members: ProjectMember[];
+  onOpenTask?: (taskId: string) => void;
 }
 
-export function TaskTreeView({ orgId, orgSlug, projectId, members }: TaskTreeViewProps) {
+export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }: TaskTreeViewProps) {
   const qc = useQueryClient();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
@@ -151,6 +151,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members }: TaskTreeVie
               onUpdate={(taskId, data) => updateMutation.mutate({ taskId, data })}
               onDelete={(task) => setDeleteTask(task)}
               onDuplicate={(taskId) => duplicateMutation.mutate(taskId)}
+              onOpenTask={onOpenTask}
             />
           ))}
         </div>
@@ -182,6 +183,7 @@ interface TreeNodeProps {
   onUpdate: (taskId: string, data: Partial<Task>) => void;
   onDelete: (task: Task) => void;
   onDuplicate: (taskId: string) => void;
+  onOpenTask?: (taskId: string) => void;
 }
 
 function TreeNode({
@@ -196,6 +198,7 @@ function TreeNode({
   onUpdate,
   onDelete,
   onDuplicate,
+  onOpenTask,
 }: TreeNodeProps) {
   const { task, children } = node;
   const hasChildren = children && children.length > 0;
@@ -233,13 +236,19 @@ function TreeNode({
           onChange={(status) => onUpdate(task.id, { status })}
         />
 
-        {/* Title */}
-        <Link
-          href={`/${orgSlug}/projects/${projectId}?task=${task.id}`}
-          className="flex-1 min-w-0 truncate font-medium hover:text-primary hover:underline"
+        {/* Title — click to expand/collapse if has children */}
+        <button
+          onClick={() => {
+            if (hasChildren) {
+              toggleExpand(task.id);
+            } else if (onOpenTask) {
+              onOpenTask(task.id);
+            }
+          }}
+          className="flex-1 min-w-0 truncate font-medium hover:text-primary hover:underline text-left"
         >
           {task.title}
-        </Link>
+        </button>
 
         {/* Labels */}
         {task.labels && task.labels.length > 0 && (
@@ -296,9 +305,9 @@ function TreeNode({
           </div>
           <ul tabIndex={0} className="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-44">
             <li>
-              <Link href={`/${orgSlug}/projects/${projectId}?task=${task.id}`}>
+              <a onClick={() => onOpenTask ? onOpenTask(task.id) : undefined}>
                 <ExternalLink className="w-4 h-4" /> Open
-              </Link>
+              </a>
             </li>
             <li>
               <a onClick={() => onDuplicate(task.id)}>
@@ -335,6 +344,7 @@ function TreeNode({
               onUpdate={onUpdate}
               onDelete={onDelete}
               onDuplicate={onDuplicate}
+              onOpenTask={onOpenTask}
             />
           ))}
         </div>

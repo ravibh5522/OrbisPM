@@ -7,12 +7,14 @@ interface UIState {
   theme: Theme;
   commandPaletteOpen: boolean;
   mobileMenuOpen: boolean;
+  breadcrumb: { label: string; backHref?: string } | null;
 
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
   setTheme: (t: Theme) => void;
   setCommandPaletteOpen: (v: boolean) => void;
   setMobileMenuOpen: (v: boolean) => void;
+  setBreadcrumb: (b: { label: string; backHref?: string } | null) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -20,6 +22,7 @@ export const useUIStore = create<UIState>((set) => ({
   theme: (typeof window !== "undefined" ? localStorage.getItem("theme") as Theme : null) || "orbis",
   commandPaletteOpen: false,
   mobileMenuOpen: false,
+  breadcrumb: null,
 
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
@@ -32,6 +35,7 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setCommandPaletteOpen: (v) => set({ commandPaletteOpen: v }),
   setMobileMenuOpen: (v) => set({ mobileMenuOpen: v }),
+  setBreadcrumb: (b) => set({ breadcrumb: b }),
 }));
 
 export const THEMES: { label: string; value: Theme }[] = [

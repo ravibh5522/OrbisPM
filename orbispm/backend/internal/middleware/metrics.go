@@ -37,11 +37,18 @@ func (rw *metricsResponseWriter) Unwrap() http.ResponseWriter {
 return rw.ResponseWriter
 }
 
+// Flush delegates to the underlying ResponseWriter if it implements http.Flusher.
+func (rw *metricsResponseWriter) Flush() {
+	if f, ok := rw.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
 // Metrics is a chi middleware that records Prometheus HTTP metrics.
 func Metrics(next http.Handler) http.Handler {
-return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-metrics.HTTPRequestsInFlight.Inc()
-defer metrics.HTTPRequestsInFlight.Dec()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		metrics.HTTPRequestsInFlight.Inc()
+		defer metrics.HTTPRequestsInFlight.Dec()
 
 start := time.Now()
 rw := newMetricsResponseWriter(w)

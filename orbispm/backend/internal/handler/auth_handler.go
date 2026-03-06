@@ -39,6 +39,7 @@ func zitadelIDToUUID(id string) uuid.UUID {
 
 // upsertUserProfile caches user info in public.users so joined queries work.
 // It also stores the extended profile fields (avatar_url, bio, etc.) from UserMetadata.
+// Fields that are empty in UserMetadata are preserved from the existing DB row.
 func (h *AuthHandler) upsertUserProfile(ctx context.Context, u *auth.UserInfo) {
 	if h.pool == nil || u == nil {
 		return
@@ -57,10 +58,14 @@ func (h *AuthHandler) upsertUserProfile(ctx context.Context, u *auth.UserInfo) {
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		  email=EXCLUDED.email, display_name=EXCLUDED.display_name,
-		  phone=EXCLUDED.phone, avatar_url=EXCLUDED.avatar_url,
-		  bio=EXCLUDED.bio, job_title=EXCLUDED.job_title,
-		  department=EXCLUDED.department, timezone=EXCLUDED.timezone,
-		  language=EXCLUDED.language, updated_at=NOW()`,
+		  phone=EXCLUDED.phone,
+		  avatar_url=CASE WHEN EXCLUDED.avatar_url != '' THEN EXCLUDED.avatar_url ELSE users.avatar_url END,
+		  bio=CASE WHEN EXCLUDED.bio != '' THEN EXCLUDED.bio ELSE users.bio END,
+		  job_title=CASE WHEN EXCLUDED.job_title != '' THEN EXCLUDED.job_title ELSE users.job_title END,
+		  department=CASE WHEN EXCLUDED.department != '' THEN EXCLUDED.department ELSE users.department END,
+		  timezone=CASE WHEN EXCLUDED.timezone != '' THEN EXCLUDED.timezone ELSE users.timezone END,
+		  language=CASE WHEN EXCLUDED.language != '' THEN EXCLUDED.language ELSE users.language END,
+		  updated_at=NOW()`,
 		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language,
 	)
 }

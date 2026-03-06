@@ -12,6 +12,27 @@ services:
         strip_path: true
         preserve_host: false
 
+  # SSE endpoint — long-lived streaming, must come BEFORE generic /api route
+  - name: backend-sse
+    url: http://api:8080
+    read_timeout: 86400000
+    write_timeout: 86400000
+    connect_timeout: 10000
+    routes:
+      - name: backend-sse-route
+        paths:
+          - ~/api/v1/orgs/[^/]+/events/stream
+        strip_path: false
+        preserve_host: false
+        regex_priority: 200
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 15
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
   # Go Backend API
   - name: backend-api
     url: http://api:8080
@@ -21,10 +42,20 @@ services:
           - /api
         strip_path: false
         preserve_host: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 200
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
 
   # WebSocket endpoint
   - name: backend-ws
     url: http://api:8080
+    read_timeout: 86400000
+    write_timeout: 86400000
+    connect_timeout: 10000
     routes:
       - name: backend-ws-route
         paths:
@@ -34,6 +65,13 @@ services:
         protocols:
           - http
           - https
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
 
   # Storage (MinIO) proxy for direct file access
   - name: storage
@@ -44,6 +82,13 @@ services:
           - /storage
         strip_path: true
         preserve_host: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 120
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
 
   # NocoDB UI
   - name: nocodb
@@ -54,6 +99,13 @@ services:
           - /db
         strip_path: true
         preserve_host: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 100
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
 
 plugins:
   - name: cors
@@ -78,6 +130,9 @@ plugins:
       exposed_headers:
         - X-Total-Count
         - X-Request-Id
+        - RateLimit-Limit
+        - RateLimit-Remaining
+        - RateLimit-Reset
       credentials: true
       max_age: 3600
       preflight_continue: false
