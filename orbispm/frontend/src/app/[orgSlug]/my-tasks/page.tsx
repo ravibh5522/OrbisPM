@@ -13,6 +13,10 @@ import {
   CheckCircle,
   Circle,
   Loader2,
+  TrendingUp,
+  Calendar,
+  FolderKanban,
+  Users,
 } from "lucide-react";
 import type { Task, TaskStatus } from "@/types/domain";
 
@@ -22,12 +26,19 @@ export default function MyTasksPage() {
   const orgSlug = currentOrg?.slug || "";
   const orgId = currentOrg?.id || "";
 
-  const { data: myTasks, isLoading } = useQuery({
+  const { data: myTasks, isLoading: tasksLoading } = useQuery({
     queryKey: ["my-tasks", orgId],
     queryFn: () => api.dashboard.myTasks(orgId, 100),
     enabled: !!orgId,
   });
 
+  const { data: personalStats, isLoading: statsLoading } = useQuery({
+    queryKey: ["personal-dashboard", orgId],
+    queryFn: () => api.dashboard.personal(orgId),
+    enabled: !!orgId,
+  });
+
+  const isLoading = tasksLoading || statsLoading;
   if (isLoading) return <LoadingPage />;
 
   const tasks = myTasks?.data || [];
@@ -61,8 +72,8 @@ export default function MyTasksPage() {
         description={`${total} task${total !== 1 ? "s" : ""} assigned to you`}
       />
 
-      {/* Quick stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      {/* Enhanced Analytics */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3 mb-6">
         <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
           <div className="stat-title text-xs">In Progress</div>
           <div className="stat-value text-lg text-info">{grouped.in_progress.length}</div>
@@ -78,6 +89,44 @@ export default function MyTasksPage() {
         <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
           <div className="stat-title text-xs">Overdue</div>
           <div className="stat-value text-lg text-error">{overdue.length}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
+          <div className="stat-title text-xs flex items-center gap-1">
+            <Calendar className="w-3 h-3" /> Due Soon
+          </div>
+          <div className="stat-value text-lg text-warning">{personalStats?.due_soon_tasks || 0}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
+          <div className="stat-title text-xs flex items-center gap-1">
+            <TrendingUp className="w-3 h-3" /> Completion Rate
+          </div>
+          <div className="stat-value text-lg text-success">{(personalStats?.completion_rate || 0).toFixed(0)}%</div>
+        </div>
+      </div>
+
+      {/* Additional Stats Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
+          <div className="stat-title text-xs flex items-center gap-1">
+            <CheckCircle className="w-3 h-3" /> Completed This Week
+          </div>
+          <div className="stat-value text-lg text-success">{personalStats?.completed_last_7_days || 0}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
+          <div className="stat-title text-xs">Total Completed</div>
+          <div className="stat-value text-lg">{personalStats?.total_completed || 0}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
+          <div className="stat-title text-xs flex items-center gap-1">
+            <FolderKanban className="w-3 h-3" /> Projects
+          </div>
+          <div className="stat-value text-lg">{personalStats?.projects_involved || 0}</div>
+        </div>
+        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
+          <div className="stat-title text-xs flex items-center gap-1">
+            <Users className="w-3 h-3" /> Teams
+          </div>
+          <div className="stat-value text-lg">{personalStats?.teams_involved || 0}</div>
         </div>
       </div>
 

@@ -265,9 +265,9 @@ func main() {
 
 	// --- Handlers (existing) ---
 	orgHandler := handler.NewOrgHandler(orgSvc)
-	teamHandler := handler.NewTeamHandler(teamSvc, dashboardSvc)
-	projectHandler := handler.NewProjectHandler(projectSvc, dashboardSvc)
-	taskHandler := handler.NewTaskHandler(taskSvc)
+	teamHandler := handler.NewTeamHandler(teamSvc, dashboardSvc, permResolver)
+	projectHandler := handler.NewProjectHandler(projectSvc, dashboardSvc, permResolver)
+	taskHandler := handler.NewTaskHandler(taskSvc, permResolver)
 	checklistHandler := handler.NewChecklistHandler(checklistSvc)
 	commentHandler := handler.NewCommentHandler(commentSvc)
 	ruleHandler := handler.NewRuleHandler(ruleSvc)
@@ -292,7 +292,7 @@ func main() {
 	apikeyHandler := handler.NewAPIKeyHandler(apikeySvc)
 	importHandler := handler.NewImportHandler(importSvc)
 	billingHandler := handler.NewBillingHandler(billingSvc, cfg.StripeSecretKey, cfg.StripeWebhookSecret, cfg.FrontendURL, cfg.StripeEnabled)
-	dashboardHandler := handler.NewDashboardHandler(dashboardSvc, taskSvc)
+	dashboardHandler := handler.NewDashboardHandler(dashboardSvc, taskSvc, permResolver)
 	customRoleHandler := handler.NewCustomRoleHandler(customRoleSvc)
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
 	eventsHandler := handler.NewEventsHandler(hub)

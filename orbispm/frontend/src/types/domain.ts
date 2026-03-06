@@ -369,6 +369,21 @@ export interface DashboardStats {
   recent_tasks: Task[];
 }
 
+export interface PersonalDashboardStats {
+  total_assigned: number;
+  total_completed: number;
+  overdue_tasks: number;
+  due_soon_tasks: number;
+  tasks_by_status: Record<TaskStatus, number>;
+  tasks_by_priority: Record<TaskPriority, number>;
+  completed_last_7_days: number;
+  completion_rate: number;
+  projects_involved: number;
+  teams_involved: number;
+  recent_tasks: Task[];
+  upcoming_tasks: Task[];
+}
+
 export interface MemberWorkload {
   user_id: string;
   display_name: string;

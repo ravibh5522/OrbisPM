@@ -103,6 +103,17 @@ func (s *TeamService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain
 	return s.teamRepo.ListByOrg(ctx, orgID)
 }
 
+// ListForUser returns teams based on user's access level.
+// If viewAll is true (user has teams.view_all), returns all org teams.
+// Otherwise, returns only teams where user is a member.
+// If role is not empty, additionally filters to teams with that specific membership role.
+func (s *TeamService) ListForUser(ctx context.Context, orgID, userID uuid.UUID, viewAll bool, role string) ([]*domain.Team, error) {
+	if viewAll && role == "" {
+		return s.teamRepo.ListByOrg(ctx, orgID)
+	}
+	return s.teamRepo.ListByMembership(ctx, orgID, userID, role)
+}
+
 // --- Members ---
 
 func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, role string) error {

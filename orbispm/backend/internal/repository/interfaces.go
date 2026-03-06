@@ -55,6 +55,7 @@ type TeamRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, team *domain.Team) (*domain.Team, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error)
+	ListByMembership(ctx context.Context, orgID, userID uuid.UUID, role string) ([]*domain.Team, error)
 }
 
 type TeamMemberRepository interface {
@@ -72,6 +73,7 @@ type ProjectRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, project *domain.Project) (*domain.Project, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID, teamID *uuid.UUID) ([]*domain.Project, error)
+	ListByMembership(ctx context.Context, orgID, userID uuid.UUID, role string) ([]*domain.Project, error)
 }
 
 type ProjectMemberRepository interface {

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Textarea, Select } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { FolderKanban, Plus, Trash2, LayoutGrid, Table2, Users, Calendar, Activity } from "lucide-react";
+import { FolderKanban, Plus, Trash2, LayoutGrid, Table2, Users, Calendar, Activity, Shield } from "lucide-react";
 import { formatDate, statusLabel, cn } from "@/lib/utils";
 import type { Project, Team } from "@/types/domain";
 import { PermissionGate } from "@/components/permission-gate";
@@ -31,10 +31,21 @@ export default function ProjectsPage() {
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
   const [teamFilter, setTeamFilter] = useState<string>("all");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
+
+  // Role options for filtering
+  const roleOptions = [
+    { value: "all", label: "All Roles" },
+    { value: "lead", label: "Lead" },
+    { value: "contributor", label: "Contributor" },
+    { value: "viewer", label: "Viewer" },
+  ];
 
   const { data: projects, isLoading } = useQuery({
-    queryKey: ["projects", currentOrg?.id],
-    queryFn: () => api.projects.list(currentOrg!.id),
+    queryKey: ["projects", currentOrg?.id, roleFilter !== "all" ? roleFilter : undefined],
+    queryFn: () => api.projects.list(currentOrg!.id, {
+      role: roleFilter !== "all" ? roleFilter : undefined,
+    }),
     enabled: !!currentOrg,
   });
 
@@ -121,30 +132,49 @@ export default function ProjectsPage() {
 
       {/* Filters and View Toggle */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium">Team:</span>
-          <button
-            className={cn(
-              "btn btn-sm gap-1",
-              teamFilter === "all" ? "btn-primary" : "btn-outline"
-            )}
-            onClick={() => setTeamFilter("all")}
-          >
-            All ({teamStats.all || 0})
-          </button>
-          {teamList.map((t: Team) => (
+        <div className="flex items-center gap-4 flex-wrap">
+          {/* Team Filter */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-sm font-medium">Team:</span>
             <button
-              key={t.id}
               className={cn(
                 "btn btn-sm gap-1",
-                teamFilter === t.id ? "btn-primary" : "btn-outline"
+                teamFilter === "all" ? "btn-primary" : "btn-outline"
               )}
-              onClick={() => setTeamFilter(t.id)}
+              onClick={() => setTeamFilter("all")}
             >
-              <Users className="w-3 h-3" />
-              {t.name} ({teamStats[t.id] || 0})
+              All ({teamStats.all || 0})
             </button>
-          ))}
+            {teamList.map((t: Team) => (
+              <button
+                key={t.id}
+                className={cn(
+                  "btn btn-sm gap-1",
+                  teamFilter === t.id ? "btn-primary" : "btn-outline"
+                )}
+                onClick={() => setTeamFilter(t.id)}
+              >
+                <Users className="w-3 h-3" />
+                {t.name} ({teamStats[t.id] || 0})
+              </button>
+            ))}
+          </div>
+
+          {/* Role Filter */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">My Role:</span>
+            <select
+              className="select select-sm select-bordered"
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+            >
+              {roleOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         <div className="join">
           <button

@@ -15,10 +15,11 @@ import (
 type TeamHandler struct {
 	teamSvc      *service.TeamService
 	dashboardSvc *service.DashboardService
+	permResolver *service.PermissionResolver
 }
 
-func NewTeamHandler(teamSvc *service.TeamService, dashboardSvc *service.DashboardService) *TeamHandler {
-	return &TeamHandler{teamSvc: teamSvc, dashboardSvc: dashboardSvc}
+func NewTeamHandler(teamSvc *service.TeamService, dashboardSvc *service.DashboardService, permResolver *service.PermissionResolver) *TeamHandler {
+	return &TeamHandler{teamSvc: teamSvc, dashboardSvc: dashboardSvc, permResolver: permResolver}
 }
 
 // Routes registers team routes. Mounted under /orgs/{orgId}/teams.
@@ -59,12 +60,22 @@ func (h *TeamHandler) Routes() chi.Router {
 // @Failure 400 {object} ErrorResponse
 // @Router /orgs/{orgId}/teams [post]
 func (h *TeamHandler) Create(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	// Check teams.create permission
+	canCreate, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", nil, "teams", "create")
+	if !canCreate {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to create teams"})
+		return
+	}
+
 	var params service.CreateTeamParams
 	if err := parseBody(r, &params); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
 		return
 	}
-	params.OrgID = middleware.OrgIDFromCtx(r.Context())
+	params.OrgID = orgID
 
 	team, err := h.teamSvc.Create(r.Context(), params)
 	if err != nil {
@@ -101,16 +112,28 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // List godoc
 // @Summary List teams
-// @Description List all teams in an organization
+// @Description List all teams in an organization (respects membership visibility)
 // @Tags Teams
 // @Produce json
 // @Security BearerAuth
 // @Param orgId path string true "Organization ID" format(uuid)
+// @Param role query string false "Filter by user's role in the team"
 // @Success 200 {array} swaggerTeam
 // @Router /orgs/{orgId}/teams [get]
 func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-	teams, err := h.teamSvc.ListByOrg(r.Context(), orgID)
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	// Optional role filter
+	var roleFilter string
+	if rf := queryStr(r, "role"); rf != nil {
+		roleFilter = *rf
+	}
+
+	// Check if user has teams.view_all permission (admin/owner)
+	viewAll, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", nil, "teams", "view_all")
+
+	teams, err := h.teamSvc.ListForUser(r.Context(), orgID, userID, viewAll, roleFilter)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -136,11 +159,22 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/teams/{teamId} [put]
 func (h *TeamHandler) Update(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
 	id, err := uuidParam(r, "teamId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
 		return
 	}
+
+	// Check teams.update permission
+	canUpdate, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", nil, "teams", "update")
+	if !canUpdate {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to update teams"})
+		return
+	}
+
 	var params service.UpdateTeamParams
 	if err := parseBody(r, &params); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
@@ -166,11 +200,22 @@ func (h *TeamHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/teams/{teamId} [delete]
 func (h *TeamHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
 	id, err := uuidParam(r, "teamId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
 		return
 	}
+
+	// Check teams.delete permission
+	canDelete, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", nil, "teams", "delete")
+	if !canDelete {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to delete teams"})
+		return
+	}
+
 	if err := h.teamSvc.Delete(r.Context(), id); err != nil {
 		Error(w, r, err)
 		return

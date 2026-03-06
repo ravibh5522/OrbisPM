@@ -1,4 +1,4 @@
-import type { AuthUser } from "@/types/domain";
+import type { AuthUser, PersonalDashboardStats } from "@/types/domain";
 
 // API response shapes
 export interface ListResponse<T> {
@@ -243,7 +243,12 @@ export const api = {
 
   // Teams
   teams: {
-    list: (orgId: string) => get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams`),
+    list: (orgId: string, filters?: { role?: string }) => {
+      const params = new URLSearchParams();
+      if (filters?.role) params.set("role", filters.role);
+      const qs = params.toString();
+      return get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams${qs ? `?${qs}` : ""}`);
+    },
     get: (orgId: string, id: string) => get<Team>(`${V1}/orgs/${orgId}/teams/${id}`),
     create: (orgId: string, data: { name: string; description?: string }) =>
       post<Team>(`${V1}/orgs/${orgId}/teams`, data),
@@ -268,8 +273,13 @@ export const api = {
 
   // Projects
   projects: {
-    list: (orgId: string, teamId?: string) =>
-      get<ListResponse<Project>>(`${V1}/orgs/${orgId}/projects${teamId ? `?team_id=${teamId}` : ""}`),
+    list: (orgId: string, filters?: { teamId?: string; role?: string }) => {
+      const params = new URLSearchParams();
+      if (filters?.teamId) params.set("team_id", filters.teamId);
+      if (filters?.role) params.set("role", filters.role);
+      const qs = params.toString();
+      return get<ListResponse<Project>>(`${V1}/orgs/${orgId}/projects${qs ? `?${qs}` : ""}`);
+    },
     get: (orgId: string, id: string) => get<Project>(`${V1}/orgs/${orgId}/projects/${id}`),
     create: (orgId: string, data: { name: string; team_id?: string; team_ids?: string[]; description?: string }) =>
       post<Project>(`${V1}/orgs/${orgId}/projects`, data),
@@ -492,6 +502,7 @@ export const api = {
   // Dashboard
   dashboard: {
     stats: (orgId: string) => get<DashboardStats>(`${V1}/orgs/${orgId}/dashboard/stats`),
+    personal: (orgId: string) => get<PersonalDashboardStats>(`${V1}/orgs/${orgId}/dashboard/personal`),
     myTasks: (orgId: string, limit = 50, offset = 0) =>
       get<ListResponse<Task>>(`${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`),
   },

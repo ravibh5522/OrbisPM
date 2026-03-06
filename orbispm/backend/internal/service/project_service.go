@@ -180,6 +180,17 @@ func (s *ProjectService) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID 
 	return s.projectRepo.ListByOrg(ctx, orgID, tid)
 }
 
+// ListForUser returns projects based on user's access level.
+// If viewAll is true (user has projects.view_all), returns all org projects.
+// Otherwise, returns only projects where user is a member (direct or via team).
+// If role is not empty, additionally filters to projects with that specific role.
+func (s *ProjectService) ListForUser(ctx context.Context, orgID, userID uuid.UUID, viewAll bool, role string) ([]*domain.Project, error) {
+	if viewAll && role == "" {
+		return s.projectRepo.ListByOrg(ctx, orgID, nil)
+	}
+	return s.projectRepo.ListByMembership(ctx, orgID, userID, role)
+}
+
 // --- Members ---
 
 func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.UUID, role string) error {

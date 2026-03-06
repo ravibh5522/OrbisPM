@@ -28,11 +28,22 @@ export default function TeamsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [error, setError] = useState("");
+  const [roleFilter, setRoleFilter] = useState<string>("all");
   const { can } = usePermissions();
 
+  // Role options for filtering
+  const roleOptions = [
+    { value: "all", label: "All Roles" },
+    { value: "lead", label: "Lead" },
+    { value: "member", label: "Member" },
+    { value: "viewer", label: "Viewer" },
+  ];
+
   const { data: teams, isLoading } = useQuery({
-    queryKey: ["teams", currentOrg?.id],
-    queryFn: () => api.teams.list(currentOrg!.id),
+    queryKey: ["teams", currentOrg?.id, roleFilter !== "all" ? roleFilter : undefined],
+    queryFn: () => api.teams.list(currentOrg!.id, {
+      role: roleFilter !== "all" ? roleFilter : undefined,
+    }),
     enabled: !!currentOrg,
   });
 
@@ -72,6 +83,22 @@ export default function TeamsPage() {
           )
         }
       />
+
+      {/* Role Filter */}
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-sm font-medium">My Role:</span>
+        <select
+          className="select select-sm select-bordered"
+          value={roleFilter}
+          onChange={(e) => setRoleFilter(e.target.value)}
+        >
+          {roleOptions.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </div>
 
       {(!teams?.data || teams.data.length === 0) ? (
         <EmptyState

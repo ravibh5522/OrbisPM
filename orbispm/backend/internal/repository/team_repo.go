@@ -76,6 +76,34 @@ func (r *teamRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Te
 	return teams, rows.Err()
 }
 
+// ListByMembership returns teams where the user is a member.
+// If role is not empty, filters to teams where user has that specific role.
+func (r *teamRepo) ListByMembership(ctx context.Context, orgID, userID uuid.UUID, role string) ([]*domain.Team, error) {
+	query := `
+		SELECT t.id, t.org_id, t.name, t.description, t.created_at, t.updated_at
+		FROM teams t
+		JOIN team_members tm ON tm.team_id = t.id
+		WHERE t.org_id = $1 AND tm.user_id = $2
+		AND ($3 = '' OR tm.role = $3)
+		ORDER BY t.name
+	`
+	rows, err := r.pool.Query(ctx, query, orgID, userID, role)
+	if err != nil {
+		return nil, fmt.Errorf("list teams by membership: %w", err)
+	}
+	defer rows.Close()
+
+	var teams []*domain.Team
+	for rows.Next() {
+		t, err := scanTeamRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		teams = append(teams, t)
+	}
+	return teams, rows.Err()
+}
+
 func scanTeam(row pgx.Row) (*domain.Team, error) {
 	var t domain.Team
 	var desc *string

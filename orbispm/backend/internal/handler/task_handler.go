@@ -10,18 +10,18 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
-	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
 // TaskHandler handles task HTTP endpoints.
 type TaskHandler struct {
-	taskSvc *service.TaskService
+	taskSvc      *service.TaskService
+	permResolver *service.PermissionResolver
 }
 
-func NewTaskHandler(taskSvc *service.TaskService) *TaskHandler {
-	return &TaskHandler{taskSvc: taskSvc}
+func NewTaskHandler(taskSvc *service.TaskService, permResolver *service.PermissionResolver) *TaskHandler {
+	return &TaskHandler{taskSvc: taskSvc, permResolver: permResolver}
 }
 
 // Routes registers task routes. Mounted under /orgs/{orgId}/projects/{projectId}/tasks.
@@ -61,18 +61,28 @@ func (h *TaskHandler) Routes() chi.Router {
 // @Failure 400 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId}/tasks [post]
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var params service.CreateTaskParams
-	if err := parseBody(r, &params); err != nil {
-		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
-		return
-	}
-	params.OrgID = middleware.OrgIDFromCtx(r.Context())
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
 
 	projectID, err := uuidParam(r, "projectId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
 		return
 	}
+
+	// Check tasks.create permission
+	canCreate, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", &projectID, "tasks", "create")
+	if !canCreate {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to create tasks"})
+		return
+	}
+
+	var params service.CreateTaskParams
+	if err := parseBody(r, &params); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	params.OrgID = orgID
 	params.ProjectID = projectID
 
 	task, err := h.taskSvc.Create(r.Context(), params)
@@ -268,11 +278,28 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId} [put]
 func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+
 	id, err := uuidParam(r, "taskId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid task id"})
 		return
 	}
+
+	// Check tasks.update permission
+	canUpdate, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", &projectID, "tasks", "update")
+	if !canUpdate {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to update tasks"})
+		return
+	}
+
 	var params service.UpdateTaskParams
 	if err := parseBody(r, &params); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
@@ -280,7 +307,6 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Inject actor ID for review pipeline
-	userID := tenant.UserID(r.Context())
 	params.ActorID = &userID
 
 	result, err := h.taskSvc.Update(r.Context(), id, params)
@@ -304,11 +330,28 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId}/tasks/{taskId} [delete]
 func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+
 	id, err := uuidParam(r, "taskId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid task id"})
 		return
 	}
+
+	// Check tasks.delete permission
+	canDelete, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", &projectID, "tasks", "delete")
+	if !canDelete {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to delete tasks"})
+		return
+	}
+
 	if err := h.taskSvc.Delete(r.Context(), id); err != nil {
 		Error(w, r, err)
 		return

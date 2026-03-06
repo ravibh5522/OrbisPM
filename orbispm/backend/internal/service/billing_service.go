@@ -880,3 +880,204 @@ func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID uu
 
 	return stats, nil
 }
+
+// ─── Personal Dashboard ──────────────────────────────────────────
+
+// PersonalDashboardStats holds aggregated analytics for a user's personal dashboard.
+type PersonalDashboardStats struct {
+	TotalAssigned   int            `json:"total_assigned"`
+	TotalCompleted  int            `json:"total_completed"`
+	OverdueTasks    int            `json:"overdue_tasks"`
+	DueSoonTasks    int            `json:"due_soon_tasks"`
+	TasksByStatus   map[string]int `json:"tasks_by_status"`
+	TasksByPriority map[string]int `json:"tasks_by_priority"`
+	CompletedLast7  int            `json:"completed_last_7_days"`
+	CompletionRate  float64        `json:"completion_rate"`
+	ProjectsInvolved int           `json:"projects_involved"`
+	TeamsInvolved    int           `json:"teams_involved"`
+	RecentTasks     []*domain.Task `json:"recent_tasks,omitempty"`
+	UpcomingTasks   []*domain.Task `json:"upcoming_tasks,omitempty"`
+}
+
+// GetPersonalDashboard returns aggregated analytics for a specific user within an org.
+func (s *DashboardService) GetPersonalDashboard(ctx context.Context, orgID, userID uuid.UUID) (*PersonalDashboardStats, error) {
+	pool := s.txm.Pool()
+	stats := &PersonalDashboardStats{
+		TasksByStatus:   make(map[string]int),
+		TasksByPriority: make(map[string]int),
+	}
+	now := time.Now()
+
+	// Total tasks assigned to user
+	err := pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2`,
+		orgID, userID).Scan(&stats.TotalAssigned)
+	if err != nil {
+		return nil, fmt.Errorf("count assigned tasks: %w", err)
+	}
+
+	// Total completed
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2 AND status = 'done'`,
+		orgID, userID).Scan(&stats.TotalCompleted)
+	if err != nil {
+		return nil, fmt.Errorf("count completed tasks: %w", err)
+	}
+
+	// Overdue tasks
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2 
+		 AND status != 'done' AND due_date IS NOT NULL AND due_date < $3`,
+		orgID, userID, now).Scan(&stats.OverdueTasks)
+	if err != nil {
+		return nil, fmt.Errorf("count overdue tasks: %w", err)
+	}
+
+	// Due soon (next 7 days)
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2
+		 AND status != 'done' AND due_date IS NOT NULL AND due_date BETWEEN $3 AND $4`,
+		orgID, userID, now, now.AddDate(0, 0, 7)).Scan(&stats.DueSoonTasks)
+	if err != nil {
+		return nil, fmt.Errorf("count due soon tasks: %w", err)
+	}
+
+	// Completed last 7 days
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2
+		 AND status = 'done' AND updated_at >= $3`,
+		orgID, userID, now.AddDate(0, 0, -7)).Scan(&stats.CompletedLast7)
+	if err != nil {
+		return nil, fmt.Errorf("count completed last 7: %w", err)
+	}
+
+	// Completion rate
+	if stats.TotalAssigned > 0 {
+		stats.CompletionRate = float64(stats.TotalCompleted) / float64(stats.TotalAssigned) * 100
+	}
+
+	// Projects involved
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(DISTINCT project_id) FROM tasks WHERE org_id = $1 AND assignee_id = $2`,
+		orgID, userID).Scan(&stats.ProjectsInvolved)
+	if err != nil {
+		return nil, fmt.Errorf("count projects: %w", err)
+	}
+
+	// Teams involved
+	err = pool.QueryRow(ctx,
+		`SELECT COUNT(DISTINCT team_id) FROM team_members WHERE user_id = $1`,
+		userID).Scan(&stats.TeamsInvolved)
+	if err != nil {
+		return nil, fmt.Errorf("count teams: %w", err)
+	}
+
+	// Tasks by status (user's tasks)
+	rows, err := pool.Query(ctx,
+		`SELECT status, COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2 GROUP BY status`,
+		orgID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("tasks by status: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return nil, fmt.Errorf("scan tasks by status: %w", err)
+		}
+		stats.TasksByStatus[status] = count
+	}
+
+	// Tasks by priority
+	rows2, err := pool.Query(ctx,
+		`SELECT priority, COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2 GROUP BY priority`,
+		orgID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("tasks by priority: %w", err)
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var priority string
+		var count int
+		if err := rows2.Scan(&priority, &count); err != nil {
+			return nil, fmt.Errorf("scan tasks by priority: %w", err)
+		}
+		stats.TasksByPriority[priority] = count
+	}
+
+	// Recent tasks (last 5 updated by user)
+	recentRows, err := pool.Query(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description,
+		        status, priority, assignee_id, reporter_id, depth, position,
+		        due_date, start_date, estimated_hours, actual_hours,
+		        labels, metadata, review_status, created_at, updated_at
+		 FROM tasks WHERE org_id = $1 AND assignee_id = $2
+		 ORDER BY updated_at DESC LIMIT 5`, orgID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("recent tasks: %w", err)
+	}
+	defer recentRows.Close()
+	for recentRows.Next() {
+		var tk domain.Task
+		var desc *string
+		if err := recentRows.Scan(
+			&tk.ID, &tk.OrgID, &tk.ProjectID, &tk.ParentTaskID, &tk.Title, &desc,
+			&tk.Status, &tk.Priority, &tk.AssigneeID, &tk.ReporterID,
+			&tk.Depth, &tk.Position, &tk.DueDate, &tk.StartDate,
+			&tk.EstimatedHours, &tk.ActualHours, &tk.Labels, &tk.Metadata,
+			&tk.ReviewStatus, &tk.CreatedAt, &tk.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan recent task: %w", err)
+		}
+		if desc != nil {
+			tk.Description = *desc
+		}
+		if tk.Labels == nil {
+			tk.Labels = []string{}
+		}
+		if tk.Metadata == nil {
+			tk.Metadata = map[string]any{}
+		}
+		stats.RecentTasks = append(stats.RecentTasks, &tk)
+	}
+
+	// Upcoming tasks (due in next 14 days)
+	upcomingRows, err := pool.Query(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description,
+		        status, priority, assignee_id, reporter_id, depth, position,
+		        due_date, start_date, estimated_hours, actual_hours,
+		        labels, metadata, review_status, created_at, updated_at
+		 FROM tasks WHERE org_id = $1 AND assignee_id = $2 AND status != 'done'
+		   AND due_date IS NOT NULL AND due_date BETWEEN $3 AND $4
+		 ORDER BY due_date ASC LIMIT 10`, orgID, userID, now, now.AddDate(0, 0, 14))
+	if err != nil {
+		return nil, fmt.Errorf("upcoming tasks: %w", err)
+	}
+	defer upcomingRows.Close()
+	for upcomingRows.Next() {
+		var tk domain.Task
+		var desc *string
+		if err := upcomingRows.Scan(
+			&tk.ID, &tk.OrgID, &tk.ProjectID, &tk.ParentTaskID, &tk.Title, &desc,
+			&tk.Status, &tk.Priority, &tk.AssigneeID, &tk.ReporterID,
+			&tk.Depth, &tk.Position, &tk.DueDate, &tk.StartDate,
+			&tk.EstimatedHours, &tk.ActualHours, &tk.Labels, &tk.Metadata,
+			&tk.ReviewStatus, &tk.CreatedAt, &tk.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan upcoming task: %w", err)
+		}
+		if desc != nil {
+			tk.Description = *desc
+		}
+		if tk.Labels == nil {
+			tk.Labels = []string{}
+		}
+		if tk.Metadata == nil {
+			tk.Metadata = map[string]any{}
+		}
+		stats.UpcomingTasks = append(stats.UpcomingTasks, &tk)
+	}
+
+	return stats, nil
+}

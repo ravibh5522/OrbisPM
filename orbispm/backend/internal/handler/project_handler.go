@@ -15,10 +15,11 @@ import (
 type ProjectHandler struct {
 	projectSvc   *service.ProjectService
 	dashboardSvc *service.DashboardService
+	permResolver *service.PermissionResolver
 }
 
-func NewProjectHandler(projectSvc *service.ProjectService, dashboardSvc *service.DashboardService) *ProjectHandler {
-	return &ProjectHandler{projectSvc: projectSvc, dashboardSvc: dashboardSvc}
+func NewProjectHandler(projectSvc *service.ProjectService, dashboardSvc *service.DashboardService, permResolver *service.PermissionResolver) *ProjectHandler {
+	return &ProjectHandler{projectSvc: projectSvc, dashboardSvc: dashboardSvc, permResolver: permResolver}
 }
 
 // Routes registers project routes. Mounted under /orgs/{orgId}/projects.
@@ -59,12 +60,22 @@ func (h *ProjectHandler) Routes() chi.Router {
 // @Failure 400 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects [post]
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	// Check projects.create permission
+	canCreate, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", nil, "projects", "create")
+	if !canCreate {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to create projects"})
+		return
+	}
+
 	var params service.CreateProjectParams
 	if err := parseBody(r, &params); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
 		return
 	}
-	params.OrgID = middleware.OrgIDFromCtx(r.Context())
+	params.OrgID = orgID
 
 	project, err := h.projectSvc.Create(r.Context(), params)
 	if err != nil {
@@ -101,23 +112,28 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // List godoc
 // @Summary List projects
-// @Description List all projects in an organization
+// @Description List all projects in an organization (respects membership visibility)
 // @Tags Projects
 // @Produce json
 // @Security BearerAuth
 // @Param orgId path string true "Organization ID" format(uuid)
+// @Param role query string false "Filter by user's role in the project"
 // @Success 200 {array} swaggerProject
 // @Router /orgs/{orgId}/projects [get]
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
 
-	// Optional team_id filter
-	var teamFilter *uuid.UUID
-	if tid := queryUUID(r, "team_id"); tid != nil {
-		teamFilter = tid
+	// Optional role filter
+	var roleFilter string
+	if rf := queryStr(r, "role"); rf != nil {
+		roleFilter = *rf
 	}
 
-	projects, err := h.projectSvc.ListByOrg(r.Context(), orgID, teamFilter)
+	// Check if user has projects.view_all permission (admin/owner)
+	viewAll, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", nil, "projects", "view_all")
+
+	projects, err := h.projectSvc.ListForUser(r.Context(), orgID, userID, viewAll, roleFilter)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -143,11 +159,22 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId} [put]
 func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
 	id, err := uuidParam(r, "projectId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
 		return
 	}
+
+	// Check projects.update permission
+	canUpdate, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", &id, "projects", "update")
+	if !canUpdate {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to update projects"})
+		return
+	}
+
 	var params service.UpdateProjectParams
 	if err := parseBody(r, &params); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
@@ -173,11 +200,22 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId} [delete]
 func (h *ProjectHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
 	id, err := uuidParam(r, "projectId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
 		return
 	}
+
+	// Check projects.delete permission
+	canDelete, _ := h.permResolver.HasPermission(r.Context(), userID, orgID, "org", &id, "projects", "delete")
+	if !canDelete {
+		JSON(w, http.StatusForbidden, ErrorResponse{Message: "insufficient permissions to delete projects"})
+		return
+	}
+
 	if err := h.projectSvc.Delete(r.Context(), id); err != nil {
 		Error(w, r, err)
 		return

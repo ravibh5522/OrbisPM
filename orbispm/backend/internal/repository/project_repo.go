@@ -90,6 +90,47 @@ func (r *projectRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID *uu
 	return projects, rows.Err()
 }
 
+// ListByMembership returns projects where the user is a direct member or a member of a linked team.
+// If role is not empty, filters to projects where user has that specific role.
+func (r *projectRepo) ListByMembership(ctx context.Context, orgID, userID uuid.UUID, role string) ([]*domain.Project, error) {
+	query := `
+		SELECT DISTINCT p.id, p.org_id, p.team_id, p.name, p.description, p.status, p.settings, p.created_at, p.updated_at
+		FROM projects p
+		WHERE p.org_id = $1 AND (
+			-- Direct project membership
+			EXISTS (
+				SELECT 1 FROM project_members pm 
+				WHERE pm.project_id = p.id AND pm.user_id = $2
+				AND ($3 = '' OR pm.role = $3)
+			)
+			OR
+			-- Indirect via team membership
+			EXISTS (
+				SELECT 1 FROM project_teams pt
+				JOIN team_members tm ON tm.team_id = pt.team_id
+				WHERE pt.project_id = p.id AND tm.user_id = $2
+				AND ($3 = '' OR tm.role = $3)
+			)
+		)
+		ORDER BY p.name
+	`
+	rows, err := r.pool.Query(ctx, query, orgID, userID, role)
+	if err != nil {
+		return nil, fmt.Errorf("list projects by membership: %w", err)
+	}
+	defer rows.Close()
+
+	var projects []*domain.Project
+	for rows.Next() {
+		p, err := scanProjectRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
 func scanProject(row pgx.Row) (*domain.Project, error) {
 	var p domain.Project
 	var desc *string
