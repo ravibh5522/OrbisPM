@@ -885,18 +885,18 @@ func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID uu
 
 // PersonalDashboardStats holds aggregated analytics for a user's personal dashboard.
 type PersonalDashboardStats struct {
-	TotalAssigned   int            `json:"total_assigned"`
-	TotalCompleted  int            `json:"total_completed"`
-	OverdueTasks    int            `json:"overdue_tasks"`
-	DueSoonTasks    int            `json:"due_soon_tasks"`
-	TasksByStatus   map[string]int `json:"tasks_by_status"`
-	TasksByPriority map[string]int `json:"tasks_by_priority"`
-	CompletedLast7  int            `json:"completed_last_7_days"`
-	CompletionRate  float64        `json:"completion_rate"`
-	ProjectsInvolved int           `json:"projects_involved"`
-	TeamsInvolved    int           `json:"teams_involved"`
-	RecentTasks     []*domain.Task `json:"recent_tasks,omitempty"`
-	UpcomingTasks   []*domain.Task `json:"upcoming_tasks,omitempty"`
+	TotalAssigned    int            `json:"total_assigned"`
+	TotalCompleted   int            `json:"total_completed"`
+	OverdueTasks     int            `json:"overdue_tasks"`
+	DueSoonTasks     int            `json:"due_soon_tasks"`
+	TasksByStatus    map[string]int `json:"tasks_by_status"`
+	TasksByPriority  map[string]int `json:"tasks_by_priority"`
+	CompletedLast7   int            `json:"completed_last_7_days"`
+	CompletionRate   float64        `json:"completion_rate"`
+	ProjectsInvolved int            `json:"projects_involved"`
+	TeamsInvolved    int            `json:"teams_involved"`
+	RecentTasks      []*domain.Task `json:"recent_tasks,omitempty"`
+	UpcomingTasks    []*domain.Task `json:"upcoming_tasks,omitempty"`
 }
 
 // GetPersonalDashboard returns aggregated analytics for a specific user within an org.
