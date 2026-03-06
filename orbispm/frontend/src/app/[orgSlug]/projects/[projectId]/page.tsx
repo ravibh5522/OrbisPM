@@ -206,7 +206,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
 
       {/* Reviews tab */}
       {activeTab === "reviews" && (
-        <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
+        <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={(members?.data || []) as unknown as import("@/types/domain").OrgMember[]} />
       )}
 
       {/* Settings tab */}
@@ -485,7 +485,7 @@ function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: s
                   <tr key={pt.team_id}>
                     <td className="font-medium">{pt.team_name || pt.team_id.slice(0, 12)}</td>
                     <td className="text-sm text-base-content/60">
-                      {pt.linked_at ? new Date(pt.linked_at).toLocaleDateString() : "—"}
+                      {pt.added_at ? new Date(pt.added_at).toLocaleDateString() : "—"}
                     </td>
                     <td>
                       <button

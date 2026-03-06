@@ -52,9 +52,9 @@ func (r *teamMemberRepo) UpdateRole(ctx context.Context, tx pgx.Tx, teamID, user
 
 func (r *teamMemberRepo) ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.team_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at
+		`SELECT m.team_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), m.role, m.joined_at
 		 FROM team_members m
-		 LEFT JOIN auth.users u ON u.id = m.user_id
+		 LEFT JOIN users u ON u.id = m.user_id
 		 WHERE m.team_id = $1 ORDER BY m.joined_at`, teamID)
 	if err != nil {
 		return nil, err

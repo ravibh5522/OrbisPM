@@ -43,7 +43,7 @@ export function TaskChangeRequests({ orgId, projectId, taskId, members }: TaskCh
 
   if (isLoading) return <div className="loading loading-spinner loading-sm" />;
 
-  const rawCRs = changeRequests?.data ?? changeRequests;
+  const rawCRs = changeRequests;
   const items: TaskChangeRequest[] = Array.isArray(rawCRs) ? rawCRs : [];
   if (items.length === 0) return null;
 
@@ -96,14 +96,14 @@ export function ProjectChangeRequests({ orgId, projectId, members }: ProjectChan
 
   const { data, isLoading } = useQuery({
     queryKey: ["project-change-requests", orgId, projectId, statusFilter, page],
-    queryFn: () =>
-      api.changeRequests.listByProject(
-        orgId,
-        projectId,
-        statusFilter === "all" ? undefined : statusFilter,
-        page,
-        20
-      ),
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      params.set("page", String(page));
+      params.set("limit", "20");
+      const qs = params.toString();
+      return api.changeRequests.listByProject(orgId, projectId, qs || undefined);
+    },
     enabled: !!orgId,
   });
 
@@ -165,7 +165,7 @@ export function ProjectChangeRequests({ orgId, projectId, members }: ProjectChan
 function ChangeRequestRow({
   cr,
   orgId,
-  projectId,
+  projectId: _projectId,
   members,
   showTask,
 }: {
@@ -458,7 +458,7 @@ export function ChangeRequestToast({
   result,
   onDismiss,
 }: {
-  result: { pending_review?: boolean; change_request?: TaskChangeRequest } | null;
+  result: { pending_review?: boolean; change_request?: TaskChangeRequest | null } | null;
   onDismiss: () => void;
 }) {
   if (!result?.pending_review || !result.change_request) return null;

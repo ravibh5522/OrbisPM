@@ -2,13 +2,13 @@ _format_version: "3.0"
 _transform: true
 
 services:
-  # GoTrue Auth Service
-  - name: gotrue
-    url: http://gotrue:9999
+  # Zitadel Console UI
+  - name: zitadel
+    url: http://zitadel:8080
     routes:
-      - name: gotrue-auth
+      - name: zitadel-console
         paths:
-          - /auth/v1
+          - /zitadel
         strip_path: true
         preserve_host: false
 

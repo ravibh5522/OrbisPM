@@ -86,7 +86,7 @@ function MembersPageContent() {
   const createForm = useForm<CreateAccountForm>({ defaultValues: { role: "member" } });
   const createAccountMutation = useMutation({
     mutationFn: async (data: CreateAccountForm) => {
-      // 1. Create account via GoTrue sign-up
+      // 1. Create account via Zitadel sign-up
       await api.auth.signup(data.email, data.password, data.name);
       // 2. Add to org by email
       return api.members.add(currentOrg!.id, { email: data.email, role: data.role });

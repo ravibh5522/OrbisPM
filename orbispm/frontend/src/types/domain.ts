@@ -432,10 +432,11 @@ export interface DomainEvent {
   payload?: Record<string, unknown>;
 }
 
-// Auth types from GoTrue
+// Auth types from Zitadel
 export interface AuthUser {
   id: string;
   email: string;
+  email_confirmed_at?: string;
   phone?: string;
   user_metadata?: {
     name?: string;
@@ -449,6 +450,11 @@ export interface AuthUser {
   };
   app_metadata?: Record<string, unknown>;
   created_at: string;
+  updated_at?: string;
+  mfa_enabled: boolean;
+  totp_enabled?: boolean;
+  otp_email_enabled?: boolean;
+  otp_sms_enabled?: boolean;
 }
 
 export interface AuthTokens {
@@ -458,4 +464,42 @@ export interface AuthTokens {
   expires_in: number;
   expires_at: number;
   user: AuthUser;
+  // MFA challenge — set when the password check passed but a second factor is required.
+  // access_token will be empty; use session_id + session_token with verifyLoginMFA.
+  mfa_required?: boolean;
+  session_id?: string;
+  session_token?: string;
+  available_methods?: string[];
+}
+
+export interface BackupCodesResponse {
+  codes: string[];
+}
+
+// MFA types
+export interface TOTPRegistration {
+  uri: string;
+  secret: string;
+}
+
+export interface MFAStatus {
+  status: string;
+}
+
+// Social / IDP types
+export interface IDPInfo {
+  id: string;
+  name: string;
+  type: string;
+}
+
+export interface IDPStartResponse {
+  auth_url: string;
+}
+
+// OIDC PKCE types
+export interface OIDCAuthorizeResponse {
+  auth_url: string;
+  code_verifier: string;
+  state: string;
 }

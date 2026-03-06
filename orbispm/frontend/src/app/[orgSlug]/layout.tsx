@@ -52,6 +52,7 @@ function getSidebarItems(orgSlug: string): NavItem[] {
     { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
     { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
     { href: `/${orgSlug}/profile`, label: "My Profile", icon: <UserCircle className="w-5 h-5" /> },
+    { href: `/${orgSlug}/profile/security`, label: "Security", icon: <Shield className="w-5 h-5" /> },
   ];
 }
 

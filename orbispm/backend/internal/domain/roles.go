@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// User represents a user entity (mirrors GoTrue user).
+// User represents a user entity (mirrors Zitadel user).
 type User struct {
 	ID    uuid.UUID
 	Email string

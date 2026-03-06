@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -46,8 +47,25 @@ func (s *BillingService) GetPlan(ctx context.Context, id string) (*domain.Billin
 }
 
 // GetSubscription returns the current subscription for an org.
+// If no subscription exists, a free-plan subscription is automatically created.
 func (s *BillingService) GetSubscription(ctx context.Context, orgID uuid.UUID) (*domain.OrgSubscription, error) {
-	return s.subRepo.GetByOrgID(ctx, orgID)
+	sub, err := s.subRepo.GetByOrgID(ctx, orgID)
+	if err == nil {
+		return sub, nil
+	}
+	if !errors.Is(err, domain.ErrNotFound) {
+		return nil, err
+	}
+	// Auto-provision a free subscription so the UI never sees a 404.
+	now := time.Now()
+	sub = &domain.OrgSubscription{
+		ID:                 uuid.New(),
+		OrgID:              orgID,
+		PlanID:             "free",
+		Status:             "active",
+		CurrentPeriodStart: &now,
+	}
+	return s.subRepo.Upsert(ctx, sub)
 }
 
 // GetStripeSubscription fetches subscription details from Stripe.
@@ -474,9 +492,9 @@ func (s *DashboardService) GetTeamDashboard(ctx context.Context, teamID uuid.UUI
 	// Per-member workload
 	workloadRows, err := pool.Query(ctx,
 		`SELECT tm.user_id,
-		        COALESCE(u.raw_user_meta_data->>'name','') AS display_name,
+		        COALESCE(u.display_name,'') AS display_name,
 		        COALESCE(u.email,'') AS email,
-		        COALESCE(u.raw_user_meta_data->>'avatar_url','') AS avatar_url,
+		        COALESCE(u.avatar_url,'') AS avatar_url,
 		        COUNT(t.id) AS total,
 		        COUNT(t.id) FILTER (WHERE t.status = 'todo') AS todo,
 		        COUNT(t.id) FILTER (WHERE t.status = 'in_progress') AS in_progress,
@@ -484,11 +502,11 @@ func (s *DashboardService) GetTeamDashboard(ctx context.Context, teamID uuid.UUI
 		        COUNT(t.id) FILTER (WHERE t.status = 'blocked') AS blocked,
 		        COUNT(t.id) FILTER (WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < $2) AS overdue
 		 FROM team_members tm
-		 LEFT JOIN auth.users u ON u.id = tm.user_id
+		 LEFT JOIN users u ON u.id = tm.user_id
 		 LEFT JOIN tasks t ON t.assignee_id = tm.user_id
 		     AND t.project_id IN (SELECT id FROM projects WHERE team_id = $1)
 		 WHERE tm.team_id = $1
-		 GROUP BY tm.user_id, u.raw_user_meta_data, u.email
+		 GROUP BY tm.user_id, u.display_name, u.email, u.avatar_url
 		 ORDER BY total DESC`,
 		teamID, now)
 	if err != nil {
@@ -765,9 +783,9 @@ func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID uu
 	// Per-member workload
 	workloadRows, err := pool.Query(ctx,
 		`SELECT pm.user_id,
-		        COALESCE(u.raw_user_meta_data->>'name','') AS display_name,
+		        COALESCE(u.display_name,'') AS display_name,
 		        COALESCE(u.email,'') AS email,
-		        COALESCE(u.raw_user_meta_data->>'avatar_url','') AS avatar_url,
+		        COALESCE(u.avatar_url,'') AS avatar_url,
 		        COUNT(t.id) AS total,
 		        COUNT(t.id) FILTER (WHERE t.status = 'todo') AS todo,
 		        COUNT(t.id) FILTER (WHERE t.status = 'in_progress') AS in_progress,
@@ -775,10 +793,10 @@ func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID uu
 		        COUNT(t.id) FILTER (WHERE t.status = 'blocked') AS blocked,
 		        COUNT(t.id) FILTER (WHERE t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < $2) AS overdue
 		 FROM project_members pm
-		 LEFT JOIN auth.users u ON u.id = pm.user_id
+		 LEFT JOIN users u ON u.id = pm.user_id
 		 LEFT JOIN tasks t ON t.assignee_id = pm.user_id AND t.project_id = $1
 		 WHERE pm.project_id = $1
-		 GROUP BY pm.user_id, u.raw_user_meta_data, u.email
+		 GROUP BY pm.user_id, u.display_name, u.email, u.avatar_url
 		 ORDER BY total DESC`,
 		projectID, now)
 	if err != nil {

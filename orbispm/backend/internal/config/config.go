@@ -20,11 +20,13 @@ type Config struct {
 	// Redis
 	RedisURL string
 
-	// JWT (shared with GoTrue)
-	JWTSecret string
-
-	// GoTrue (Supabase Auth)
-	GoTrueURL string
+	// Zitadel
+	ZitadelDomain       string // e.g. "localhost:8081"
+	ZitadelIssuer       string // e.g. "http://localhost:8081"
+	ZitadelInternalURL  string // e.g. "http://zitadel:8080"
+	ZitadelServiceToken string // PAT for management API
+	ZitadelClientID     string // OIDC application client ID
+	JWTSecret           string // secret for signing backend-issued JWTs
 
 	// MinIO / S3
 	MinIOEndpoint  string
@@ -72,8 +74,12 @@ func Load() (*Config, error) {
 		BaseURL:             getEnv("BASE_URL", "http://localhost:8080"),
 		DatabaseURL:         getEnv("DATABASE_URL", "postgres://orbispm:orbispm@localhost:5432/orbispm?sslmode=disable"),
 		RedisURL:            getEnv("REDIS_URL", "redis://localhost:6380/0"),
-		JWTSecret:           getEnv("JWT_SECRET", "super-secret-jwt-token-with-at-least-32-characters-long"),
-		GoTrueURL:           getEnv("GOTRUE_URL", "http://localhost:9999"),
+		ZitadelDomain:       getEnv("ZITADEL_DOMAIN", "localhost:8081"),
+		ZitadelIssuer:       getEnv("ZITADEL_ISSUER", "http://localhost:8081"),
+		ZitadelInternalURL:  getEnv("ZITADEL_INTERNAL_URL", "http://zitadel:8080"),
+		ZitadelServiceToken: getEnv("ZITADEL_SERVICE_TOKEN", ""),
+		ZitadelClientID:     getEnv("ZITADEL_CLIENT_ID", ""),
+		JWTSecret:           getEnv("JWT_SECRET", "orbispm-dev-jwt-secret-change-in-prod"),
 		MinIOEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
@@ -99,8 +105,8 @@ func Load() (*Config, error) {
 		StripeEnabled:       getEnvBool("STRIPE_ENABLED", false),
 	}
 
-	if cfg.Env == "production" && cfg.JWTSecret == "super-secret-jwt-token-with-at-least-32-characters-long" {
-		return nil, fmt.Errorf("JWT_SECRET must be set in production")
+	if cfg.Env == "production" && cfg.ZitadelServiceToken == "" {
+		return nil, fmt.Errorf("ZITADEL_SERVICE_TOKEN must be set in production")
 	}
 
 	return cfg, nil

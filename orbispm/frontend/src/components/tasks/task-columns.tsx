@@ -67,7 +67,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     if (focusTaskId && focusTaskQuery.data && !deepLinkProcessed) {
       const task = focusTaskQuery.data;
       // Build the path from root to this task
-      const path = task.path || [];
+      const path = (task as Task & { path?: string[] }).path || [];
       const newSelected: (string | null)[] = [null, null, null, null];
       
       // path contains UUIDs from root to task (excluding task itself)

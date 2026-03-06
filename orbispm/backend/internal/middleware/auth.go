@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 
+	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
 )
 
@@ -16,14 +16,14 @@ func UserIDFromCtx(ctx context.Context) uuid.UUID {
 	return tenant.UserID(ctx)
 }
 
-// Auth middleware validates JWT tokens (GoTrue-compatible HS256) and sets user context.
-func Auth(jwtSecret string) func(http.Handler) http.Handler {
+// Auth middleware validates Zitadel-issued JWTs (RS256) or session tokens and sets user context.
+func Auth(zitadelClient *auth.ZitadelClient) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// First check Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
-				// Also check apikey query param (for SSE/WebSocket)
+				// Also check token query param (for SSE/WebSocket)
 				if token := r.URL.Query().Get("token"); token != "" {
 					authHeader = "Bearer " + token
 				}
@@ -41,35 +41,22 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 			}
 
 			tokenStr := parts[1]
-			token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, jwt.ErrSignatureInvalid
-				}
-				return []byte(jwtSecret), nil
-			})
-			if err != nil || !token.Valid {
+
+			claims, err := zitadelClient.ValidateToken(r.Context(), tokenStr)
+			if err != nil {
 				http.Error(w, `{"message":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
 
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				http.Error(w, `{"message":"invalid claims"}`, http.StatusUnauthorized)
-				return
-			}
-
-			// GoTrue uses "sub" for user UUID
-			sub, _ := claims.GetSubject()
-			userID, err := uuid.Parse(sub)
+			// Zitadel uses "sub" for user ID
+			userID, err := uuid.Parse(claims.Subject)
 			if err != nil {
-				http.Error(w, `{"message":"invalid user id in token"}`, http.StatusUnauthorized)
-				return
+				// Zitadel sub may be numeric — use deterministic UUID
+				userID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(claims.Subject))
 			}
-
-			email, _ := claims["email"].(string)
 
 			ctx := tenant.SetUserID(r.Context(), userID)
-			ctx = tenant.SetEmail(ctx, email)
+			ctx = tenant.SetEmail(ctx, claims.Email)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

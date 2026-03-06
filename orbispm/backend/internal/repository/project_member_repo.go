@@ -52,9 +52,9 @@ func (r *projectMemberRepo) UpdateRole(ctx context.Context, tx pgx.Tx, projectID
 
 func (r *projectMemberRepo) ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.raw_user_meta_data->>'name', ''), COALESCE(u.raw_user_meta_data->>'avatar_url', ''), m.role, m.joined_at
+		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''), m.role, m.joined_at
 		 FROM project_members m
-		 LEFT JOIN auth.users u ON u.id = m.user_id
+		 LEFT JOIN users u ON u.id = m.user_id
 		 WHERE m.project_id = $1 ORDER BY m.joined_at`, projectID)
 	if err != nil {
 		return nil, err
@@ -79,24 +79,24 @@ func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID 
 	rows, err := r.pool.Query(ctx,
 		`WITH direct AS (
 			SELECT pm.user_id, COALESCE(u.email, '') AS email,
-			       COALESCE(u.raw_user_meta_data->>'name', '') AS display_name,
-			       COALESCE(u.raw_user_meta_data->>'avatar_url', '') AS avatar_url,
+			       COALESCE(u.display_name, '') AS display_name,
+			       COALESCE(u.avatar_url, '') AS avatar_url,
 			       pm.role, 'direct' AS source, NULL::uuid AS source_team_id, '' AS source_team_name,
 			       1 AS priority
 			FROM project_members pm
-			LEFT JOIN auth.users u ON u.id = pm.user_id
+			LEFT JOIN users u ON u.id = pm.user_id
 			WHERE pm.project_id = $1
 		),
 		team_inherited AS (
 			SELECT tm.user_id, COALESCE(u.email, '') AS email,
-			       COALESCE(u.raw_user_meta_data->>'name', '') AS display_name,
-			       COALESCE(u.raw_user_meta_data->>'avatar_url', '') AS avatar_url,
+			       COALESCE(u.display_name, '') AS display_name,
+			       COALESCE(u.avatar_url, '') AS avatar_url,
 			       tm.role, 'team' AS source, t.id AS source_team_id, t.name AS source_team_name,
 			       2 AS priority
 			FROM project_teams pt
 			JOIN team_members tm ON tm.team_id = pt.team_id
 			JOIN teams t ON t.id = pt.team_id
-			LEFT JOIN auth.users u ON u.id = tm.user_id
+			LEFT JOIN users u ON u.id = tm.user_id
 			WHERE pt.project_id = $1
 			AND tm.user_id NOT IN (SELECT user_id FROM project_members WHERE project_id = $1)
 		)

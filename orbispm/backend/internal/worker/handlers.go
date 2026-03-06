@@ -109,10 +109,10 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 		}
 
 		if emailEnabled {
-			// Lookup user email from auth.users
+			// Lookup user email from public.users cache
 			var userEmail string
 			err := h.Pool.QueryRow(ctx,
-				`SELECT COALESCE(email, '') FROM auth.users WHERE id = $1`, userID,
+				`SELECT COALESCE(email, '') FROM users WHERE id = $1`, userID,
 			).Scan(&userEmail)
 			if err != nil || userEmail == "" {
 				log.Warn().Err(err).Str("user_id", p.UserID).Msg("could not find user email")

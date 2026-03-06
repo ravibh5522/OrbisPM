@@ -1,4 +1,5 @@
 import type { AuthUser } from "@/types/domain";
+import { getRefreshToken, isTokenExpired, saveTokens, clearAuth } from "@/lib/auth";
 
 // API response shapes
 export interface ListResponse<T> {
@@ -28,16 +29,62 @@ class ApiError extends Error {
 export { ApiError };
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+const V1 = "/api/v1";
 
 function getToken(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("access_token");
 }
 
+// Track refresh in progress to avoid concurrent refreshes
+let refreshPromise: Promise<boolean> | null = null;
+
+async function tryRefreshToken(): Promise<boolean> {
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return false;
+
+  try {
+    const res = await fetch(`${API_BASE}${V1}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!res.ok) return false;
+    const tokens = await res.json();
+    saveTokens(tokens);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ensureValidToken(): Promise<void> {
+  if (!getToken() || !isTokenExpired()) return;
+
+  if (!refreshPromise) {
+    refreshPromise = tryRefreshToken().finally(() => {
+      refreshPromise = null;
+    });
+  }
+  const success = await refreshPromise;
+  if (!success) {
+    clearAuth();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+  }
+}
+
 async function request<T>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  skipAutoRefresh = false,
 ): Promise<T> {
+  // Auto-refresh token before request if close to expiry (skip for auth endpoints)
+  if (!skipAutoRefresh) {
+    await ensureValidToken();
+  }
+
   const token = getToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -63,6 +110,18 @@ async function request<T>(
   if (res.status === 204) {
     console.log(`[API] ${method} ${path} → 204 (no content)`);
     return undefined as T;
+  }
+
+  // On 401, try refresh once then retry
+  if (res.status === 401 && !skipAutoRefresh) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      return request<T>(path, options, true);
+    }
+    clearAuth();
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
   }
 
   if (!res.ok) {
@@ -168,43 +227,108 @@ import type {
   EffectiveMember,
   TaskChangeRequest,
   TaskUpdateResult,
+  TOTPRegistration,
+  MFAStatus,
+  BackupCodesResponse,
+  IDPInfo,
+  IDPStartResponse,
+  OIDCAuthorizeResponse,
 } from "@/types/domain";
 
-const V1 = "/api/v1";
-
 export const api = {
-  // Auth (GoTrue)
+  // Auth (Zitadel via backend)
   auth: {
     signup(email: string, password: string, name?: string): Promise<AuthTokens> {
-      return request<AuthTokens>("/auth/v1/signup", {
+      return request<AuthTokens>(`${V1}/auth/signup`, {
         method: "POST",
         body: JSON.stringify({
           email,
           password,
+          name: name || undefined,
           data: name ? { name } : undefined,
         }),
       });
     },
     login(email: string, password: string): Promise<AuthTokens> {
-      return request<AuthTokens>("/auth/v1/token?grant_type=password", {
+      return request<AuthTokens>(`${V1}/auth/login`, {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
     },
     refresh(refreshToken: string): Promise<AuthTokens> {
-      return request<AuthTokens>("/auth/v1/token?grant_type=refresh_token", {
+      return request<AuthTokens>(`${V1}/auth/refresh`, {
         method: "POST",
         body: JSON.stringify({ refresh_token: refreshToken }),
       });
     },
     getUser(): Promise<AuthUser> {
-      return get("/auth/v1/user");
+      return get(`${V1}/auth/user`);
     },
     updateUser(data: { data?: Record<string, unknown>; email?: string; phone?: string }): Promise<AuthUser> {
-      return request<AuthUser>("/auth/v1/user", {
+      return request<AuthUser>(`${V1}/auth/user`, {
         method: "PUT",
         body: JSON.stringify(data),
       });
+    },
+    logout(): Promise<void> {
+      return request<void>(`${V1}/auth/logout`, { method: "POST" }, true);
+    },
+
+    // OIDC PKCE flow
+    oidcAuthorize(redirectUri: string, state: string): Promise<OIDCAuthorizeResponse> {
+      return post(`${V1}/auth/oidc/authorize`, { redirect_uri: redirectUri, state });
+    },
+    oidcCallback(code: string, redirectUri: string, codeVerifier: string): Promise<AuthTokens> {
+      return post(`${V1}/auth/oidc/callback`, { code, redirect_uri: redirectUri, code_verifier: codeVerifier });
+    },
+    oidcRefresh(refreshToken: string): Promise<AuthTokens> {
+      return post(`${V1}/auth/oidc/refresh`, { refresh_token: refreshToken });
+    },
+
+    verifyLoginMFA(sessionId: string, sessionToken: string, method: string, code: string): Promise<AuthTokens> {
+      return post(`${V1}/auth/mfa/login-verify`, { session_id: sessionId, session_token: sessionToken, method, code });
+    },
+    sendOTPChallenge(sessionId: string, sessionToken: string, method: string): Promise<void> {
+      return post(`${V1}/auth/mfa/send-otp-challenge`, { session_id: sessionId, session_token: sessionToken, method });
+    },
+
+    // Social / IDP
+    listIDPs(): Promise<{ idps: IDPInfo[] }> {
+      return get(`${V1}/auth/idps`);
+    },
+    startIDPLogin(idpId: string, successUrl: string, failureUrl: string): Promise<IDPStartResponse> {
+      return post(`${V1}/auth/idp/start`, { idp_id: idpId, success_url: successUrl, failure_url: failureUrl });
+    },
+  },
+
+  // MFA
+  mfa: {
+    registerTOTP(): Promise<TOTPRegistration> {
+      return post(`${V1}/auth/mfa/totp/register`);
+    },
+    verifyTOTP(code: string): Promise<MFAStatus> {
+      return post(`${V1}/auth/mfa/totp/verify`, { code });
+    },
+    removeTOTP(): Promise<void> {
+      return del(`${V1}/auth/mfa/totp`);
+    },
+    enableOTPEmail(): Promise<MFAStatus> {
+      return post(`${V1}/auth/mfa/otp-email/enable`);
+    },
+    disableOTPEmail(): Promise<void> {
+      return del(`${V1}/auth/mfa/otp-email`);
+    },
+    enableOTPSMS(): Promise<MFAStatus> {
+      return post(`${V1}/auth/mfa/otp-sms/enable`);
+    },
+    disableOTPSMS(): Promise<void> {
+      return del(`${V1}/auth/mfa/otp-sms`);
+    },
+    generateRecoveryCodes(): Promise<BackupCodesResponse> {
+      return post(`${V1}/auth/mfa/recovery-codes`);
+    },
+    removeRecoveryCodes(): Promise<void> {
+      return del(`${V1}/auth/mfa/recovery-codes`);
     },
   },
 

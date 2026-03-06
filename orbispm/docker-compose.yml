@@ -30,30 +30,44 @@ services:
       timeout: 5s
       retries: 5
 
-  gotrue:
-    image: supabase/gotrue:v2.158.1
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v2.71.6
     restart: unless-stopped
+    command: start-from-init --masterkeyFromEnv --tlsMode disabled
     ports:
-      - "9999:9999"
+      - "8081:8080"
     environment:
-      GOTRUE_API_HOST: "0.0.0.0"
-      GOTRUE_API_PORT: "9999"
-      GOTRUE_DB_DRIVER: postgres
-      GOTRUE_DB_DATABASE_URL: "postgres://orbispm:orbispm@postgres:5432/orbispm?sslmode=disable&search_path=auth"
-      GOTRUE_SITE_URL: "http://localhost:3000"
-      GOTRUE_URI_ALLOW_LIST: ""
-      GOTRUE_JWT_SECRET: "super-secret-jwt-token-with-at-least-32-characters-long"
-      GOTRUE_JWT_EXP: "3600"
-      GOTRUE_JWT_DEFAULT_GROUP_NAME: "authenticated"
-      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
-      GOTRUE_MAILER_AUTOCONFIRM: "true"
-      GOTRUE_DISABLE_SIGNUP: "false"
-      GOTRUE_SMS_AUTOCONFIRM: "true"
-      GOTRUE_LOG_LEVEL: "DEBUG"
-      API_EXTERNAL_URL: "http://localhost:8000/auth/v1"
+      ZITADEL_MASTERKEY: "MasterkeyNeedsToHave32Characters"
+      ZITADEL_DATABASE_POSTGRES_HOST: postgres
+      ZITADEL_DATABASE_POSTGRES_PORT: "5432"
+      ZITADEL_DATABASE_POSTGRES_DATABASE: orbispm
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: orbispm
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: orbispm
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: orbispm
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: orbispm
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      ZITADEL_EXTERNALSECURE: "false"
+      ZITADEL_EXTERNALPORT: "8081"
+      ZITADEL_EXTERNALDOMAIN: "localhost"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: "admin@orbispm.local"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "Admin123!"
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: "OrbisPM"
+      ZITADEL_FIRSTINSTANCE_INSTANCENAME: "OrbisPM"
+      ZITADEL_FIRSTINSTANCE_DEFAULTLANGUAGE: "en"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: "backend-service"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: "OrbisPM Backend"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "2030-01-01T00:00:00Z"
+      ZITADEL_LOG_LEVEL: "info"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/debug/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   minio:
     image: minio/minio:latest
@@ -113,8 +127,11 @@ services:
       ENV: development
       DATABASE_URL: postgres://orbispm:orbispm@postgres:5432/orbispm?sslmode=disable
       REDIS_URL: redis://redis:6379/0
-      JWT_SECRET: "super-secret-jwt-token-with-at-least-32-characters-long"
-      GOTRUE_URL: "http://gotrue:9999"
+      ZITADEL_DOMAIN: "localhost:8081"
+      ZITADEL_ISSUER: "http://localhost:8081"
+      ZITADEL_SERVICE_TOKEN: "yLuIIVIzl05t1RGZMsHt-X4tQTdt--LNlBEgtlQnFsFoQiO2a1eP83nbKYtSlDfoBxxzg7M"
+      ZITADEL_CLIENT_ID: "362919913230237700"
+      JWT_SECRET: "orbispm-dev-jwt-secret-32chars!!"
       MINIO_ENDPOINT: "minio:9000"
       MINIO_ACCESS_KEY: minioadmin
       MINIO_SECRET_KEY: minioadmin
@@ -153,7 +170,7 @@ services:
     volumes:
       - ./kong.yml:/kong/kong.yml:ro
     depends_on:
-      - gotrue
+      - zitadel
       - api
       - nocodb
 

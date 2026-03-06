@@ -19,7 +19,7 @@
 // @description Enter your bearer token in the format: Bearer {token}
 //
 // @tag.name Auth
-// @tag.description Authentication (GoTrue proxy)
+// @tag.description Authentication (Zitadel proxy)
 // @tag.name Organizations
 // @tag.description Organization management
 // @tag.name Teams
@@ -151,9 +151,12 @@ func main() {
 		log.Info().Msg("connected to Redis")
 	}
 
-	// --- GoTrue Auth Client ---
-	gotrueClient := auth.NewGoTrueClient(cfg.GoTrueURL)
-	log.Info().Str("url", cfg.GoTrueURL).Msg("GoTrue client configured")
+	// --- Zitadel Auth Client (gRPC + OIDC) ---
+	zitadelClient, err := auth.NewZitadelClient(ctx, cfg.ZitadelIssuer, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, cfg.ZitadelClientID)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create Zitadel client")
+	}
+	log.Info().Str("issuer", cfg.ZitadelIssuer).Msg("Zitadel gRPC client connected")
 
 	// --- MinIO Storage Client (best-effort) ---
 	var storageClient *storage.Client
@@ -276,7 +279,10 @@ func main() {
 	healthHandler := handler.NewHealthHandler(pool, rdb)
 
 	// --- Handlers (new) ---
-	authHandler := handler.NewAuthHandler(gotrueClient)
+	authHandler := handler.NewAuthHandler(zitadelClient, pool)
+	// Backfill public.users cache from Zitadel so member/project queries show names/emails
+	go authHandler.BackfillUserProfiles(ctx)
+
 	attachmentHandler := handler.NewAttachmentHandler(attachmentSvc)
 
 	// Upload handler (avatar, logos, etc.) — public URL for MinIO objects
@@ -337,7 +343,7 @@ func main() {
 		httpSwagger.URL("/swagger/doc.json"),
 	))
 
-	// Auth endpoints (no auth needed — these are the GoTrue proxy)
+	// Auth endpoints (no auth needed — these are the Zitadel proxy)
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		r.Mount("/", authHandler.Routes())
 	})
@@ -349,7 +355,7 @@ func main() {
 
 	// API v1 group — requires auth
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(middleware.Auth(cfg.JWTSecret))
+		r.Use(middleware.Auth(zitadelClient))
 
 		// Orgs
 		r.Route("/orgs", func(r chi.Router) {

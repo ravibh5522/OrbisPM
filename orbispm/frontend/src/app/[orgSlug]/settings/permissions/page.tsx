@@ -305,11 +305,12 @@ function PermissionsPageContent() {
       <PageHeader
         title="Permissions & Roles"
         description="Manage DB-driven roles and fine-grained permissions"
-      >
-        <Button onClick={() => { setShowCreate(true); setError(""); createForm.reset({ slug: "", name: "", description: "" }); }}>
-          <Plus className="w-4 h-4 mr-1" /> New Role
-        </Button>
-      </PageHeader>
+        actions={
+          <Button onClick={() => { setShowCreate(true); setError(""); createForm.reset({ slug: "", name: "", description: "" }); }}>
+            <Plus className="w-4 h-4 mr-1" /> New Role
+          </Button>
+        }
+      />
 
       {/* Scope tabs */}
       <div className="tabs tabs-bordered">
@@ -326,7 +327,7 @@ function PermissionsPageContent() {
 
       {/* Roles list */}
       {!roles || roles.length === 0 ? (
-        <EmptyState icon={Shield} title="No roles" description={`No ${scope}-level roles yet.`} />
+        <EmptyState icon={<Shield className="w-8 h-8" />} title="No roles" description={`No ${scope}-level roles yet.`} />
       ) : (
         <div className="grid gap-4">
           {roles.map((role: Role) => (
@@ -503,7 +504,6 @@ function PermissionsPageContent() {
         title="Delete Role"
         message={`Delete role "${deleteTarget?.name}"? This cannot be undone.`}
         loading={deleteMutation.isPending}
-        variant="error"
       />
 
       {/* Team → Project Role Mapping */}
