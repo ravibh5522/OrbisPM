@@ -40,6 +40,10 @@ export function isTokenExpired(): boolean {
   return Date.now() / 1000 > Number(exp) - 60;
 }
 
+export function saveUser(user: AuthUser) {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
 export function clearAuth() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(REFRESH_KEY);

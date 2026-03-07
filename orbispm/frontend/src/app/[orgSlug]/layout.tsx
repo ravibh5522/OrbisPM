@@ -112,9 +112,13 @@ function Sidebar() {
           {!sidebarCollapsed && (
             <div className="dropdown dropdown-bottom w-full">
               <label tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-base-200 rounded-lg p-1 w-full">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm">
-                  {(currentOrg.name?.[0] || '?').toUpperCase()}
-                </div>
+                {currentOrg.logo_url ? (
+                  <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm flex-shrink-0">
+                    {(currentOrg.name?.[0] || '?').toUpperCase()}
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate">{currentOrg.name}</div>
                   <div className="text-xs text-base-content/50">{userRole || "member"}</div>
@@ -128,9 +132,13 @@ function Sidebar() {
                       className={cn(org.id === currentOrg.id && "active")}
                       onClick={() => handleOrgSwitch(org.slug)}
                     >
-                      <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-content font-bold text-xs">
-                        {(org.name?.[0] || '?').toUpperCase()}
-                      </div>
+                      {org.logo_url ? (
+                        <img src={org.logo_url} alt={org.name} className="w-6 h-6 rounded object-cover" />
+                      ) : (
+                        <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-content font-bold text-xs">
+                          {(org.name?.[0] || '?').toUpperCase()}
+                        </div>
+                      )}
                       {org.name}
                     </button>
                   </li>
@@ -325,9 +333,13 @@ function MobileSidebar() {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-base-200">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm">
-                {(currentOrg.name?.[0] || '?').toUpperCase()}
-              </div>
+              {currentOrg.logo_url ? (
+                <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm flex-shrink-0">
+                  {(currentOrg.name?.[0] || '?').toUpperCase()}
+                </div>
+              )}
               <div>
                 <div className="font-semibold text-sm">{currentOrg.name}</div>
                 <div className="text-xs text-base-content/50">{userRole || "member"}</div>
@@ -394,9 +406,13 @@ function MobileSidebar() {
                         className={cn(org.id === currentOrg.id && "active")}
                         onClick={() => handleOrgSwitch(org.slug)}
                       >
-                        <div className="w-6 h-6 bg-primary/20 rounded flex items-center justify-center text-primary font-bold text-xs">
-                          {(org.name?.[0] || '?').toUpperCase()}
-                        </div>
+                        {org.logo_url ? (
+                          <img src={org.logo_url} alt={org.name} className="w-6 h-6 rounded object-cover" />
+                        ) : (
+                          <div className="w-6 h-6 bg-primary/20 rounded flex items-center justify-center text-primary font-bold text-xs">
+                            {(org.name?.[0] || '?').toUpperCase()}
+                          </div>
+                        )}
                         {org.name}
                       </button>
                     </li>

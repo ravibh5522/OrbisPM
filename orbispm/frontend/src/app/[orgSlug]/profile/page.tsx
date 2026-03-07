@@ -86,7 +86,7 @@ export default function ProfilePage() {
       timezone: (m.timezone as string) || "",
       language: (m.language as string) || "",
     });
-  }, [user?.id, reset]);
+  }, [user?.id, user?.phone, user?.user_metadata, reset]);
 
   const updateMutation = useMutation({
     mutationFn: async (data: ProfileForm) => {
@@ -105,7 +105,7 @@ export default function ProfilePage() {
       });
     },
     onSuccess: (updated) => {
-      useAuthStore.setState({ user: updated });
+      useAuthStore.getState().updateUser(updated);
       qc.invalidateQueries({ queryKey: ["profile"] });
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setSuccess("Profile updated successfully");

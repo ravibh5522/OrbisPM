@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import type { AuthUser, Org, OrgMember } from "@/types/domain";
-import { clearAuth, getStoredUser, saveTokens, getAccessToken, getRefreshToken, isTokenExpired } from "@/lib/auth";
+import { clearAuth, getStoredUser, saveTokens, saveUser, getAccessToken, getRefreshToken, isTokenExpired } from "@/lib/auth";
 import { api } from "@/lib/api";
 import type { AuthTokens } from "@/types/domain";
 
@@ -53,6 +53,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     set({ user: storedUser, isAuthenticated: true, mfaEnabled: storedUser.mfa_enabled ?? false });
+    // Refresh user from backend in background so profile/avatar are always fresh
+    api.auth.getUser().then((freshUser) => {
+      saveUser(freshUser);
+      set({ user: freshUser, mfaEnabled: freshUser.mfa_enabled ?? false });
+    }).catch(() => {});
     try {
       const orgsRes = await api.orgs.list();
       const orgs = orgsRes.data || [];
@@ -135,6 +140,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   updateUser: (user: AuthUser) => {
+    saveUser(user);
     set({ user, mfaEnabled: user.mfa_enabled ?? false });
   },
 
