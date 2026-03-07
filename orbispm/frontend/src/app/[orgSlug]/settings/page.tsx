@@ -190,7 +190,7 @@ function SettingsPageContent() {
   };
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="General Settings"
         description="Manage your organization profile and preferences"

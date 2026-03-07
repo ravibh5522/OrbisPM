@@ -106,7 +106,7 @@ export default function ProjectsPage() {
   const teamList = teams?.data || [];
 
   return (
-    <div>
+    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
       <PageHeader
         title="Projects"
         description="Manage your organization's projects"
@@ -171,9 +171,9 @@ export default function ProjectsPage() {
         />
       ) : viewMode === "table" ? (
         /* Table View */
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="table">
+        <Card className="flex-1">
+          <div className="w-full">
+            <table className="table w-full">
               <thead>
                 <tr>
                   <th>Project Name</th>

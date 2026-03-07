@@ -133,7 +133,7 @@ function MembersPageContent() {
   const getMemberName = (m: OrgMember) => m.display_name || m.email || m.user_id.slice(0, 12);
 
   return (
-    <div>
+    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
       <PageHeader
         title="Members"
         description={`Manage ${memberList.length} organization member${memberList.length !== 1 ? "s" : ""}`}
@@ -170,9 +170,9 @@ function MembersPageContent() {
           }
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="table">
+        <Card className="flex-1">
+          <div className="w-full">
+            <table className="table w-full">
               <thead>
                 <tr>
                   <th>Member</th>

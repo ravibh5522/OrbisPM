@@ -130,7 +130,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               <div tabIndex={0} role="button" className="btn btn-outline btn-xs">
                 <Download className="w-3.5 h-3.5 mr-1" /> Export
               </div>
-              <ul tabIndex={0} className="dropdown-content z-[1] menu p-2 shadow bg-base-100 rounded-box w-44">
+              <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-44">
                 <li><a onClick={() => api.tasks.export(currentOrg!.id, projectId)}><Download className="w-4 h-4" /> CSV</a></li>
                 <li><a onClick={() => api.tasks.exportCalendar(currentOrg!.id, projectId)}><CalendarDays className="w-4 h-4" /> iCal (.ics)</a></li>
               </ul>

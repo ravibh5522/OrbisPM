@@ -38,6 +38,7 @@ import {
   Copy,
   Loader2,
   GripVertical,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   formatDate,
@@ -385,6 +386,7 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
       </div>
 
       {/* ── Table ── */}
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="overflow-x-auto border border-base-200 rounded-lg">
         <table className="table table-sm">
           <thead className="bg-base-200/50">
@@ -439,10 +441,9 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
                   Updated <SortIcon field="updated_at" />
                 </span>
               </th>
-              <th className="w-16"></th>
+              <th className="w-20">Actions</th>
             </tr>
           </thead>
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
           <tbody>
             {isLoading && (
@@ -480,9 +481,9 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
             ))}
           </tbody>
           </SortableContext>
-          </DndContext>
         </table>
       </div>
+      </DndContext>
 
       {/* ── Pagination ── */}
       {totalPages > 1 && (
@@ -702,20 +703,27 @@ function TaskRow({
 
       {/* Actions */}
       <td>
-        <div className="flex items-center gap-0.5">
-          <button
-            className="btn btn-ghost btn-xs opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={onDuplicate}
-            title="Duplicate task with subtree"
-          >
-            <Copy className="w-3 h-3" />
-          </button>
-          <button
-            className="btn btn-ghost btn-xs text-error opacity-0 group-hover:opacity-100 transition-opacity"
-            onClick={onDelete}
-          >
-            <Trash2 className="w-3 h-3" />
-          </button>
+        <div className="dropdown dropdown-end">
+          <label tabIndex={0} className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity">
+            <MoreHorizontal className="w-4 h-4" />
+          </label>
+          <ul tabIndex={0} className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200">
+            <li>
+              <a onClick={onNavigate} className="text-sm">
+                <ExternalLink className="w-3.5 h-3.5" /> Open
+              </a>
+            </li>
+            <li>
+              <a onClick={onDuplicate} className="text-sm">
+                <Copy className="w-3.5 h-3.5" /> Clone
+              </a>
+            </li>
+            <li>
+              <a onClick={onDelete} className="text-sm text-error">
+                <Trash2 className="w-3.5 h-3.5" /> Delete
+              </a>
+            </li>
+          </ul>
         </div>
       </td>
     </tr>

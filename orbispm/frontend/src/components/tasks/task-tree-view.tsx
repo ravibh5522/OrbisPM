@@ -156,7 +156,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
       </div>
 
       {/* Tree container */}
-      <div className="border border-base-300 rounded-lg bg-base-100 overflow-hidden">
+      <div className="border border-base-300 rounded-lg bg-base-100">
         <div className="divide-y divide-base-200">
           {tree.map((node) => (
             <TreeNode
@@ -234,11 +234,13 @@ function TreeNode({
     <>
       <div
         className={cn(
-          "flex items-center gap-2 px-3 py-2 hover:bg-base-200/50 transition-colors group",
-          task.status === "done" && "opacity-60"
+          "relative flex items-center gap-2 px-3 py-2 hover:bg-base-200/50 transition-colors group"
         )}
         style={{ paddingLeft: `${12 + depth * 24}px` }}
       >
+        {/* Content wrapper — opacity is applied HERE, not on the outer row, so the
+            dropdown is NOT inside the opacity stacking context and can escape it */}
+        <div className={cn("flex items-center gap-2 flex-1 min-w-0", task.status === "done" && "opacity-60")}>
         {/* Expand/collapse toggle */}
         <button
           className={cn(
@@ -322,12 +324,14 @@ function TreeNode({
           </span>
         )}
 
+        </div>{/* end content wrapper */}
+
         {/* Actions dropdown */}
         <div className="dropdown dropdown-end opacity-0 group-hover:opacity-100 transition-opacity">
           <div tabIndex={0} role="button" className="btn btn-ghost btn-xs btn-square">
             <MoreHorizontal className="w-4 h-4" />
           </div>
-          <ul tabIndex={0} className="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-44">
+          <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-44 border border-base-200">
             <li>
               <a onClick={() => onOpenTask ? onOpenTask(task.id) : undefined}>
                 <ExternalLink className="w-4 h-4" /> Open
@@ -402,7 +406,7 @@ function StatusDropdown({
           )}
         />
       </div>
-      <ul tabIndex={0} className="dropdown-content z-10 menu p-1 shadow bg-base-100 rounded-box w-32">
+      <ul tabIndex={0} className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100 rounded-box w-32 border border-base-200">
         {statuses.map((s) => (
           <li key={s}>
             <a
@@ -445,7 +449,7 @@ function PriorityDropdown({
           {priority}
         </Badge>
       </div>
-      <ul tabIndex={0} className="dropdown-content z-10 menu p-1 shadow bg-base-100 rounded-box w-28">
+      <ul tabIndex={0} className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100 rounded-box w-28 border border-base-200">
         {priorities.map((p) => (
           <li key={p}>
             <a

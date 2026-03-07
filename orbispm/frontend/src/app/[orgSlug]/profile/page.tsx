@@ -148,7 +148,7 @@ export default function ProfilePage() {
   const nameVal = watch("name");
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="My Profile"
         description="Manage your personal information and preferences"

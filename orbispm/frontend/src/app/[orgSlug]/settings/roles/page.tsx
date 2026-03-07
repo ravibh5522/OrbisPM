@@ -200,7 +200,7 @@ function RolesPageContent() {
   const roleList = roles?.data || [];
 
   return (
-    <div>
+    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
       <PageHeader
         title="Custom Roles"
         description={`Define custom permissions — ${roleList.length} role${roleList.length !== 1 ? "s" : ""}`}
@@ -223,9 +223,9 @@ function RolesPageContent() {
           }
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto overflow-visible">
-            <table className="table">
+        <Card className="flex-1">
+          <div className="w-full">
+            <table className="table w-full">
               <thead>
                 <tr>
                   <th>Role Name</th>

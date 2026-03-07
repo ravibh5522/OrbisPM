@@ -463,13 +463,13 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-base-200/30">
       <Sidebar />
       <MobileSidebar />
       <TopBar />
       <main className={cn(
-        "transition-all duration-200 p-4 md:p-6",
-        "lg:ml-64",
+        "transition-all duration-200 pt-4 pb-8 px-4 md:px-6",
+        "min-h-[calc(100vh-3.5rem)]",
         sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
       )}>
         {children}

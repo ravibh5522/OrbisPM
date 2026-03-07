@@ -72,7 +72,7 @@ function ApiKeysPageContent() {
   if (isLoading) return <LoadingPage />;
 
   return (
-    <div>
+    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
       <PageHeader
         title="API Keys"
         description="Manage programmatic access to your organization"
@@ -113,9 +113,9 @@ function ApiKeysPageContent() {
           action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Key</Button>}
         />
       ) : (
-        <Card>
-          <div className="overflow-x-auto">
-            <table className="table">
+        <Card className="flex-1">
+          <div className="w-full">
+            <table className="table w-full">
               <thead>
                 <tr>
                   <th>Name</th>

@@ -201,7 +201,7 @@ export default function SecurityPage() {
   };
 
   return (
-    <div className="max-w-3xl">
+    <div>
       <PageHeader
         title="Security Settings"
         description="Manage your account security and multi-factor authentication"
