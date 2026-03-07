@@ -2,21 +2,18 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useEffect } from "react";
 import { useOrgSocket } from "@/hooks/use-org-socket";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore, THEMES } from "@/stores/ui-store";
 import { useRequireAuth } from "@/hooks/use-auth-guard";
+import { api } from "@/lib/api";
 import { Avatar } from "@/components/ui/shared";
 import {
   LayoutDashboard,
   FolderKanban,
   ListTodo,
   Users,
-  Settings,
-  CreditCard,
-  Webhook,
-  KeyRound,
-  Shield,
   Bell,
   FileText,
   Search,
@@ -28,6 +25,7 @@ import {
   Activity,
   ChevronDown,
   UserCircle,
+  Building2,
 } from "lucide-react";
 import type { OrgRole } from "@/types/domain";
 import { cn } from "@/lib/utils";
@@ -51,28 +49,19 @@ function getSidebarItems(orgSlug: string): NavItem[] {
     { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
     { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
     { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
-    { href: `/${orgSlug}/profile`, label: "My Profile", icon: <UserCircle className="w-5 h-5" /> },
-    { href: `/${orgSlug}/profile/security`, label: "Security", icon: <Shield className="w-5 h-5" /> },
   ];
 }
 
 function getSettingsItems(orgSlug: string): NavItem[] {
   return [
-    { href: `/${orgSlug}/settings`, label: "General", icon: <Settings className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/members`, label: "Members", icon: <Users className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/billing`, label: "Billing", icon: <CreditCard className="w-5 h-5" />, roles: ["owner", "billing_admin"] },
-    { href: `/${orgSlug}/settings/webhooks`, label: "Webhooks", icon: <Webhook className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/api-keys`, label: "API Keys", icon: <KeyRound className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/roles`, label: "Roles", icon: <Shield className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/permissions`, label: "Permissions", icon: <Shield className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
+    { href: `/${orgSlug}/settings`, label: "Organisation", icon: <Building2 className="w-5 h-5" />, roles: ["owner", "admin", "billing_admin"] },
   ];
 }
 
 function Sidebar() {
   const pathname = usePathname();
-  const { currentOrg, currentMembership, orgs, setCurrentOrg, user } = useAuthStore();
-  const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { currentOrg, currentMembership, orgs, setCurrentOrg, user, logout } = useAuthStore();
+  const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useUIStore();
   const router = useRouter();
 
   if (!currentOrg) return null;
@@ -80,6 +69,11 @@ function Sidebar() {
   const mainItems = getSidebarItems(currentOrg.slug);
   const settingsItems = getSettingsItems(currentOrg.slug);
   const userRole = currentMembership?.role as OrgRole | undefined;
+
+  const handleThemeSwitch = (value: string) => {
+    setTheme(value as Parameters<typeof setTheme>[0]);
+    api.auth.updateUser({ data: { theme: value } }).catch(() => { /* non-critical */ });
+  };
 
   const filteredSettings = settingsItems.filter(
     (item) => !item.roles || (userRole && item.roles.includes(userRole))
@@ -101,16 +95,32 @@ function Sidebar() {
   return (
     <aside
       className={cn(
-        "fixed left-0 top-0 h-full bg-base-100 border-r border-base-200 z-40 transition-all duration-200",
+        "fixed left-0 top-0 h-full bg-base-100 border-r border-base-200 z-40 transition-all duration-300 ease-in-out glass-sidebar",
         "hidden lg:flex", // Hide on mobile
-        sidebarCollapsed ? "w-16" : "w-64"
+        sidebarCollapsed ? "w-[92px]" : "w-64"
       )}
     >
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full w-full">
         {/* Org header */}
-        <div className="flex items-center justify-between p-4 border-b border-base-200">
+        <div className={cn(
+          "flex items-center border-b border-base-200 transition-all duration-300 ease-in-out",
+          sidebarCollapsed ? "flex-col justify-center p-3 gap-2" : "justify-between p-4"
+        )}>
+          {/* Collapsed: show org logo centered */}
+          {sidebarCollapsed && (
+            <div className="flex items-center justify-center">
+              {currentOrg.logo_url ? (
+                <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-10 h-10 rounded-lg object-cover" />
+              ) : (
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-base">
+                  {(currentOrg.name?.[0] || '?').toUpperCase()}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Open: show full org picker dropdown */}
           {!sidebarCollapsed && (
-            <div className="dropdown dropdown-bottom w-full">
+            <div className="dropdown dropdown-bottom flex-1 mr-1">
               <label tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-base-200 rounded-lg p-1 w-full">
                 {currentOrg.logo_url ? (
                   <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
@@ -146,23 +156,49 @@ function Sidebar() {
               </ul>
             </div>
           )}
-          <button className="btn btn-ghost btn-sm btn-square" onClick={toggleSidebar}>
-            {sidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+          {/* Toggle button */}
+          <button className="btn btn-ghost btn-sm btn-square flex-shrink-0" onClick={toggleSidebar}>
+            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
           </button>
         </div>
 
         {/* Nav items */}
-        <nav className="flex-1 overflow-y-auto py-2">
-          <ul className="menu menu-sm px-2 gap-1">
+        <nav className="flex-1 overflow-y-auto py-3">
+          <ul className={cn("flex flex-col gap-1", sidebarCollapsed ? "items-center px-0" : "px-2")}>
             {mainItems.map((item) => (
-              <li key={item.href}>
+              <li key={item.href} className="list-none">
                 <Link
                   href={item.href}
-                  className={cn(isActive(item.href) && "active")}
+                  className={cn(
+                    "relative flex flex-row items-center rounded-xl transition-all duration-300 ease-in-out",
+                    "hover:bg-base-200",
+                    isActive(item.href)
+                      ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90"
+                      : "text-base-content",
+                    sidebarCollapsed
+                      ? "justify-center mx-auto w-14 pt-2 pb-4"
+                      : "gap-2 px-3 py-2.5"
+                  )}
                   title={sidebarCollapsed ? item.label : undefined}
                 >
-                  {item.icon}
-                  {!sidebarCollapsed && <span>{item.label}</span>}
+                  {/* Icon */}
+                  <span className="flex items-center justify-center flex-shrink-0">
+                    {item.icon}
+                  </span>
+                  {/* Full label — clips horizontally when collapsing (right → gone) */}
+                  <span className={cn(
+                    "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
+                    sidebarCollapsed ? "w-0 max-w-0 opacity-0" : "opacity-100 max-w-full"
+                  )}>
+                    {item.label}
+                  </span>
+                  {/* Short label — absolute below icon, fades in when collapsed */}
+                  <span className={cn(
+                    "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
+                    sidebarCollapsed ? "bottom-0.5 opacity-100 translate-y-0" : "bottom-0 opacity-0 translate-y-1 pointer-events-none"
+                  )}>
+                    {item.label.length > 7 ? item.label.slice(0, 7) + '..' : item.label}
+                  </span>
                 </Link>
               </li>
             ))}
@@ -170,23 +206,50 @@ function Sidebar() {
 
           {filteredSettings.length > 0 && (
             <>
-              {!sidebarCollapsed && (
-                <div className="px-4 py-2 mt-2">
-                  <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
-                    Settings
-                  </span>
-                </div>
-              )}
-              <ul className="menu menu-sm px-2 gap-1">
+              {/* Settings section label */}
+              <div className={cn(
+                "px-4 mt-3 mb-1 overflow-hidden transition-all duration-300 ease-in-out",
+                sidebarCollapsed ? "max-h-0 opacity-0 py-0" : "max-h-8 opacity-100 py-1"
+              )}>
+                <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+                  Organisation
+                </span>
+              </div>
+              <ul className={cn("flex flex-col gap-1", sidebarCollapsed ? "items-center px-0" : "px-2")}>
                 {filteredSettings.map((item) => (
-                  <li key={item.href}>
+                  <li key={item.href} className="list-none">
                     <Link
                       href={item.href}
-                      className={cn(isActive(item.href) && "active")}
+                      className={cn(
+                        "relative flex flex-row items-center rounded-xl transition-all duration-300 ease-in-out",
+                        "hover:bg-base-200",
+                        isActive(item.href)
+                          ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90"
+                          : "text-base-content",
+                        sidebarCollapsed
+                          ? "justify-center mx-auto w-14 pt-2 pb-4"
+                          : "gap-2 px-3 py-2.5"
+                      )}
                       title={sidebarCollapsed ? item.label : undefined}
                     >
-                      {item.icon}
-                      {!sidebarCollapsed && <span>{item.label}</span>}
+                      {/* Icon */}
+                      <span className="flex items-center justify-center flex-shrink-0">
+                        {item.icon}
+                      </span>
+                      {/* Full label — clips when collapsing */}
+                      <span className={cn(
+                        "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
+                        sidebarCollapsed ? "w-0 max-w-0 opacity-0" : "opacity-100 max-w-full"
+                      )}>
+                        {item.label}
+                      </span>
+                      {/* Short label — absolute below icon, fades in when collapsed */}
+                      <span className={cn(
+                        "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
+                        sidebarCollapsed ? "bottom-0.5 opacity-100 translate-y-0" : "bottom-0 opacity-0 translate-y-1 pointer-events-none"
+                      )}>
+                        {item.label.length > 7 ? item.label.slice(0, 7) + '..' : item.label}
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -195,41 +258,75 @@ function Sidebar() {
           )}
         </nav>
 
-        {/* User footer */}
-        {!sidebarCollapsed && (
-          <div className="border-t border-base-200 p-3">
-            <Link href={`/${currentOrg.slug}/profile`} className="flex items-center gap-2 hover:bg-base-200 rounded-lg p-1 transition-colors">
+        {/* User footer — dropdown with Profile, Theme, Logout */}
+        <div className="border-t border-base-200 transition-all duration-300 ease-in-out p-2">
+          <div className="dropdown dropdown-top w-full">
+            <label
+              tabIndex={0}
+              className={cn(
+                "flex cursor-pointer hover:bg-base-200 rounded-xl transition-all duration-300 ease-in-out items-center w-full",
+                sidebarCollapsed ? "justify-center p-2" : "gap-2 px-2 py-1.5"
+              )}
+            >
               <Avatar
                 name={user?.user_metadata?.name as string || user?.email || "U"}
                 src={user?.user_metadata?.avatar_url as string | undefined}
                 size="sm"
               />
-              <div className="flex-1 min-w-0">
+              <div className={cn(
+                "flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out",
+                sidebarCollapsed ? "max-w-0 opacity-0 w-0" : "max-w-full opacity-100"
+              )}>
                 <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
                 <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
               </div>
-              <UserCircle className="w-4 h-4 text-base-content/30" />
-            </Link>
+            </label>
+            <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-52 border border-base-200 mb-2">
+              <li>
+                <Link href={`/${currentOrg.slug}/profile`}>
+                  <UserCircle className="w-4 h-4" />
+                  Profile &amp; Security
+                </Link>
+              </li>
+              <li>
+                <details>
+                  <summary className="flex items-center gap-1">
+                    <Palette className="w-4 h-4" /> Theme
+                  </summary>
+                  <ul>
+                    {THEMES.map((t) => (
+                      <li key={t.value}>
+                        <button className={cn(theme === t.value && "active")} onClick={() => handleThemeSwitch(t.value)}>
+                          {t.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </li>
+              <li className="border-t border-base-200 mt-1 pt-1">
+                <button className="text-error" onClick={logout}>
+                  <LogOut className="w-4 h-4" /> Logout
+                </button>
+              </li>
+            </ul>
           </div>
-        )}
+        </div>
       </div>
     </aside>
   );
 }
 
 function TopBar() {
-  const { sidebarCollapsed, breadcrumb } = useUIStore();
-  const { setMobileMenuOpen } = useUIStore();
-  const logout = useAuthStore((s) => s.logout);
-  const { theme, setTheme } = useUIStore();
+  const { sidebarCollapsed, breadcrumb, setMobileMenuOpen } = useUIStore();
   const router = useRouter();
 
   return (
     <header
       className={cn(
-        "sticky top-0 z-30 h-14 bg-base-100 border-b border-base-200 flex items-center px-4 gap-4 transition-all duration-200",
+        "sticky top-0 z-30 h-14 bg-base-100 border-b border-base-200 flex items-center px-4 gap-4 transition-all duration-300 ease-in-out glass-topbar",
         "lg:ml-64", // Desktop sidebar offset
-        sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
       )}
     >
       <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={() => setMobileMenuOpen(true)}>
@@ -253,26 +350,6 @@ function TopBar() {
       {/* Notifications */}
       <NotificationBell />
 
-      {/* Theme picker */}
-      <div className="dropdown dropdown-end">
-        <label tabIndex={0} className="btn btn-ghost btn-sm btn-square">
-          <Palette className="w-5 h-5" />
-        </label>
-        <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-40 border border-base-200">
-          {THEMES.map((t) => (
-            <li key={t.value}>
-              <button className={cn(theme === t.value && "active")} onClick={() => setTheme(t.value)}>
-                {t.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      {/* Logout */}
-      <button className="btn btn-ghost btn-sm btn-square" onClick={logout} title="Logout">
-        <LogOut className="w-5 h-5" />
-      </button>
     </header>
   );
 }
@@ -281,8 +358,8 @@ function TopBar() {
 function MobileSidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { orgs, currentOrg, setCurrentOrg, user } = useAuthStore();
-  const { mobileMenuOpen, setMobileMenuOpen } = useUIStore();
+  const { orgs, currentOrg, setCurrentOrg, user, logout } = useAuthStore();
+  const { mobileMenuOpen, setMobileMenuOpen, theme, setTheme } = useUIStore();
   const currentMembership = useAuthStore((s) => s.currentMembership);
   const userRole = currentMembership?.role as OrgRole | undefined;
   const orgSlug = currentOrg?.slug || "";
@@ -294,19 +371,22 @@ function MobileSidebar() {
     { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
     { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
     { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
+    { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
     { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
   ];
 
-  const settingsItems: NavItem[] = [
-    { href: `/${orgSlug}/settings`, label: "General", icon: <Settings className="w-5 h-5" />, roles: ["owner", "admin"] },
-    { href: `/${orgSlug}/settings/billing`, label: "Billing", icon: <CreditCard className="w-5 h-5" />, roles: ["owner", "billing_admin"] },
-  ];
+  const settingsItems = getSettingsItems(orgSlug);
 
   const filteredSettings = settingsItems.filter(
     (item) => !item.roles || (userRole && item.roles.includes(userRole))
   );
 
   const isActive = (href: string) => pathname === href || (href !== `/${orgSlug}` && pathname.startsWith(href));
+
+  const handleThemeSwitch = (value: string) => {
+    setTheme(value as Parameters<typeof setTheme>[0]);
+    api.auth.updateUser({ data: { theme: value } }).catch(() => { /* non-critical */ });
+  };
 
   const handleOrgSwitch = async (orgSlug: string) => {
     const org = orgs.find((o) => o.slug === orgSlug);
@@ -328,7 +408,7 @@ function MobileSidebar() {
       />
       
       {/* Drawer */}
-      <aside className="fixed left-0 top-0 h-full w-72 bg-base-100 z-50 lg:hidden shadow-xl">
+      <aside className="fixed left-0 top-0 h-full w-72 bg-base-100 z-50 lg:hidden shadow-xl glass-sidebar">
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-base-200">
@@ -371,7 +451,7 @@ function MobileSidebar() {
               <>
                 <div className="px-4 py-2 mt-2">
                   <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
-                    Settings
+                    Organisation
                   </span>
                 </div>
                 <ul className="menu menu-md px-2 gap-1">
@@ -422,23 +502,53 @@ function MobileSidebar() {
             )}
           </nav>
 
-          {/* User footer */}
-          <div className="border-t border-base-200 p-3">
-            <Link
-              href={`/${currentOrg.slug}/profile`}
-              className="flex items-center gap-2 hover:bg-base-200 rounded-lg p-2"
-              onClick={() => setMobileMenuOpen(false)}
-            >
-              <Avatar
-                name={user?.user_metadata?.name as string || user?.email || "U"}
-                src={user?.user_metadata?.avatar_url as string | undefined}
-                size="sm"
-              />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
-                <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
-              </div>
-            </Link>
+          {/* User footer — dropdown with Profile, Theme, Logout */}
+          <div className="border-t border-base-200 p-2">
+            <div className="dropdown dropdown-top w-full">
+              <label
+                tabIndex={0}
+                className="flex cursor-pointer hover:bg-base-200 rounded-xl items-center gap-2 px-2 py-1.5 w-full"
+              >
+                <Avatar
+                  name={user?.user_metadata?.name as string || user?.email || "U"}
+                  src={user?.user_metadata?.avatar_url as string | undefined}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
+                  <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
+                </div>
+              </label>
+              <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-56 border border-base-200 mb-2">
+                <li>
+                  <Link href={`/${currentOrg.slug}/profile`} onClick={() => setMobileMenuOpen(false)}>
+                    <UserCircle className="w-4 h-4" />
+                    Profile &amp; Security
+                  </Link>
+                </li>
+                <li>
+                  <details>
+                    <summary className="flex items-center gap-1">
+                      <Palette className="w-4 h-4" /> Theme
+                    </summary>
+                    <ul>
+                      {THEMES.map((t) => (
+                        <li key={t.value}>
+                          <button className={cn(theme === t.value && "active")} onClick={() => handleThemeSwitch(t.value)}>
+                            {t.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </li>
+                <li className="border-t border-base-200 mt-1 pt-1">
+                  <button className="text-error" onClick={() => { setMobileMenuOpen(false); logout(); }}>
+                    <LogOut className="w-4 h-4" /> Logout
+                  </button>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
       </aside>
@@ -448,8 +558,17 @@ function MobileSidebar() {
 
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, hasOrgs } = useRequireAuth();
-  const { sidebarCollapsed } = useUIStore();
+  const { sidebarCollapsed, setTheme } = useUIStore();
   const currentOrg = useAuthStore((s) => s.currentOrg);
+  const user = useAuthStore((s) => s.user);
+
+  // Sync theme from user profile on load
+  useEffect(() => {
+    const savedTheme = user?.user_metadata?.theme as string | undefined;
+    if (savedTheme && ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(savedTheme)) {
+      setTheme(savedTheme as "glass-light" | "glass-dark" | "orbis-light" | "orbis-dark");
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Single org-level WebSocket (replaces SSE + per-project WS)
   useOrgSocket(currentOrg?.id);
@@ -468,9 +587,9 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
       <MobileSidebar />
       <TopBar />
       <main className={cn(
-        "transition-all duration-200 pt-4 pb-8 px-4 md:px-6",
+        "transition-all duration-300 ease-in-out pt-4 pb-8 px-4 md:px-6",
         "min-h-[calc(100vh-3.5rem)]",
-        sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
       )}>
         {children}
       </main>

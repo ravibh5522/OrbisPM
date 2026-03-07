@@ -52,10 +52,11 @@ func (h *AuthHandler) upsertUserProfile(ctx context.Context, u *auth.UserInfo) {
 	department := stringFromMeta(u.UserMetadata, "department")
 	timezone := stringFromMeta(u.UserMetadata, "timezone")
 	language := stringFromMeta(u.UserMetadata, "language")
+	theme := stringFromMeta(u.UserMetadata, "theme")
 
 	_, _ = h.pool.Exec(ctx,
-		`INSERT INTO users (id, email, display_name, phone, avatar_url, bio, job_title, department, timezone, language, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+		`INSERT INTO users (id, email, display_name, phone, avatar_url, bio, job_title, department, timezone, language, theme, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		  email=EXCLUDED.email, display_name=EXCLUDED.display_name,
 		  phone=EXCLUDED.phone,
@@ -65,8 +66,9 @@ func (h *AuthHandler) upsertUserProfile(ctx context.Context, u *auth.UserInfo) {
 		  department=CASE WHEN EXCLUDED.department != '' THEN EXCLUDED.department ELSE users.department END,
 		  timezone=CASE WHEN EXCLUDED.timezone != '' THEN EXCLUDED.timezone ELSE users.timezone END,
 		  language=CASE WHEN EXCLUDED.language != '' THEN EXCLUDED.language ELSE users.language END,
+		  theme=CASE WHEN EXCLUDED.theme != '' THEN EXCLUDED.theme ELSE users.theme END,
 		  updated_at=NOW()`,
-		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language,
+		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language, theme,
 	)
 }
 
@@ -84,10 +86,11 @@ func (h *AuthHandler) upsertUserProfilePartial(ctx context.Context, u *auth.User
 	department := stringFromMetaFallback(data, "department", "")
 	timezone := stringFromMetaFallback(data, "timezone", "")
 	language := stringFromMetaFallback(data, "language", "")
+	theme := stringFromMetaFallback(data, "theme", "")
 
 	_, _ = h.pool.Exec(ctx,
-		`INSERT INTO users (id, email, display_name, phone, avatar_url, bio, job_title, department, timezone, language, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+		`INSERT INTO users (id, email, display_name, phone, avatar_url, bio, job_title, department, timezone, language, theme, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		  email=EXCLUDED.email, display_name=EXCLUDED.display_name,
 		  phone=EXCLUDED.phone,
@@ -97,8 +100,9 @@ func (h *AuthHandler) upsertUserProfilePartial(ctx context.Context, u *auth.User
 		  department=CASE WHEN EXCLUDED.department != '' THEN EXCLUDED.department ELSE users.department END,
 		  timezone=CASE WHEN EXCLUDED.timezone != '' THEN EXCLUDED.timezone ELSE users.timezone END,
 		  language=CASE WHEN EXCLUDED.language != '' THEN EXCLUDED.language ELSE users.language END,
+		  theme=CASE WHEN EXCLUDED.theme != '' THEN EXCLUDED.theme ELSE users.theme END,
 		  updated_at=NOW()`,
-		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language,
+		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language, theme,
 	)
 }
 
@@ -109,11 +113,11 @@ func (h *AuthHandler) enrichUserFromDB(ctx context.Context, u *auth.UserInfo) {
 		return
 	}
 	userUUID := zitadelIDToUUID(u.ID)
-	var avatarURL, bio, jobTitle, department, timezone, language string
+	var avatarURL, bio, jobTitle, department, timezone, language, theme string
 	err := h.pool.QueryRow(ctx,
-		`SELECT avatar_url, bio, job_title, department, timezone, language
+		`SELECT avatar_url, bio, job_title, department, timezone, language, theme
 		 FROM users WHERE id = $1`, userUUID).
-		Scan(&avatarURL, &bio, &jobTitle, &department, &timezone, &language)
+		Scan(&avatarURL, &bio, &jobTitle, &department, &timezone, &language, &theme)
 	if err != nil {
 		return // DB miss is non-fatal
 	}
@@ -137,6 +141,9 @@ func (h *AuthHandler) enrichUserFromDB(ctx context.Context, u *auth.UserInfo) {
 	}
 	if language != "" {
 		u.UserMetadata["language"] = language
+	}
+	if theme != "" {
+		u.UserMetadata["theme"] = theme
 	}
 }
 

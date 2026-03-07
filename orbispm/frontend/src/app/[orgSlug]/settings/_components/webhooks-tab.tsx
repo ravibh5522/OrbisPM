@@ -4,14 +4,13 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, EmptyState, LoadingPage, Badge, ConfirmDialog } from "@/components/ui/shared";
+import { Card, EmptyState, LoadingPage, Badge, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
 import { Plus, Webhook as WebhookIcon, Trash2 } from "lucide-react";
 import type { Webhook } from "@/types/domain";
-import { RequireAdmin } from "@/components/permission-gate";
 
 interface WebhookForm {
   url: string;
@@ -19,15 +18,7 @@ interface WebhookForm {
   secret: string;
 }
 
-export default function WebhooksPage() {
-  return (
-    <RequireAdmin>
-      <WebhooksPageContent />
-    </RequireAdmin>
-  );
-}
-
-function WebhooksPageContent() {
+export default function WebhooksTab() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -69,19 +60,19 @@ function WebhooksPageContent() {
 
   if (isLoading) return <LoadingPage />;
 
+  const webhookList = webhooks?.data || [];
+
   return (
     <div>
-      <PageHeader
-        title="Webhooks"
-        description="Receive events via HTTP callbacks"
-        actions={
-          <Button onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> New Webhook
-          </Button>
-        }
-      />
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-base-content/60">Receive events via HTTP callbacks</p>
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <Plus className="w-4 h-4" /> New Webhook
+        </Button>
+      </div>
 
-      {(!webhooks?.data || webhooks.data.length === 0) ? (
+      {webhookList.length === 0 ? (
         <EmptyState
           icon={<WebhookIcon className="w-16 h-16" />}
           title="No webhooks configured"
@@ -90,7 +81,7 @@ function WebhooksPageContent() {
         />
       ) : (
         <div className="space-y-3">
-          {webhooks.data.map((wh: Webhook) => (
+          {webhookList.map((wh: Webhook) => (
             <Card key={wh.id} compact>
               <div className="flex items-center justify-between">
                 <div>
@@ -118,24 +109,15 @@ function WebhooksPageContent() {
       <Modal open={showCreate} onClose={() => { setShowCreate(false); reset(); setError(""); }} title="New Webhook">
         {error && <div className="alert alert-error mb-4"><span>{error}</span></div>}
         <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
-          <Input
-            label="URL"
-            placeholder="https://example.com/webhook"
+          <Input label="URL" placeholder="https://example.com/webhook"
             {...register("url", { required: "URL is required" })}
             error={formErrors.url?.message}
           />
-          <Input
-            label="Events"
-            placeholder="task.created, task.updated"
-            helperText="Comma-separated event types"
+          <Input label="Events" placeholder="task.created, task.updated" helperText="Comma-separated event types"
             {...register("events", { required: "At least one event required" })}
             error={formErrors.events?.message}
           />
-          <Input
-            label="Secret"
-            placeholder="Optional signing secret"
-            {...register("secret")}
-          />
+          <Input label="Secret" placeholder="Optional signing secret" {...register("secret")} />
           <div className="modal-action">
             <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
             <Button type="submit" loading={createMutation.isPending}>Create</Button>

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, LoadingPage, Avatar, ConfirmDialog, EmptyState } from "@/components/ui/shared";
+import { Card, LoadingPage, Avatar, ConfirmDialog, EmptyState } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Select } from "@/components/ui/form-fields";
@@ -12,7 +12,6 @@ import { useForm } from "react-hook-form";
 import { UserPlus, Trash2, Shield, Users, MoreHorizontal, Mail, Phone, Calendar, Search } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { OrgMember } from "@/types/domain";
-import { RequireAdmin } from "@/components/permission-gate";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -44,15 +43,7 @@ interface CreateAccountForm {
   role: string;
 }
 
-export default function MembersPage() {
-  return (
-    <RequireAdmin>
-      <MembersPageContent />
-    </RequireAdmin>
-  );
-}
-
-function MembersPageContent() {
+export default function MembersTab() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const currentUser = useAuthStore((s) => s.user);
   const qc = useQueryClient();
@@ -69,7 +60,6 @@ function MembersPageContent() {
     enabled: !!currentOrg,
   });
 
-  // Invite existing user by email
   const inviteForm = useForm<InviteForm>({ defaultValues: { role: "member" } });
   const inviteMutation = useMutation({
     mutationFn: (data: InviteForm) => api.members.add(currentOrg!.id, { email: data.email, role: data.role }),
@@ -82,13 +72,10 @@ function MembersPageContent() {
     onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to invite member"),
   });
 
-  // Create new account and add to org
   const createForm = useForm<CreateAccountForm>({ defaultValues: { role: "member" } });
   const createAccountMutation = useMutation({
     mutationFn: async (data: CreateAccountForm) => {
-      // 1. Create account via Zitadel sign-up
       await api.auth.signup(data.email, data.password, data.name);
-      // 2. Add to org by email
       return api.members.add(currentOrg!.id, { email: data.email, role: data.role });
     },
     onSuccess: () => {
@@ -133,16 +120,16 @@ function MembersPageContent() {
   const getMemberName = (m: OrgMember) => m.display_name || m.email || m.user_id.slice(0, 12);
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
-      <PageHeader
-        title="Members"
-        description={`Manage ${memberList.length} organization member${memberList.length !== 1 ? "s" : ""}`}
-        actions={
-          <Button onClick={() => { setShowInvite(true); setError(""); }}>
-            <UserPlus className="w-4 h-4" /> Add Member
-          </Button>
-        }
-      />
+    <div className="flex flex-col">
+      {/* Header with action */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-base-content/60">
+          {memberList.length} member{memberList.length !== 1 ? "s" : ""}
+        </p>
+        <Button size="sm" onClick={() => { setShowInvite(true); setError(""); }}>
+          <UserPlus className="w-4 h-4" /> Add Member
+        </Button>
+      </div>
 
       {/* Search bar */}
       <div className="mb-4">
@@ -170,8 +157,8 @@ function MembersPageContent() {
           }
         />
       ) : (
-        <Card className="flex-1">
-          <div className="w-full">
+        <Card>
+          <div className="w-full overflow-x-auto">
             <table className="table w-full">
               <thead>
                 <tr>
@@ -186,39 +173,25 @@ function MembersPageContent() {
               <tbody>
                 {filteredMembers.map((m: OrgMember) => (
                   <tr key={m.user_id} className="hover">
-                    {/* Member */}
                     <td>
                       <div className="flex items-center gap-3">
                         <Avatar name={getMemberName(m)} src={m.avatar_url} size="sm" />
                         <div>
-                          <span className="font-medium text-sm">
-                            {m.display_name || "—"}
-                          </span>
+                          <span className="font-medium text-sm">{m.display_name || "—"}</span>
                           {m.user_id === currentUser?.id && (
                             <span className="badge badge-xs badge-primary ml-2">You</span>
                           )}
                         </div>
                       </div>
                     </td>
-                    {/* Email */}
-                    <td>
-                      <span className="text-sm">{m.email || "—"}</span>
-                    </td>
-                    {/* Phone */}
-                    <td>
-                      <span className="text-sm text-base-content/60">{m.phone || "—"}</span>
-                    </td>
-                    {/* Role */}
+                    <td><span className="text-sm">{m.email || "—"}</span></td>
+                    <td><span className="text-sm text-base-content/60">{m.phone || "—"}</span></td>
                     <td>
                       <span className={`badge badge-sm ${ROLE_COLORS[m.role] || "badge-ghost"}`}>
                         {m.role.replace("_", " ")}
                       </span>
                     </td>
-                    {/* Joined */}
-                    <td>
-                      <span className="text-sm text-base-content/60">{formatDate(m.joined_at)}</span>
-                    </td>
-                    {/* Actions */}
+                    <td><span className="text-sm text-base-content/60">{formatDate(m.joined_at)}</span></td>
                     <td>
                       <div className="flex gap-1 justify-end">
                         <div className="dropdown dropdown-end">
@@ -227,20 +200,12 @@ function MembersPageContent() {
                           </label>
                           <ul tabIndex={0} className="dropdown-content z-50 menu p-1 shadow-lg bg-base-100 rounded-box w-44 border border-base-200">
                             <li>
-                              <button
-                                onClick={() => setEditTarget(m)}
-                                disabled={m.user_id === currentUser?.id}
-                                className="text-sm"
-                              >
+                              <button onClick={() => setEditTarget(m)} disabled={m.user_id === currentUser?.id} className="text-sm">
                                 <Shield className="w-3.5 h-3.5" /> Change Role
                               </button>
                             </li>
                             <li>
-                              <button
-                                onClick={() => setRemoveTarget(m)}
-                                disabled={m.user_id === currentUser?.id}
-                                className="text-sm text-error"
-                              >
+                              <button onClick={() => setRemoveTarget(m)} disabled={m.user_id === currentUser?.id} className="text-sm text-error">
                                 <Trash2 className="w-3.5 h-3.5" /> Remove
                               </button>
                             </li>
@@ -268,95 +233,47 @@ function MembersPageContent() {
         title="Add Member"
       >
         {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
-
-        {/* Mode tabs */}
         <div className="tabs tabs-boxed mb-4">
-          <button
-            className={`tab tab-sm ${inviteMode === "email" ? "tab-active" : ""}`}
-            onClick={() => { setInviteMode("email"); setError(""); }}
-          >
+          <button className={`tab tab-sm ${inviteMode === "email" ? "tab-active" : ""}`} onClick={() => { setInviteMode("email"); setError(""); }}>
             <Mail className="w-3.5 h-3.5 mr-1" /> Invite Existing User
           </button>
-          <button
-            className={`tab tab-sm ${inviteMode === "create" ? "tab-active" : ""}`}
-            onClick={() => { setInviteMode("create"); setError(""); }}
-          >
+          <button className={`tab tab-sm ${inviteMode === "create" ? "tab-active" : ""}`} onClick={() => { setInviteMode("create"); setError(""); }}>
             <UserPlus className="w-3.5 h-3.5 mr-1" /> Create New Account
           </button>
         </div>
 
         {inviteMode === "email" ? (
           <form onSubmit={inviteForm.handleSubmit((data) => inviteMutation.mutate(data))} className="space-y-4">
-            <Input
-              label="Email Address"
-              type="email"
-              placeholder="user@example.com"
-              {...inviteForm.register("email", {
-                required: "Email is required",
-                pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" },
-              })}
+            <Input label="Email Address" type="email" placeholder="user@example.com"
+              {...inviteForm.register("email", { required: "Email is required", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" } })}
               error={inviteForm.formState.errors.email?.message}
             />
-            <Select
-              label="Role"
-              options={ROLE_OPTIONS}
-              {...inviteForm.register("role")}
-            />
-            <p className="text-xs text-base-content/50">
-              The user must already have an OrbisPM account.
-            </p>
+            <Select label="Role" options={ROLE_OPTIONS} {...inviteForm.register("role")} />
+            <p className="text-xs text-base-content/50">The user must already have an OrbisPM account.</p>
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={() => { setShowInvite(false); inviteForm.reset(); }}>
-                Cancel
-              </Button>
-              <Button type="submit" loading={inviteMutation.isPending}>
-                <Mail className="w-4 h-4" /> Invite
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => { setShowInvite(false); inviteForm.reset(); }}>Cancel</Button>
+              <Button type="submit" loading={inviteMutation.isPending}><Mail className="w-4 h-4" /> Invite</Button>
             </div>
           </form>
         ) : (
           <form onSubmit={createForm.handleSubmit((data) => createAccountMutation.mutate(data))} className="space-y-4">
-            <Input
-              label="Full Name"
-              placeholder="John Doe"
+            <Input label="Full Name" placeholder="John Doe"
               {...createForm.register("name", { required: "Name is required" })}
               error={createForm.formState.errors.name?.message}
             />
-            <Input
-              label="Email Address"
-              type="email"
-              placeholder="user@example.com"
-              {...createForm.register("email", {
-                required: "Email is required",
-                pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" },
-              })}
+            <Input label="Email Address" type="email" placeholder="user@example.com"
+              {...createForm.register("email", { required: "Email is required", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" } })}
               error={createForm.formState.errors.email?.message}
             />
-            <Input
-              label="Password"
-              type="password"
-              placeholder="Min 8 characters"
-              {...createForm.register("password", {
-                required: "Password is required",
-                minLength: { value: 8, message: "Password must be at least 8 characters" },
-              })}
+            <Input label="Password" type="password" placeholder="Min 8 characters"
+              {...createForm.register("password", { required: "Password is required", minLength: { value: 8, message: "Password must be at least 8 characters" } })}
               error={createForm.formState.errors.password?.message}
             />
-            <Select
-              label="Role"
-              options={ROLE_OPTIONS}
-              {...createForm.register("role")}
-            />
-            <p className="text-xs text-base-content/50">
-              This creates a new OrbisPM account and adds them to the organization.
-            </p>
+            <Select label="Role" options={ROLE_OPTIONS} {...createForm.register("role")} />
+            <p className="text-xs text-base-content/50">This creates a new OrbisPM account and adds them to the organization.</p>
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={() => { setShowInvite(false); createForm.reset(); }}>
-                Cancel
-              </Button>
-              <Button type="submit" loading={createAccountMutation.isPending}>
-                <UserPlus className="w-4 h-4" /> Create & Add
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => { setShowInvite(false); createForm.reset(); }}>Cancel</Button>
+              <Button type="submit" loading={createAccountMutation.isPending}><UserPlus className="w-4 h-4" /> Create & Add</Button>
             </div>
           </form>
         )}
@@ -378,9 +295,7 @@ function MembersPageContent() {
                 <button
                   key={r.value}
                   className={`btn btn-sm ${editTarget.role === r.value ? "btn-primary" : "btn-outline"}`}
-                  onClick={() =>
-                    updateRoleMutation.mutate({ userId: editTarget.user_id, role: r.value })
-                  }
+                  onClick={() => updateRoleMutation.mutate({ userId: editTarget.user_id, role: r.value })}
                   disabled={updateRoleMutation.isPending}
                 >
                   {r.label}

@@ -4,51 +4,22 @@ import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
+import { Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { useForm } from "react-hook-form";
-import { Plus, Shield, Trash2, Pencil, Calendar, Check, X, MoreHorizontal, Eye } from "lucide-react";
+import { Plus, Shield, Trash2, Pencil, Check, X, MoreHorizontal, Eye } from "lucide-react";
 import { formatDate } from "@/lib/utils";
 import type { CustomRole } from "@/types/domain";
-import { RequireAdmin } from "@/components/permission-gate";
 
-/**
- * Permission categories and their actions.
- * Stored in the DB as: { "projects": { "create": true, "read": true, ... }, "tasks": {...} }
- */
 const PERMISSION_CATEGORIES = [
-  {
-    key: "projects",
-    label: "Projects",
-    actions: ["create", "read", "update", "delete", "manage_members"],
-  },
-  {
-    key: "tasks",
-    label: "Tasks",
-    actions: ["create", "read", "update", "delete", "assign", "review"],
-  },
-  {
-    key: "teams",
-    label: "Teams",
-    actions: ["create", "read", "update", "delete", "manage_members"],
-  },
-  {
-    key: "members",
-    label: "Members",
-    actions: ["invite", "read", "update_role", "remove"],
-  },
-  {
-    key: "billing",
-    label: "Billing",
-    actions: ["read", "manage"],
-  },
-  {
-    key: "settings",
-    label: "Settings",
-    actions: ["read", "update"],
-  },
+  { key: "projects", label: "Projects", actions: ["create", "read", "update", "delete", "manage_members"] },
+  { key: "tasks", label: "Tasks", actions: ["create", "read", "update", "delete", "assign", "review"] },
+  { key: "teams", label: "Teams", actions: ["create", "read", "update", "delete", "manage_members"] },
+  { key: "members", label: "Members", actions: ["invite", "read", "update_role", "remove"] },
+  { key: "billing", label: "Billing", actions: ["read", "manage"] },
+  { key: "settings", label: "Settings", actions: ["read", "update"] },
 ] as const;
 
 type Permissions = Record<string, Record<string, boolean>>;
@@ -62,9 +33,7 @@ function buildEmptyPermissions(): Permissions {
   const perms: Permissions = {};
   for (const cat of PERMISSION_CATEGORIES) {
     perms[cat.key] = {};
-    for (const action of cat.actions) {
-      perms[cat.key][action] = false;
-    }
+    for (const action of cat.actions) perms[cat.key][action] = false;
   }
   return perms;
 }
@@ -86,9 +55,7 @@ function normalizePermissions(raw: Record<string, unknown> | undefined): Permiss
 function countPermissions(perms: Permissions): number {
   let count = 0;
   for (const cat of Object.values(perms)) {
-    for (const val of Object.values(cat)) {
-      if (val) count++;
-    }
+    for (const val of Object.values(cat)) { if (val) count++; }
   }
   return count;
 }
@@ -97,15 +64,7 @@ function totalPermissions(): number {
   return PERMISSION_CATEGORIES.reduce((sum, c) => sum + c.actions.length, 0);
 }
 
-export default function RolesPage() {
-  return (
-    <RequireAdmin>
-      <RolesPageContent />
-    </RequireAdmin>
-  );
-}
-
-function RolesPageContent() {
+export default function RolesTab() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -125,7 +84,6 @@ function RolesPageContent() {
   const createFormMethods = useForm<RoleForm>();
   const editFormMethods = useForm<RoleForm>();
 
-  // Toggle a permission in a permissions state object
   const togglePerm = useCallback(
     (setter: React.Dispatch<React.SetStateAction<Permissions>>, category: string, action: string) => {
       setter((prev) => ({
@@ -136,7 +94,6 @@ function RolesPageContent() {
     []
   );
 
-  // Toggle all permissions for a category
   const toggleCategory = useCallback(
     (setter: React.Dispatch<React.SetStateAction<Permissions>>, category: string, enable: boolean) => {
       setter((prev) => {
@@ -200,38 +157,34 @@ function RolesPageContent() {
   const roleList = roles?.data || [];
 
   return (
-    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
-      <PageHeader
-        title="Custom Roles"
-        description={`Define custom permissions — ${roleList.length} role${roleList.length !== 1 ? "s" : ""}`}
-        actions={
-          <Button onClick={() => { setShowCreate(true); setError(""); setCreatePerms(buildEmptyPermissions()); }}>
-            <Plus className="w-4 h-4" /> New Role
-          </Button>
-        }
-      />
+    <div className="flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-sm text-base-content/60">
+          {roleList.length} custom role{roleList.length !== 1 ? "s" : ""} with granular permissions
+        </p>
+        <Button size="sm" onClick={() => { setShowCreate(true); setError(""); setCreatePerms(buildEmptyPermissions()); }}>
+          <Plus className="w-4 h-4" /> New Role
+        </Button>
+      </div>
 
       {roleList.length === 0 ? (
         <EmptyState
           icon={<Shield className="w-16 h-16" />}
           title="No custom roles"
           description="Create custom roles with granular permissions for your organization"
-          action={
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="w-4 h-4" /> Create Role
-            </Button>
-          }
+          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Role</Button>}
         />
       ) : (
-        <Card className="flex-1">
-          <div className="w-full">
+        <Card>
+          <div className="w-full overflow-x-auto">
             <table className="table w-full">
               <thead>
                 <tr>
                   <th>Role Name</th>
                   <th>Description</th>
                   <th>Permissions</th>
-                  <th><Calendar className="w-3.5 h-3.5 inline mr-1" />Created</th>
+                  <th>Created</th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
@@ -249,26 +202,16 @@ function RolesPageContent() {
                         </div>
                       </td>
                       <td>
-                        <span className="text-sm text-base-content/60 line-clamp-1 max-w-xs">
-                          {role.description || "—"}
-                        </span>
+                        <span className="text-sm text-base-content/60 line-clamp-1 max-w-xs">{role.description || "—"}</span>
                       </td>
                       <td>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-mono">
-                            {count}/{total}
-                          </span>
-                          <progress
-                            className="progress progress-primary w-20"
-                            value={count}
-                            max={total}
-                          />
+                          <span className="text-sm font-mono">{count}/{total}</span>
+                          <progress className="progress progress-primary w-20" value={count} max={total} />
                         </div>
                       </td>
                       <td>
-                        <span className="text-sm text-base-content/60">
-                          {role.created_at ? formatDate(role.created_at) : "—"}
-                        </span>
+                        <span className="text-sm text-base-content/60">{role.created_at ? formatDate(role.created_at) : "—"}</span>
                       </td>
                       <td>
                         <div className="flex gap-1 justify-end">
@@ -277,21 +220,9 @@ function RolesPageContent() {
                               <MoreHorizontal className="w-4 h-4" />
                             </div>
                             <ul tabIndex={0} className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200">
-                              <li>
-                                <button onClick={() => setViewTarget(role)} className="text-sm">
-                                  <Eye className="w-3.5 h-3.5" /> View
-                                </button>
-                              </li>
-                              <li>
-                                <button onClick={() => openEdit(role)} className="text-sm">
-                                  <Pencil className="w-3.5 h-3.5" /> Edit
-                                </button>
-                              </li>
-                              <li>
-                                <button onClick={() => setDeleteTarget(role)} className="text-sm text-error">
-                                  <Trash2 className="w-3.5 h-3.5" /> Delete
-                                </button>
-                              </li>
+                              <li><button onClick={() => setViewTarget(role)} className="text-sm"><Eye className="w-3.5 h-3.5" /> View</button></li>
+                              <li><button onClick={() => openEdit(role)} className="text-sm"><Pencil className="w-3.5 h-3.5" /> Edit</button></li>
+                              <li><button onClick={() => setDeleteTarget(role)} className="text-sm text-error"><Trash2 className="w-3.5 h-3.5" /> Delete</button></li>
                             </ul>
                           </div>
                         </div>
@@ -305,102 +236,56 @@ function RolesPageContent() {
         </Card>
       )}
 
-      {/* ─── Create Role Modal ─── */}
-      <Modal
-        open={showCreate}
-        onClose={() => { setShowCreate(false); createFormMethods.reset(); setError(""); }}
-        title="New Custom Role"
-        className="max-w-2xl"
-      >
+      {/* Create Role Modal */}
+      <Modal open={showCreate} onClose={() => { setShowCreate(false); createFormMethods.reset(); setError(""); }} title="New Custom Role" className="max-w-2xl">
         {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
-        <form
-          onSubmit={createFormMethods.handleSubmit((data) => createMutation.mutate(data))}
-          className="space-y-5"
-        >
+        <form onSubmit={createFormMethods.handleSubmit((data) => createMutation.mutate(data))} className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input
-              label="Role Name"
-              placeholder="Project Manager"
+            <Input label="Role Name" placeholder="Project Manager"
               {...createFormMethods.register("name", { required: "Name is required" })}
               error={createFormMethods.formState.errors.name?.message}
             />
-            <Textarea
-              label="Description"
-              placeholder="Optional description"
-              {...createFormMethods.register("description")}
-            />
+            <Textarea label="Description" placeholder="Optional description" {...createFormMethods.register("description")} />
           </div>
-
           <PermissionEditor perms={createPerms} onChange={setCreatePerms} togglePerm={togglePerm} toggleCategory={toggleCategory} />
-
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); createFormMethods.reset(); }}>
-              Cancel
-            </Button>
+            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); createFormMethods.reset(); }}>Cancel</Button>
             <Button type="submit" loading={createMutation.isPending}>Create Role</Button>
           </div>
         </form>
       </Modal>
 
-      {/* ─── Edit Role Modal ─── */}
+      {/* Edit Role Modal */}
       {editTarget && (
-        <Modal
-          open
-          onClose={() => { setEditTarget(null); editFormMethods.reset(); setError(""); }}
-          title={`Edit: ${editTarget.name}`}
-          className="max-w-2xl"
-        >
+        <Modal open onClose={() => { setEditTarget(null); editFormMethods.reset(); setError(""); }} title={`Edit: ${editTarget.name}`} className="max-w-2xl">
           {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
-          <form
-            onSubmit={editFormMethods.handleSubmit((data) => updateMutation.mutate(data))}
-            className="space-y-5"
-          >
+          <form onSubmit={editFormMethods.handleSubmit((data) => updateMutation.mutate(data))} className="space-y-5">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input
-                label="Role Name"
-                {...editFormMethods.register("name", { required: "Name is required" })}
-                error={editFormMethods.formState.errors.name?.message}
-              />
-              <Textarea
-                label="Description"
-                {...editFormMethods.register("description")}
-              />
+              <Input label="Role Name" {...editFormMethods.register("name", { required: "Name is required" })} error={editFormMethods.formState.errors.name?.message} />
+              <Textarea label="Description" {...editFormMethods.register("description")} />
             </div>
-
             <PermissionEditor perms={editPerms} onChange={setEditPerms} togglePerm={togglePerm} toggleCategory={toggleCategory} />
-
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={() => setEditTarget(null)}>
-                Cancel
-              </Button>
+              <Button type="button" variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
               <Button type="submit" loading={updateMutation.isPending}>Save Changes</Button>
             </div>
           </form>
         </Modal>
       )}
 
-      {/* ─── View Role Modal ─── */}
+      {/* View Role Modal */}
       {viewTarget && (
-        <Modal
-          open
-          onClose={() => setViewTarget(null)}
-          title={viewTarget.name}
-          className="max-w-2xl"
-        >
-          {viewTarget.description && (
-            <p className="text-sm text-base-content/60 mb-4">{viewTarget.description}</p>
-          )}
+        <Modal open onClose={() => setViewTarget(null)} title={viewTarget.name} className="max-w-2xl">
+          {viewTarget.description && <p className="text-sm text-base-content/60 mb-4">{viewTarget.description}</p>}
           <PermissionEditor perms={normalizePermissions(viewTarget.permissions)} readOnly />
           <div className="modal-action">
             <Button variant="ghost" onClick={() => setViewTarget(null)}>Close</Button>
-            <Button onClick={() => { setViewTarget(null); openEdit(viewTarget); }}>
-              <Pencil className="w-4 h-4" /> Edit
-            </Button>
+            <Button onClick={() => { setViewTarget(null); openEdit(viewTarget); }}><Pencil className="w-4 h-4" /> Edit</Button>
           </div>
         </Modal>
       )}
 
-      {/* ─── Delete Confirm ─── */}
+      {/* Delete Confirm */}
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -414,7 +299,7 @@ function RolesPageContent() {
   );
 }
 
-/* ─────────────────────────── Permission Editor Component ─────────────────────────── */
+/* ─── Permission Editor ─── */
 
 function PermissionEditor({
   perms,
@@ -433,9 +318,7 @@ function PermissionEditor({
     <div>
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-semibold">Permissions</h4>
-        <span className="text-xs text-base-content/50">
-          {countPermissions(perms)} of {totalPermissions()} enabled
-        </span>
+        <span className="text-xs text-base-content/50">{countPermissions(perms)} of {totalPermissions()} enabled</span>
       </div>
       <div className="border border-base-200 rounded-lg divide-y divide-base-200">
         {PERMISSION_CATEGORIES.map((cat) => {
@@ -448,16 +331,10 @@ function PermissionEditor({
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium capitalize">{cat.label}</span>
-                  <span className="badge badge-xs badge-ghost">
-                    {enabledCount}/{cat.actions.length}
-                  </span>
+                  <span className="badge badge-xs badge-ghost">{enabledCount}/{cat.actions.length}</span>
                 </div>
                 {!readOnly && onChange && toggleCategory && (
-                  <button
-                    type="button"
-                    className="btn btn-xs btn-ghost"
-                    onClick={() => toggleCategory(onChange, cat.key, !allEnabled)}
-                  >
+                  <button type="button" className="btn btn-xs btn-ghost" onClick={() => toggleCategory(onChange, cat.key, !allEnabled)}>
                     {allEnabled ? "Revoke All" : "Grant All"}
                   </button>
                 )}
@@ -467,10 +344,7 @@ function PermissionEditor({
                   const enabled = !!catPerms[action];
                   if (readOnly) {
                     return (
-                      <span
-                        key={action}
-                        className={`badge badge-sm gap-1 ${enabled ? "badge-success" : "badge-ghost badge-outline opacity-40"}`}
-                      >
+                      <span key={action} className={`badge badge-sm gap-1 ${enabled ? "badge-success" : "badge-ghost badge-outline opacity-40"}`}>
                         {enabled ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                         {action.replace("_", " ")}
                       </span>
@@ -484,12 +358,7 @@ function PermissionEditor({
                       }`}
                       onClick={() => onChange && togglePerm && togglePerm(onChange, cat.key, action)}
                     >
-                      <input
-                        type="checkbox"
-                        checked={enabled}
-                        readOnly
-                        className="hidden"
-                      />
+                      <input type="checkbox" checked={enabled} readOnly className="hidden" />
                       {enabled ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
                       {action.replace("_", " ")}
                     </label>

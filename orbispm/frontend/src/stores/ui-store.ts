@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-type Theme = "orbis" | "dark" | "light" | "cupcake" | "forest" | "night";
+type Theme = "glass-light" | "glass-dark" | "orbis-light" | "orbis-dark";
 
 interface UIState {
   sidebarCollapsed: boolean;
@@ -17,9 +17,18 @@ interface UIState {
   setBreadcrumb: (b: { label: string; backHref?: string } | null) => void;
 }
 
+const VALID_THEMES: Theme[] = ["glass-light", "glass-dark", "orbis-light", "orbis-dark"];
+
+function getStoredTheme(): Theme {
+  if (typeof window === "undefined") return "orbis-light";
+  const stored = localStorage.getItem("theme") as Theme | null;
+  if (stored && VALID_THEMES.includes(stored)) return stored;
+  return "orbis-light";
+}
+
 export const useUIStore = create<UIState>((set) => ({
   sidebarCollapsed: false,
-  theme: (typeof window !== "undefined" ? localStorage.getItem("theme") as Theme : null) || "orbis",
+  theme: getStoredTheme(),
   commandPaletteOpen: false,
   mobileMenuOpen: false,
   breadcrumb: null,
@@ -38,11 +47,9 @@ export const useUIStore = create<UIState>((set) => ({
   setBreadcrumb: (b) => set({ breadcrumb: b }),
 }));
 
-export const THEMES: { label: string; value: Theme }[] = [
-  { label: "OrbisPM", value: "orbis" },
-  { label: "Light", value: "light" },
-  { label: "Dark", value: "dark" },
-  { label: "Cupcake", value: "cupcake" },
-  { label: "Forest", value: "forest" },
-  { label: "Night", value: "night" },
+export const THEMES: { label: string; value: Theme; description: string; colorScheme: "light" | "dark" }[] = [
+  { label: "Glass Light", value: "glass-light", description: "Frosted glass with light gradient", colorScheme: "light" },
+  { label: "Glass Dark", value: "glass-dark", description: "Frosted glass with dark gradient", colorScheme: "dark" },
+  { label: "Orbis Light", value: "orbis-light", description: "Clean minimal light", colorScheme: "light" },
+  { label: "Orbis Dark", value: "orbis-dark", description: "Clean minimal dark", colorScheme: "dark" },
 ];

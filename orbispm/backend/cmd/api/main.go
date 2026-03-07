@@ -303,6 +303,10 @@ func main() {
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
 	presenceHandler := handler.NewPresenceHandler(rdb, publisher)
 
+	// --- Contact (public) ---
+	contactRepo := repository.NewContactRepo(pool)
+	contactHandler := handler.NewContactHandler(contactRepo)
+
 	// --- Handlers (RBAC / Review) ---
 	permHandler := handler.NewPermissionHandler(permSvc)
 	projectTeamHandler := handler.NewProjectTeamHandler(projectTeamSvc)
@@ -353,6 +357,11 @@ func main() {
 	// Stripe webhook (no auth — uses signature verification)
 	r.Route("/api/v1/webhooks/stripe", func(r chi.Router) {
 		r.Mount("/", billingHandler.WebhookRoutes())
+	})
+
+	// Public contact form (no auth required)
+	r.Route("/api/v1/public/contact", func(r chi.Router) {
+		r.Mount("/", contactHandler.Routes())
 	})
 
 	// API v1 group — requires auth

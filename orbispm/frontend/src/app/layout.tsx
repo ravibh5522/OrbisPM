@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" data-theme="orbis" suppressHydrationWarning>
+    <html lang="en" data-theme="orbis-light" suppressHydrationWarning>
       <body className="min-h-screen bg-base-200">
         <Providers>{children}</Providers>
       </body>
