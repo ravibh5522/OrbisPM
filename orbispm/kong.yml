@@ -59,7 +59,7 @@ services:
     routes:
       - name: backend-ws-route
         paths:
-          - ~/api/v1/orgs/[^/]+/projects/[^/]+/ws$
+          - ~/api/v1/orgs/[^/]+/ws$
         strip_path: false
         preserve_host: false
         protocols:

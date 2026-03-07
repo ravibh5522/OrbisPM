@@ -2,6 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { useOrgSocket } from "@/hooks/use-org-socket";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore, THEMES } from "@/stores/ui-store";
 import { useRequireAuth } from "@/hooks/use-auth-guard";
@@ -30,7 +31,6 @@ import {
 } from "lucide-react";
 import type { OrgRole } from "@/types/domain";
 import { cn } from "@/lib/utils";
-import { WebSocketProvider } from "@/hooks/use-websocket";
 
 import { NotificationBell } from "@/components/notification-bell";
 
@@ -433,6 +433,10 @@ function MobileSidebar() {
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, hasOrgs } = useRequireAuth();
   const { sidebarCollapsed } = useUIStore();
+  const currentOrg = useAuthStore((s) => s.currentOrg);
+
+  // Single org-level WebSocket (replaces SSE + per-project WS)
+  useOrgSocket(currentOrg?.id);
 
   if (isLoading || !hasOrgs) {
     return (
@@ -443,19 +447,17 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <WebSocketProvider>
-      <div className="min-h-screen">
-        <Sidebar />
-        <MobileSidebar />
-        <TopBar />
-        <main className={cn(
-          "transition-all duration-200 p-4 md:p-6",
-          "lg:ml-64",
-          sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
-        )}>
-          {children}
-        </main>
-      </div>
-    </WebSocketProvider>
+    <div className="min-h-screen">
+      <Sidebar />
+      <MobileSidebar />
+      <TopBar />
+      <main className={cn(
+        "transition-all duration-200 p-4 md:p-6",
+        "lg:ml-64",
+        sidebarCollapsed ? "lg:ml-16" : "lg:ml-64"
+      )}>
+        {children}
+      </main>
+    </div>
   );
 }

@@ -182,17 +182,14 @@ func main() {
 	publisher := eventbus.NewRedisPublisher(rdb)
 	subscriber := eventbus.NewRedisSubscriber(rdb)
 
-	// --- WebSocket Hub ---
-	hub := websocket.NewHub(subscriber)
+	// --- Org WebSocket Hub (unified: replaces SSE + per-project WS) ---
+	orgHub := websocket.NewOrgHub(subscriber)
 	go func() {
-		if err := hub.Start(ctx); err != nil {
-			log.Error().Err(err).Msg("websocket hub error")
+		if err := orgHub.Start(ctx); err != nil {
+			log.Error().Err(err).Msg("org websocket hub error")
 		}
 	}()
-	log.Info().Msg("WebSocket hub started")
-
-	// --- Project WebSocket Hub (real-time task collaboration) ---
-	projectHub := websocket.NewProjectHub()
+	log.Info().Msg("Org WebSocket hub started")
 
 	// --- Background Worker (Asynq) ---
 	workerSrv := worker.NewServer(redisOpts.Addr)
@@ -304,7 +301,6 @@ func main() {
 	dashboardHandler := handler.NewDashboardHandler(dashboardSvc, taskSvc)
 	customRoleHandler := handler.NewCustomRoleHandler(customRoleSvc)
 	notifPrefHandler := handler.NewNotifPrefHandler(notifPrefSvc)
-	eventsHandler := handler.NewEventsHandler(hub)
 	presenceHandler := handler.NewPresenceHandler(rdb, publisher)
 
 	// --- Handlers (RBAC / Review) ---
@@ -313,7 +309,7 @@ func main() {
 	changeReqHandler := handler.NewChangeRequestHandler(changeReqSvc)
 
 	// --- Handler (WebSocket — real-time project collaboration) ---
-	wsHandler := handler.NewWSHandler(projectHub, taskSvc, commentSvc, checklistSvc, depSvc, watcherSvc, changeReqSvc)
+	wsHandler := handler.NewWSHandler(orgHub, taskSvc, commentSvc, checklistSvc, depSvc, watcherSvc, changeReqSvc)
 
 	// Search handler (optional — only if Meilisearch is available)
 	var searchHandler *handler.SearchHandler
@@ -423,8 +419,8 @@ func main() {
 						r.Mount("/search", searchHandler.Routes())
 					}
 
-					// Events (SSE)
-					r.Mount("/events", eventsHandler.Routes())
+					// Org-level WebSocket (replaces SSE + per-project WS)
+					r.Get("/ws", wsHandler.ServeWS)
 
 					// Change request review actions (org-level)
 					r.Mount("/change-requests", changeReqHandler.ReviewRoutes())
@@ -455,9 +451,6 @@ func main() {
 							r.Post("/members", projectHandler.AddMember)
 							r.Delete("/members/{userId}", projectHandler.RemoveMember)
 							r.Get("/dashboard", projectHandler.Dashboard)
-
-							// Real-time WebSocket (task collaboration)
-							r.Get("/ws", wsHandler.ServeWS)
 
 							// Project teams (multi-team)
 							r.Mount("/teams", projectTeamHandler.Routes())

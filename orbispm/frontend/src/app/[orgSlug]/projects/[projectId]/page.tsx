@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
-import { useProjectSocket } from "@/hooks/use-project-socket";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import { api } from "@/lib/api";
 import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
@@ -63,8 +63,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     enabled: !!currentOrg,
   });
 
-  // Real-time WebSocket connection for project task collaboration
-  useProjectSocket(currentOrg?.id, projectId);
+  // Join/leave project room on the org-level WebSocket
+  useEffect(() => {
+    useProjectTaskStore.getState().setCurrentProjectId(projectId);
+    return () => {
+      useProjectTaskStore.getState().setCurrentProjectId(null);
+    };
+  }, [projectId]);
 
   const { data: members } = useQuery({
     queryKey: ["project-members", currentOrg?.id, projectId],

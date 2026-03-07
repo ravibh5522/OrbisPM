@@ -16,6 +16,8 @@ interface ProjectTaskState {
   // Connection
   connected: boolean;
   roomSize: number;
+  currentProjectId: string | null;
+  _rawSend: WsSendFn | null;
   send: WsSendFn | null;
 
   // Task data (flat list – used by list-view and columns)
@@ -39,6 +41,8 @@ interface ProjectTaskState {
 
   setConnected: (v: boolean, roomSize?: number) => void;
   setSend: (fn: WsSendFn | null) => void;
+  setRawSend: (fn: WsSendFn | null) => void;
+  setCurrentProjectId: (id: string | null) => void;
 
   // Task list
   setTasks: (key: string, tasks: Task[], total: number) => void;
@@ -78,6 +82,8 @@ const INITIAL: Pick<
   ProjectTaskState,
   | "connected"
   | "roomSize"
+  | "currentProjectId"
+  | "_rawSend"
   | "send"
   | "tasks"
   | "totals"
@@ -91,6 +97,8 @@ const INITIAL: Pick<
 > = {
   connected: false,
   roomSize: 0,
+  currentProjectId: null,
+  _rawSend: null,
   send: null,
   tasks: new Map(),
   totals: new Map(),
@@ -110,6 +118,64 @@ export const useProjectTaskStore = create<ProjectTaskState>((set, get) => ({
     set({ connected: v, roomSize: roomSize ?? get().roomSize }),
 
   setSend: (fn) => set({ send: fn }),
+
+  setRawSend: (fn) => {
+    if (!fn) {
+      set({ _rawSend: null, send: null });
+      return;
+    }
+    set({ _rawSend: fn });
+
+    // If we're already in a project, re-join the room on reconnect
+    const pid = get().currentProjectId;
+    if (pid) {
+      fn("project:join", { project_id: pid })
+        .then((resp: any) => {
+          const projectSend: WsSendFn = (action, payload) =>
+            fn(action, { ...payload, project_id: pid });
+          set({ send: projectSend, roomSize: resp?.room_size ?? 0 });
+        })
+        .catch(() => {
+          set({ send: null });
+        });
+    }
+  },
+
+  setCurrentProjectId: (id) => {
+    const prev = get().currentProjectId;
+    const rawSend = get()._rawSend;
+
+    // Leave previous project room
+    if (prev && rawSend) {
+      rawSend("project:leave", { project_id: prev }).catch(() => {});
+    }
+
+    // Clear project-specific data
+    set({
+      currentProjectId: id,
+      send: null,
+      tasks: new Map(),
+      totals: new Map(),
+      taskTree: [],
+      checklists: new Map(),
+      comments: new Map(),
+      dependencies: new Map(),
+      watchers: new Map(),
+      changeRequests: new Map(),
+      roomSize: 0,
+    });
+
+    // Join new project room
+    if (id && rawSend) {
+      rawSend("project:join", { project_id: id })
+        .then((resp: any) => {
+          const projectSend: WsSendFn = (action, payload) =>
+            rawSend(action, { ...payload, project_id: id });
+          set({ send: projectSend, roomSize: resp?.room_size ?? 0 });
+        })
+        .catch(() => {});
+    }
+  },
 
   // ─── Task data ────────────────────────────────
 
