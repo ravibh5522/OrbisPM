@@ -139,6 +139,11 @@ func (h *Hub) SSEHandler(userID, orgID uuid.UUID, w http.ResponseWriter, r *http
 		return
 	}
 
+	// Clear HTTP server read/write deadlines so the long-lived SSE isn't killed.
+	rc := http.NewResponseController(w)
+	_ = rc.SetReadDeadline(time.Time{})
+	_ = rc.SetWriteDeadline(time.Time{})
+
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")

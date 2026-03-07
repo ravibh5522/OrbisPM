@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import { Button } from "@/components/ui/button";
 import { Play, Pause, StopCircle, Timer, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -61,9 +60,10 @@ function clearTimerState(taskId: string) {
 }
 
 export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerProps) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const [state, setState] = useState<TimerState>(() => loadTimerState(task.id));
   const [displayMs, setDisplayMs] = useState(0);
+  const [saving, setSaving] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Calculate current elapsed time
@@ -91,15 +91,14 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
     };
   }, [state.isRunning, state.startedAt, state.accumulatedMs, calculateElapsed]);
 
-  const updateMutation = useMutation({
-    mutationFn: (newActualHours: number) =>
-      api.tasks.update(orgId, projectId, task.id, { actual_hours: newActualHours }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["task", orgId, projectId, task.id] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+  const saveActualHours = useCallback(async (newHours: number) => {
+    if (!send) return;
+    setSaving(true);
+    try {
+      await send("task:update", { task_id: task.id, actual_hours: newHours });
       onUpdate?.();
-    },
-  });
+    } catch {} finally { setSaving(false); }
+  }, [send, task.id, onUpdate]);
 
   const start = useCallback(() => {
     const newState: TimerState = {
@@ -129,10 +128,10 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
     const newHours = Math.round((currentHours + hoursToAdd) * 100) / 100;
 
     // Update task and clear timer state
-    updateMutation.mutate(newHours);
+    saveActualHours(newHours);
     clearTimerState(task.id);
     setState({ isRunning: false, startedAt: null, accumulatedMs: 0 });
-  }, [task.id, task.actual_hours, calculateElapsed, updateMutation]);
+  }, [task.id, task.actual_hours, calculateElapsed, saveActualHours]);
 
   const reset = useCallback(() => {
     clearTimerState(task.id);
@@ -203,7 +202,7 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
               size="sm"
               onClick={stop}
               title="Stop and save time"
-              loading={updateMutation.isPending}
+              loading={saving}
               className="text-success"
             >
               <StopCircle className="w-4 h-4" />

@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { api } from "@/lib/api"; // kept for CSV file upload (binary)
 import { Button } from "@/components/ui/button";
 import {
   Upload,
@@ -97,7 +96,6 @@ interface CSVImportDialogProps {
 type Step = "upload" | "mapping" | "result";
 
 export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDialogProps) {
-  const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -106,16 +104,22 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [result, setResult] = useState<ImportJob | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+  const [importError, setImportError] = useState<Error | null>(null);
 
-  const importMutation = useMutation({
-    mutationFn: ({ f, m }: { f: File; m: Record<string, string> }) =>
-      api.import.start(orgId, projectId, f, m),
-    onSuccess: (job) => {
+  const startImport = async (f: File, m: Record<string, string>) => {
+    setImporting(true);
+    setImportError(null);
+    try {
+      const job = await api.import.start(orgId, projectId, f, m);
       setResult(job);
       setStep("result");
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+    } catch (e: any) {
+      setImportError(e);
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const reset = useCallback(() => {
     setStep("upload");
@@ -125,9 +129,10 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
     setMapping({});
     setResult(null);
     setParseError(null);
-    importMutation.reset();
+    setImporting(false);
+    setImportError(null);
     if (fileRef.current) fileRef.current.value = "";
-  }, [importMutation]);
+  }, []);
 
   const handleClose = () => {
     reset();
@@ -193,7 +198,7 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
     for (const [header, field] of Object.entries(mapping)) {
       if (field) cleanMapping[header] = field;
     }
-    importMutation.mutate({ f: file, m: cleanMapping });
+    startImport(file, cleanMapping);
   };
 
   if (!open) return null;
@@ -342,21 +347,21 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
               <Button
                 size="sm"
                 onClick={handleImport}
-                disabled={!hasTitleMapping || importMutation.isPending}
+                disabled={!hasTitleMapping || importing}
               >
-                {importMutation.isPending ? (
+                {importing ? (
                   <span className="loading loading-spinner loading-sm mr-1" />
                 ) : (
                   <ArrowRight className="w-4 h-4 mr-1" />
                 )}
-                {importMutation.isPending ? "Importing..." : "Import Tasks"}
+                {importing ? "Importing..." : "Import Tasks"}
               </Button>
             </div>
 
-            {importMutation.isError && (
-              <div className="alert alert-error mt-4">
+            {importError && (
+              <div className="alert alert-error text-sm">
                 <AlertTriangle className="w-4 h-4" />
-                <span>{(importMutation.error as Error).message || "Import failed"}</span>
+                <span>{importError.message || "Import failed"}</span>
               </div>
             )}
           </div>

@@ -191,6 +191,9 @@ func main() {
 	}()
 	log.Info().Msg("WebSocket hub started")
 
+	// --- Project WebSocket Hub (real-time task collaboration) ---
+	projectHub := websocket.NewProjectHub()
+
 	// --- Background Worker (Asynq) ---
 	workerSrv := worker.NewServer(redisOpts.Addr)
 	defer workerSrv.Stop()
@@ -308,6 +311,9 @@ func main() {
 	permHandler := handler.NewPermissionHandler(permSvc)
 	projectTeamHandler := handler.NewProjectTeamHandler(projectTeamSvc)
 	changeReqHandler := handler.NewChangeRequestHandler(changeReqSvc)
+
+	// --- Handler (WebSocket — real-time project collaboration) ---
+	wsHandler := handler.NewWSHandler(projectHub, taskSvc, commentSvc, checklistSvc, depSvc, watcherSvc, changeReqSvc)
 
 	// Search handler (optional — only if Meilisearch is available)
 	var searchHandler *handler.SearchHandler
@@ -449,6 +455,9 @@ func main() {
 							r.Post("/members", projectHandler.AddMember)
 							r.Delete("/members/{userId}", projectHandler.RemoveMember)
 							r.Get("/dashboard", projectHandler.Dashboard)
+
+							// Real-time WebSocket (task collaboration)
+							r.Get("/ws", wsHandler.ServeWS)
 
 							// Project teams (multi-team)
 							r.Mount("/teams", projectTeamHandler.Routes())

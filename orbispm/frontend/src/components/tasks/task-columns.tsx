@@ -1,8 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import { ConfirmDialog, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -44,7 +43,7 @@ interface TaskColumnsProps {
 }
 
 export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, focusTaskId }: TaskColumnsProps) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const user = useAuthStore((s) => s.user);
   const orgMembership = useAuthStore((s) => s.currentMembership);
   const currentUserId = user?.id || "";
@@ -56,42 +55,84 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
   const [prevFocusTaskId, setPrevFocusTaskId] = useState(focusTaskId);
 
+  // Column data state (one per depth)
+  const [columnData, setColumnData] = useState<Task[][]>([[], [], [], []]);
+  const [columnLoading, setColumnLoading] = useState<boolean[]>([false, false, false, false]);
+
+  // Mutation state
+  const [updatePending, setUpdatePending] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+
   // Reset deep-link state when focusTaskId changes
   if (focusTaskId !== prevFocusTaskId) {
     setPrevFocusTaskId(focusTaskId);
     setDeepLinkProcessed(false);
   }
 
-  // Query for deep-linked task to get its path
-  const focusTaskQuery = useQuery({
-    queryKey: ["task", orgId, projectId, focusTaskId],
-    queryFn: () => api.tasks.get(orgId, projectId, focusTaskId!),
-    enabled: !!orgId && !!focusTaskId && !deepLinkProcessed,
-  });
+  // Fetch column tasks via WS
+  const fetchColumn = useCallback(async (depth: number, parentId: string | null) => {
+    if (!send) return;
+    setColumnLoading((prev) => { const n = [...prev]; n[depth] = true; return n; });
+    try {
+      const param = parentId ?? "root";
+      const res = await send("task:list", { parent_id: param });
+      setColumnData((prev) => { const n = [...prev]; n[depth] = res?.data || []; return n; });
+    } catch {
+      setColumnData((prev) => { const n = [...prev]; n[depth] = []; return n; });
+    } finally {
+      setColumnLoading((prev) => { const n = [...prev]; n[depth] = false; return n; });
+    }
+  }, [send]);
 
-  // Effect to auto-expand deep-linked task
+  // Refetch all visible columns
+  const refetchAll = useCallback(() => {
+    fetchColumn(0, null);
+    for (let i = 0; i < selected.length; i++) {
+      if (selected[i]) fetchColumn(i + 1, selected[i]);
+    }
+  }, [fetchColumn, selected]);
+
+  // Load root column on connect
+  useEffect(() => { if (send) fetchColumn(0, null); }, [send, fetchColumn]);
+
+  // Load child column when selection changes
   useEffect(() => {
-    if (focusTaskId && focusTaskQuery.data && !deepLinkProcessed) {
-      const task = focusTaskQuery.data;
-      // Build the path from root to this task
-      const path = (task as Task & { path?: string[] }).path || [];
-      const newSelected: (string | null)[] = [null, null, null, null];
-      
-      // path contains UUIDs from root to task (excluding task itself)
-      // We need to select each ancestor, then the task itself
-      for (let i = 0; i < path.length && i < 4; i++) {
-        newSelected[i] = path[i];
+    for (let i = 0; i < selected.length; i++) {
+      if (selected[i]) {
+        fetchColumn(i + 1, selected[i]);
+      } else {
+        // Clear deeper columns
+        setColumnData((prev) => { const n = [...prev]; n[i + 1] = []; return n; });
       }
-      // Set the task itself at its depth
-      if (task.depth < 4) {
-        newSelected[task.depth] = task.id;
-      }
-      
-      setSelected(newSelected);
-      setDeepLinkProcessed(true);
+    }
+  }, [selected, fetchColumn]);
+
+  // Deep-link: fetch the target task via WS
+  useEffect(() => {
+    if (!focusTaskId || !send || deepLinkProcessed) return;
+    (async () => {
+      try {
+        const task = await send("task:get", { task_id: focusTaskId });
+        if (!task) return;
+        const path = (task as Task & { path?: string[] }).path || [];
+        const newSelected: (string | null)[] = [null, null, null, null];
+        for (let i = 0; i < path.length && i < 4; i++) newSelected[i] = path[i];
+        if (task.depth < 4) newSelected[task.depth] = task.id;
+        setSelected(newSelected);
+        setDeepLinkProcessed(true);
+        setAutoExpanded(true);
+      } catch { /* ignore */ }
+    })();
+  }, [focusTaskId, send, deepLinkProcessed]);
+
+  // Auto-expand first root task on initial load
+  useEffect(() => {
+    if (!autoExpanded && columnData[0].length > 0) {
+      const firstTask = columnData[0][0];
+      selectTask(0, firstTask.id);
       setAutoExpanded(true);
     }
-  }, [focusTaskId, focusTaskQuery.data, deepLinkProcessed]);
+  }, [columnData, autoExpanded]);
 
   // Column customization: widths and names (persisted per project)
   const [columnWidths, setColumnWidths] = useState<number[]>(() => {
@@ -143,59 +184,14 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     return -1;
   }, [selected]);
 
-  /* ── Queries for each column ── */
-  const rootQ = useQuery({
-    queryKey: ["tasks", orgId, projectId, "parent", "root"],
-    queryFn: () => api.tasks.list(orgId, projectId, "parent_id=root"),
-    enabled: !!orgId,
-  });
-
-  const d1Q = useQuery({
-    queryKey: ["tasks", orgId, projectId, "parent", selected[0]],
-    queryFn: () => api.tasks.list(orgId, projectId, `parent_id=${selected[0]}`),
-    enabled: !!orgId && !!selected[0],
-  });
-
-  const d2Q = useQuery({
-    queryKey: ["tasks", orgId, projectId, "parent", selected[1]],
-    queryFn: () => api.tasks.list(orgId, projectId, `parent_id=${selected[1]}`),
-    enabled: !!orgId && !!selected[1],
-  });
-
-  const d3Q = useQuery({
-    queryKey: ["tasks", orgId, projectId, "parent", selected[2]],
-    queryFn: () => api.tasks.list(orgId, projectId, `parent_id=${selected[2]}`),
-    enabled: !!orgId && !!selected[2],
-  });
-
-  const columnData: Task[][] = [
-    rootQ.data?.data || [],
-    d1Q.data?.data || [],
-    d2Q.data?.data || [],
-    d3Q.data?.data || [],
-  ];
-
-  // Auto-expand first task when project loads (select first task and its subtasks)
-  useEffect(() => {
-    if (!autoExpanded && rootQ.data?.data && rootQ.data.data.length > 0) {
-      const firstTask = rootQ.data.data[0];
-      selectTask(0, firstTask.id);
-      setAutoExpanded(true);
-    }
-  }, [rootQ.data, autoExpanded, selectTask]);
-
-  const focusedTask =
-    focusedDepth >= 0
-      ? columnData[focusedDepth]?.find((t) => t.id === selected[focusedDepth]) ?? null
-      : null;
-
-  /* ── Mutations ── */
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.tasks.delete(orgId, projectId, id),
-    onSuccess: (_d, deletedId) => {
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+  /* ── Mutations via WS ── */
+  const handleDelete = useCallback(async (id: string) => {
+    if (!send) return;
+    setDeletePending(true);
+    try {
+      await send("task:delete", { task_id: id });
       setSelected((prev) => {
-        const idx = prev.indexOf(deletedId);
+        const idx = prev.indexOf(id);
         if (idx >= 0) {
           const next = [...prev];
           for (let i = idx; i < next.length; i++) next[i] = null;
@@ -204,50 +200,38 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         return prev;
       });
       setDeleteTarget(null);
-    },
-  });
+      refetchAll();
+    } catch { /* ignore */ }
+    finally { setDeletePending(false); }
+  }, [send, refetchAll]);
 
-  const updateMutation = useMutation({
-    mutationFn: ({ taskId, data }: { taskId: string; data: Partial<Task> }) =>
-      api.tasks.update(orgId, projectId, taskId, data),
-    onMutate: async ({ taskId, data }) => {
-      // Cancel ongoing refetches
-      await qc.cancelQueries({ queryKey: ["tasks", orgId, projectId] });
-      // Snapshot all task queries for rollback
-      const previousData = qc.getQueriesData({ queryKey: ["tasks", orgId, projectId] });
-      // Optimistically update the task in all matching queries
-      qc.setQueriesData(
-        { queryKey: ["tasks", orgId, projectId] },
-        (old: { data: Task[]; total: number; limit: number; offset: number } | undefined) => {
-          if (!old?.data) return old;
-          return {
-            ...old,
-            data: old.data.map((t: Task) => (t.id === taskId ? { ...t, ...data } : t)),
-          };
-        },
-      );
-      return { previousData };
-    },
-    onError: (_err, _vars, context) => {
-      // Rollback on failure
-      if (context?.previousData) {
-        for (const [key, data] of context.previousData) {
-          qc.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+  const handleUpdate = useCallback(async (taskId: string, data: Partial<Task>) => {
+    if (!send) return;
+    // Optimistic update in column data
+    setColumnData((prev) =>
+      prev.map((col) => col.map((t) => (t.id === taskId ? { ...t, ...data } : t)))
+    );
+    setUpdatePending(true);
+    try {
+      await send("task:update", { task_id: taskId, ...data });
+      refetchAll();
+    } catch {
+      refetchAll(); // rollback
+    } finally { setUpdatePending(false); }
+  }, [send, refetchAll]);
 
-  const duplicateMutation = useMutation({
-    mutationFn: (id: string) => api.tasks.duplicate(orgId, projectId, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
-    },
-  });
+  const handleDuplicate = useCallback(async (id: string) => {
+    if (!send) return;
+    try {
+      await send("task:duplicate", { task_id: id });
+      refetchAll();
+    } catch { /* ignore */ }
+  }, [send, refetchAll]);
+
+  const focusedTask =
+    focusedDepth >= 0
+      ? columnData[focusedDepth]?.find((t) => t.id === selected[focusedDepth]) ?? null
+      : null;
 
   const openCreate = (depth: number) => {
     setCreateDepth(depth);
@@ -313,10 +297,10 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
 
   /* ── Render ── */
   const columnMeta = [
-    { depth: 0, label: columnNames[0], tasks: columnData[0], loading: rootQ.isLoading, show: true },
-    { depth: 1, label: columnNames[1], tasks: columnData[1], loading: d1Q.isLoading, show: !!selected[0] },
-    { depth: 2, label: columnNames[2], tasks: columnData[2], loading: d2Q.isLoading, show: !!selected[1] },
-    { depth: 3, label: columnNames[3], tasks: columnData[3], loading: d3Q.isLoading, show: !!selected[2] },
+    { depth: 0, label: columnNames[0], tasks: columnData[0], loading: columnLoading[0], show: true },
+    { depth: 1, label: columnNames[1], tasks: columnData[1], loading: columnLoading[1], show: !!selected[0] },
+    { depth: 2, label: columnNames[2], tasks: columnData[2], loading: columnLoading[2], show: !!selected[1] },
+    { depth: 3, label: columnNames[3], tasks: columnData[3], loading: columnLoading[3], show: !!selected[2] },
   ];
 
   return (
@@ -362,10 +346,10 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
             projectMembers={members}
             currentUserId={currentUserId}
             userProjectRole={userProjectRole}
-            updating={updateMutation.isPending}
-            onUpdate={(data) => updateMutation.mutate({ taskId: focusedTask.id, data })}
+            updating={updatePending}
+            onUpdate={(data) => handleUpdate(focusedTask.id, data)}
             onDelete={() => setDeleteTarget(focusedTask)}
-            onDuplicate={() => duplicateMutation.mutate(focusedTask.id)}
+            onDuplicate={() => handleDuplicate(focusedTask.id)}
             onAddSubtask={() => {
               if (focusedTask.depth < MAX_DEPTH) {
                 setCreateParentId(focusedTask.id);
@@ -392,7 +376,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
             setCreateParentId(null);
           }}
           onCreated={() => {
-            qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+            refetchAll();
             setCreateDepth(null);
             setCreateParentId(null);
           }}
@@ -403,10 +387,10 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
         title="Delete Task"
         message={`Delete "${deleteTarget?.title}" and all its subtasks?`}
-        loading={deleteMutation.isPending}
+        loading={deletePending}
       />
     </div>
   );
@@ -650,10 +634,15 @@ function CreateTaskModal({
   } = useForm<CreateForm>({
     defaultValues: { status: "todo", priority: "medium", assignee_id: "" },
   });
+  const send = useProjectTaskStore((s) => s.send);
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
-  const mutation = useMutation({
-    mutationFn: (data: CreateForm) => {
+  const onSubmit = async (data: CreateForm) => {
+    if (!send) return;
+    setCreating(true);
+    setError("");
+    try {
       const payload: Record<string, unknown> = {
         title: data.title,
         status: data.status,
@@ -661,11 +650,14 @@ function CreateTaskModal({
       };
       if (data.assignee_id) payload.assignee_id = data.assignee_id;
       if (parentId) payload.parent_task_id = parentId;
-      return api.tasks.create(orgId, projectId, payload as Partial<Task>);
-    },
-    onSuccess: () => onCreated(),
-    onError: (e: Error) => setError(e.message),
-  });
+      await send("task:create", payload);
+      onCreated();
+    } catch (e: any) {
+      setError(e?.message || "Failed to create task");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <Modal open onClose={onClose} title={parentId ? "New Subtask" : "New Task"} className="max-w-md">
@@ -674,7 +666,7 @@ function CreateTaskModal({
           <span>{error}</span>
         </div>
       )}
-      <form onSubmit={handleSubmit((d) => mutation.mutate(d))} className="space-y-3">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
         <Input
           label="Title"
           placeholder="Task title"
@@ -718,7 +710,7 @@ function CreateTaskModal({
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" loading={mutation.isPending}>
+          <Button type="submit" loading={creating}>
             Create
           </Button>
         </div>

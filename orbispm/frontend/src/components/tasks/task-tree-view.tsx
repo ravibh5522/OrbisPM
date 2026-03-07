@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useState, useCallback, useEffect } from "react";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import { Badge, Avatar, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import {
@@ -36,15 +35,29 @@ interface TaskTreeViewProps {
 }
 
 export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }: TaskTreeViewProps) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
+  const taskTree = useProjectTaskStore((s) => s.taskTree);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [mutating, setMutating] = useState(false);
 
-  const { data: treeData, isLoading } = useQuery({
-    queryKey: ["tasks-tree", orgId, projectId],
-    queryFn: () => api.tasks.tree(orgId, projectId),
-    staleTime: 30_000,
-  });
+  // Fetch tree via WS
+  const fetchTree = useCallback(async () => {
+    if (!send) return;
+    try {
+      const data = await send("task:tree", {});
+      useProjectTaskStore.getState().setTaskTree(data || []);
+    } catch (e) {
+      console.error("[WS] task:tree failed", e);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [send]);
+
+  useEffect(() => {
+    fetchTree();
+  }, [fetchTree]);
 
   const toggleExpand = useCallback((id: string) => {
     setExpandedIds((prev) => {
@@ -56,7 +69,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
   }, []);
 
   const expandAll = useCallback(() => {
-    if (!treeData) return;
+    if (!taskTree.length) return;
     const allIds = new Set<string>();
     const collect = (nodes: TaskTree[]) => {
       for (const n of nodes) {
@@ -66,39 +79,47 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
         }
       }
     };
-    collect(treeData);
+    collect(taskTree);
     setExpandedIds(allIds);
-  }, [treeData]);
+  }, [taskTree]);
 
   const collapseAll = useCallback(() => {
     setExpandedIds(new Set());
   }, []);
 
-  const updateMutation = useMutation({
-    mutationFn: ({ taskId, data }: { taskId: string; data: Partial<Task> }) =>
-      api.tasks.update(orgId, projectId, taskId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks-tree", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+  const handleUpdate = useCallback(async (taskId: string, data: Partial<Task>) => {
+    if (!send) return;
+    try {
+      await send("task:update", { task_id: taskId, ...data });
+      fetchTree();
+    } catch (e) {
+      console.error("[WS] task:update failed", e);
+    }
+  }, [send, fetchTree]);
 
-  const deleteMutation = useMutation({
-    mutationFn: (taskId: string) => api.tasks.delete(orgId, projectId, taskId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks-tree", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+  const handleDelete = useCallback(async (taskId: string) => {
+    if (!send) return;
+    setMutating(true);
+    try {
+      await send("task:delete", { task_id: taskId });
       setDeleteTask(null);
-    },
-  });
+      fetchTree();
+    } catch (e) {
+      console.error("[WS] task:delete failed", e);
+    } finally {
+      setMutating(false);
+    }
+  }, [send, fetchTree]);
 
-  const duplicateMutation = useMutation({
-    mutationFn: (taskId: string) => api.tasks.duplicate(orgId, projectId, taskId),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks-tree", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+  const handleDuplicate = useCallback(async (taskId: string) => {
+    if (!send) return;
+    try {
+      await send("task:duplicate", { task_id: taskId });
+      fetchTree();
+    } catch (e) {
+      console.error("[WS] task:duplicate failed", e);
+    }
+  }, [send, fetchTree]);
 
   if (isLoading) {
     return (
@@ -108,13 +129,13 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
     );
   }
 
-  const tree = treeData || [];
+  const tree = taskTree;
 
   if (tree.length === 0) {
     return (
       <div className="text-center py-12 text-base-content/60">
         <p className="mb-4">No tasks yet. Create your first task to get started.</p>
-        <CreateTaskButton orgId={orgId} projectId={projectId} parentId={null} />
+        <CreateTaskButton parentId={null} onCreated={fetchTree} />
       </div>
     );
   }
@@ -131,7 +152,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
             Collapse All
           </Button>
         </div>
-        <CreateTaskButton orgId={orgId} projectId={projectId} parentId={null} />
+        <CreateTaskButton parentId={null} onCreated={fetchTree} />
       </div>
 
       {/* Tree container */}
@@ -148,10 +169,11 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
               members={members}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
-              onUpdate={(taskId, data) => updateMutation.mutate({ taskId, data })}
+              onUpdate={(taskId, data) => handleUpdate(taskId, data)}
               onDelete={(task) => setDeleteTask(task)}
-              onDuplicate={(taskId) => duplicateMutation.mutate(taskId)}
+              onDuplicate={(taskId) => handleDuplicate(taskId)}
               onOpenTask={onOpenTask}
+              onCreated={fetchTree}
             />
           ))}
         </div>
@@ -162,7 +184,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
         open={!!deleteTask}
         title="Delete Task"
         message={`Delete "${deleteTask?.title}"? This will also delete all subtasks.`}
-        onConfirm={() => deleteTask && deleteMutation.mutate(deleteTask.id)}
+        onConfirm={() => deleteTask && handleDelete(deleteTask.id)}
         onClose={() => setDeleteTask(null)}
       />
     </div>
@@ -184,6 +206,7 @@ interface TreeNodeProps {
   onDelete: (task: Task) => void;
   onDuplicate: (taskId: string) => void;
   onOpenTask?: (taskId: string) => void;
+  onCreated: () => void;
 }
 
 function TreeNode({
@@ -199,6 +222,7 @@ function TreeNode({
   onDelete,
   onDuplicate,
   onOpenTask,
+  onCreated,
 }: TreeNodeProps) {
   const { task, children } = node;
   const hasChildren = children && children.length > 0;
@@ -315,7 +339,7 @@ function TreeNode({
               </a>
             </li>
             <li>
-              <CreateSubtaskButton orgId={orgId} projectId={projectId} parentId={task.id} />
+              <CreateSubtaskButton parentId={task.id} onCreated={onCreated} />
             </li>
             <div className="divider my-1" />
             <li>
@@ -345,6 +369,7 @@ function TreeNode({
               onDelete={onDelete}
               onDuplicate={onDuplicate}
               onOpenTask={onOpenTask}
+              onCreated={onCreated}
             />
           ))}
         </div>
@@ -441,28 +466,34 @@ function PriorityDropdown({
 /* ── Create Task Button ── */
 
 function CreateTaskButton({
-  orgId,
-  projectId,
   parentId,
+  onCreated,
 }: {
-  orgId: string;
-  projectId: string;
   parentId: string | null;
+  onCreated: () => void;
 }) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const [title, setTitle] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [pending, setPending] = useState(false);
 
-  const createMutation = useMutation({
-    mutationFn: (data: { title: string; parent_task_id?: string | null }) =>
-      api.tasks.create(orgId, projectId, data as Partial<Task>),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks-tree", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+  const handleCreate = async () => {
+    if (!send || !title.trim()) return;
+    setPending(true);
+    try {
+      await send("task:create", {
+        title: title.trim(),
+        parent_task_id: parentId,
+      });
       setTitle("");
       setIsOpen(false);
-    },
-  });
+      onCreated();
+    } catch (e) {
+      console.error("[WS] task:create failed", e);
+    } finally {
+      setPending(false);
+    }
+  };
 
   if (!isOpen) {
     return (
@@ -482,10 +513,7 @@ function CreateTaskButton({
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && title.trim()) {
-            createMutation.mutate({
-              title: title.trim(),
-              parent_task_id: parentId,
-            });
+            handleCreate();
           }
           if (e.key === "Escape") {
             setTitle("");
@@ -496,15 +524,8 @@ function CreateTaskButton({
       />
       <Button
         size="sm"
-        onClick={() => {
-          if (title.trim()) {
-            createMutation.mutate({
-              title: title.trim(),
-              parent_task_id: parentId,
-            });
-          }
-        }}
-        disabled={!title.trim() || createMutation.isPending}
+        onClick={handleCreate}
+        disabled={!title.trim() || pending}
       >
         Create
       </Button>
@@ -518,30 +539,29 @@ function CreateTaskButton({
 /* ── Inline Subtask Button (for dropdown) ── */
 
 function CreateSubtaskButton({
-  orgId,
-  projectId,
   parentId,
+  onCreated,
 }: {
-  orgId: string;
-  projectId: string;
   parentId: string;
+  onCreated: () => void;
 }) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
 
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.tasks.create(orgId, projectId, {
+  const handleCreate = async () => {
+    if (!send) return;
+    try {
+      await send("task:create", {
         title: "New subtask",
         parent_task_id: parentId,
-      } as Partial<Task>),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks-tree", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+      });
+      onCreated();
+    } catch (e) {
+      console.error("[WS] create subtask failed", e);
+    }
+  };
 
   return (
-    <a onClick={() => createMutation.mutate()}>
+    <a onClick={handleCreate}>
       <Plus className="w-4 h-4" /> Add Subtask
     </a>
   );

@@ -83,11 +83,10 @@ function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) 
   const type = event.type;
 
   // --- Tasks ---
+  // Task events are now handled via the project WebSocket (use-project-socket).
+  // Only refresh dashboard stats here for task events.
   if (type.startsWith("task.")) {
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["task-tree"] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
-    // Also refresh project dashboard if the task belongs to a project
     if (event.payload?.project_id) {
       qc.invalidateQueries({ queryKey: ["project-dashboard"] });
     }
@@ -133,9 +132,8 @@ function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) 
   }
 
   // --- Comments ---
-  if (type.startsWith("comment.")) {
-    qc.invalidateQueries({ queryKey: ["comments"] });
-  }
+  // Comment events are now handled via the project WebSocket for task comments.
+  // Other comment types (if any) still go through SSE.
 
   // --- Notifications ---
   if (type.startsWith("notification.")) {

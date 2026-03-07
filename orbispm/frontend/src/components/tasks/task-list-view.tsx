@@ -1,9 +1,8 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useRouter } from "next/navigation";
-import { api } from "@/lib/api";
 import { ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -66,7 +65,7 @@ interface TaskListViewProps {
 }
 
 export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListViewProps) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const router = useRouter();
 
   /* ── Sort, filter, pagination state ── */
@@ -85,96 +84,104 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
   /* ── Multi-select state ── */
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
-  /* Build query params */
-  const buildParams = useCallback(() => {
-    const p = new URLSearchParams();
-    p.set("limit", String(limit));
-    p.set("offset", String(page * limit));
-    p.set("sort_by", sortBy);
-    p.set("sort_order", sortOrder);
-    if (filterStatus) p.set("status", filterStatus);
-    if (filterPriority) p.set("priority", filterPriority);
-    if (searchText.trim()) p.set("search", searchText.trim());
-    return p.toString();
-  }, [sortBy, sortOrder, filterStatus, filterPriority, searchText, page]);
+  /* ── Local task data ── */
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [total, setTotal] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isFetching, setIsFetching] = useState(false);
+  const [bulkPending, setBulkPending] = useState(false);
 
-  /* ── Query ── */
-  const { data, isLoading, isFetching } = useQuery({
-    queryKey: ["task-list", orgId, projectId, sortBy, sortOrder, filterStatus, filterPriority, searchText, page],
-    queryFn: () => api.tasks.list(orgId, projectId, buildParams()),
-    enabled: !!orgId,
-  });
+  /* Fetch via WS */
+  const fetchList = useCallback(async () => {
+    if (!send) return;
+    setIsFetching(true);
+    try {
+      const res = await send("task:list", {
+        limit,
+        offset: page * limit,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        status: filterStatus || undefined,
+        priority: filterPriority || undefined,
+        search: searchText.trim() || undefined,
+      });
+      setTasks(res?.data || []);
+      setTotal(res?.total || 0);
+    } catch (e) {
+      console.error("[WS] task:list failed", e);
+    } finally {
+      setIsLoading(false);
+      setIsFetching(false);
+    }
+  }, [send, page, sortBy, sortOrder, filterStatus, filterPriority, searchText]);
 
-  const tasks = data?.data || [];
-  const total = data?.total || 0;
+  useEffect(() => { fetchList(); }, [fetchList]);
+
   const totalPages = Math.ceil(total / limit);
 
-  /* ── Inline update mutation ── */
-  const updateMutation = useMutation({
-    mutationFn: ({ id, changes }: { id: string; changes: Partial<Task> }) =>
-      api.tasks.update(orgId, projectId, id, changes),
-    onMutate: async ({ id, changes }) => {
-      await qc.cancelQueries({ queryKey: ["task-list", orgId, projectId] });
-      const prev = qc.getQueriesData({ queryKey: ["task-list", orgId, projectId] });
-      qc.setQueriesData(
-        { queryKey: ["task-list", orgId, projectId] },
-        (old: { data: Task[]; total: number; limit: number; offset: number } | undefined) => {
-          if (!old?.data) return old;
-          return { ...old, data: old.data.map((t: Task) => (t.id === id ? { ...t, ...changes } : t)) };
-        },
-      );
-      return { prev };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.prev) {
-        for (const [key, data] of context.prev) {
-          qc.setQueryData(key, data);
-        }
-      }
-    },
-    onSettled: () => {
-      qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
-    },
-  });
+  /* ── Inline update ── */
+  const handleUpdate = useCallback(async (id: string, changes: Partial<Task>) => {
+    if (!send) return;
+    // Optimistic
+    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...changes } : t)));
+    try {
+      await send("task:update", { task_id: id, ...changes });
+    } catch {
+      fetchList(); // rollback by re-fetching
+    }
+  }, [send, fetchList]);
 
-  /* ── Delete mutation ── */
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.tasks.delete(orgId, projectId, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
+  /* ── Delete ── */
+  const handleDelete = useCallback(async (id: string) => {
+    if (!send) return;
+    try {
+      await send("task:delete", { task_id: id });
       setDeleteTarget(null);
-    },
-  });
+      fetchList();
+    } catch (e) {
+      console.error("[WS] task:delete failed", e);
+    }
+  }, [send, fetchList]);
 
-  /* ── Duplicate mutation ── */
-  const duplicateMutation = useMutation({
-    mutationFn: (id: string) => api.tasks.duplicate(orgId, projectId, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+  /* ── Duplicate ── */
+  const handleDuplicate = useCallback(async (id: string) => {
+    if (!send) return;
+    try {
+      await send("task:duplicate", { task_id: id });
+      fetchList();
+    } catch (e) {
+      console.error("[WS] task:duplicate failed", e);
+    }
+  }, [send, fetchList]);
 
-  /* ── Bulk update mutation ── */
-  const bulkUpdateMutation = useMutation({
-    mutationFn: (data: { task_ids: string[]; changes: Partial<Task> }) =>
-      api.tasks.bulkUpdate(orgId, projectId, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
+  /* ── Bulk update ── */
+  const bulkAction = useCallback(async (changes: Partial<Task>) => {
+    if (!send || selectedIds.size === 0) return;
+    setBulkPending(true);
+    try {
+      await send("task:bulk-update", {
+        task_ids: Array.from(selectedIds),
+        changes,
+      });
       setSelectedIds(new Set());
-    },
-  });
+      fetchList();
+    } catch (e) {
+      console.error("[WS] task:bulk-update failed", e);
+    } finally {
+      setBulkPending(false);
+    }
+  }, [send, selectedIds, fetchList]);
 
-  /* ── Reorder mutation ── */
-  const reorderMutation = useMutation({
-    mutationFn: (items: { id: string; position: number }[]) =>
-      api.tasks.reorder(orgId, projectId, items),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-    },
-  });
+  /* ── Reorder ── */
+  const handleReorder = useCallback(async (items: { id: string; position: number }[]) => {
+    if (!send) return;
+    try {
+      await send("task:reorder", { items });
+      fetchList();
+    } catch (e) {
+      console.error("[WS] task:reorder failed", e);
+    }
+  }, [send, fetchList]);
 
   /* ── DnD sensors ── */
   const sensors = useSensors(
@@ -192,10 +199,11 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
       if (oldIndex === -1 || newIndex === -1) return;
 
       const reordered = arrayMove(tasks, oldIndex, newIndex);
+      setTasks(reordered); // optimistic
       const items = reordered.map((t, i) => ({ id: t.id, position: i }));
-      reorderMutation.mutate(items);
+      handleReorder(items);
     },
-    [tasks, reorderMutation],
+    [tasks, handleReorder],
   );
 
   const toggleSelect = (id: string) => {
@@ -213,14 +221,6 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
     } else {
       setSelectedIds(new Set(tasks.map((t) => t.id)));
     }
-  };
-
-  const bulkAction = (changes: Partial<Task>) => {
-    if (selectedIds.size === 0) return;
-    bulkUpdateMutation.mutate({
-      task_ids: Array.from(selectedIds),
-      changes,
-    });
   };
 
   /* ── Sort toggler ── */
@@ -320,7 +320,7 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
           <button className="btn btn-ghost btn-xs" onClick={() => setSelectedIds(new Set())}>
             <X className="w-3 h-3" /> Clear
           </button>
-          {bulkUpdateMutation.isPending && <Loader2 className="w-3 h-3 animate-spin" />}
+          {bulkPending && <Loader2 className="w-3 h-3 animate-spin" />}
         </div>
       )}
 
@@ -470,9 +470,9 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
                 memberAvatar={memberAvatar}
                 isSelected={selectedIds.has(task.id)}
                 onToggleSelect={() => toggleSelect(task.id)}
-                onUpdate={(changes) => updateMutation.mutate({ id: task.id, changes })}
+                onUpdate={(changes) => handleUpdate(task.id, changes)}
                 onDelete={() => setDeleteTarget(task)}
-                onDuplicate={() => duplicateMutation.mutate(task.id)}
+                onDuplicate={() => handleDuplicate(task.id)}
                 onNavigate={() =>
                   router.push(`/${orgSlug}/projects/${projectId}?task=${task.id}`)
                 }
@@ -516,7 +516,7 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
           onClose={() => setShowCreate(false)}
           onCreated={() => {
             setShowCreate(false);
-            qc.invalidateQueries({ queryKey: ["task-list", orgId, projectId] });
+            fetchList();
           }}
         />
       )}
@@ -525,10 +525,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
         title="Delete Task"
         message={`Delete "${deleteTarget?.title}"? This cannot be undone.`}
-        loading={deleteMutation.isPending}
+        loading={false}
       />
     </div>
   );
@@ -759,24 +759,34 @@ function CreateTaskModal({
     },
   });
 
-  const createMutation = useMutation({
-    mutationFn: (data: CreateTaskForm) => {
-      const payload: Partial<Task> = {
+  const send = useProjectTaskStore((s) => s.send);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  const onSubmit = async (data: CreateTaskForm) => {
+    if (!send) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      await send("task:create", {
         title: data.title,
         description: data.description || undefined,
         status: data.status,
         priority: data.priority,
         assignee_id: data.assignee_id || undefined,
         due_date: data.due_date ? new Date(data.due_date).toISOString() : undefined,
-      };
-      return api.tasks.create(orgId, projectId, payload);
-    },
-    onSuccess: () => onCreated(),
-  });
+      });
+      onCreated();
+    } catch (err: any) {
+      setCreateError(err?.message || "Failed to create task");
+    } finally {
+      setCreating(false);
+    }
+  };
 
   return (
     <Modal open onClose={onClose} title="Create Task">
-      <form onSubmit={handleSubmit((d) => createMutation.mutate(d))} className="space-y-3">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
         <Input
           label="Title"
           {...register("title", { required: "Title is required" })}
@@ -820,14 +830,14 @@ function CreateTaskModal({
           />
           <Input label="Due Date" type="date" {...register("due_date")} />
         </div>
-        {createMutation.error && (
-          <p className="text-error text-sm">{(createMutation.error as Error).message}</p>
+        {createError && (
+          <p className="text-error text-sm">{createError}</p>
         )}
         <div className="flex justify-end gap-2 pt-2">
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
             Cancel
           </button>
-          <Button type="submit" size="sm" loading={createMutation.isPending}>
+          <Button type="submit" size="sm" loading={creating}>
             Create
           </Button>
         </div>

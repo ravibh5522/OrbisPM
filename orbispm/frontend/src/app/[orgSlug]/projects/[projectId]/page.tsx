@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
+import { useProjectSocket } from "@/hooks/use-project-socket";
 import { api } from "@/lib/api";
 import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
@@ -62,11 +63,8 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     enabled: !!currentOrg,
   });
 
-  const { isLoading: tasksLoading } = useQuery({
-    queryKey: ["tasks", currentOrg?.id, projectId],
-    queryFn: () => api.tasks.list(currentOrg!.id, projectId),
-    enabled: !!currentOrg,
-  });
+  // Real-time WebSocket connection for project task collaboration
+  useProjectSocket(currentOrg?.id, projectId);
 
   const { data: members } = useQuery({
     queryKey: ["project-members", currentOrg?.id, projectId],
@@ -82,7 +80,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     return () => setBreadcrumb(null);
   }, [project, currentOrg, setBreadcrumb]);
 
-  if (projLoading || tasksLoading) return <LoadingPage />;
+  if (projLoading) return <LoadingPage />;
   if (!project) return <div className="text-center py-12">Project not found</div>;
 
   return (

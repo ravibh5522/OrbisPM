@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import { api } from "@/lib/api"; // kept for CR attachment binary ops
 import { Card, Badge, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
@@ -35,16 +35,23 @@ interface TaskChangeRequestsProps {
 }
 
 export function TaskChangeRequests({ orgId, projectId, taskId, members }: TaskChangeRequestsProps) {
-  const { data: changeRequests, isLoading } = useQuery({
-    queryKey: ["change-requests", orgId, projectId, taskId],
-    queryFn: () => api.changeRequests.listByTask(orgId, projectId, taskId),
-    enabled: !!orgId,
-  });
+  const send = useProjectTaskStore((s) => s.send);
+  const [items, setItems] = useState<TaskChangeRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchCRs = useCallback(async () => {
+    if (!send) { setIsLoading(false); return; }
+    setIsLoading(true);
+    try {
+      const res = await send("cr:list", { task_id: taskId });
+      const raw = res?.data;
+      setItems(Array.isArray(raw) ? raw : []);
+    } catch {} finally { setIsLoading(false); }
+  }, [send, taskId]);
+
+  useEffect(() => { fetchCRs(); }, [fetchCRs]);
 
   if (isLoading) return <div className="loading loading-spinner loading-sm" />;
-
-  const rawCRs = changeRequests;
-  const items: TaskChangeRequest[] = Array.isArray(rawCRs) ? rawCRs : [];
   if (items.length === 0) return null;
 
   const pending = items.filter((cr) => cr.status === "pending");
@@ -59,7 +66,7 @@ export function TaskChangeRequests({ orgId, projectId, taskId, members }: TaskCh
           </h4>
           <div className="space-y-2">
             {pending.map((cr) => (
-              <ChangeRequestRow key={cr.id} cr={cr} orgId={orgId} projectId={projectId} members={members} />
+              <ChangeRequestRow key={cr.id} cr={cr} orgId={orgId} projectId={projectId} members={members} onRefresh={fetchCRs} />
             ))}
           </div>
         </div>
@@ -71,7 +78,7 @@ export function TaskChangeRequests({ orgId, projectId, taskId, members }: TaskCh
           </h4>
           <div className="space-y-2">
             {resolved.slice(0, 5).map((cr) => (
-              <ChangeRequestRow key={cr.id} cr={cr} orgId={orgId} projectId={projectId} members={members} />
+              <ChangeRequestRow key={cr.id} cr={cr} orgId={orgId} projectId={projectId} members={members} onRefresh={fetchCRs} />
             ))}
           </div>
         </div>
@@ -91,24 +98,24 @@ interface ProjectChangeRequestsProps {
 }
 
 export function ProjectChangeRequests({ orgId, projectId, members }: ProjectChangeRequestsProps) {
+  const send = useProjectTaskStore((s) => s.send);
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<ChangeRequestStatus | "all">("pending");
+  const [items, setItems] = useState<TaskChangeRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ["project-change-requests", orgId, projectId, statusFilter, page],
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (statusFilter !== "all") params.set("status", statusFilter);
-      params.set("page", String(page));
-      params.set("limit", "20");
-      const qs = params.toString();
-      return api.changeRequests.listByProject(orgId, projectId, qs || undefined);
-    },
-    enabled: !!orgId,
-  });
+  const fetchCRs = useCallback(async () => {
+    if (!send) { setIsLoading(false); return; }
+    setIsLoading(true);
+    try {
+      const status = statusFilter !== "all" ? statusFilter : undefined;
+      const res = await send("cr:list", { status });
+      const raw = res?.data;
+      setItems(Array.isArray(raw) ? raw : []);
+    } catch {} finally { setIsLoading(false); }
+  }, [send, statusFilter]);
 
-  const rawItems = data?.data ?? data;
-  const items: TaskChangeRequest[] = Array.isArray(rawItems) ? rawItems : [];
+  useEffect(() => { fetchCRs(); }, [fetchCRs]);
 
   return (
     <div className="space-y-4">
@@ -137,7 +144,7 @@ export function ProjectChangeRequests({ orgId, projectId, members }: ProjectChan
         ) : (
           <div className="space-y-3">
             {items.map((cr) => (
-              <ChangeRequestRow key={cr.id} cr={cr} orgId={orgId} projectId={projectId} members={members} showTask />
+              <ChangeRequestRow key={cr.id} cr={cr} orgId={orgId} projectId={projectId} members={members} showTask onRefresh={fetchCRs} />
             ))}
           </div>
         )}
@@ -168,39 +175,43 @@ function ChangeRequestRow({
   projectId: _projectId,
   members,
   showTask,
+  onRefresh,
 }: {
   cr: TaskChangeRequest;
   orgId: string;
   projectId: string;
   members: OrgMember[];
   showTask?: boolean;
+  onRefresh?: () => void;
 }) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const [expanded, setExpanded] = useState(false);
   const [reviewNote, setReviewNote] = useState("");
   const [showReview, setShowReview] = useState(false);
+  const [approvePending, setApprovePending] = useState(false);
+  const [rejectPending, setRejectPending] = useState(false);
 
-  const approveMutation = useMutation({
-    mutationFn: (note: string) => api.changeRequests.approve(orgId, cr.id, note || undefined),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["change-requests"] });
-      qc.invalidateQueries({ queryKey: ["project-change-requests"] });
-      qc.invalidateQueries({ queryKey: ["task"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
+  const handleApprove = async (note: string) => {
+    if (!send) return;
+    setApprovePending(true);
+    try {
+      await send("cr:approve", { id: cr.id, note: note || undefined });
       setShowReview(false);
       setReviewNote("");
-    },
-  });
+      onRefresh?.();
+    } catch {} finally { setApprovePending(false); }
+  };
 
-  const rejectMutation = useMutation({
-    mutationFn: (note: string) => api.changeRequests.reject(orgId, cr.id, note || undefined),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["change-requests"] });
-      qc.invalidateQueries({ queryKey: ["project-change-requests"] });
+  const handleReject = async (note: string) => {
+    if (!send) return;
+    setRejectPending(true);
+    try {
+      await send("cr:reject", { id: cr.id, note: note || undefined });
       setShowReview(false);
       setReviewNote("");
-    },
-  });
+      onRefresh?.();
+    } catch {} finally { setRejectPending(false); }
+  };
 
   const proposer = members.find((m) => m.user_id === cr.proposer_id);
   const reviewer = cr.reviewer_id ? members.find((m) => m.user_id === cr.reviewer_id) : null;
@@ -312,14 +323,14 @@ function ChangeRequestRow({
             </Button>
             <Button
               variant="error"
-              onClick={() => rejectMutation.mutate(reviewNote)}
-              loading={rejectMutation.isPending}
+              onClick={() => handleReject(reviewNote)}
+              loading={rejectPending}
             >
               <X className="w-4 h-4 mr-1" /> Reject
             </Button>
             <Button
-              onClick={() => approveMutation.mutate(reviewNote)}
-              loading={approveMutation.isPending}
+              onClick={() => handleApprove(reviewNote)}
+              loading={approvePending}
             >
               <Check className="w-4 h-4 mr-1" /> Approve
             </Button>
@@ -335,23 +346,26 @@ function ChangeRequestRow({
    ═══════════════════════════════════════════════════════ */
 
 function ChangeRequestAttachmentsSection({ orgId, crId }: { orgId: string; crId: string }) {
-  const qc = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [items, setItems] = useState<Attachment[]>([]);
 
-  const { data } = useQuery({
-    queryKey: ["cr-attachments", orgId, crId],
-    queryFn: () => api.changeRequests.attachments.list(orgId, crId),
-    enabled: !!crId,
-  });
+  const fetchItems = useCallback(async () => {
+    try {
+      const data = await api.changeRequests.attachments.list(orgId, crId);
+      setItems(data?.data || []);
+    } catch {}
+  }, [orgId, crId]);
 
-  const items: Attachment[] = data?.data || [];
+  useEffect(() => { fetchItems(); }, [fetchItems]);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.changeRequests.attachments.delete(orgId, crId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cr-attachments", orgId, crId] }),
-  });
+  const handleDelete = async (id: string) => {
+    try {
+      await api.changeRequests.attachments.delete(orgId, crId, id);
+      fetchItems();
+    } catch {}
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -369,7 +383,7 @@ function ChangeRequestAttachmentsSection({ orgId, crId }: { orgId: string; crId:
         body: file,
         headers: { "Content-Type": file.type || "application/octet-stream" },
       });
-      qc.invalidateQueries({ queryKey: ["cr-attachments", orgId, crId] });
+      fetchItems();
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -422,7 +436,7 @@ function ChangeRequestAttachmentsSection({ orgId, crId }: { orgId: string; crId:
                 </button>
                 <button
                   className="btn btn-ghost btn-xs btn-square text-error"
-                  onClick={() => deleteMutation.mutate(att.id)}
+                  onClick={() => handleDelete(att.id)}
                   title="Delete"
                 >
                   <Trash2 className="w-3 h-3" />

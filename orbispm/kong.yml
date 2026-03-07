@@ -50,7 +50,7 @@ services:
           fault_tolerant: true
           hide_client_headers: false
 
-  # WebSocket endpoint
+  # WebSocket endpoint — long-lived, must come BEFORE generic /api route
   - name: backend-ws
     url: http://api:8080
     read_timeout: 86400000
@@ -59,12 +59,13 @@ services:
     routes:
       - name: backend-ws-route
         paths:
-          - /ws
+          - ~/api/v1/orgs/[^/]+/projects/[^/]+/ws$
         strip_path: false
         preserve_host: false
         protocols:
           - http
           - https
+        regex_priority: 200
     plugins:
       - name: rate-limiting
         config:

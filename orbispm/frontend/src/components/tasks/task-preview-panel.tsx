@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import { useState, useRef, useCallback, useEffect } from "react";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import { api } from "@/lib/api"; // kept for attachment upload/download (binary ops)
 import { ConfirmDialog, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -160,7 +160,7 @@ export function TaskPreviewPanel({
   onDuplicate,
   onAddSubtask,
 }: TaskPreviewPanelProps) {
-  const _qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const [activeTab, setActiveTab] = useState<TabType>("details");
   const [showDelete, setShowDelete] = useState(false);
   
@@ -174,7 +174,39 @@ export function TaskPreviewPanel({
   const [titleDraft, setTitleDraft] = useState(task.title);
   const [editingDesc, setEditingDesc] = useState(false);
   const [descDraft, setDescDraft] = useState(task.description || "");
+
+  // Sub-resource local state
+  const [checklistItems, setChecklistItems] = useState<Checklist[]>([]);
+  const [commentItems, setCommentItems] = useState<Comment[]>([]);
+  const [attachmentItems, setAttachmentItems] = useState<Attachment[]>([]);
+  const [dependencyItems, setDependencyItems] = useState<TaskDependency[]>([]);
+  const [watcherItems, setWatcherItems] = useState<TaskWatcher[]>([]);
   
+  // Fetch helpers
+  const fetchChecklists = useCallback(async () => {
+    if (!send) return;
+    try { const res = await send("checklist:list", { task_id: task.id }); setChecklistItems(res?.data || []); } catch {}
+  }, [send, task.id]);
+
+  const fetchComments = useCallback(async () => {
+    if (!send) return;
+    try { const res = await send("comment:list", { task_id: task.id }); setCommentItems(res?.data || []); } catch {}
+  }, [send, task.id]);
+
+  const fetchAttachments = useCallback(async () => {
+    try { const res = await api.attachments.list(orgId, projectId, task.id); setAttachmentItems(res?.data || []); } catch {}
+  }, [orgId, projectId, task.id]);
+
+  const fetchDependencies = useCallback(async () => {
+    if (!send) return;
+    try { const res = await send("dependency:list", { task_id: task.id }); setDependencyItems(res?.data || []); } catch {}
+  }, [send, task.id]);
+
+  const fetchWatchers = useCallback(async () => {
+    if (!send) return;
+    try { const res = await send("watcher:list", { task_id: task.id }); setWatcherItems(res?.data || []); } catch {}
+  }, [send, task.id]);
+
   // Reset on task change
   const [prevId, setPrevId] = useState(task.id);
   if (task.id !== prevId) {
@@ -184,49 +216,21 @@ export function TaskPreviewPanel({
     setTitleDraft(task.title);
     setDescDraft(task.description || "");
     setActiveTab("details");
+    setChecklistItems([]);
+    setCommentItems([]);
+    setAttachmentItems([]);
+    setDependencyItems([]);
+    setWatcherItems([]);
   }
-  
-  // Queries for related data
-  const { data: checklists } = useQuery({
-    queryKey: ["checklists", orgId, projectId, task.id],
-    queryFn: () => api.checklists.list(orgId, projectId, task.id),
-    enabled: !!orgId,
-    placeholderData: keepPreviousData,
-  });
-  
-  const { data: comments } = useQuery({
-    queryKey: ["comments", orgId, projectId, task.id],
-    queryFn: () => api.comments.list(orgId, projectId, task.id),
-    enabled: !!orgId,
-    placeholderData: keepPreviousData,
-  });
-  
-  const { data: attachments } = useQuery({
-    queryKey: ["attachments", orgId, projectId, task.id],
-    queryFn: () => api.attachments.list(orgId, projectId, task.id),
-    enabled: !!orgId,
-    placeholderData: keepPreviousData,
-  });
-  
-  const { data: dependencies } = useQuery({
-    queryKey: ["dependencies", orgId, projectId, task.id],
-    queryFn: () => api.dependencies.list(orgId, projectId, task.id),
-    enabled: !!orgId,
-    placeholderData: keepPreviousData,
-  });
-  
-  const { data: watchers } = useQuery({
-    queryKey: ["watchers", orgId, projectId, task.id],
-    queryFn: () => api.watchers.list(orgId, projectId, task.id),
-    enabled: !!orgId,
-    placeholderData: keepPreviousData,
-  });
 
-  const checklistItems = checklists?.data || [];
-  const commentItems = comments?.data || [];
-  const attachmentItems = attachments?.data || [];
-  const dependencyItems = dependencies?.data || [];
-  const watcherItems = watchers?.data || [];
+  // Fetch sub-resources when task changes or WS connects
+  useEffect(() => {
+    fetchChecklists();
+    fetchComments();
+    fetchAttachments();
+    fetchDependencies();
+    fetchWatchers();
+  }, [fetchChecklists, fetchComments, fetchAttachments, fetchDependencies, fetchWatchers]);
 
   // Tab badges
   const tabs: { id: TabType; label: string; icon: React.ReactNode; badge?: number }[] = [
@@ -353,6 +357,7 @@ export function TaskPreviewPanel({
             taskId={task.id}
             items={checklistItems}
             access={access}
+            onRefresh={fetchChecklists}
           />
         )}
         
@@ -365,6 +370,7 @@ export function TaskPreviewPanel({
             members={members}
             currentUserId={currentUserId}
             access={access}
+            onRefresh={fetchComments}
           />
         )}
         
@@ -375,6 +381,7 @@ export function TaskPreviewPanel({
             taskId={task.id}
             items={attachmentItems}
             access={access}
+            onRefresh={fetchAttachments}
           />
         )}
         
@@ -388,6 +395,8 @@ export function TaskPreviewPanel({
             members={members}
             currentUserId={currentUserId}
             access={access}
+            onRefreshDeps={fetchDependencies}
+            onRefreshWatchers={fetchWatchers}
           />
         )}
       </div>
@@ -743,21 +752,24 @@ function DetailsTab({
    ═══════════════════════════════════════════════════════ */
 
 function ChecklistTab({
-  orgId,
-  projectId,
+  orgId: _orgId,
+  projectId: _projectId,
   taskId,
   items,
   access,
+  onRefresh,
 }: {
   orgId: string;
   projectId: string;
   taskId: string;
   items: Checklist[];
   access: AccessControl;
+  onRefresh: () => void;
 }) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const parentRef = useRef<HTMLDivElement>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -766,64 +778,31 @@ function ChecklistTab({
     overscan: 5,
   });
 
-  const createMutation = useMutation({
-    mutationFn: (title: string) => api.checklists.create(orgId, projectId, taskId, { title }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["checklists"] });
+  const handleCreate = async (title: string) => {
+    if (!send) return;
+    setCreating(true);
+    try {
+      await send("checklist:create", { task_id: taskId, title });
       setNewTitle("");
-    },
-  });
+      onRefresh();
+    } catch {} finally { setCreating(false); }
+  };
 
-  const toggleMutation = useMutation({
-    mutationFn: ({ id, is_checked }: { id: string; is_checked: boolean }) =>
-      api.checklists.update(orgId, projectId, taskId, id, { is_checked }),
-    onMutate: async ({ id, is_checked }) => {
-      // Cancel outgoing refetches
-      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
-      // Snapshot previous value
-      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
-      // Optimistically update
-      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          data: old.data.map((item) =>
-            item.id === id ? { ...item, is_checked } : item
-          ),
-        };
-      });
-      return { previousChecklists };
-    },
-    onError: (_err, _vars, context) => {
-      // Rollback on error
-      if (context?.previousChecklists) {
-        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
-      }
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
-  });
+  const handleToggle = async (id: string, is_checked: boolean) => {
+    if (!send) return;
+    try {
+      await send("checklist:update", { task_id: taskId, checklist_id: id, is_checked });
+      onRefresh();
+    } catch {}
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.checklists.delete(orgId, projectId, taskId, id),
-    onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
-      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
-      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          data: old.data.filter((item) => item.id !== id),
-        };
-      });
-      return { previousChecklists };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previousChecklists) {
-        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
-      }
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
-  });
+  const handleDeleteItem = async (id: string) => {
+    if (!send) return;
+    try {
+      await send("checklist:delete", { task_id: taskId, checklist_id: id });
+      onRefresh();
+    } catch {}
+  };
 
   const total = items.length;
   const checked = items.filter((c) => c.is_checked).length;
@@ -869,7 +848,7 @@ function ChecklistTab({
                 >
                   <button
                     className="btn btn-ghost btn-xs btn-square shrink-0"
-                    onClick={() => access.canEdit && toggleMutation.mutate({ id: item.id, is_checked: !item.is_checked })}
+                    onClick={() => access.canEdit && handleToggle(item.id, !item.is_checked)}
                     disabled={!access.canEdit}
                   >
                     {item.is_checked ? (
@@ -884,7 +863,7 @@ function ChecklistTab({
                   {access.canEdit && (
                     <button
                       className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 shrink-0"
-                      onClick={() => deleteMutation.mutate(item.id)}
+                      onClick={() => handleDeleteItem(item.id)}
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -902,7 +881,7 @@ function ChecklistTab({
           className="p-3 pt-0 shrink-0"
           onSubmit={(e) => {
             e.preventDefault();
-            if (newTitle.trim()) createMutation.mutate(newTitle.trim());
+            if (newTitle.trim()) handleCreate(newTitle.trim());
           }}
         >
           <div className="join w-full">
@@ -916,7 +895,7 @@ function ChecklistTab({
             <button
               type="submit"
               className="btn btn-primary btn-xs join-item"
-              disabled={!newTitle.trim() || createMutation.isPending}
+              disabled={!newTitle.trim() || creating}
             >
               <Plus className="w-3 h-3" />
             </button>
@@ -932,13 +911,14 @@ function ChecklistTab({
    ═══════════════════════════════════════════════════════ */
 
 function CommentsTab({
-  orgId,
-  projectId,
+  orgId: _orgId,
+  projectId: _projectId,
   taskId,
   items,
   members,
   currentUserId,
   access,
+  onRefresh,
 }: {
   orgId: string;
   projectId: string;
@@ -947,10 +927,12 @@ function CommentsTab({
   members: OrgMember[];
   currentUserId: string;
   access: AccessControl;
+  onRefresh: () => void;
 }) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const parentRef = useRef<HTMLDivElement>(null);
   const [body, setBody] = useState("");
+  const [creating, setCreating] = useState(false);
 
   const virtualizer = useVirtualizer({
     count: items.length,
@@ -959,18 +941,23 @@ function CommentsTab({
     overscan: 3,
   });
 
-  const createMutation = useMutation({
-    mutationFn: (b: string) => api.comments.create(orgId, projectId, taskId, { body: b }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["comments"] });
+  const handleCreate = async (b: string) => {
+    if (!send) return;
+    setCreating(true);
+    try {
+      await send("comment:create", { task_id: taskId, body: b });
       setBody("");
-    },
-  });
+      onRefresh();
+    } catch {} finally { setCreating(false); }
+  };
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.comments.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["comments"] }),
-  });
+  const handleDeleteComment = async (id: string) => {
+    if (!send) return;
+    try {
+      await send("comment:delete", { task_id: taskId, comment_id: id });
+      onRefresh();
+    } catch {}
+  };
 
   return (
     <div className="h-full flex flex-col">
@@ -1012,7 +999,7 @@ function CommentsTab({
                       {canDelete && (
                         <button
                           className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
-                          onClick={() => deleteMutation.mutate(comment.id)}
+                          onClick={() => handleDeleteComment(comment.id)}
                         >
                           <Trash2 className="w-2.5 h-2.5" />
                         </button>
@@ -1035,7 +1022,7 @@ function CommentsTab({
           className="p-3 pt-0 shrink-0 border-t border-base-200"
           onSubmit={(e) => {
             e.preventDefault();
-            if (body.trim()) createMutation.mutate(body.trim());
+            if (body.trim()) handleCreate(body.trim());
           }}
         >
           <div className="flex gap-2">
@@ -1047,14 +1034,14 @@ function CommentsTab({
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && body.trim()) {
                   e.preventDefault();
-                  createMutation.mutate(body.trim());
+                  handleCreate(body.trim());
                 }
               }}
             />
             <Button
               type="submit"
               size="sm"
-              disabled={!body.trim() || createMutation.isPending}
+              disabled={!body.trim() || creating}
               className="self-end"
             >
               <Send className="w-3 h-3" />
@@ -1077,22 +1064,25 @@ function AttachmentsTab({
   taskId,
   items,
   access,
+  onRefresh,
 }: {
   orgId: string;
   projectId: string;
   taskId: string;
   items: Attachment[];
   access: AccessControl;
+  onRefresh: () => void;
 }) {
-  const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<{ url: string; mime: string; name: string } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.attachments.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attachments"] }),
-  });
+  const handleDelete = async (id: string) => {
+    try {
+      await api.attachments.delete(orgId, projectId, taskId, id);
+      onRefresh();
+    } catch {}
+  };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1100,7 +1090,7 @@ function AttachmentsTab({
     setUploading(true);
     try {
       await api.attachments.upload(orgId, projectId, taskId, file);
-      qc.invalidateQueries({ queryKey: ["attachments"] });
+      onRefresh();
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -1178,7 +1168,7 @@ function AttachmentsTab({
                 {access.canEdit && (
                   <button
                     className="btn btn-ghost btn-xs btn-square text-error"
-                    onClick={() => deleteMutation.mutate(att.id)}
+                    onClick={() => handleDelete(att.id)}
                   >
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -1231,14 +1221,16 @@ function AttachmentsTab({
    ═══════════════════════════════════════════════════════ */
 
 function RelationsTab({
-  orgId,
-  projectId,
+  orgId: _orgId,
+  projectId: _projectId,
   taskId,
   dependencies,
   watchers,
   members,
   currentUserId,
   access,
+  onRefreshDeps,
+  onRefreshWatchers,
 }: {
   orgId: string;
   projectId: string;
@@ -1248,49 +1240,33 @@ function RelationsTab({
   members: OrgMember[];
   currentUserId: string;
   access: AccessControl;
+  onRefreshDeps: () => void;
+  onRefreshWatchers: () => void;
 }) {
-  const qc = useQueryClient();
+  const send = useProjectTaskStore((s) => s.send);
   const isWatching = watchers.some((w) => w.user_id === currentUserId);
+  const [watchPending, setWatchPending] = useState(false);
 
-  const toggleWatchMutation = useMutation({
-    mutationFn: () =>
-      isWatching
-        ? api.watchers.unwatch(orgId, projectId, taskId)
-        : api.watchers.watch(orgId, projectId, taskId),
-    onMutate: async () => {
-      await qc.cancelQueries({ queryKey: ["watchers", orgId, projectId, taskId] });
-      const previousWatchers = qc.getQueryData(["watchers", orgId, projectId, taskId]);
-      qc.setQueryData(["watchers", orgId, projectId, taskId], (old: { data: TaskWatcher[] } | undefined) => {
-        if (!old) return old;
-        if (isWatching) {
-          return {
-            ...old,
-            data: old.data.filter((w) => w.user_id !== currentUserId),
-          };
-        } else {
-          return {
-            ...old,
-            data: [...old.data, { user_id: currentUserId, task_id: taskId, created_at: new Date().toISOString() }],
-          };
-        }
-      });
-      return { previousWatchers };
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.previousWatchers) {
-        qc.setQueryData(["watchers", orgId, projectId, taskId], context.previousWatchers);
+  const handleToggleWatch = async () => {
+    if (!send) return;
+    setWatchPending(true);
+    try {
+      if (isWatching) {
+        await send("watcher:unwatch", { task_id: taskId });
+      } else {
+        await send("watcher:watch", { task_id: taskId });
       }
-    },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["watchers", orgId, projectId, taskId] }),
-  });
+      onRefreshWatchers();
+    } catch {} finally { setWatchPending(false); }
+  };
 
-  // Note: Watcher removal for other users would need a different API endpoint
-  // For now, users can only toggle their own watch status
-
-  const removeDependencyMutation = useMutation({
-    mutationFn: (depId: string) => api.dependencies.remove(orgId, projectId, taskId, depId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dependencies"] }),
-  });
+  const handleRemoveDep = async (depId: string) => {
+    if (!send) return;
+    try {
+      await send("dependency:remove", { task_id: taskId, depends_on_id: depId });
+      onRefreshDeps();
+    } catch {}
+  };
 
   return (
     <div className="p-3 space-y-4">
@@ -1302,8 +1278,8 @@ function RelationsTab({
           </label>
           <button
             className={cn("btn btn-xs gap-1", isWatching ? "btn-primary" : "btn-outline")}
-            onClick={() => toggleWatchMutation.mutate()}
-            disabled={toggleWatchMutation.isPending}
+            onClick={() => handleToggleWatch()}
+            disabled={watchPending}
           >
             <Eye className="w-3 h-3" />
             {isWatching ? "Watching" : "Watch"}
@@ -1346,7 +1322,7 @@ function RelationsTab({
                 {access.canEdit && (
                   <button
                     className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
-                    onClick={() => removeDependencyMutation.mutate(dep.depends_on_id)}
+                    onClick={() => handleRemoveDep(dep.depends_on_id)}
                   >
                     <X className="w-3 h-3" />
                   </button>
