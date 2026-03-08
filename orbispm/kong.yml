@@ -2,9 +2,9 @@ _format_version: "3.0"
 _transform: true
 
 services:
-  # Zitadel Console UI
+  # Zitadel (v4 via Traefik proxy)
   - name: zitadel
-    url: http://zitadel:8080
+    url: http://zitadel-proxy:8080
     routes:
       - name: zitadel-console
         paths:
@@ -45,7 +45,7 @@ services:
     plugins:
       - name: rate-limiting
         config:
-          minute: 200
+          minute: 1000
           policy: local
           fault_tolerant: true
           hide_client_headers: false
@@ -74,22 +74,8 @@ services:
           fault_tolerant: true
           hide_client_headers: false
 
-  # Storage (MinIO) proxy for direct file access
-  - name: storage
-    url: http://minio:9000
-    routes:
-      - name: storage-route
-        paths:
-          - /storage
-        strip_path: true
-        preserve_host: false
-    plugins:
-      - name: rate-limiting
-        config:
-          minute: 120
-          policy: local
-          fault_tolerant: true
-          hide_client_headers: false
+  # Storage proxy removed — MinIO is external (HTTPS)
+  # Access files directly via MINIO_SERVER_URL
 
   # NocoDB UI
   - name: nocodb

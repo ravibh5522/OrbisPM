@@ -192,7 +192,12 @@ func main() {
 	log.Info().Msg("Org WebSocket hub started")
 
 	// --- Background Worker (Asynq) ---
-	workerSrv := worker.NewServer(redisOpts.Addr)
+	workerSrv := worker.NewServer(asynq.RedisClientOpt{
+		Addr:     redisOpts.Addr,
+		Password: redisOpts.Password,
+		Username: redisOpts.Username,
+		DB:       redisOpts.DB,
+	})
 	defer workerSrv.Stop()
 	log.Info().Msg("Asynq worker configured")
 

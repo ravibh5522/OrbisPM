@@ -4,6 +4,8 @@ Zitadel setup script for OrbisPM.
 Creates a service user PAT and OIDC application for the backend.
 Run once after 'docker compose up' with Zitadel healthy.
 
+Reads configuration from .env file or environment variables.
+
 Usage: python3 scripts/zitadel-setup.py
 """
 
@@ -20,10 +22,34 @@ import urllib.error
 import urllib.parse
 from http.cookiejar import CookieJar
 
-ZITADEL_URL = "http://localhost:8081"
-ADMIN_USER = "admin@orbispm.local"
-ADMIN_PASS = "Admin123!"
-REDIRECT_URI = "http://localhost:3000/auth/callback"
+
+def load_dotenv(path=None):
+    """Load .env file into os.environ (simple parser, no dependencies)."""
+    if path is None:
+        path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if not os.path.isfile(path):
+        return
+    with open(path) as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, value = line.partition("=")
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key not in os.environ:  # Don't override explicit env vars
+                os.environ[key] = value
+
+
+load_dotenv()
+
+ZITADEL_DOMAIN = os.environ.get("ZITADEL_EXTERNAL_DOMAIN", "localhost")
+ZITADEL_PORT = os.environ.get("ZITADEL_MAPPED_PORT", "8081")
+ZITADEL_URL = os.environ.get("ZITADEL_URL", f"http://{ZITADEL_DOMAIN}:{ZITADEL_PORT}")
+ADMIN_USER = os.environ.get("ZITADEL_ADMIN_USER", "admin@orbispm.local")
+ADMIN_PASS = os.environ.get("ZITADEL_ADMIN_PASSWORD", "Admin123!")
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+REDIRECT_URI = f"{FRONTEND_URL}/auth/callback"
 
 cookiejar = CookieJar()
 opener = urllib.request.build_opener(
@@ -77,15 +103,61 @@ def wait_for_zitadel():
         time.sleep(2)
     return False
 
+def get_init_pat_from_logs():
+    """
+    Extract the machine user PAT generated during Zitadel's first-instance
+    initialization from Docker container logs.
+
+    Zitadel v2 prints the PAT token as a raw line to stdout during the
+    '03_default_instance' migration step. It is NOT wrapped in key=value format.
+    Pattern: a standalone line of 60-100 base64url characters (A-Za-z0-9, -, _).
+    """
+    import subprocess
+    print("Trying to extract init PAT from Zitadel container logs...")
+    try:
+        result = subprocess.run(
+            ["docker", "logs", "orbispm-zitadel-api-1"],
+            capture_output=True, text=True, timeout=10
+        )
+        combined = result.stdout + result.stderr
+
+        # The PAT appears as a raw token after the 03_default_instance migration.
+        # It may appear inline within a log line or on its own line.
+        # Match any long base64url token (60–120 chars, only A-Za-z0-9, -, _)
+        # that is preceded/followed by whitespace or line boundaries.
+        pat_re = re.compile(r'(?:^|\s)([A-Za-z0-9_\-]{60,120})(?:\s|$)', re.MULTILINE)
+        for m in pat_re.finditer(combined):
+            candidate = m.group(1)
+            # Filter out log fields that look like file paths or timestamps
+            if '/' in candidate or ':' in candidate or '.' in candidate:
+                continue
+            # Must have mixed case and digits — PATs are not all-lowercase names
+            if not re.search(r'[A-Z]', candidate) or not re.search(r'[0-9]', candidate):
+                continue
+            print(f"  Found candidate PAT from logs (len={len(candidate)})")
+            return candidate
+
+        # Fallback: look for structured log formats
+        for pattern in [r'token="([A-Za-z0-9_\-]{40,})"', r'"token"\s*:\s*"([A-Za-z0-9_\-]{40,})"']:
+            m = re.search(pattern, combined)
+            if m and len(m.group(1)) > 30:
+                print(f"  Found PAT from structured log (len={len(m.group(1))})")
+                return m.group(1)
+
+    except Exception as e:
+        print(f"  Could not read Docker logs: {e}")
+    print("  No PAT found in logs")
+    return None
+
+
 def get_admin_token_via_oidc():
     """
     Get an admin token by using the OIDC Authorization Code flow with PKCE
-    via the Console client.
+    via the Console client (Zitadel v2 login UI paths).
     """
-    # Step 1: Find the Console client_id via the well-known endpoint
     print("Getting admin token via OIDC...")
 
-    # Get Console environment to find client_id
+    # Step 1: Get Console environment to find client_id
     try:
         req = urllib.request.Request(f"{ZITADEL_URL}/ui/console/assets/environment.json")
         with opener.open(req) as resp:
@@ -109,7 +181,7 @@ def get_admin_token_via_oidc():
     state = secrets.token_urlsafe(16)
     nonce = secrets.token_urlsafe(16)
 
-    # Step 3: Start OIDC Authorization
+    # Step 3: Start OIDC Authorization, follow initial redirect
     auth_params = urllib.parse.urlencode({
         "client_id": console_client_id,
         "redirect_uri": f"{ZITADEL_URL}/ui/console/auth/callback",
@@ -123,6 +195,7 @@ def get_admin_token_via_oidc():
     })
     auth_url = f"{ZITADEL_URL}/oauth/v2/authorize?{auth_params}"
 
+    login_url = ""
     try:
         req = urllib.request.Request(auth_url)
         with no_redirect_opener.open(req) as resp:
@@ -144,52 +217,76 @@ def get_admin_token_via_oidc():
     auth_request_id = auth_request_match.group(1)
     print(f"  Auth request: {auth_request_id}")
 
-    # Step 5: Submit login form via Zitadel's internal login API
-    # First: loginname step
+    # Step 5: Submit loginname form — Zitadel v2 path is /ui/login/loginname
     login_data = urllib.parse.urlencode({
         "authRequestID": auth_request_id,
         "loginName": ADMIN_USER,
     })
+    loginname_redirect = ""
     try:
         req = urllib.request.Request(
-            f"{ZITADEL_URL}/loginname",
+            f"{ZITADEL_URL}/ui/login/loginname",
             data=login_data.encode(),
             method="POST",
         )
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with no_redirect_opener.open(req) as resp:
-            pass
+            # Some Zitadel versions return 200 with next URL in body or meta refresh
+            body = resp.read().decode("utf-8", errors="replace")
+            print(f"  Login name returned 200, checking body for next step...")
+            meta = re.search(r'<meta[^>]+http-equiv=["\']refresh["\'][^>]+url=([^\s"\'>;]+)', body, re.IGNORECASE)
+            if meta:
+                loginname_redirect = meta.group(1)
+            elif '/ui/login/password' in body or 'password' in body.lower():
+                loginname_redirect = f"/ui/login/password"
+                print(f"  Password page detected in body")
     except urllib.error.HTTPError as e:
         if e.code in (302, 303):
-            print(f"  Login name submitted")
+            loginname_redirect = e.headers.get("Location", "")
+            print(f"  Login name submitted (302), redirect: {loginname_redirect[:80]}")
         else:
-            print(f"  Login name error: {e.code}: {e.read().decode()[:200]}")
+            body = e.read().decode()
+            print(f"  Login name error: {e.code}: {body[:200]}")
             return None
 
-    # Step 6: Submit password
+    # Step 6: Submit password — Zitadel v2 path is /ui/login/password
     pwd_data = urllib.parse.urlencode({
         "authRequestID": auth_request_id,
         "password": ADMIN_PASS,
     })
+    callback_url = ""
     try:
         req = urllib.request.Request(
-            f"{ZITADEL_URL}/login/password",
+            f"{ZITADEL_URL}/ui/login/password",
             data=pwd_data.encode(),
             method="POST",
         )
         req.add_header("Content-Type", "application/x-www-form-urlencoded")
         with no_redirect_opener.open(req) as resp:
-            pass
+            # Some Zitadel versions return 200 with meta redirect or code in body
+            body = resp.read().decode("utf-8", errors="replace")
+            print(f"  Password returned 200, scanning body for authcode...")
+            code_m = re.search(r'[?&]code=([A-Za-z0-9%_\-\.]+)', body)
+            if code_m:
+                callback_url = f"?code={code_m.group(1)}"
+            else:
+                url_m = re.search(r'https?://[^\s"\'<>]+code=[^\s"\'<>]+', body)
+                if url_m:
+                    callback_url = url_m.group(0)
     except urllib.error.HTTPError as e:
         if e.code in (302, 303):
             callback_url = e.headers.get("Location", "")
-            print(f"  Password accepted, callback: {callback_url[:100]}...")
+            print(f"  Password accepted (302), callback: {callback_url[:100]}...")
         else:
-            print(f"  Password error: {e.code}: {e.read().decode()[:200]}")
+            body = e.read().decode()
+            print(f"  Password error: {e.code}: {body[:200]}")
             return None
 
     # Step 7: Follow redirects to get the auth code
-    # The callback URL might go through several redirects
+    if not callback_url:
+        print("  Could not get callback URL from password step")
+        return None
+
     max_redirects = 10
     current_url = callback_url
     code = None
@@ -206,7 +303,7 @@ def get_admin_token_via_oidc():
                 current_url = f"{ZITADEL_URL}{current_url}"
             req = urllib.request.Request(current_url)
             with no_redirect_opener.open(req) as resp:
-                break  # No more redirects
+                break
         except urllib.error.HTTPError as e:
             if e.code in (302, 303):
                 current_url = e.headers.get("Location", "")
@@ -214,7 +311,7 @@ def get_admin_token_via_oidc():
                 break
 
     if not code:
-        print("  Could not extract authorization code")
+        print("  Could not extract authorization code from redirect chain")
         return None
 
     print(f"  Got authorization code")
@@ -336,8 +433,8 @@ def create_oidc_app(token, project_id):
 
     result = api_call("POST", f"/management/v1/projects/{project_id}/apps/oidc", {
         "name": "OrbisPM Web",
-        "redirectUris": [REDIRECT_URI, "http://localhost:3000/login"],
-        "postLogoutRedirectUris": ["http://localhost:3000/login"],
+        "redirectUris": [REDIRECT_URI, f"{FRONTEND_URL}/login"],
+        "postLogoutRedirectUris": [f"{FRONTEND_URL}/login"],
         "responseTypes": ["OIDC_RESPONSE_TYPE_CODE"],
         "grantTypes": ["OIDC_GRANT_TYPE_AUTHORIZATION_CODE", "OIDC_GRANT_TYPE_REFRESH_TOKEN"],
         "appType": "OIDC_APP_TYPE_USER_AGENT",
@@ -356,28 +453,55 @@ def create_oidc_app(token, project_id):
 def main():
     if not wait_for_zitadel():
         sys.exit(1)
-    time.sleep(3)
+    time.sleep(5)  # Extra delay for Zitadel to finish projection setup
 
-    # Get admin token via OIDC flow
-    admin_token = get_admin_token_via_oidc()
-    if not admin_token:
-        print("\nERROR: Could not get admin token")
-        sys.exit(1)
+    # Strategy 1: get the init-generated machine user PAT from Docker logs.
+    # Zitadel creates this PAT for ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE
+    # and the token value appears in startup logs.
+    # If we get it, use it directly as the service token (skip admin OIDC flow).
+    init_pat = get_init_pat_from_logs()
 
-    # Find/create machine user
-    user_id = create_machine_user(admin_token)
-    if not user_id:
-        print("ERROR: Could not create/find machine user")
-        sys.exit(1)
+    if init_pat:
+        print("Using machine user PAT from init logs as service token...")
+        # Verify it works against the management API
+        test = api_call("POST", "/management/v1/users/_search", {
+            "queries": [{"userNameQuery": {"userName": "backend-service", "method": "TEXT_QUERY_METHOD_EQUALS"}}]
+        }, init_pat)
+        if test is not None:
+            print("  PAT validated against management API!")
+            machine_user_id = test["result"][0]["id"] if test.get("result") else None
+        else:
+            print("  Init PAT did not work against management API, falling back to OIDC...")
+            init_pat = None
 
-    # Grant IAM_OWNER
-    grant_iam_owner(admin_token, user_id)
+    # Strategy 2: OIDC login as human admin
+    if init_pat:
+        admin_token = init_pat
+        pat = init_pat  # The init PAT IS the service token
+        user_id = machine_user_id
+        # Still need to create the OIDC app — need admin token for that
+        # The init PAT should have ORG_OWNER rights for this
+    else:
+        # Get admin token via OIDC flow
+        admin_token = get_admin_token_via_oidc()
+        if not admin_token:
+            print("\nERROR: Could not get admin token")
+            sys.exit(1)
 
-    # Create PAT
-    pat = create_pat(admin_token, user_id)
-    if not pat:
-        print("ERROR: Could not create PAT")
-        sys.exit(1)
+        # Find/create machine user
+        user_id = create_machine_user(admin_token)
+        if not user_id:
+            print("ERROR: Could not create/find machine user")
+            sys.exit(1)
+
+        # Grant IAM_OWNER
+        grant_iam_owner(admin_token, user_id)
+
+        # Create PAT
+        pat = create_pat(admin_token, user_id)
+        if not pat:
+            print("ERROR: Could not create PAT")
+            sys.exit(1)
 
     # Create project
     project_id = create_project(admin_token)
@@ -401,24 +525,59 @@ def main():
     print("\n" + "=" * 60)
     print("ZITADEL SETUP COMPLETE!")
     print("=" * 60)
-    print("\nAdd these to docker-compose.yml api service environment:")
     print()
     for key, value in config.items():
-        print(f'      {key}: "{value}"')
+        print(f"  {key}={value}")
     print()
-    print(f"Frontend NEXT_PUBLIC_ZITADEL_CLIENT_ID: {client_id}")
-    print(f"Frontend NEXT_PUBLIC_ZITADEL_ISSUER: {ZITADEL_URL}")
+    print(f"  NEXT_PUBLIC_ZITADEL_CLIENT_ID={client_id}")
+    print(f"  NEXT_PUBLIC_ZITADEL_ISSUER={ZITADEL_URL}")
     print()
 
-    # Write .env.zitadel
-    env_path = os.path.join(os.path.dirname(__file__), ".env.zitadel")
-    with open(env_path, "w") as f:
-        f.write(f"ZITADEL_SERVICE_TOKEN={pat}\n")
-        f.write(f"ZITADEL_CLIENT_ID={client_id}\n")
-        f.write(f"ZITADEL_PROJECT_ID={project_id}\n")
-        f.write(f"NEXT_PUBLIC_ZITADEL_CLIENT_ID={client_id}\n")
-        f.write(f"NEXT_PUBLIC_ZITADEL_ISSUER={ZITADEL_URL}\n")
-    print(f"Config saved to {env_path}")
+    # Update .env file with Zitadel tokens
+    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    if os.path.isfile(env_path):
+        with open(env_path, "r") as f:
+            content = f.read()
+        for key in ("ZITADEL_SERVICE_TOKEN", "ZITADEL_CLIENT_ID"):
+            val = config[key]
+            # Replace existing line (even if empty value)
+            import re as _re
+            content = _re.sub(
+                rf"^{key}=.*$",
+                f"{key}={val}",
+                content,
+                flags=_re.MULTILINE,
+            )
+        with open(env_path, "w") as f:
+            f.write(content)
+        print(f"Updated {env_path} with ZITADEL_SERVICE_TOKEN and ZITADEL_CLIENT_ID")
+    else:
+        print(f"WARNING: {env_path} not found — create it from .env.example")
+
+    # Also write frontend .env.local if it exists
+    frontend_env = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend", ".env.local")
+    frontend_dir = os.path.dirname(frontend_env)
+    if os.path.isdir(frontend_dir):
+        lines = []
+        if os.path.isfile(frontend_env):
+            with open(frontend_env) as f:
+                lines = f.readlines()
+        # Update or append NEXT_PUBLIC vars
+        for key, val in [
+            ("NEXT_PUBLIC_ZITADEL_CLIENT_ID", client_id),
+            ("NEXT_PUBLIC_ZITADEL_ISSUER", ZITADEL_URL),
+        ]:
+            found = False
+            for i, line in enumerate(lines):
+                if line.startswith(f"{key}="):
+                    lines[i] = f"{key}={val}\n"
+                    found = True
+                    break
+            if not found:
+                lines.append(f"{key}={val}\n")
+        with open(frontend_env, "w") as f:
+            f.writelines(lines)
+        print(f"Updated {frontend_env}")
 
 if __name__ == "__main__":
     main()

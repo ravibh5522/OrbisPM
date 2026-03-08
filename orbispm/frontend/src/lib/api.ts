@@ -36,6 +36,14 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+// Pages that should never trigger an auto-redirect to /login
+const AUTH_PATHS = ["/login", "/signup", "/auth"];
+
+function isOnAuthPage(): boolean {
+  if (typeof window === "undefined") return false;
+  return AUTH_PATHS.some((p) => window.location.pathname.startsWith(p));
+}
+
 // Track refresh in progress to avoid concurrent refreshes
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -69,7 +77,7 @@ async function ensureValidToken(): Promise<void> {
   const success = await refreshPromise;
   if (!success) {
     clearAuth();
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !isOnAuthPage()) {
       window.location.href = "/login";
     }
   }
@@ -119,7 +127,7 @@ async function request<T>(
       return request<T>(path, options, true);
     }
     clearAuth();
-    if (typeof window !== "undefined") {
+    if (typeof window !== "undefined" && !isOnAuthPage()) {
       window.location.href = "/login";
     }
   }
@@ -236,7 +244,7 @@ import type {
 } from "@/types/domain";
 
 export const api = {
-  // Auth (Zitadel via backend)
+  // Auth (Zitadel via backend) — all /auth/* endpoints are public, skip auto-refresh
   auth: {
     signup(email: string, password: string, name?: string): Promise<AuthTokens> {
       return request<AuthTokens>(`${V1}/auth/signup`, {
@@ -247,19 +255,19 @@ export const api = {
           name: name || undefined,
           data: name ? { name } : undefined,
         }),
-      });
+      }, true);
     },
     login(email: string, password: string): Promise<AuthTokens> {
       return request<AuthTokens>(`${V1}/auth/login`, {
         method: "POST",
         body: JSON.stringify({ email, password }),
-      });
+      }, true);
     },
     refresh(refreshToken: string): Promise<AuthTokens> {
       return request<AuthTokens>(`${V1}/auth/refresh`, {
         method: "POST",
         body: JSON.stringify({ refresh_token: refreshToken }),
-      });
+      }, true);
     },
     getUser(): Promise<AuthUser> {
       return get(`${V1}/auth/user`);
@@ -274,30 +282,30 @@ export const api = {
       return request<void>(`${V1}/auth/logout`, { method: "POST" }, true);
     },
 
-    // OIDC PKCE flow
+    // OIDC PKCE flow (public — called pre-auth)
     oidcAuthorize(redirectUri: string, state: string): Promise<OIDCAuthorizeResponse> {
-      return post(`${V1}/auth/oidc/authorize`, { redirect_uri: redirectUri, state });
+      return request(`${V1}/auth/oidc/authorize`, { method: "POST", body: JSON.stringify({ redirect_uri: redirectUri, state }) }, true);
     },
     oidcCallback(code: string, redirectUri: string, codeVerifier: string): Promise<AuthTokens> {
-      return post(`${V1}/auth/oidc/callback`, { code, redirect_uri: redirectUri, code_verifier: codeVerifier });
+      return request(`${V1}/auth/oidc/callback`, { method: "POST", body: JSON.stringify({ code, redirect_uri: redirectUri, code_verifier: codeVerifier }) }, true);
     },
     oidcRefresh(refreshToken: string): Promise<AuthTokens> {
-      return post(`${V1}/auth/oidc/refresh`, { refresh_token: refreshToken });
+      return request(`${V1}/auth/oidc/refresh`, { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) }, true);
     },
 
     verifyLoginMFA(sessionId: string, sessionToken: string, method: string, code: string): Promise<AuthTokens> {
-      return post(`${V1}/auth/mfa/login-verify`, { session_id: sessionId, session_token: sessionToken, method, code });
+      return request(`${V1}/auth/mfa/login-verify`, { method: "POST", body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, method, code }) }, true);
     },
     sendOTPChallenge(sessionId: string, sessionToken: string, method: string): Promise<void> {
-      return post(`${V1}/auth/mfa/send-otp-challenge`, { session_id: sessionId, session_token: sessionToken, method });
+      return request(`${V1}/auth/mfa/send-otp-challenge`, { method: "POST", body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, method }) }, true);
     },
 
-    // Social / IDP
+    // Social / IDP (public — no auth required)
     listIDPs(): Promise<{ idps: IDPInfo[] }> {
-      return get(`${V1}/auth/idps`);
+      return request(`${V1}/auth/idps`, { method: "GET" }, true);
     },
     startIDPLogin(idpId: string, successUrl: string, failureUrl: string): Promise<IDPStartResponse> {
-      return post(`${V1}/auth/idp/start`, { idp_id: idpId, success_url: successUrl, failure_url: failureUrl });
+      return request(`${V1}/auth/idp/start`, { method: "POST", body: JSON.stringify({ idp_id: idpId, success_url: successUrl, failure_url: failureUrl }) }, true);
     },
   },
 

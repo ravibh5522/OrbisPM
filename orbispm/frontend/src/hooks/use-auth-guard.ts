@@ -34,8 +34,10 @@ export function useRedirectIfAuth() {
     if (isAuthenticated) {
       if (orgs.length === 0) {
         router.replace("/onboarding");
-      } else if (currentOrg) {
-        router.replace(`/${currentOrg.slug}`);
+      } else {
+        // Use currentOrg if set, otherwise fall back to first org
+        const target = currentOrg || orgs[0];
+        router.replace(`/${target.slug}`);
       }
     }
   }, [isAuthenticated, isLoading, orgs, currentOrg, router]);

@@ -962,7 +962,7 @@ func (c *ZitadelClient) ListIDPs(ctx context.Context) ([]*IDPInfo, error) {
 		return nil, c.wrapGRPCError(err)
 	}
 
-	var idps []*IDPInfo
+	idps := make([]*IDPInfo, 0)
 	for _, idp := range resp.GetResult() {
 		idpType := "unknown"
 		if idp.GetOidcConfig() != nil {

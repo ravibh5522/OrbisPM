@@ -1,6 +1,12 @@
 .PHONY: dev build test lint migrate-up migrate-down docker-up docker-down swagger
 
-# Development
+# Load .env
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
+# Development (local backend, Docker infra)
 dev: docker-up
 	cd backend && go run ./cmd/api
 
@@ -25,7 +31,7 @@ migrate-up:
 migrate-down:
 	cd backend && go run ./cmd/migrate -direction down
 
-# Docker
+# Docker — infrastructure services only (for local dev)
 docker-up:
 	docker compose up -d postgres redis
 
@@ -35,15 +41,24 @@ docker-down:
 docker-build:
 	docker compose build api
 
+# Full stack in Docker
 docker-all:
 	docker compose up --build -d
 
-# Full reset
+# Scale API horizontally
+docker-scale:
+	docker compose up -d --scale api=$${API_REPLICAS:-2} --no-recreate
+
+# Full reset (destructive)
 reset: docker-down
 	docker volume rm orbispm_pgdata orbispm_redisdata 2>/dev/null || true
 	$(MAKE) docker-up
 	sleep 3
 	$(MAKE) migrate-up
+
+# Zitadel setup (run once after first docker-all)
+zitadel-setup:
+	python3 scripts/zitadel-setup.py
 
 # Swagger docs
 swagger:

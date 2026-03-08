@@ -131,10 +131,10 @@ type Server struct {
 }
 
 // NewServer creates a new background job server.
-func NewServer(redisAddr string) *Server {
-	client := asynq.NewClient(asynq.RedisClientOpt{Addr: redisAddr})
+func NewServer(redisOpt asynq.RedisClientOpt) *Server {
+	client := asynq.NewClient(redisOpt)
 	srv := asynq.NewServer(
-		asynq.RedisClientOpt{Addr: redisAddr},
+		redisOpt,
 		asynq.Config{
 			Concurrency: 10,
 			Queues: map[string]int{

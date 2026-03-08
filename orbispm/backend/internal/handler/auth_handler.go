@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/orbispm/orbispm/internal/auth"
@@ -846,7 +847,11 @@ func (h *AuthHandler) verifyAndConsumeBackupCode(ctx context.Context, zitadelUse
 func (h *AuthHandler) ListIDPs(w http.ResponseWriter, r *http.Request) {
 	idps, err := h.zitadel.ListIDPs(r.Context())
 	if err != nil {
-		handleAuthError(w, err)
+		// Return empty list instead of error — Zitadel management API may be
+		// unavailable if the service token is not yet configured. The login page
+		// uses this only to render social login buttons; no IDPs = no buttons.
+		log.Warn().Err(err).Msg("ListIDPs: Zitadel management unavailable, returning empty list")
+		JSON(w, http.StatusOK, map[string]any{"idps": []any{}})
 		return
 	}
 	JSON(w, http.StatusOK, map[string]any{"idps": idps})
