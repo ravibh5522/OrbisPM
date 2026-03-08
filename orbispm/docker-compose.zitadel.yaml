@@ -13,7 +13,6 @@ services:
     command:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=orbispm_default
       - --entrypoints.web.address=:8080
       - --ping=true
       - --ping.entrypoint=web
@@ -127,7 +126,7 @@ services:
       ZITADEL_API_URL: http://zitadel-api:8080
       NEXT_PUBLIC_BASE_PATH: /ui/v2/login
       ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
-      CUSTOM_REQUEST_HEADERS: "Host:${ZITADEL_EXTERNAL_DOMAIN:-localhost},X-Forwarded-Proto:http"
+      CUSTOM_REQUEST_HEADERS: "Host:${ZITADEL_EXTERNAL_DOMAIN:-localhost},X-Forwarded-Proto:${ZITADEL_EXTERNAL_SECURE:+https}${ZITADEL_EXTERNAL_SECURE:-http}"
     healthcheck:
       test: ["CMD", "/bin/sh", "-c", "node /app/healthcheck.mjs http://localhost:3000/ui/v2/login/healthy"]
       interval: 10s
