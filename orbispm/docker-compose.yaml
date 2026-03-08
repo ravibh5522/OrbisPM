@@ -91,7 +91,9 @@ services:
       - "zitadel.animastuff.fun:35.207.238.251"
 
   kong:
-    image: kong/kong-gateway:3.9
+    build:
+      context: .
+      dockerfile: kong/Dockerfile
     restart: unless-stopped
     ports:
       - "${KONG_PROXY_PORT:-8000}:8000"
@@ -105,8 +107,6 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
-    volumes:
-      - ./kong.yml:/kong/kong.yml:ro
     extra_hosts:
       - "zitadel.animastuff.fun:35.207.238.251"
     depends_on:
