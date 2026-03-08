@@ -11,6 +11,7 @@ Usage: python3 scripts/zitadel-setup.py
 
 import hashlib
 import base64
+import http.cookiejar as http_cookiejar
 import json
 import os
 import re
@@ -51,11 +52,19 @@ ADMIN_PASS = os.environ.get("ZITADEL_ADMIN_PASSWORD", "Admin123!")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 REDIRECT_URI = f"{FRONTEND_URL}/auth/callback"
 
-cookiejar = CookieJar()
+# Use a real browser User-Agent (Zitadel fingerprints UA and rejects mismatches)
+BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
+# Override cookie policy to send Secure cookies over HTTP (for local dev)
+_cookie_policy = http_cookiejar.DefaultCookiePolicy()
+_cookie_policy.return_ok_secure = lambda cookie, request: True
+
+cookiejar = CookieJar(policy=_cookie_policy)
 opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(cookiejar),
     urllib.request.HTTPRedirectHandler(),
 )
+opener.addheaders = [("User-Agent", BROWSER_UA)]
 
 class NoRedirectHandler(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
@@ -65,6 +74,7 @@ no_redirect_opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(cookiejar),
     NoRedirectHandler(),
 )
+no_redirect_opener.addheaders = [("User-Agent", BROWSER_UA)]
 
 def api_call(method, path, data=None, token=None, content_type="application/json"):
     url = f"{ZITADEL_URL}{path}"
@@ -157,13 +167,25 @@ def get_admin_token_via_oidc():
     """
     print("Getting admin token via OIDC...")
 
-    # Step 1: Get Console environment to find client_id
+    # Warm up: fetch the login page first so Zitadel sets the UA cookie.
+    # This cookie is required — Zitadel verifies User-Agent consistency.
+    try:
+        opener.open(urllib.request.Request(f"{ZITADEL_URL}/ui/login/"))
+    except Exception:
+        pass
+
+    # Step 1: Get Console environment to find client_id and the external base URL
+    console_base_url = ZITADEL_URL  # default fallback
     try:
         req = urllib.request.Request(f"{ZITADEL_URL}/ui/console/assets/environment.json")
         with opener.open(req) as resp:
             env = json.loads(resp.read().decode())
             console_client_id = env.get("clientid") or env.get("clientId", "")
+            # Use the api URL from environment.json as the redirect base
+            # (Zitadel stores this with the correct external scheme+port)
+            console_base_url = env.get("api", ZITADEL_URL).rstrip("/")
             print(f"  Console client_id: {console_client_id}")
+            print(f"  Console base URL: {console_base_url}")
     except Exception as e:
         print(f"  Could not get console client_id: {e}")
         return None
@@ -181,10 +203,11 @@ def get_admin_token_via_oidc():
     state = secrets.token_urlsafe(16)
     nonce = secrets.token_urlsafe(16)
 
-    # Step 3: Start OIDC Authorization, follow initial redirect
+    # Step 3: Start OIDC Authorization — follow ALL redirects to the login page
+    # This properly sets session cookies (including __Host-zitadel.useragent)
     auth_params = urllib.parse.urlencode({
         "client_id": console_client_id,
-        "redirect_uri": f"{ZITADEL_URL}/ui/console/auth/callback",
+        "redirect_uri": f"{console_base_url}/ui/console/auth/callback",
         "response_type": "code",
         "scope": "openid profile email urn:zitadel:iam:org:project:id:zitadel:aud offline_access",
         "code_challenge": code_challenge,
@@ -195,32 +218,46 @@ def get_admin_token_via_oidc():
     })
     auth_url = f"{ZITADEL_URL}/oauth/v2/authorize?{auth_params}"
 
-    login_url = ""
     try:
-        req = urllib.request.Request(auth_url)
-        with no_redirect_opener.open(req) as resp:
-            pass
-    except urllib.error.HTTPError as e:
-        if e.code in (302, 303):
-            login_url = e.headers.get("Location", "")
-            print(f"  Login redirect: {login_url[:100]}...")
-        else:
-            print(f"  Auth request error: {e.code}")
-            return None
+        login_resp = opener.open(urllib.request.Request(auth_url))
+        login_page_body = login_resp.read().decode()
+        login_page_url = login_resp.geturl()
+        print(f"  Login page: {login_page_url[:80]}...")
+    except Exception as e:
+        print(f"  Auth request error: {e}")
+        return None
 
-    # Step 4: Parse the auth request ID from the login URL
-    auth_request_match = re.search(r'authRequestID=([^&]+)', login_url)
+    # Check for error
+    if "internal error occurred" in login_page_body.lower():
+        m = re.search(r'lgn-error-message[^>]*>\s*([^<]+)', login_page_body)
+        if m:
+            print(f"  Login page error: {m.group(1).strip()}")
+        return None
+
+    # Step 4: Extract auth request ID and CSRF token from the login form
+    auth_request_match = re.search(r'authRequestID=([^&"]+)', login_page_url)
     if not auth_request_match:
-        print("  Could not find authRequestID in login redirect")
+        # try from form body
+        auth_request_match = re.search(r'name="authRequestID"[^>]*value="([^"]+)"', login_page_body)
+    if not auth_request_match:
+        print("  Could not find authRequestID in login page")
         return None
 
     auth_request_id = auth_request_match.group(1)
     print(f"  Auth request: {auth_request_id}")
 
-    # Step 5: Submit loginname form — Zitadel v2 path is /ui/login/loginname
+    # Extract CSRF token from the login form (Zitadel uses gorilla/csrf)
+    csrf_match = re.search(r'name="gorilla\.csrf\.Token"[^>]*value="([^"]+)"', login_page_body)
+    if not csrf_match:
+        csrf_match = re.search(r'name="_csrf"[^>]*value="([^"]+)"', login_page_body)
+    csrf_token = csrf_match.group(1) if csrf_match else ""
+    print(f"  CSRF token found: {bool(csrf_token)}")
+
+    # Step 5: Submit loginname form
     login_data = urllib.parse.urlencode({
         "authRequestID": auth_request_id,
         "loginName": ADMIN_USER,
+        "gorilla.csrf.Token": csrf_token,
     })
     loginname_redirect = ""
     try:
@@ -249,10 +286,26 @@ def get_admin_token_via_oidc():
             print(f"  Login name error: {e.code}: {body[:200]}")
             return None
 
-    # Step 6: Submit password — Zitadel v2 path is /ui/login/password
+    # Step 5b: Follow redirect to password page and extract its CSRF token
+    # (The password page may have a different CSRF token than the loginname page)
+    password_page_csrf = csrf_token  # fallback to existing token
+    if loginname_redirect:
+        try:
+            pwd_page_url = loginname_redirect if loginname_redirect.startswith("http") else f"{ZITADEL_URL}{loginname_redirect}"
+            pwd_page_resp = opener.open(urllib.request.Request(pwd_page_url))
+            pwd_page_body = pwd_page_resp.read().decode()
+            m = re.search(r'name="gorilla\.csrf\.Token"[^>]*value="([^"]+)"', pwd_page_body)
+            if m:
+                password_page_csrf = m.group(1)
+                print(f"  Password page CSRF updated")
+        except Exception:
+            pass
+
+    # Step 6: Submit password
     pwd_data = urllib.parse.urlencode({
         "authRequestID": auth_request_id,
         "password": ADMIN_PASS,
+        "gorilla.csrf.Token": password_page_csrf,
     })
     callback_url = ""
     try:
@@ -320,7 +373,7 @@ def get_admin_token_via_oidc():
     token_data = urllib.parse.urlencode({
         "grant_type": "authorization_code",
         "code": code,
-        "redirect_uri": f"{ZITADEL_URL}/ui/console/auth/callback",
+        "redirect_uri": f"{console_base_url}/ui/console/auth/callback",
         "client_id": console_client_id,
         "code_verifier": code_verifier,
     })

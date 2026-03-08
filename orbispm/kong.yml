@@ -4,7 +4,7 @@ _transform: true
 services:
   # Zitadel (v4 via Traefik proxy)
   - name: zitadel
-    url: http://zitadel-proxy:8080
+    url: http://zitadel:8080
     routes:
       - name: zitadel-console
         paths:

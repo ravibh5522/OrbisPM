@@ -2,47 +2,23 @@
 # OrbisPM — Zitadel v4 (Identity Provider)
 # ============================================================
 # Included by docker-compose.yml.
-# Architecture: Traefik proxy → Zitadel API + Zitadel Login
+# Single-container setup: Zitadel API with built-in Login v1.
 # Uses external PostgreSQL and Redis (configured in .env).
 # ============================================================
 
 services:
-  zitadel-proxy:
-    image: traefik:v3.6.8
-    restart: unless-stopped
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:8080
-      - --ping=true
-      - --ping.entrypoint=web
-      - --log.level=WARN
-      - --accesslog=false
-    ports:
-      - "${ZITADEL_MAPPED_PORT:-8081}:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    depends_on:
-      zitadel-api:
-        condition: service_healthy
-      zitadel-login:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "traefik", "healthcheck", "--ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  zitadel-api:
+  zitadel:
     image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.12.1}
     restart: unless-stopped
     user: "0"
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY}" --config /zitadel-config.yaml
+    ports:
+      - "${ZITADEL_MAPPED_PORT:-8081}:8080"
     environment:
       ZITADEL_PORT: 8080
-      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN:-localhost}
-      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNAL_PORT:-8081}
-      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNAL_SECURE:-false}"
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}
+      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNAL_PORT:-443}
+      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNAL_SECURE:-true}"
       ZITADEL_TLS_ENABLED: false
 
       ZITADEL_DATABASE_POSTGRES_HOST: ${POSTGRES_HOST}
@@ -66,16 +42,9 @@ services:
       ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: ${ZITADEL_MACHINE_USERNAME:-backend-service}
       ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: ${ZITADEL_MACHINE_NAME:-OrbisPM Backend}
       ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: ${ZITADEL_MACHINE_PAT_EXPIRY:-2030-01-01T00:00:00Z}
-      ZITADEL_FIRSTINSTANCE_LOGINCLIENTPATPATH: /zitadel/bootstrap/login-client.pat
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_USERNAME: login-client
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_MACHINE_NAME: Automatically Initialized IAM_LOGIN_CLIENT
-      ZITADEL_FIRSTINSTANCE_ORG_LOGINCLIENT_PAT_EXPIRATIONDATE: "2099-01-01T00:00:00Z"
 
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: true
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_BASEURI: "http://${ZITADEL_EXTERNAL_DOMAIN:-localhost}:${ZITADEL_EXTERNAL_PORT:-8081}/ui/v2/login/"
-      ZITADEL_OIDC_DEFAULTLOGINURLV2: "http://${ZITADEL_EXTERNAL_DOMAIN:-localhost}:${ZITADEL_EXTERNAL_PORT:-8081}/ui/v2/login/login?authRequest="
-      ZITADEL_OIDC_DEFAULTLOGOUTURLV2: "http://${ZITADEL_EXTERNAL_DOMAIN:-localhost}:${ZITADEL_EXTERNAL_PORT:-8081}/ui/v2/login/logout?post_logout_redirect="
-      ZITADEL_SAML_DEFAULTLOGINURLV2: "http://${ZITADEL_EXTERNAL_DOMAIN:-localhost}:${ZITADEL_EXTERNAL_PORT:-8081}/ui/v2/login/login?samlRequest="
+      # Use built-in Login v1 (no separate login container needed)
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
 
       ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: true
       ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "${REDIS_HOST}:${REDIS_PORT}"
@@ -95,64 +64,7 @@ services:
       test: ["CMD", "/app/zitadel", "ready"]
       interval: 10s
       timeout: 30s
-      retries: 15
-      start_period: 120s
+      retries: 30
+      start_period: 600s
     volumes:
-      - zitadel-bootstrap:/zitadel/bootstrap:rw
       - ./zitadel-config.yaml:/zitadel-config.yaml:ro
-    labels:
-      - traefik.enable=true
-      - traefik.http.services.zitadel-api.loadbalancer.server.port=8080
-      - traefik.http.services.zitadel-api.loadbalancer.server.scheme=h2c
-      # /api prefix → strip and forward to zitadel-api
-      - traefik.http.middlewares.zitadel-strip-api.stripprefix.prefixes=/api
-      - traefik.http.middlewares.zitadel-strip-api.stripprefix.forceSlash=false
-      - traefik.http.routers.zitadel-api-alias.rule=PathPrefix(`/api`)
-      - traefik.http.routers.zitadel-api-alias.entrypoints=web
-      - traefik.http.routers.zitadel-api-alias.middlewares=zitadel-strip-api
-      - traefik.http.routers.zitadel-api-alias.service=zitadel-api
-      - traefik.http.routers.zitadel-api-alias.priority=200
-      # Catch-all for everything else (console, OIDC, etc.) except /ui/v2/login
-      - traefik.http.routers.zitadel-canonical.rule=!PathPrefix(`/ui/v2/login`) && !PathPrefix(`/api`) && !Path(`/`)
-      - traefik.http.routers.zitadel-canonical.entrypoints=web
-      - traefik.http.routers.zitadel-canonical.service=zitadel-api
-      - traefik.http.routers.zitadel-canonical.priority=100
-
-  zitadel-login:
-    image: ghcr.io/zitadel/zitadel-login:${ZITADEL_VERSION:-v4.12.1}
-    restart: unless-stopped
-    user: "0"
-    environment:
-      ZITADEL_API_URL: http://zitadel-api:8080
-      NEXT_PUBLIC_BASE_PATH: /ui/v2/login
-      ZITADEL_SERVICE_USER_TOKEN_FILE: /zitadel/bootstrap/login-client.pat
-      CUSTOM_REQUEST_HEADERS: "Host:${ZITADEL_EXTERNAL_DOMAIN:-localhost},X-Forwarded-Proto:${ZITADEL_EXTERNAL_SECURE:+https}${ZITADEL_EXTERNAL_SECURE:-http}"
-    healthcheck:
-      test: ["CMD", "/bin/sh", "-c", "node /app/healthcheck.mjs http://localhost:3000/ui/v2/login/healthy"]
-      interval: 10s
-      timeout: 30s
-      retries: 15
-      start_period: 60s
-    volumes:
-      - zitadel-bootstrap:/zitadel/bootstrap:ro
-    depends_on:
-      zitadel-api:
-        condition: service_healthy
-    labels:
-      - traefik.enable=true
-      - traefik.http.services.zitadel-login.loadbalancer.server.port=3000
-      # Root / → redirect to login
-      - traefik.http.middlewares.zitadel-root-rewrite.replacepath.path=/ui/v2/login/
-      - traefik.http.routers.zitadel-root.rule=Path(`/`)
-      - traefik.http.routers.zitadel-root.entrypoints=web
-      - traefik.http.routers.zitadel-root.middlewares=zitadel-root-rewrite
-      - traefik.http.routers.zitadel-root.service=zitadel-login
-      - traefik.http.routers.zitadel-root.priority=400
-      # /ui/v2/login → zitadel-login
-      - traefik.http.routers.zitadel-login.rule=PathPrefix(`/ui/v2/login`)
-      - traefik.http.routers.zitadel-login.entrypoints=web
-      - traefik.http.routers.zitadel-login.service=zitadel-login
-      - traefik.http.routers.zitadel-login.priority=250
-
-volumes:
-  zitadel-bootstrap:
