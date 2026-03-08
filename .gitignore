@@ -1,2 +1,5 @@
 orbispm/frontend/node_modules/
 orbispm/frontend/.next/
+frontend/.next/
+frontend/.next/cache/
+frontend/.next/trace

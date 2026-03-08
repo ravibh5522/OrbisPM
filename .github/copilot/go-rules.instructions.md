@@ -22,8 +22,10 @@ import (
 ## Error Handling
 - Return errors, don't panic
 - Wrap errors with context: `fmt.Errorf("create task: %w", err)`
-- Use domain errors: `domain.ErrNotFound`, `domain.ErrMaxDepthExceeded`, `domain.ErrForbidden`
-- Handler maps domain errors → HTTP status codes in `response.go`
+- Use `domain.AppError` with HTTP status codes: `domain.NewAppError(http.StatusBadRequest, "invalid input")`
+- Common sentinel errors: `domain.ErrNotFound`, `domain.ErrMaxDepthExceeded`, `domain.ErrForbidden`, `domain.ErrConflict`, `domain.ErrInvalidInput`, `domain.ErrDuplicateEntry`
+- Handler maps `domain.AppError` → HTTP status codes in `response.go` via `WriteError()`
+- Service layer returns `domain.AppError`; handler never creates HTTP status codes directly
 
 ## Naming
 - Interfaces: verb-based (`TaskRepository`, `TaskService`) — NOT `ITaskRepository`
@@ -39,8 +41,10 @@ import (
 
 ## Context Usage
 - First param always: `func (s *TaskService) Create(ctx context.Context, ...) error`
-- Extract user/org from context: `middleware.UserIDFromContext(ctx)`
+- Extract user/org from context: `tenant.UserID(ctx)`, `tenant.OrgID(ctx)` (from `internal/pkg/tenant`)
+- Set context in middleware: `tenant.SetOrgID(ctx, orgID)`, `tenant.SetUserID(ctx, userID)`
 - Pass context through all layers — never create new background context in handlers
+- TxManager uses `tenant.OrgID(ctx)` to set RLS config inside transactions
 
 ## Logging
 - Use zerolog: `log.Ctx(ctx).Info().Str("task_id", id.String()).Msg("task created")`

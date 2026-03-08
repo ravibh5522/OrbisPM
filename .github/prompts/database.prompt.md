@@ -81,7 +81,7 @@ WITH RECURSIVE task_tree AS (
     SELECT t.*, tt.path || t.id, tt.sort_path || t.position
     FROM tasks t
     INNER JOIN task_tree tt ON t.parent_task_id = tt.id
-    WHERE t.depth <= 5 AND NOT t.id = ANY(tt.path)
+    WHERE t.depth <= 3 AND NOT t.id = ANY(tt.path)
 )
 SELECT * FROM task_tree ORDER BY sort_path;
 ```
@@ -93,8 +93,8 @@ SELECT * FROM task_tree ORDER BY sort_path;
 - ALWAYS use `JSONB` (never `JSON`)
 - ALWAYS add `ON DELETE CASCADE` for foreign keys within the same org
 - NEVER use `TEXT` with unbounded length for user input without application-level validation
-- The `tasks.depth` column has `CHECK (depth >= 0 AND depth <= 5)` — NEVER remove this constraint
+- The `tasks.depth` column has `CHECK (depth >= 0 AND depth <= 3)` — NEVER remove this constraint
 - Use `gen_random_uuid()` for default UUIDs (built-in, no extension needed)
 - Down migrations must be safe — drop objects in reverse order of creation
 - Every migration must be idempotent where possible (use `IF NOT EXISTS`, `IF EXISTS`)
-- Add comments on complex columns: `COMMENT ON COLUMN tasks.depth IS 'Subtask nesting depth, max 5';`
+- Add comments on complex columns: `COMMENT ON COLUMN tasks.depth IS 'Subtask nesting depth, max 3';`

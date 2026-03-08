@@ -39,8 +39,8 @@ func TestTaskService_Create_MaxDepthEnforced(t *testing.T) {
     mockRepo := &mocks.TaskRepository{}
     svc := service.NewTaskService(mockRepo, nil, nil)
 
-    // Parent at depth 5
-    mockRepo.On("GetByID", mock.Anything, parentID).Return(&domain.Task{Depth: 5}, nil)
+    # Parent at depth 3 (MaxTaskDepth)
+    mockRepo.On("GetByID", mock.Anything, parentID).Return(&domain.Task{Depth: 3}, nil)
 
     _, err := svc.Create(context.Background(), service.CreateTaskParams{
         ParentTaskID: &parentID,

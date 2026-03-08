@@ -27,24 +27,24 @@ This project uses a strict 4-layer DAO architecture:
 ```go
 func (h *TaskHandler) Create(w http.ResponseWriter, r *http.Request) {
     var req CreateTaskRequest
-    if err := decodeAndValidate(r, &req); err != nil {
-        respondError(w, r, err)
+    if err := parseBody(r, &req); err != nil {
+        WriteError(w, r, err)
         return
     }
-    orgID := middleware.OrgIDFromContext(r.Context())
-    projectID := chi.URLParam(r, "projectId")
+    orgID := tenant.OrgID(r.Context())
+    projectID := uuidParam(r, "projectId")
     
     task, err := h.taskSvc.Create(r.Context(), service.CreateTaskParams{
         OrgID:     orgID,
-        ProjectID: uuid.MustParse(projectID),
+        ProjectID: projectID,
         Title:     req.Title,
         // ...
     })
     if err != nil {
-        respondError(w, r, err)
+        WriteError(w, r, err)
         return
     }
-    respondJSON(w, http.StatusCreated, task)
+    JSON(w, http.StatusCreated, task)
 }
 ```
 
@@ -55,7 +55,7 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
     if params.ParentTaskID != nil {
         parent, err := s.taskRepo.GetByID(ctx, *params.ParentTaskID)
         if err != nil { return nil, err }
-        if parent.Depth >= 5 {
+        if parent.Depth >= domain.MaxTaskDepth {
             return nil, domain.ErrMaxDepthExceeded
         }
     }

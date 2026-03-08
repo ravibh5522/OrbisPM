@@ -24,9 +24,9 @@ Tests:               Integration tests with real DB
 
 ### Service Layer (`internal/service/`)
 ```
-ALLOWED imports:     domain, repository interfaces, redis, asynq, standard library
-FORBIDDEN imports:   handler, net/http, chi
-Contains:            Business logic, transaction management, event publishing
+ALLOWED imports:     domain, repository interfaces, eventbus, asynq, search, standard library
+FORBIDDEN imports:   handler, net/http, chi, database drivers (pgx)
+Contains:            Business logic, transaction orchestration (via TxManager), event publishing
 Tests:               Unit tests with mocked repositories
 ```
 
@@ -58,7 +58,7 @@ Tests:               Integration tests via HTTP client
 
 ## Transaction Pattern
 ```go
-// Service owns transactions. Repos accept tx parameter.
+// Service owns transactions via TxManager. TxManager calls set_config('app.current_org_id', ...) for RLS.
 func (s *Service) CreateWithChildren(ctx context.Context, parent *domain.Parent, children []*domain.Child) error {
     return s.txManager.WithTx(ctx, func(tx pgx.Tx) error {
         p, err := s.parentRepo.Create(ctx, tx, parent)
@@ -71,7 +71,7 @@ func (s *Service) CreateWithChildren(ctx context.Context, parent *domain.Parent,
         }
         return nil
     })
-    // After tx commits: publish events, enqueue jobs
+    // After tx commits: publish events via eventbus, enqueue Asynq jobs
 }
 ```
 
@@ -80,7 +80,7 @@ func (s *Service) CreateWithChildren(ctx context.Context, parent *domain.Parent,
 ```go
 // ❌ WRONG: Business logic in handler
 func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
-    if task.Depth > 5 { /* This belongs in service */ }
+    if task.Depth > 3 { /* This belongs in service */ }
 }
 
 // ❌ WRONG: Business logic in repository

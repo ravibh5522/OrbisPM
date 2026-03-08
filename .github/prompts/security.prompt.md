@@ -8,23 +8,26 @@ Apply these security rules when generating, editing, or reviewing ANY code in th
 
 ## Authentication & Authorization
 
-### Authentication (GoTrue)
-- ALL API endpoints require JWT authentication (except `/health`, `/ready`, `/metrics`)
-- JWT is validated in `middleware/auth.go` — NEVER skip this middleware
-- Extract `user_id` and `org_id` from JWT claims — NEVER trust client-provided org_id in request body
+### Authentication (Zitadel v4 OIDC)
+- ALL API endpoints require JWT authentication (except `/health`, `/metrics`, `/swagger`, `/api/v1/auth/*`, `/api/v1/webhooks/stripe`, `/api/v1/public/contact`)
+- JWT is validated in `middleware/auth.go` via Zitadel JWKS endpoint — NEVER skip this middleware
+- Extract `user_id` from JWT claims — `org_id` comes from URL path via `middleware/rls_tenant.go`
 - API key authentication is an alternative for programmatic access — validated in `middleware/api_key.go`
-- Token refresh is handled by GoTrue — NEVER implement custom token refresh logic
+- Token refresh is handled via Zitadel OIDC refresh_token flow — proxied through `/api/v1/auth/refresh`
+- WebSocket connections authenticate via JWT in query parameter (`?token=`)
 
-### Authorization (Casbin RBAC)
+### Authorization (DB-driven RBAC)
 - Check permissions BEFORE executing any business logic
-- Use domain-scoped RBAC: `enforcer.Enforce(userID, orgID, resource, action)`
+- Use middleware-based RBAC: `RequireOrgMember`, `RequireOrgAdmin`, `RequireTeamRole`, `RequireProjectRole`, `RequirePermission`
+- Permission resolution merges org → team → project roles (see `service/permission_resolver.go`)
 - NEVER rely on client-side permission checks alone — server MUST enforce
 - Role inheritance: org admin → implicit access to all org resources
-- Custom roles stored in `custom_roles` table with `permissions` JSONB
+- Custom roles stored in `custom_roles` table with role_permissions join table
+- Predefined roles: org (owner/admin/member/viewer/billing_admin), team (team_lead/member), project (lead/contributor/reviewer/observer)
 
 ### Multi-Tenant Isolation (RLS)
 - PostgreSQL RLS is the PRIMARY isolation mechanism
-- Middleware sets `SET LOCAL app.current_org_id = 'uuid'` per-transaction
+- Middleware sets `set_config('app.current_org_id', 'uuid', true)` per-transaction via TxManager.WithTx()
 - NEVER bypass RLS with superuser connections in application code
 - Integration tests MUST verify cross-tenant isolation returns 0 rows
 
@@ -35,15 +38,15 @@ Apply these security rules when generating, editing, or reviewing ANY code in th
 - Validate UUID format before passing to service layer
 - Validate file MIME types before storage (allowlist: images, PDFs, documents)
 - Limit file upload size (configurable per plan)
-- Validate `depth` parameter: reject if `parentTask.Depth >= 5`
+- Validate `depth` parameter: reject if `parentTask.Depth >= domain.MaxTaskDepth` (currently 3)
 - Validate column mapping in imports — only allow known target fields
 
 ## Data Protection
 
-- Hash API keys with bcrypt before storage
+- Hash API keys with SHA-256 before storage
 - Store only `key_prefix` (first 8 chars) for key identification
 - NEVER log: passwords, tokens, API keys, email addresses, personal data
-- Use pre-signed URLs for file downloads (expire in 1h)
+- Use pre-signed URLs for file downloads (MinIO, expire in 1h)
 - NEVER return internal database IDs in error messages
 - Include `X-Request-ID` in all responses for correlation (NEVER expose stack traces)
 - JSONB metadata fields: validate schema before storing (prevent injection of arbitrary keys)
@@ -84,7 +87,7 @@ Apply these security rules when generating, editing, or reviewing ANY code in th
 
 - ALL secrets via environment variables (loaded in `internal/config/config.go`)
 - Template in `.env.example` — NEVER commit actual `.env` files
-- Required secrets: `DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `STRIPE_SECRET_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MEILISEARCH_API_KEY`, `LLM_API_KEY`
+- Required secrets: `DATABASE_URL`, `REDIS_URL`, `ZITADEL_ISSUER`, `ZITADEL_PROJECT_ID`, `ZITADEL_API_KEY`, `STRIPE_SECRET_KEY`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MEILISEARCH_API_KEY`
 - Docker Compose: use `env_file` directive, mount secrets as files in K8s
 
 ## CORS Configuration

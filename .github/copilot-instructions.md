@@ -7,14 +7,17 @@
 ## Project Overview
 
 OrbisPM is a multi-tenant SaaS project management platform built with:
-- **Backend:** Go (Chi router), PostgreSQL 18 (RLS), Redis 7, Casbin (RBAC), Asynq (background jobs)
-- **Frontend:** Next.js 15 (App Router, SSR), TypeScript, Tailwind CSS, Shadcn/UI, Tiptap
-- **Auth:** GoTrue (Supabase Auth) — JWT-based
-- **Search:** Meilisearch
+- **Backend:** Go 1.24 (Chi v5 router), PostgreSQL 16+ (RLS), Redis 7, DB-driven RBAC, Asynq (background jobs)
+- **Frontend:** Next.js 15 (App Router), React 19, TypeScript strict, Tailwind CSS 4, DaisyUI 5, Tiptap
+- **Auth:** Zitadel v4 (OIDC + gRPC management API) — JWT RS256
+- **Search:** Meilisearch v1.7
 - **Storage:** MinIO (S3-compatible)
-- **Real-time:** WebSockets (coder/websocket) + Redis Pub/Sub
-- **Billing:** Stripe
-- **AI:** MCP Server + LLM integration for task review
+- **Real-time:** WebSockets (nhooyr.io/websocket) + Redis Pub/Sub
+- **API Gateway:** Kong (declarative config)
+- **Billing:** Stripe (optional, feature-flagged)
+- **Metrics:** Prometheus
+- **Email:** SMTP (Mailpit for dev)
+- **AI:** MCP Server + LLM integration (planned v0.3.0)
 
 ---
 
@@ -29,18 +32,19 @@ All backend code MUST follow these layers. NEVER mix responsibilities.
 - Domain error types defined here
 
 ### Layer 2: Repository / DAO (`internal/repository/`)
-- SQL queries ONLY — use sqlc-generated code + sqlx for dynamic queries
+- SQL queries ONLY — use sqlc-generated code + pgx for dynamic queries
 - NEVER put business logic in repositories
-- Accept `pgx.Tx` or `*sqlx.DB` as parameter (transaction-aware)
+- Accept `pgx.Tx` as parameter (transaction-aware)
 - Map DB rows → domain models
 - All repos implement interfaces defined in `interfaces.go`
+- NEVER filter by `org_id` — RLS handles tenant isolation via TxManager
 
 ### Layer 3: Service (`internal/service/`)
 - ALL business logic lives here
 - Orchestrate multiple repositories within transactions
 - Emit events to Redis Pub/Sub
 - Enqueue Asynq background jobs
-- Transaction boundaries managed here (`repo.WithTx`)
+- Transaction boundaries managed here (`txManager.WithTx`) — TxManager sets RLS context automatically
 
 ### Layer 4: Handler / Presentation (`internal/handler/`)
 - Parse HTTP request (path params, query, body)
@@ -65,12 +69,12 @@ Handler → Service → Repository → Domain
 2. **NEVER** log sensitive data (passwords, tokens, PII). Use `zerolog` structured logging with field filtering.
 3. **ALWAYS** validate and sanitize ALL user input at the handler layer before passing to service.
 4. **ALWAYS** use parameterized queries. NEVER concatenate user input into SQL strings.
-5. **ALWAYS** rely on PostgreSQL RLS for tenant isolation. The middleware sets `SET LOCAL app.current_org_id`. Repository code should NEVER manually filter by `org_id` in WHERE clauses — RLS handles it.
-6. **ALWAYS** check RBAC permissions via Casbin middleware or `rbac.Check()` before performing actions.
+5. **ALWAYS** rely on PostgreSQL RLS for tenant isolation. The TxManager calls `set_config('app.current_org_id', ...)` inside transactions. Repository code should NEVER manually filter by `org_id` in WHERE clauses — RLS handles it.
+6. **ALWAYS** check RBAC permissions via middleware (`RequireOrgAdmin`, `RequireOrgMember`, `RequireTeamRole`, `RequireProjectRole`, `PermissionResolverMiddleware`) before performing actions.
 7. **ALWAYS** use pre-signed URLs for file access (MinIO). NEVER expose storage paths to clients.
-8. **ALWAYS** hash API keys with bcrypt before storing. Store only `key_prefix` (first 8 chars) for identification.
-9. **ALWAYS** rate-limit API endpoints using the Redis-based rate limiter middleware.
-10. **NEVER** expose internal error details to clients. Return generic error messages with correlation IDs.
+8. **ALWAYS** hash API keys with SHA-256 before storing. Store only `key_prefix` (first 8 chars) for identification.
+9. **ALWAYS** rate-limit API endpoints using the per-IP rate limiter middleware (`middleware.RateLimiter`).
+10. **NEVER** expose internal error details to clients. Return generic error messages with correlation IDs via `X-Request-ID`.
 
 ### Clean Code
 1. **ALWAYS** read and understand existing code files before making changes.
@@ -102,26 +106,30 @@ Handler → Service → Repository → Domain
 5. **ALWAYS** use `JSONB` (not `JSON`) for flexible metadata columns.
 6. **ALWAYS** add `created_at TIMESTAMPTZ NOT NULL DEFAULT now()` and `updated_at` to all tables.
 7. **NEVER** use auto-increment integers for primary keys. Use `UUID DEFAULT gen_random_uuid()`.
-8. Task `depth` column has `CHECK (depth >= 0 AND depth <= 5)` — NEVER exceed depth 5 for subtasks.
+8. Task `depth` column has `CHECK (depth >= 0 AND depth <= 3)` — NEVER exceed depth 3 for subtasks (domain constant `MaxTaskDepth = 3`).
 
 ### Frontend
 1. **ALWAYS** use Server Components by default. Add `'use client'` ONLY when the component needs interactivity.
 2. **ALWAYS** use TypeScript strict mode. No `// @ts-ignore` or `// @ts-nocheck`.
-3. **ALWAYS** use Shadcn/UI components from `components/ui/`. NEVER install competing component libraries.
-4. **ALWAYS** use `cn()` utility (clsx + tailwind-merge) for conditional class names.
-5. **ALWAYS** define API response types in `src/types/` — NEVER use inline type assertions.
-6. **ALWAYS** use React Query (TanStack Query) for server data fetching with SSR hydration.
+3. **ALWAYS** use DaisyUI 5 components with Tailwind CSS 4 utility classes. NEVER install competing component libraries.
+4. **ALWAYS** use `cn()` utility (clsx) for conditional class names.
+5. **ALWAYS** define API response types in `src/types/domain.ts` — NEVER use inline type assertions.
+6. **ALWAYS** use TanStack Query v5 for server data fetching in client components.
 7. **ALWAYS** use React Hook Form + Zod for form validation.
-8. **ALWAYS** handle loading states with `loading.tsx` or `<Suspense>` boundaries.
-9. **ALWAYS** handle error states with `error.tsx` error boundaries.
+8. **ALWAYS** handle loading states with Skeleton components or suspense boundaries.
+9. **ALWAYS** handle error states with error boundaries or try/catch.
 10. **NEVER** fetch data in Client Components when it can be done in Server Components.
+11. **ALWAYS** use `useOrgSocket` hook for real-time WebSocket connections (mounted in OrgLayout).
+12. **ALWAYS** use `useProjectTaskStore` Zustand store for task state management within projects.
+13. **ALWAYS** use `usePermissions` hook to check user permissions before rendering action buttons.
+14. **ALWAYS** use the `api` client from `@/lib/api` for all backend API calls (handles auth headers automatically).
 
 ### Testing
 1. **ALWAYS** write unit tests for service layer business logic.
 2. **ALWAYS** write integration tests for API endpoints that test the full stack (handler → service → repo → DB).
 3. **ALWAYS** test RLS isolation: verify Org A cannot access Org B's data.
 4. **ALWAYS** test RBAC: verify each role can only perform permitted actions.
-5. **ALWAYS** test subtask depth enforcement: creating depth 6 must return 400.
+5. **ALWAYS** test subtask depth enforcement: creating depth 4 must return 400.
 6. Use `docker compose -f docker-compose.test.yml up` for integration test infrastructure.
 
 ### Naming Conventions
