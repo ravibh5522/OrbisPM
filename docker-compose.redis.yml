@@ -1,0 +1,23 @@
+# ============================================================
+# OrbisPM — Redis
+# ============================================================
+# Included by docker-compose.yml. Can be removed from includes
+# if using an external Redis instance.
+# ============================================================
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "${REDIS_MAPPED_PORT:-6380}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  redisdata:

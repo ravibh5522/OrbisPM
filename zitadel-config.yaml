@@ -1,0 +1,19 @@
+TLS:
+  Enabled: false
+
+# Increase timeouts for remote database with high latency
+# Default command timeout is 10s, increase to 120s for remote DB
+SystemDefaults:
+  Multifactors:
+    OTP:
+      Issuer: "OrbisPM"
+
+# Database connection pool tuning
+Database:
+  Postgres:
+    MaxOpenConns: 20
+    MaxIdleConns: 10
+    ConnMaxLifetime: "1h"
+    ConnMaxIdleTime: "5m"
+    Dialer:
+      Timeout: "30s"

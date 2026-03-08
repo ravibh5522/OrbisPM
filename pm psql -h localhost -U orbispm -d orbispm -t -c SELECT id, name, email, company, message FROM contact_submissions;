@@ -1,0 +1,5 @@
+                  id                  |   name    |      email       |  company  |           message            | ip_address |          created_at           
+--------------------------------------+-----------+------------------+-----------+------------------------------+------------+-------------------------------
+ e567a7cb-f25e-4d69-93c6-b8dd7fdaa1c8 | Test User | test@example.com | Test Corp | Hello from the landing page! | 172.20.0.1 | 2026-03-07 14:26:36.836509+00
+(1 row)
+

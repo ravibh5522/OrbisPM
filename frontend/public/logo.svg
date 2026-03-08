@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 60" fill="none">
+  <defs>
+    <!-- Ring gradient: indigo top → deeper indigo bottom -->
+    <linearGradient id="ringG" x1="30" y1="4" x2="30" y2="56" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#3730a3"/>
+    </linearGradient>
+
+    <!-- Orbit gradient: bright at satellite tip, fades away -->
+    <linearGradient id="orbitG" x1="52" y1="7" x2="8" y2="53" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#818cf8" stop-opacity="1"/>
+      <stop offset="60%"  stop-color="#6366f1" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#4338ca" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <!-- Satellite inner glow -->
+    <radialGradient id="satG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"  stop-color="#e0e7ff"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </radialGradient>
+
+    <!-- Clip: outside ring outer edge (r > 19.8 from icon center 30,30) -->
+    <clipPath id="oa">
+      <path clip-rule="evenodd"
+        d="M -5 -5 H 65 V 65 H -5 Z
+           M 30 30 m -20 0 a 20 20 0 1 0 40 0 a 20 20 0 1 0 -40 0"/>
+    </clipPath>
+  </defs>
+
+  <!-- ── ICON MARK (60×60 region, left side) ──────────────── -->
+  <!--
+    Orbit ellipse around center (30,30):
+      rx=25.2, ry=10.2, rotate(-30)
+      Major tips: t=0  → (30+25.2·cos30, 30-25.2·sin30) = (51.8, 17.4)
+                  t=180 → (8.2, 42.6)
+  -->
+
+  <!-- Layer 1: full faint orbit trace -->
+  <ellipse cx="30" cy="30" rx="25.2" ry="10.2"
+    transform="rotate(-30 30 30)"
+    stroke="#818cf8" stroke-width="1.4" stroke-opacity="0.35"/>
+
+  <!-- Layer 2: main ring – the "O" of Orbis -->
+  <circle cx="30" cy="30" r="16.8"
+    stroke="url(#ringG)" stroke-width="5.4"/>
+
+  <!-- Layer 3: bright orbit arms clipped outside ring -->
+  <ellipse cx="30" cy="30" rx="25.2" ry="10.2"
+    transform="rotate(-30 30 30)"
+    stroke="url(#orbitG)" stroke-width="1.6"
+    stroke-linecap="round"
+    clip-path="url(#oa)"/>
+
+  <!-- Layer 4: satellite node -->
+  <circle cx="51.8" cy="17.4" r="3.2" fill="#818cf8" fill-opacity="0.22"/>
+  <circle cx="51.8" cy="17.4" r="2.5" fill="#6366f1"/>
+  <circle cx="51.8" cy="17.4" r="1.1" fill="#e0e7ff"/>
+
+  <!-- ── WORDMARK (text, right of icon) ───────────────────── -->
+  <!--
+    Font stack: Inter, system-ui — the same fonts used by the app.
+    "Orbis" in medium weight (500), "PM" in bold (700) with primary color.
+  -->
+  <text x="70" y="38"
+    font-family="Inter, 'Segoe UI', system-ui, sans-serif"
+    font-size="26" font-weight="500" letter-spacing="-0.5"
+    fill="#1e1b4b">Orbis</text>
+  <text x="140" y="38"
+    font-family="Inter, 'Segoe UI', system-ui, sans-serif"
+    font-size="26" font-weight="700" letter-spacing="-0.3"
+    fill="#4f46e5">PM</text>
+</svg>

@@ -1,0 +1,70 @@
+# ============================================================
+# OrbisPM — Zitadel v4 (Identity Provider)
+# ============================================================
+# Included by docker-compose.yml.
+# Single-container setup: Zitadel API with built-in Login v1.
+# Uses external PostgreSQL and Redis (configured in .env).
+# ============================================================
+
+services:
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.12.1}
+    restart: unless-stopped
+    user: "0"
+    command: start-from-init --masterkey "${ZITADEL_MASTERKEY}" --config /zitadel-config.yaml
+    ports:
+      - "${ZITADEL_MAPPED_PORT:-8081}:8080"
+    environment:
+      ZITADEL_PORT: 8080
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}
+      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNAL_PORT:-443}
+      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNAL_SECURE:-true}"
+      ZITADEL_TLS_ENABLED: false
+
+      ZITADEL_DATABASE_POSTGRES_HOST: ${POSTGRES_HOST}
+      ZITADEL_DATABASE_POSTGRES_PORT: ${POSTGRES_PORT}
+      ZITADEL_DATABASE_POSTGRES_DATABASE: ${POSTGRES_DB}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: ${POSTGRES_USER}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: ${POSTGRES_USER}
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${POSTGRES_PASSWORD}
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
+      ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 25
+      ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 10
+
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USER:-admin@orbispm.local}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${ZITADEL_ADMIN_PASSWORD:-Admin123!}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: false
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_ORG_NAME:-OrbisPM}
+      ZITADEL_FIRSTINSTANCE_INSTANCENAME: ${ZITADEL_INSTANCE_NAME:-OrbisPM}
+      ZITADEL_FIRSTINSTANCE_DEFAULTLANGUAGE: en
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: ${ZITADEL_MACHINE_USERNAME:-backend-service}
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: ${ZITADEL_MACHINE_NAME:-OrbisPM Backend}
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: ${ZITADEL_MACHINE_PAT_EXPIRY:-2030-01-01T00:00:00Z}
+
+      # Use built-in Login v1 (no separate login container needed)
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
+
+      ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: true
+      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "${REDIS_HOST}:${REDIS_PORT}"
+      ZITADEL_CACHES_CONNECTORS_REDIS_USERNAME: ${REDIS_USERNAME:-default}
+      ZITADEL_CACHES_CONNECTORS_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ZITADEL_CACHES_INSTANCE_CONNECTOR: redis
+      ZITADEL_CACHES_MILESTONES_CONNECTOR: redis
+      ZITADEL_CACHES_ORGANIZATION_CONNECTOR: redis
+
+      ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: false
+      ZITADEL_LOG_LEVEL: ${ZITADEL_LOG_LEVEL:-info}
+
+      # Increase eventstore push timeout for remote DB (default 15s)
+      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "120s"
+      ZITADEL_EVENTSTORE_MAXRETRIES: 10
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 10s
+      timeout: 30s
+      retries: 30
+      start_period: 600s
+    volumes:
+      - ./zitadel-config.yaml:/zitadel-config.yaml:ro

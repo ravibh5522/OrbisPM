@@ -1,0 +1,598 @@
+"use client";
+
+import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
+import { useEffect } from "react";
+import { useOrgSocket } from "@/hooks/use-org-socket";
+import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore, THEMES } from "@/stores/ui-store";
+import { useRequireAuth } from "@/hooks/use-auth-guard";
+import { api } from "@/lib/api";
+import { Avatar } from "@/components/ui/shared";
+import {
+  LayoutDashboard,
+  FolderKanban,
+  ListTodo,
+  Users,
+  Bell,
+  FileText,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  Menu,
+  LogOut,
+  Palette,
+  Activity,
+  ChevronDown,
+  UserCircle,
+  Building2,
+} from "lucide-react";
+import type { OrgRole } from "@/types/domain";
+import { cn } from "@/lib/utils";
+
+import { NotificationBell } from "@/components/notification-bell";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  roles?: OrgRole[];
+}
+
+function getSidebarItems(orgSlug: string): NavItem[] {
+  return [
+    { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
+    { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
+    { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
+    { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
+    { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
+    { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
+    { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
+  ];
+}
+
+function getSettingsItems(orgSlug: string): NavItem[] {
+  return [
+    { href: `/${orgSlug}/settings`, label: "Organisation", icon: <Building2 className="w-5 h-5" />, roles: ["owner", "admin", "billing_admin"] },
+  ];
+}
+
+function Sidebar() {
+  const pathname = usePathname();
+  const { currentOrg, currentMembership, orgs, setCurrentOrg, user, logout } = useAuthStore();
+  const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useUIStore();
+  const router = useRouter();
+
+  if (!currentOrg) return null;
+
+  const mainItems = getSidebarItems(currentOrg.slug);
+  const settingsItems = getSettingsItems(currentOrg.slug);
+  const userRole = currentMembership?.role as OrgRole | undefined;
+
+  const handleThemeSwitch = (value: string) => {
+    setTheme(value as Parameters<typeof setTheme>[0]);
+    api.auth.updateUser({ data: { theme: value } }).catch(() => { /* non-critical */ });
+  };
+
+  const filteredSettings = settingsItems.filter(
+    (item) => !item.roles || (userRole && item.roles.includes(userRole))
+  );
+
+  const isActive = (href: string) => {
+    if (href === `/${currentOrg.slug}`) return pathname === href;
+    return pathname.startsWith(href);
+  };
+
+  const handleOrgSwitch = async (orgSlug: string) => {
+    const org = orgs.find((o) => o.slug === orgSlug);
+    if (org) {
+      await setCurrentOrg(org);
+      router.push(`/${org.slug}`);
+    }
+  };
+
+  return (
+    <aside
+      className={cn(
+        "fixed left-0 top-0 h-full bg-base-100 border-r border-base-200 z-40 transition-all duration-300 ease-in-out glass-sidebar",
+        "hidden lg:flex", // Hide on mobile
+        sidebarCollapsed ? "w-[92px]" : "w-64"
+      )}
+    >
+      <div className="flex flex-col h-full w-full">
+        {/* Org header */}
+        <div className={cn(
+          "flex items-center border-b border-base-200 transition-all duration-300 ease-in-out",
+          sidebarCollapsed ? "flex-col justify-center p-3 gap-2" : "justify-between p-4"
+        )}>
+          {/* Collapsed: show org logo centered */}
+          {sidebarCollapsed && (
+            <div className="flex items-center justify-center">
+              {currentOrg.logo_url ? (
+                <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-10 h-10 rounded-lg object-cover" />
+              ) : (
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-base">
+                  {(currentOrg.name?.[0] || '?').toUpperCase()}
+                </div>
+              )}
+            </div>
+          )}
+          {/* Open: show full org picker dropdown */}
+          {!sidebarCollapsed && (
+            <div className="dropdown dropdown-bottom flex-1 mr-1">
+              <label tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-base-200 rounded-lg p-1 w-full">
+                {currentOrg.logo_url ? (
+                  <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm flex-shrink-0">
+                    {(currentOrg.name?.[0] || '?').toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{currentOrg.name}</div>
+                  <div className="text-xs text-base-content/50">{userRole || "member"}</div>
+                </div>
+                <ChevronDown className="w-4 h-4 text-base-content/50" />
+              </label>
+              <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-56 border border-base-200">
+                {orgs.map((org) => (
+                  <li key={org.id}>
+                    <button
+                      className={cn(org.id === currentOrg.id && "active")}
+                      onClick={() => handleOrgSwitch(org.slug)}
+                    >
+                      {org.logo_url ? (
+                        <img src={org.logo_url} alt={org.name} className="w-6 h-6 rounded object-cover" />
+                      ) : (
+                        <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-content font-bold text-xs">
+                          {(org.name?.[0] || '?').toUpperCase()}
+                        </div>
+                      )}
+                      {org.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {/* Toggle button */}
+          <button className="btn btn-ghost btn-sm btn-square flex-shrink-0" onClick={toggleSidebar}>
+            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          </button>
+        </div>
+
+        {/* Nav items */}
+        <nav className="flex-1 overflow-y-auto py-3">
+          <ul className={cn("flex flex-col gap-1", sidebarCollapsed ? "items-center px-0" : "px-2")}>
+            {mainItems.map((item) => (
+              <li key={item.href} className="list-none">
+                <Link
+                  href={item.href}
+                  className={cn(
+                    "relative flex flex-row items-center rounded-xl transition-all duration-300 ease-in-out",
+                    "hover:bg-base-200",
+                    isActive(item.href)
+                      ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90"
+                      : "text-base-content",
+                    sidebarCollapsed
+                      ? "justify-center mx-auto w-14 pt-2 pb-4"
+                      : "gap-2 px-3 py-2.5"
+                  )}
+                  title={sidebarCollapsed ? item.label : undefined}
+                >
+                  {/* Icon */}
+                  <span className="flex items-center justify-center flex-shrink-0">
+                    {item.icon}
+                  </span>
+                  {/* Full label — clips horizontally when collapsing (right → gone) */}
+                  <span className={cn(
+                    "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
+                    sidebarCollapsed ? "w-0 max-w-0 opacity-0" : "opacity-100 max-w-full"
+                  )}>
+                    {item.label}
+                  </span>
+                  {/* Short label — absolute below icon, fades in when collapsed */}
+                  <span className={cn(
+                    "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
+                    sidebarCollapsed ? "bottom-0.5 opacity-100 translate-y-0" : "bottom-0 opacity-0 translate-y-1 pointer-events-none"
+                  )}>
+                    {item.label.length > 7 ? item.label.slice(0, 7) + '..' : item.label}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {filteredSettings.length > 0 && (
+            <>
+              {/* Settings section label */}
+              <div className={cn(
+                "px-4 mt-3 mb-1 overflow-hidden transition-all duration-300 ease-in-out",
+                sidebarCollapsed ? "max-h-0 opacity-0 py-0" : "max-h-8 opacity-100 py-1"
+              )}>
+                <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+                  Organisation
+                </span>
+              </div>
+              <ul className={cn("flex flex-col gap-1", sidebarCollapsed ? "items-center px-0" : "px-2")}>
+                {filteredSettings.map((item) => (
+                  <li key={item.href} className="list-none">
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "relative flex flex-row items-center rounded-xl transition-all duration-300 ease-in-out",
+                        "hover:bg-base-200",
+                        isActive(item.href)
+                          ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90"
+                          : "text-base-content",
+                        sidebarCollapsed
+                          ? "justify-center mx-auto w-14 pt-2 pb-4"
+                          : "gap-2 px-3 py-2.5"
+                      )}
+                      title={sidebarCollapsed ? item.label : undefined}
+                    >
+                      {/* Icon */}
+                      <span className="flex items-center justify-center flex-shrink-0">
+                        {item.icon}
+                      </span>
+                      {/* Full label — clips when collapsing */}
+                      <span className={cn(
+                        "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
+                        sidebarCollapsed ? "w-0 max-w-0 opacity-0" : "opacity-100 max-w-full"
+                      )}>
+                        {item.label}
+                      </span>
+                      {/* Short label — absolute below icon, fades in when collapsed */}
+                      <span className={cn(
+                        "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
+                        sidebarCollapsed ? "bottom-0.5 opacity-100 translate-y-0" : "bottom-0 opacity-0 translate-y-1 pointer-events-none"
+                      )}>
+                        {item.label.length > 7 ? item.label.slice(0, 7) + '..' : item.label}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </nav>
+
+        {/* User footer — dropdown with Profile, Theme, Logout */}
+        <div className="border-t border-base-200 transition-all duration-300 ease-in-out p-2">
+          <div className="dropdown dropdown-top w-full">
+            <label
+              tabIndex={0}
+              className={cn(
+                "flex cursor-pointer hover:bg-base-200 rounded-xl transition-all duration-300 ease-in-out items-center w-full",
+                sidebarCollapsed ? "justify-center p-2" : "gap-2 px-2 py-1.5"
+              )}
+            >
+              <Avatar
+                name={user?.user_metadata?.name as string || user?.email || "U"}
+                src={user?.user_metadata?.avatar_url as string | undefined}
+                size="sm"
+              />
+              <div className={cn(
+                "flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out",
+                sidebarCollapsed ? "max-w-0 opacity-0 w-0" : "max-w-full opacity-100"
+              )}>
+                <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
+                <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
+              </div>
+            </label>
+            <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-52 border border-base-200 mb-2">
+              <li>
+                <Link href={`/${currentOrg.slug}/profile`}>
+                  <UserCircle className="w-4 h-4" />
+                  Profile &amp; Security
+                </Link>
+              </li>
+              <li>
+                <details>
+                  <summary className="flex items-center gap-1">
+                    <Palette className="w-4 h-4" /> Theme
+                  </summary>
+                  <ul>
+                    {THEMES.map((t) => (
+                      <li key={t.value}>
+                        <button className={cn(theme === t.value && "active")} onClick={() => handleThemeSwitch(t.value)}>
+                          {t.label}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              </li>
+              <li className="border-t border-base-200 mt-1 pt-1">
+                <button className="text-error" onClick={logout}>
+                  <LogOut className="w-4 h-4" /> Logout
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+function TopBar() {
+  const { sidebarCollapsed, breadcrumb, setMobileMenuOpen } = useUIStore();
+  const router = useRouter();
+
+  return (
+    <header
+      className={cn(
+        "sticky top-0 z-30 h-14 bg-base-100 border-b border-base-200 flex items-center px-4 gap-4 transition-all duration-300 ease-in-out glass-topbar",
+        "lg:ml-64", // Desktop sidebar offset
+        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
+      )}
+    >
+      <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={() => setMobileMenuOpen(true)}>
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {/* Breadcrumb / project name */}
+      {breadcrumb && (
+        <div className="flex items-center gap-2 min-w-0">
+          {breadcrumb.backHref && (
+            <button className="btn btn-ghost btn-xs btn-square flex-shrink-0" onClick={() => router.push(breadcrumb.backHref!)}>
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
+          <span className="text-sm font-semibold truncate">{breadcrumb.label}</span>
+        </div>
+      )}
+
+      <div className="flex-1" />
+
+      {/* Notifications */}
+      <NotificationBell />
+
+    </header>
+  );
+}
+
+/* Mobile Sidebar Overlay */
+function MobileSidebar() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const { orgs, currentOrg, setCurrentOrg, user, logout } = useAuthStore();
+  const { mobileMenuOpen, setMobileMenuOpen, theme, setTheme } = useUIStore();
+  const currentMembership = useAuthStore((s) => s.currentMembership);
+  const userRole = currentMembership?.role as OrgRole | undefined;
+  const orgSlug = currentOrg?.slug || "";
+
+  const mainItems: NavItem[] = [
+    { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
+    { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
+    { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
+    { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
+    { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
+    { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
+    { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
+    { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
+  ];
+
+  const settingsItems = getSettingsItems(orgSlug);
+
+  const filteredSettings = settingsItems.filter(
+    (item) => !item.roles || (userRole && item.roles.includes(userRole))
+  );
+
+  const isActive = (href: string) => pathname === href || (href !== `/${orgSlug}` && pathname.startsWith(href));
+
+  const handleThemeSwitch = (value: string) => {
+    setTheme(value as Parameters<typeof setTheme>[0]);
+    api.auth.updateUser({ data: { theme: value } }).catch(() => { /* non-critical */ });
+  };
+
+  const handleOrgSwitch = async (orgSlug: string) => {
+    const org = orgs.find((o) => o.slug === orgSlug);
+    if (org) {
+      await setCurrentOrg(org);
+      router.push(`/${org.slug}`);
+      setMobileMenuOpen(false);
+    }
+  };
+
+  if (!mobileMenuOpen || !currentOrg) return null;
+
+  return (
+    <>
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+        onClick={() => setMobileMenuOpen(false)}
+      />
+      
+      {/* Drawer */}
+      <aside className="fixed left-0 top-0 h-full w-72 bg-base-100 z-50 lg:hidden shadow-xl glass-sidebar">
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-base-200">
+            <div className="flex items-center gap-2">
+              {currentOrg.logo_url ? (
+                <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm flex-shrink-0">
+                  {(currentOrg.name?.[0] || '?').toUpperCase()}
+                </div>
+              )}
+              <div>
+                <div className="font-semibold text-sm">{currentOrg.name}</div>
+                <div className="text-xs text-base-content/50">{userRole || "member"}</div>
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-sm btn-square" onClick={() => setMobileMenuOpen(false)}>
+              <ChevronLeft className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Nav */}
+          <nav className="flex-1 overflow-y-auto py-2">
+            <ul className="menu menu-md px-2 gap-1">
+              {mainItems.map((item) => (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={cn(isActive(item.href) && "active")}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
+                    {item.icon}
+                    <span>{item.label}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+
+            {filteredSettings.length > 0 && (
+              <>
+                <div className="px-4 py-2 mt-2">
+                  <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+                    Organisation
+                  </span>
+                </div>
+                <ul className="menu menu-md px-2 gap-1">
+                  {filteredSettings.map((item) => (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(isActive(item.href) && "active")}
+                        onClick={() => setMobileMenuOpen(false)}
+                      >
+                        {item.icon}
+                        <span>{item.label}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+
+            {/* Org Switcher */}
+            {orgs.length > 1 && (
+              <>
+                <div className="px-4 py-2 mt-2">
+                  <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+                    Organizations
+                  </span>
+                </div>
+                <ul className="menu menu-md px-2 gap-1">
+                  {orgs.map((org) => (
+                    <li key={org.id}>
+                      <button
+                        className={cn(org.id === currentOrg.id && "active")}
+                        onClick={() => handleOrgSwitch(org.slug)}
+                      >
+                        {org.logo_url ? (
+                          <img src={org.logo_url} alt={org.name} className="w-6 h-6 rounded object-cover" />
+                        ) : (
+                          <div className="w-6 h-6 bg-primary/20 rounded flex items-center justify-center text-primary font-bold text-xs">
+                            {(org.name?.[0] || '?').toUpperCase()}
+                          </div>
+                        )}
+                        {org.name}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </nav>
+
+          {/* User footer — dropdown with Profile, Theme, Logout */}
+          <div className="border-t border-base-200 p-2">
+            <div className="dropdown dropdown-top w-full">
+              <label
+                tabIndex={0}
+                className="flex cursor-pointer hover:bg-base-200 rounded-xl items-center gap-2 px-2 py-1.5 w-full"
+              >
+                <Avatar
+                  name={user?.user_metadata?.name as string || user?.email || "U"}
+                  src={user?.user_metadata?.avatar_url as string | undefined}
+                  size="sm"
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
+                  <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
+                </div>
+              </label>
+              <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-56 border border-base-200 mb-2">
+                <li>
+                  <Link href={`/${currentOrg.slug}/profile`} onClick={() => setMobileMenuOpen(false)}>
+                    <UserCircle className="w-4 h-4" />
+                    Profile &amp; Security
+                  </Link>
+                </li>
+                <li>
+                  <details>
+                    <summary className="flex items-center gap-1">
+                      <Palette className="w-4 h-4" /> Theme
+                    </summary>
+                    <ul>
+                      {THEMES.map((t) => (
+                        <li key={t.value}>
+                          <button className={cn(theme === t.value && "active")} onClick={() => handleThemeSwitch(t.value)}>
+                            {t.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                </li>
+                <li className="border-t border-base-200 mt-1 pt-1">
+                  <button className="text-error" onClick={() => { setMobileMenuOpen(false); logout(); }}>
+                    <LogOut className="w-4 h-4" /> Logout
+                  </button>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+export default function OrgLayout({ children }: { children: React.ReactNode }) {
+  const { isLoading, hasOrgs } = useRequireAuth();
+  const { sidebarCollapsed, setTheme } = useUIStore();
+  const currentOrg = useAuthStore((s) => s.currentOrg);
+  const user = useAuthStore((s) => s.user);
+
+  // Sync theme from user profile on load
+  useEffect(() => {
+    const savedTheme = user?.user_metadata?.theme as string | undefined;
+    if (savedTheme && ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(savedTheme)) {
+      setTheme(savedTheme as "glass-light" | "glass-dark" | "orbis-light" | "orbis-dark");
+    }
+  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Single org-level WebSocket (replaces SSE + per-project WS)
+  useOrgSocket(currentOrg?.id);
+
+  if (isLoading || !hasOrgs) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-base-200/30">
+      <Sidebar />
+      <MobileSidebar />
+      <TopBar />
+      <main className={cn(
+        "transition-all duration-300 ease-in-out pt-4 pb-8 px-4 md:px-6",
+        "min-h-[calc(100vh-3.5rem)]",
+        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
+      )}>
+        {children}
+      </main>
+    </div>
+  );
+}
