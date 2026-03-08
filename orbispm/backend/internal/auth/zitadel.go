@@ -64,26 +64,40 @@ func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, cl
 	c.jwks = NewJWKSCache(jwksURL, c.httpClient, c.externalHost)
 
 	// Connect gRPC via zitadel-go SDK
-	// Use the external domain (localhost) so Zitadel recognizes the instance,
-	// but route actual gRPC traffic to the internal Docker address (zitadel:8080).
+	// Use the external domain so Zitadel recognizes the instance,
+	// but route actual gRPC traffic to the internal URL (may differ in Docker setups).
 	parsedIssuer, err := url.Parse(issuer)
 	if err != nil {
 		return nil, fmt.Errorf("parse issuer URL: %w", err)
 	}
 	domain := parsedIssuer.Hostname()
-	port := parsedIssuer.Port()
-	if port == "" {
-		port = "8080"
+
+	// Choose TLS vs insecure based on issuer scheme
+	var z *zitadel.Zitadel
+	if parsedIssuer.Scheme == "https" {
+		z = zitadel.New(domain) // TLS, port 443
+	} else {
+		port := parsedIssuer.Port()
+		if port == "" {
+			port = "8080"
+		}
+		z = zitadel.New(domain, zitadel.WithInsecure(port))
 	}
 
-	z := zitadel.New(domain, zitadel.WithInsecure(port))
-
-	// Parse internal URL to get actual gRPC target
+	// Parse internal URL to get actual gRPC target (host:port)
 	parsedInternal, err := url.Parse(internalURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse internal URL: %w", err)
 	}
-	grpcTarget := parsedInternal.Host // e.g. "zitadel:8080"
+	grpcTarget := parsedInternal.Host // e.g. "zitadel:8080" or "zitadel.animastuff.fun:443"
+	// If no explicit port in URL (e.g. https://host or http://host), add default port
+	if parsedInternal.Port() == "" {
+		if parsedInternal.Scheme == "https" {
+			grpcTarget = parsedInternal.Hostname() + ":443"
+		} else {
+			grpcTarget = parsedInternal.Hostname() + ":80"
+		}
+	}
 
 	grpcClient, err := zclient.New(ctx, z,
 		zclient.WithAuth(zclient.PAT(serviceToken)),

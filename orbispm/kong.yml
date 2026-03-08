@@ -2,9 +2,9 @@ _format_version: "3.0"
 _transform: true
 
 services:
-  # Zitadel (v4 via Traefik proxy)
+  # Zitadel (external)
   - name: zitadel
-    url: http://zitadel:8080
+    url: https://zitadel.animastuff.fun
     routes:
       - name: zitadel-console
         paths:

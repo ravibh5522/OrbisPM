@@ -16,8 +16,8 @@
 #   Kong automatically load-balances via Docker DNS.
 # ============================================================
 
-include:
-  - docker-compose.zitadel.yaml
+# include:
+#   - docker-compose.zitadel.yaml
 
 services:
   meilisearch:
@@ -64,7 +64,7 @@ services:
       REDIS_URL: "redis://${REDIS_USERNAME:-default}:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
       ZITADEL_DOMAIN: "${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
       ZITADEL_ISSUER: "https://${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
-      ZITADEL_INTERNAL_URL: "http://zitadel:8080"
+      ZITADEL_INTERNAL_URL: "https://${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
       ZITADEL_SERVICE_TOKEN: ${ZITADEL_SERVICE_TOKEN:-}
       ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
       JWT_SECRET: ${JWT_SECRET:-orbispm-dev-jwt-secret-32chars!!}
@@ -87,9 +87,8 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_ENABLED: "${STRIPE_ENABLED:-false}"
-    depends_on:
-      zitadel:
-        condition: service_healthy
+    extra_hosts:
+      - "zitadel.animastuff.fun:35.207.238.251"
 
   kong:
     image: kong/kong-gateway:3.9
@@ -108,8 +107,9 @@ services:
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
     volumes:
       - ./kong.yml:/kong/kong.yml:ro
+    extra_hosts:
+      - "zitadel.animastuff.fun:35.207.238.251"
     depends_on:
-      - zitadel
       - api
       - nocodb
 
