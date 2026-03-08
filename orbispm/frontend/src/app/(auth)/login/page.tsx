@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { Input } from "@/components/ui/form-fields";
+import { Input, PasswordInput } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import { ApiError, api } from "@/lib/api";
+import { parseAuthError } from "@/lib/auth-errors";
 import type { IDPInfo } from "@/types/domain";
 import { Shield, Smartphone, Mail, Key } from "lucide-react";
 
@@ -104,11 +105,7 @@ export default function LoginPage() {
         setError("");
         return;
       }
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError("Login failed. Please try again.");
-      }
+      setError(parseAuthError(err));
     }
   };
 
@@ -120,7 +117,7 @@ export default function LoginPage() {
       await api.auth.sendOTPChallenge(mfaChallenge.sessionId, mfaChallenge.sessionToken, mfaMethod);
       setChallengeSent(true);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to send code");
+      setError(parseAuthError(err));
     } finally {
       setSendingChallenge(false);
     }
@@ -147,7 +144,7 @@ export default function LoginPage() {
       await loginComplete(tokens);
       redirectAfterLogin();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Verification failed. Check your code and try again.");
+      setError(parseAuthError(err));
     } finally {
       setVerifying(false);
     }
@@ -165,7 +162,7 @@ export default function LoginPage() {
       );
       window.location.href = res.auth_url;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Social login failed");
+      setError(parseAuthError(err));
       setIdpLoading(null);
     }
   };
@@ -176,10 +173,12 @@ export default function LoginPage() {
     const needsSend = mfaMethod === "otp_email" || mfaMethod === "otp_sms";
 
     return (
-      <div className="card bg-base-100 shadow-xl">
-        <div className="card-body">
+      <div className="card bg-base-100 shadow-2xl rounded-2xl">
+        <div className="card-body p-8">
           <div className="text-center mb-6">
-            <Shield className="w-10 h-10 text-primary mx-auto mb-2" />
+            <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+              <Shield className="w-6 h-6 text-primary" />
+            </div>
             <h1 className="text-2xl font-bold">Two-Factor Verification</h1>
             <p className="text-base-content/60 mt-1 text-sm">
               Your account is protected with MFA. Please verify your identity.
@@ -192,10 +191,9 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Method selector */}
           {mfaChallenge.availableMethods.length > 1 && (
             <div className="mb-4">
-              <label className="text-xs text-base-content/50 mb-1 block">Verification method</label>
+              <label className="text-xs text-base-content/50 mb-1.5 block font-medium">Verification method</label>
               <div className="flex flex-wrap gap-2">
                 {mfaChallenge.availableMethods.map((m) => {
                   const info = MFA_METHOD_LABELS[m] ?? MFA_METHOD_LABELS.totp;
@@ -215,7 +213,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="border border-base-200 rounded-lg p-4 mb-4">
+          <div className="border border-base-200 rounded-xl p-4 mb-4 bg-base-50">
             <div className="flex items-center gap-2 mb-3">
               <methodInfo.Icon className="w-5 h-5 text-primary" />
               <span className="font-medium text-sm">{methodInfo.label}</span>
@@ -280,15 +278,15 @@ export default function LoginPage() {
 
   // ── Step-1: email + password ──────────────────────────────────────────────
   return (
-    <div className="card bg-base-100 shadow-xl">
-      <div className="card-body">
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-primary">OrbisPM</h1>
-          <p className="text-base-content/60 mt-2">Sign in to your account</p>
+    <div className="card bg-base-100 shadow-2xl rounded-2xl">
+      <div className="card-body p-8">
+        <div className="text-center mb-7">
+          <h1 className="text-2xl font-bold text-base-content">Welcome back</h1>
+          <p className="text-base-content/55 mt-1.5 text-sm">Sign in to your OrbisPM account</p>
         </div>
 
         {error && (
-          <div className="alert alert-error mb-4">
+          <div className="alert alert-error mb-5 text-sm py-3">
             <span>{error}</span>
           </div>
         )}
@@ -314,7 +312,7 @@ export default function LoginPage() {
                 </button>
               ))}
             </div>
-            <div className="divider text-xs text-base-content/40">OR</div>
+            <div className="divider text-xs text-base-content/40 my-4">OR</div>
           </>
         )}
 
@@ -323,23 +321,29 @@ export default function LoginPage() {
             label="Email"
             type="email"
             placeholder="you@example.com"
+            autoComplete="email"
             {...register("email", { required: "Email is required" })}
           />
-          <Input
+          <PasswordInput
             label="Password"
-            type="password"
             placeholder="••••••••"
+            autoComplete="current-password"
             {...register("password", { required: "Password is required" })}
           />
-          <Button type="submit" loading={isSubmitting} className="w-full">
+          <div className="flex justify-end -mt-1">
+            <Link href="/forgot-password" className="text-xs text-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+          <Button type="submit" loading={isSubmitting} className="w-full mt-1">
             Sign In
           </Button>
         </form>
 
-        <p className="text-center text-sm mt-4">
+        <p className="text-center text-sm mt-5 text-base-content/60">
           Don&apos;t have an account?{" "}
-          <Link href="/signup" className="link link-primary">
-            Sign up
+          <Link href="/signup" className="link link-primary font-medium">
+            Create one
           </Link>
         </p>
       </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
+import { Eye, EyeOff } from "lucide-react";
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -118,3 +119,63 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   }
 );
 Select.displayName = "Select";
+
+// ─── Password Input with show/hide toggle ────────────────────────────────────
+
+interface PasswordInputProps
+  extends Omit<React.InputHTMLAttributes<HTMLInputElement>, "type"> {
+  label?: string;
+  error?: string;
+  helperText?: string;
+}
+
+export const PasswordInput = forwardRef<HTMLInputElement, PasswordInputProps>(
+  ({ label, error, helperText, className, id, ...props }, ref) => {
+    const [show, setShow] = useState(false);
+    const inputId = id || props.name;
+    return (
+      <div className="form-control w-full">
+        {label && (
+          <label className="label" htmlFor={inputId}>
+            <span className="label-text">{label}</span>
+          </label>
+        )}
+        <div className="relative">
+          <input
+            id={inputId}
+            ref={ref}
+            type={show ? "text" : "password"}
+            className={cn(
+              "input input-bordered w-full pr-11",
+              error && "input-error",
+              className,
+            )}
+            {...props}
+          />
+          <button
+            type="button"
+            tabIndex={-1}
+            aria-label={show ? "Hide password" : "Show password"}
+            onClick={() => setShow((s) => !s)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/40 hover:text-base-content/70 transition-colors focus:outline-none"
+          >
+            {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        </div>
+        {(error || helperText) && (
+          <label className="label">
+            <span
+              className={cn(
+                "label-text-alt",
+                error ? "text-error" : "text-base-content/60",
+              )}
+            >
+              {error || helperText}
+            </span>
+          </label>
+        )}
+      </div>
+    );
+  },
+);
+PasswordInput.displayName = "PasswordInput";

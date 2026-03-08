@@ -6,9 +6,10 @@ import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { useAuthStore } from "@/stores/auth-store";
 import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { Input } from "@/components/ui/form-fields";
+import { Input, PasswordInput } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
 import { ApiError, api } from "@/lib/api";
+import { parseAuthError } from "@/lib/auth-errors";
 import type { IDPInfo } from "@/types/domain";
 
 const IDP_ICONS: Record<string, string> = {
@@ -65,11 +66,7 @@ export default function SignupPage() {
       await signup(data.email, data.password, data.name);
       router.push("/onboarding");
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-      } else {
-        setError("Signup failed. Please try again.");
-      }
+      setError(parseAuthError(err));
     }
   };
 
@@ -85,21 +82,21 @@ export default function SignupPage() {
       );
       window.location.href = res.auth_url;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Social signup failed");
+      setError(parseAuthError(err));
       setIdpLoading(null);
     }
   };
 
   return (
-    <div className="card bg-base-100 shadow-xl">
-      <div className="card-body">
-        <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-primary">OrbisPM</h1>
-          <p className="text-base-content/60 mt-2">Create your account</p>
+    <div className="card bg-base-100 shadow-2xl rounded-2xl">
+      <div className="card-body p-8">
+        <div className="text-center mb-7">
+          <h1 className="text-2xl font-bold text-base-content">Create account</h1>
+          <p className="text-base-content/55 mt-1.5 text-sm">Get started with OrbisPM for free</p>
         </div>
 
         {error && (
-          <div className="alert alert-error mb-4">
+          <div className="alert alert-error mb-5 text-sm py-3">
             <span>{error}</span>
           </div>
         )}
@@ -125,7 +122,7 @@ export default function SignupPage() {
                 </button>
               ))}
             </div>
-            <div className="divider text-xs text-base-content/40">OR</div>
+            <div className="divider text-xs text-base-content/40 my-4">OR</div>
           </>
         )}
 
@@ -133,6 +130,7 @@ export default function SignupPage() {
           <Input
             label="Full Name"
             placeholder="John Doe"
+            autoComplete="name"
             {...register("name", { required: "Name is required" })}
             error={errors.name?.message}
           />
@@ -140,23 +138,24 @@ export default function SignupPage() {
             label="Email"
             type="email"
             placeholder="you@example.com"
+            autoComplete="email"
             {...register("email", { required: "Email is required" })}
             error={errors.email?.message}
           />
-          <Input
+          <PasswordInput
             label="Password"
-            type="password"
             placeholder="••••••••"
+            autoComplete="new-password"
             {...register("password", {
               required: "Password is required",
-              minLength: { value: 6, message: "At least 6 characters" },
+              minLength: { value: 8, message: "At least 8 characters" },
             })}
             error={errors.password?.message}
           />
-          <Input
+          <PasswordInput
             label="Confirm Password"
-            type="password"
             placeholder="••••••••"
+            autoComplete="new-password"
             {...register("confirmPassword", {
               required: "Please confirm your password",
               validate: (v) => v === watch("password") || "Passwords do not match",
@@ -168,9 +167,9 @@ export default function SignupPage() {
           </Button>
         </form>
 
-        <p className="text-center text-sm mt-4">
+        <p className="text-center text-sm mt-5 text-base-content/60">
           Already have an account?{" "}
-          <Link href="/login" className="link link-primary">
+          <Link href="/login" className="link link-primary font-medium">
             Sign in
           </Link>
         </p>
