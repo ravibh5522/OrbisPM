@@ -99,6 +99,10 @@ plugins:
     config:
       origins:
         - http://localhost:3000
+        - http://localhost:3001
+        - https://orbispm.crewsity.com
+        - https://www.orbispm.crewsity.com
+        - http://xgkwk0wkwg4c8cogg4ow44gk.35.207.238.251.sslip.io
       methods:
         - GET
         - POST
