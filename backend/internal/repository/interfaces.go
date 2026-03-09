@@ -87,6 +87,7 @@ type ProjectMemberRepository interface {
 type TaskRepository interface {
 	Create(ctx context.Context, tx pgx.Tx, task *domain.Task) (*domain.Task, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Task, error)
+	GetByIDTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.Task, error)
 	GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain.Task, error)
 	ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error)
 	List(ctx context.Context, projectID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error)

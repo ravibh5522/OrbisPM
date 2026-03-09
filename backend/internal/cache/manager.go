@@ -277,6 +277,17 @@ func (m *Manager) RemoveTask(ctx context.Context, projectID, taskID uuid.UUID, p
 	return err
 }
 
+// RemoveFromParentIndex removes a task from a specific parent's children sorted set
+// without deleting the task data itself. Used during reparenting to clean up the
+// old parent's children list before SetTask adds to the new parent.
+func (m *Manager) RemoveFromParentIndex(ctx context.Context, projectID, taskID uuid.UUID, parentID *uuid.UUID) error {
+	parentKey := "root"
+	if parentID != nil {
+		parentKey = parentID.String()
+	}
+	return m.rdb.ZRem(ctx, ProjectChildrenKey(projectID, parentKey), taskID.String()).Err()
+}
+
 // ─── Conflict Detection ─────────────────────────────────────
 
 // CheckAndIncrementVersion atomically checks the base version and increments.

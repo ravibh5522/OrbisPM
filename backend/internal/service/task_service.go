@@ -878,11 +878,36 @@ type ReorderItem struct {
 
 // Reorder updates the positions (and optionally parents) of multiple tasks in a single transaction.
 func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
+	type cacheEntry struct {
+		OldParentID *uuid.UUID
+		UpdatedTask *domain.Task
+	}
+	var cacheEntries []cacheEntry
+
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, item := range items {
+			// Capture old parent before reparenting (needed to clean Redis cache)
+			var oldParentID *uuid.UUID
+			if s.cache != nil {
+				_ = tx.QueryRow(ctx,
+					`SELECT parent_task_id FROM tasks WHERE id = $1`, item.ID,
+				).Scan(&oldParentID)
+			}
+
 			// Always call Reparent — handles both non-nil parent and nil (move to root)
 			if err := s.taskRepo.Reparent(ctx, tx, item.ID, item.ParentID, item.Position); err != nil {
 				return fmt.Errorf("reparent task %s: %w", item.ID, err)
+			}
+
+			// Read the updated task inside the tx (RLS context is active here)
+			if s.cache != nil {
+				updated, err := s.taskRepo.GetByIDTx(ctx, tx, item.ID)
+				if err == nil {
+					cacheEntries = append(cacheEntries, cacheEntry{
+						OldParentID: oldParentID,
+						UpdatedTask: updated,
+					})
+				}
 			}
 		}
 		return nil
@@ -891,16 +916,14 @@ func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
 		return err
 	}
 
-	// Refresh moved tasks in cache
+	// Update cache after commit: remove from old parent, add to new parent
 	if s.cache != nil {
-		for _, item := range items {
-			task, getErr := s.taskRepo.GetByID(ctx, item.ID)
-			if getErr != nil {
+		for _, ce := range cacheEntries {
+			if !s.cache.IsProjectLoaded(ctx, ce.UpdatedTask.ProjectID) {
 				continue
 			}
-			if s.cache.IsProjectLoaded(ctx, task.ProjectID) {
-				_ = s.cache.SetTask(ctx, task.ProjectID, task)
-			}
+			_ = s.cache.RemoveFromParentIndex(ctx, ce.UpdatedTask.ProjectID, ce.UpdatedTask.ID, ce.OldParentID)
+			_ = s.cache.SetTask(ctx, ce.UpdatedTask.ProjectID, ce.UpdatedTask)
 		}
 	}
 	return nil

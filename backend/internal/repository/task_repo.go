@@ -56,6 +56,22 @@ func (r *taskRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Task, err
 	return t, nil
 }
 
+func (r *taskRepo) GetByIDTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.Task, error) {
+	row := tx.QueryRow(ctx,
+		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
+		 FROM tasks WHERE id = $1`, id)
+	t, err := scanTask(row)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, fmt.Errorf("get task tx: %w", err)
+	}
+	return t, nil
+}
+
 func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain.Task, error) {
 	rows, err := r.pool.Query(ctx,
 		`WITH RECURSIVE task_tree AS (
