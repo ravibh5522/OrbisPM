@@ -56,6 +56,13 @@ func (h *CommentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	params.OrgID = middleware.OrgIDFromCtx(r.Context())
 	params.UserID = middleware.UserIDFromCtx(r.Context())
 
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	params.ProjectID = projectID
+
 	taskID, err := uuidParam(r, "taskId")
 	if err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid task id"})

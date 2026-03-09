@@ -56,6 +56,7 @@ type Task struct {
 	RecurrenceRule     *string        `json:"recurrence_rule,omitempty"`
 	RecurrenceParentID *uuid.UUID     `json:"recurrence_parent_id,omitempty"`
 	NextOccurrence     *time.Time     `json:"next_occurrence,omitempty"`
+	Version            int64          `json:"version"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type { DomainEvent } from "@/types/domain";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -170,39 +170,41 @@ function handleMessage(
 function handleOrgEvent(event: DomainEvent | undefined, qc: ReturnType<typeof useQueryClient>) {
   if (!event) return;
   const type = event.type;
+  const orgId = event.org_id;
 
-  // Tasks — only dashboard stats (task details come via project broadcasts)
+  // Tasks — invalidate dashboard stats + my-tasks (user may be assignee)
   if (type.startsWith("task.")) {
-    qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
+    qc.invalidateQueries({ queryKey: ["my-tasks", orgId] });
     if (event.payload?.project_id) {
-      qc.invalidateQueries({ queryKey: ["project-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["project-dashboard", orgId, event.payload.project_id] });
     }
   }
 
   // Projects
   if (type.startsWith("project.")) {
-    qc.invalidateQueries({ queryKey: ["projects"] });
-    qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
+    qc.invalidateQueries({ queryKey: ["projects", orgId] });
+    qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
     if (event.entity_id) {
-      qc.invalidateQueries({ queryKey: ["project", event.org_id, event.entity_id] });
-      qc.invalidateQueries({ queryKey: ["project-dashboard", event.org_id, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["project", orgId, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["project-dashboard", orgId, event.entity_id] });
     }
   }
 
   // Teams
   if (type.startsWith("team.")) {
-    qc.invalidateQueries({ queryKey: ["teams"] });
+    qc.invalidateQueries({ queryKey: ["teams", orgId] });
     if (event.entity_id) {
-      qc.invalidateQueries({ queryKey: ["team", event.org_id, event.entity_id] });
-      qc.invalidateQueries({ queryKey: ["team-dashboard", event.org_id, event.entity_id] });
-      qc.invalidateQueries({ queryKey: ["team-members", event.org_id, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["team", orgId, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["team-dashboard", orgId, event.entity_id] });
+      qc.invalidateQueries({ queryKey: ["team-members", orgId, event.entity_id] });
     }
   }
 
   // Members
   if (type.startsWith("member.")) {
     const scope = event.payload?.scope as string | undefined;
-    qc.invalidateQueries({ queryKey: ["org-members"] });
+    qc.invalidateQueries({ queryKey: ["org-members", orgId] });
     if (scope === "team") {
       qc.invalidateQueries({ queryKey: ["team-members"] });
       qc.invalidateQueries({ queryKey: ["team-dashboard"] });
@@ -218,11 +220,13 @@ function handleOrgEvent(event: DomainEvent | undefined, qc: ReturnType<typeof us
 
   // Notifications
   if (type.startsWith("notification.")) {
-    qc.invalidateQueries({ queryKey: ["notifications"] });
+    qc.invalidateQueries({ queryKey: ["notifications", orgId] });
   }
 
-  // Always refresh activity
-  qc.invalidateQueries({ queryKey: ["activity"] });
+  // Activity — only invalidate on actual mutations, not reads
+  if (type.includes(".created") || type.includes(".updated") || type.includes(".deleted")) {
+    qc.invalidateQueries({ queryKey: ["activity", orgId] });
+  }
 }
 
 // ═══════════════════════════════════════
@@ -246,7 +250,7 @@ function handleProjectBroadcast(
       if (task?.id) {
         const parentKey = task.parent_task_id || "root";
         const existing = store.tasks.get(parentKey);
-        if (existing) {
+        if (existing && !existing.find((t: any) => t.id === task.id)) {
           store.setTasks(parentKey, [...existing, task], (store.totals.get(parentKey) ?? 0) + 1);
         }
       }
@@ -257,6 +261,20 @@ function handleProjectBroadcast(
       if (task?.id) store.upsertTask(task);
       break;
     }
+    case "task:conflict": {
+      // Version conflict detected — the server state has the latest version
+      const serverTask = p.server_state;
+      if (serverTask?.id) {
+        // Update our local state with the server's authoritative version
+        store.upsertTask(serverTask);
+      }
+      console.warn("[ws] task:conflict", {
+        task_id: p.task_id,
+        server_version: p.server_version,
+        resolution: p.resolution,
+      });
+      break;
+    }
     case "task:deleted": {
       if (p.task_id) store.removeTask(p.task_id);
       break;
@@ -264,6 +282,19 @@ function handleProjectBroadcast(
     case "task:bulk-updated": {
       const tasks = Array.isArray(p) ? p : p.data ?? [];
       store.bulkUpsertTasks(tasks);
+      break;
+    }
+    case "task:bulk-created": {
+      const tasks: any[] = Array.isArray(p) ? p : p.data ?? [];
+      for (const task of tasks) {
+        if (task?.id) {
+          const parentKey = task.parent_task_id || "root";
+          const existing = store.tasks.get(parentKey);
+          if (existing && !existing.find((t: any) => t.id === task.id)) {
+            store.setTasks(parentKey, [...existing, task], (store.totals.get(parentKey) ?? 0) + 1);
+          }
+        }
+      }
       break;
     }
     case "task:reordered":

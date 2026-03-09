@@ -1,19 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, EmptyState, LoadingPage, ConfirmDialog, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { Plus, Users, Trash2, UserPlus, BarChart3 } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import type { Team, TeamMember } from "@/types/domain";
+import { Modal } from "@/components/ui/modal";
+import { Avatar, Card, ConfirmDialog, EmptyState, PageHeader } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
+import { api, ApiError } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Team, TeamMember } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { BarChart3, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 interface TeamForm {
   name: string;
@@ -41,7 +41,7 @@ export default function TeamsPage() {
   const createMutation = useMutation({
     mutationFn: (data: TeamForm) => api.teams.create(currentOrg!.id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["teams"] });
+      qc.invalidateQueries({ queryKey: ["teams", currentOrg?.id] });
       setShowCreate(false);
       reset();
       setError("");
@@ -52,12 +52,27 @@ export default function TeamsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.teams.delete(currentOrg!.id, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["teams"] });
+      qc.invalidateQueries({ queryKey: ["teams", currentOrg?.id] });
       setDeleteTarget(null);
     },
   });
 
-  if (isLoading) return <LoadingPage />;
+  if (isLoading) return (
+    <div className="animate-pulse">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="h-8 bg-base-300 rounded w-28 mb-2" />
+          <div className="h-4 bg-base-300 rounded w-52" />
+        </div>
+        <div className="h-10 bg-base-300 rounded w-32" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-36 bg-base-200 rounded-xl border border-base-200" />
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div>

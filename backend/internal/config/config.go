@@ -64,6 +64,9 @@ type Config struct {
 	StripeSecretKey     string
 	StripeWebhookSecret string
 	StripeEnabled       bool
+
+	// Cache
+	CacheEnabled bool
 }
 
 // Load reads configuration from environment variables with sensible defaults.
@@ -103,6 +106,7 @@ func Load() (*Config, error) {
 		StripeSecretKey:     getEnv("STRIPE_SECRET_KEY", ""),
 		StripeWebhookSecret: getEnv("STRIPE_WEBHOOK_SECRET", ""),
 		StripeEnabled:       getEnvBool("STRIPE_ENABLED", false),
+		CacheEnabled:        getEnvBool("CACHE_ENABLED", true),
 	}
 
 	if cfg.Env == "production" && cfg.ZitadelServiceToken == "" {

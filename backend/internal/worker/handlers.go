@@ -10,10 +10,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/rs/zerolog/log"
 
+	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/email"
+	"github.com/orbispm/orbispm/internal/repository"
 )
 
 // Handlers holds dependencies for task handler functions.
@@ -21,6 +24,8 @@ type Handlers struct {
 	Pool        *pgxpool.Pool
 	EmailSender *email.Sender
 	FrontendURL string
+	Cache       *cache.Manager
+	TxManager   *repository.TxManager
 }
 
 // RegisterAll registers all task handlers on the mux.
@@ -31,6 +36,10 @@ func (h *Handlers) RegisterAll(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeSearchDelete, h.HandleSearchDelete)
 	mux.HandleFunc(TypeWebhookDeliver, h.HandleWebhookDeliver)
 	mux.HandleFunc(TypeRecurringGenerate, h.HandleRecurringGenerate)
+	if h.Cache != nil {
+		mux.HandleFunc(TypeDBFlushTask, h.HandleDBFlushTask)
+		mux.HandleFunc(TypeDBFlushProject, h.HandleDBFlushProject)
+	}
 }
 
 // HandleActivityLog inserts an activity log entry into the database.
@@ -336,4 +345,119 @@ func calculateNextOccurrence(current time.Time, rrule string) *time.Time {
 		next = current.AddDate(0, 0, 1) // Default to daily
 	}
 	return &next
+}
+
+// ─── DB Flush Handlers ──────────────────────────────────────
+
+// HandleDBFlushTask flushes a single dirty cached task to the database.
+func (h *Handlers) HandleDBFlushTask(ctx context.Context, t *asynq.Task) error {
+	var p DBFlushTaskPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("unmarshal db flush task payload: %w", err)
+	}
+
+	projectID, err := uuid.Parse(p.ProjectID)
+	if err != nil {
+		return fmt.Errorf("parse project_id: %w", err)
+	}
+	taskID, err := uuid.Parse(p.TaskID)
+	if err != nil {
+		return fmt.Errorf("parse task_id: %w", err)
+	}
+
+	// Read the task from cache
+	task, err := h.Cache.GetTask(ctx, projectID, taskID)
+	if err != nil {
+		log.Warn().Err(err).Str("task_id", p.TaskID).Msg("cache miss during flush, skipping")
+		// Remove from dirty set anyway — if it's not in cache, nothing to flush
+		h.Cache.RemoveFromDirty(ctx, projectID, taskID)
+		return nil
+	}
+
+	// Write to DB via TxManager (sets RLS context)
+	err = h.TxManager.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`UPDATE tasks SET
+				title = $1, description = $2, status = $3, priority = $4,
+				assignee_id = $5, reporter_id = $6, labels = $7, metadata = $8,
+				estimated_hours = $9, due_date = $10, start_date = $11,
+				position = $12, parent_task_id = $13, updated_at = $14
+			WHERE id = $15`,
+			task.Title, task.Description, task.Status, task.Priority,
+			task.AssigneeID, task.ReporterID, task.Labels, task.Metadata,
+			task.EstimatedHours, task.DueDate, task.StartDate,
+			task.Position, task.ParentTaskID, time.Now().UTC(),
+			task.ID,
+		)
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("flush task to db: %w", err)
+	}
+
+	// Remove from dirty set on successful flush
+	if err := h.Cache.RemoveFromDirty(ctx, projectID, taskID); err != nil {
+		log.Warn().Err(err).Str("task_id", p.TaskID).Msg("failed to remove from dirty set")
+	}
+
+	log.Debug().Str("task_id", p.TaskID).Msg("task flushed to DB")
+	return nil
+}
+
+// HandleDBFlushProject flushes all dirty cached tasks in a project to the database.
+func (h *Handlers) HandleDBFlushProject(ctx context.Context, t *asynq.Task) error {
+	var p DBFlushProjectPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("unmarshal db flush project payload: %w", err)
+	}
+
+	projectID, err := uuid.Parse(p.ProjectID)
+	if err != nil {
+		return fmt.Errorf("parse project_id: %w", err)
+	}
+
+	dirtyIDs, err := h.Cache.GetDirtyTasks(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("get dirty tasks: %w", err)
+	}
+
+	if len(dirtyIDs) == 0 {
+		return nil
+	}
+
+	var flushed int
+	for _, taskID := range dirtyIDs {
+		task, err := h.Cache.GetTask(ctx, projectID, taskID)
+		if err != nil {
+			h.Cache.RemoveFromDirty(ctx, projectID, taskID)
+			continue
+		}
+
+		err = h.TxManager.WithTx(ctx, func(tx pgx.Tx) error {
+			_, err := tx.Exec(ctx,
+				`UPDATE tasks SET
+					title = $1, description = $2, status = $3, priority = $4,
+					assignee_id = $5, reporter_id = $6, labels = $7, metadata = $8,
+					estimated_hours = $9, due_date = $10, start_date = $11,
+					position = $12, parent_task_id = $13, updated_at = $14
+				WHERE id = $15`,
+				task.Title, task.Description, task.Status, task.Priority,
+				task.AssigneeID, task.ReporterID, task.Labels, task.Metadata,
+				task.EstimatedHours, task.DueDate, task.StartDate,
+				task.Position, task.ParentTaskID, time.Now().UTC(),
+				task.ID,
+			)
+			return err
+		})
+		if err != nil {
+			log.Error().Err(err).Str("task_id", taskID.String()).Msg("failed to flush task in project batch")
+			continue
+		}
+
+		h.Cache.RemoveFromDirty(ctx, projectID, taskID)
+		flushed++
+	}
+
+	log.Debug().Str("project_id", p.ProjectID).Int("flushed", flushed).Int("total_dirty", len(dirtyIDs)).Msg("project flush completed")
+	return nil
 }

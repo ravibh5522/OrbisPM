@@ -1,19 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { Input, Textarea, Select } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { FolderKanban, Plus, Trash2, LayoutGrid, Table2, Users, Calendar, Activity } from "lucide-react";
-import { formatDate, statusLabel, cn } from "@/lib/utils";
-import type { Project, Team } from "@/types/domain";
 import { PermissionGate } from "@/components/permission-gate";
+import { Button } from "@/components/ui/button";
+import { Input, Select, Textarea } from "@/components/ui/form-fields";
+import { Modal } from "@/components/ui/modal";
+import { Card, ConfirmDialog, EmptyState, PageHeader } from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
+import { cn, formatDate, statusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Project, Team } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Activity, Calendar, FolderKanban, LayoutGrid, Plus, Table2, Trash2, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
 
 interface ProjectForm {
   name: string;
@@ -84,7 +84,7 @@ export default function ProjectsPage() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", currentOrg?.id] });
       setShowCreate(false);
       reset();
       setError("");
@@ -95,12 +95,27 @@ export default function ProjectsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.projects.delete(currentOrg!.id, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects", currentOrg?.id] });
       setDeleteTarget(null);
     },
   });
 
-  if (isLoading) return <LoadingPage />;
+  if (isLoading) return (
+    <div className="animate-pulse">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <div className="h-8 bg-base-300 rounded w-36 mb-2" />
+          <div className="h-4 bg-base-300 rounded w-64" />
+        </div>
+        <div className="h-10 bg-base-300 rounded w-32" />
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="h-14 bg-base-200 rounded-lg border border-base-200" />
+        ))}
+      </div>
+    </div>
+  );
 
   const teamOptions = (teams?.data || []).map((t: Team) => ({ value: t.id, label: t.name }));
   const teamList = teams?.data || [];

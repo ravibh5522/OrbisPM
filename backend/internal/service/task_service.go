@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
@@ -31,6 +32,7 @@ type CreateTaskParams struct {
 
 type UpdateTaskParams struct {
 	ActorID        *uuid.UUID `json:"-"` // Set by handler from auth context
+	BaseVersion    int64      `json:"base_version,omitempty"`
 	Title          *string    `json:"title,omitempty" validate:"omitempty,min=1,max=500"`
 	Description    *string    `json:"description,omitempty"`
 	Status         *string    `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
@@ -55,6 +57,7 @@ type TaskService struct {
 	txm           *repository.TxManager
 	workerSrv     *worker.Server
 	publisher     EventPublisher
+	cache         *cache.Manager
 }
 
 func NewTaskService(
@@ -78,12 +81,36 @@ func NewTaskService(
 	return s
 }
 
+// SetCache injects the optional cache manager.
+func (s *TaskService) SetCache(cm *cache.Manager) {
+	s.cache = cm
+}
+
 // SetReviewDeps injects optional review-pipeline dependencies.
 // Kept separate so the constructor signature stays backward-compatible.
 func (s *TaskService) SetReviewDeps(projectRepo repository.ProjectRepository, crRepo repository.TaskChangeRequestRepository, resolver *PermissionResolver) {
 	s.projectRepo = projectRepo
 	s.crRepo = crRepo
 	s.permResolver = resolver
+}
+
+// PreloadProjectCache loads project tasks into cache if not already loaded.
+func (s *TaskService) PreloadProjectCache(ctx context.Context, projectID uuid.UUID) {
+	if s.cache == nil {
+		return
+	}
+	if s.cache.IsProjectLoaded(ctx, projectID) {
+		s.cache.RefreshTTL(ctx, projectID)
+		return
+	}
+	tasks, err := s.taskRepo.ListTreeByProject(ctx, projectID)
+	if err != nil {
+		log.Warn().Err(err).Str("project_id", projectID.String()).Msg("failed to load tasks for cache preload")
+		return
+	}
+	if err := s.cache.PreloadProject(ctx, projectID, tasks); err != nil {
+		log.Warn().Err(err).Str("project_id", projectID.String()).Msg("failed to preload project cache")
+	}
 }
 
 func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*domain.Task, error) {
@@ -133,6 +160,13 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create task: %w", err)
+	}
+
+	// Update cache if project is loaded
+	if s.cache != nil && s.cache.IsProjectLoaded(ctx, created.ProjectID) {
+		if cacheErr := s.cache.SetTask(ctx, created.ProjectID, created); cacheErr != nil {
+			log.Warn().Err(cacheErr).Str("task_id", created.ID.String()).Msg("failed to cache new task")
+		}
 	}
 
 	// Enqueue activity log
@@ -231,12 +265,130 @@ func (s *TaskService) ListTreeByProject(ctx context.Context, projectID uuid.UUID
 }
 
 func (s *TaskService) List(ctx context.Context, projectID uuid.UUID, filter repository.TaskFilter) ([]*domain.Task, int, error) {
+	// Cache-first for simple parent-ID lookups (column view pattern).
+	// When the only filter is parent_id and the project is cached in Redis,
+	// serve directly from cache (~5ms) instead of hitting PostgreSQL (~500ms).
+	if s.cache != nil && filter.ParentID != nil &&
+		filter.Status == nil && filter.Priority == nil &&
+		filter.AssigneeID == nil && filter.Search == nil &&
+		s.cache.IsProjectLoaded(ctx, projectID) {
+		tasks, err := s.cache.ListTasks(ctx, projectID, *filter.ParentID)
+		if err == nil {
+			return tasks, len(tasks), nil
+		}
+		// Fall through to DB on cache miss
+	}
 	return s.taskRepo.List(ctx, projectID, filter)
 }
 
 // ListMyTasks returns tasks assigned to the user across all projects in the org.
 func (s *TaskService) ListMyTasks(ctx context.Context, orgID, userID uuid.UUID, limit, offset int) ([]*domain.Task, int, error) {
 	return s.taskRepo.ListByOrgAndAssignee(ctx, orgID, userID, limit, offset)
+}
+
+// BulkCreateParams defines the shape for a bulk create request.
+type BulkCreateParams struct {
+	OrgID        uuid.UUID  `json:"-"`
+	ProjectID    uuid.UUID  `json:"-"`
+	ParentTaskID *uuid.UUID `json:"parent_task_id,omitempty"`
+	Titles       []string   `json:"titles" validate:"required,min=1,max=200"`
+	Priority     string     `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
+	AssigneeID   *uuid.UUID `json:"assignee_id,omitempty"`
+	ReporterID   *uuid.UUID `json:"reporter_id,omitempty"`
+	DueDate      *time.Time `json:"due_date,omitempty"`
+	StartDate    *time.Time `json:"start_date,omitempty"`
+	Labels       []string   `json:"labels,omitempty"`
+}
+
+// BulkCreate creates multiple tasks in a single transaction with deduplication.
+func (s *TaskService) BulkCreate(ctx context.Context, params BulkCreateParams) ([]*domain.Task, error) {
+	// Deduplicate titles (case-insensitive, preserving first occurrence's casing)
+	seen := make(map[string]struct{}, len(params.Titles))
+	uniqueTitles := make([]string, 0, len(params.Titles))
+	for _, t := range params.Titles {
+		trimmed := strings.TrimSpace(t)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
+			uniqueTitles = append(uniqueTitles, trimmed)
+		}
+	}
+	if len(uniqueTitles) == 0 {
+		return nil, fmt.Errorf("no valid titles provided")
+	}
+
+	priority := params.Priority
+	if priority == "" {
+		priority = domain.PriorityMedium
+	}
+
+	var depth int
+	if params.ParentTaskID != nil {
+		parent, err := s.taskRepo.GetByID(ctx, *params.ParentTaskID)
+		if err != nil {
+			return nil, fmt.Errorf("get parent task: %w", err)
+		}
+		if !parent.CanAddChild() {
+			return nil, domain.ErrMaxDepth
+		}
+		depth = parent.Depth + 1
+	}
+
+	labels := params.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+
+	created := make([]*domain.Task, 0, len(uniqueTitles))
+
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, title := range uniqueTitles {
+			task := &domain.Task{
+				OrgID:        params.OrgID,
+				ProjectID:    params.ProjectID,
+				ParentTaskID: params.ParentTaskID,
+				Title:        title,
+				Status:       domain.TaskStatusTodo,
+				Priority:     priority,
+				AssigneeID:   params.AssigneeID,
+				ReporterID:   params.ReporterID,
+				DueDate:      params.DueDate,
+				StartDate:    params.StartDate,
+				Labels:       labels,
+				Metadata:     map[string]any{},
+				Depth:        depth,
+			}
+			c, err := s.taskRepo.Create(ctx, tx, task)
+			if err != nil {
+				return fmt.Errorf("create task %q: %w", title, err)
+			}
+			created = append(created, c)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bulk create: %w", err)
+	}
+
+	// Update cache for all created tasks
+	if s.cache != nil && len(created) > 0 && s.cache.IsProjectLoaded(ctx, params.ProjectID) {
+		for _, t := range created {
+			if cacheErr := s.cache.SetTask(ctx, t.ProjectID, t); cacheErr != nil {
+				log.Warn().Err(cacheErr).Str("task_id", t.ID.String()).Msg("failed to cache bulk-created task")
+			}
+		}
+	}
+
+	// Enqueue async jobs for all created tasks
+	for _, t := range created {
+		s.enqueueActivity(t.OrgID.String(), "task", t.ID.String(), "created", "", nil)
+		s.enqueueSearchIndex("tasks", t)
+	}
+
+	return created, nil
 }
 
 // BulkUpdateParams defines the shape for a bulk update request.
@@ -290,6 +442,17 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 	})
 	if err != nil {
 		return nil, fmt.Errorf("bulk update: %w", err)
+	}
+
+	// Update cache for all updated tasks
+	if s.cache != nil && len(updated) > 0 {
+		for _, t := range updated {
+			if s.cache.IsProjectLoaded(ctx, t.ProjectID) {
+				if cacheErr := s.cache.SetTask(ctx, t.ProjectID, t); cacheErr != nil {
+					log.Warn().Err(cacheErr).Str("task_id", t.ID.String()).Msg("failed to update bulk-updated task in cache")
+				}
+			}
+		}
 	}
 
 	// Enqueue async jobs
@@ -360,6 +523,36 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 		changes["recurrence_rule"] = *params.RecurrenceRule
 	}
 
+	// --- Optimistic version check via cache ---
+	if s.cache != nil && params.BaseVersion > 0 && s.cache.IsProjectLoaded(ctx, task.ProjectID) {
+		newVersion, vErr := s.cache.CheckAndIncrementVersion(ctx, task.ProjectID, task.ID, params.BaseVersion)
+		if vErr != nil {
+			log.Warn().Err(vErr).Str("task_id", id.String()).Msg("version check failed, falling through to DB")
+		} else if newVersion != params.BaseVersion+1 {
+			// Version mismatch — attempt field-level merge
+			serverTask, sErr := s.cache.GetTask(ctx, task.ProjectID, task.ID)
+			if sErr != nil {
+				serverTask = task // Fall back to DB version
+			}
+			mergedChanges, resolution, mErr := cache.FieldLevelMerge(serverTask, params.BaseVersion, changes)
+			if mErr != nil {
+				return nil, mErr
+			}
+			if resolution == "auto-merged" {
+				changes = mergedChanges
+				// Proceed with the merge
+			} else {
+				return nil, &cache.ConflictError{
+					TaskID:        task.ID,
+					ServerVersion: newVersion,
+					ServerState:   serverTask,
+					YourChanges:   changes,
+					Resolution:    "conflict",
+				}
+			}
+		}
+	}
+
 	// --- Review pipeline ---
 	// If review deps are wired and project has reviewable_fields, partition changes.
 	var reviewableFields []string
@@ -418,6 +611,13 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// Update cache after successful DB write
+	if s.cache != nil && s.cache.IsProjectLoaded(ctx, updated.ProjectID) {
+		if cacheErr := s.cache.SetTask(ctx, updated.ProjectID, updated); cacheErr != nil {
+			log.Warn().Err(cacheErr).Str("task_id", updated.ID.String()).Msg("failed to update task in cache")
+		}
 	}
 
 	result := &domain.TaskUpdateResult{
@@ -592,6 +792,13 @@ func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
+	// Remove from cache
+	if s.cache != nil && s.cache.IsProjectLoaded(ctx, task.ProjectID) {
+		if cacheErr := s.cache.RemoveTask(ctx, task.ProjectID, task.ID, task.ParentTaskID); cacheErr != nil {
+			log.Warn().Err(cacheErr).Str("task_id", task.ID.String()).Msg("failed to remove task from cache")
+		}
+	}
+
 	// Enqueue activity log
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "deleted", "", nil)
 	// Enqueue search delete
@@ -671,21 +878,32 @@ type ReorderItem struct {
 
 // Reorder updates the positions (and optionally parents) of multiple tasks in a single transaction.
 func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, item := range items {
-			if item.ParentID != nil {
-				// Reparent + reposition
-				if err := s.taskRepo.Reparent(ctx, tx, item.ID, item.ParentID, item.Position); err != nil {
-					return fmt.Errorf("reparent task %s: %w", item.ID, err)
-				}
-			} else {
-				if err := s.taskRepo.UpdatePosition(ctx, tx, item.ID, item.Position); err != nil {
-					return fmt.Errorf("reorder task %s: %w", item.ID, err)
-				}
+			// Always call Reparent — handles both non-nil parent and nil (move to root)
+			if err := s.taskRepo.Reparent(ctx, tx, item.ID, item.ParentID, item.Position); err != nil {
+				return fmt.Errorf("reparent task %s: %w", item.ID, err)
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Refresh moved tasks in cache
+	if s.cache != nil {
+		for _, item := range items {
+			task, getErr := s.taskRepo.GetByID(ctx, item.ID)
+			if getErr != nil {
+				continue
+			}
+			if s.cache.IsProjectLoaded(ctx, task.ProjectID) {
+				_ = s.cache.SetTask(ctx, task.ProjectID, task)
+			}
+		}
+	}
+	return nil
 }
 
 // --- Worker helpers (fire-and-forget, log errors) ---

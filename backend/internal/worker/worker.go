@@ -19,6 +19,8 @@ const (
 	TypeImportProcess     = "import:process"
 	TypeExportGenerate    = "export:generate"
 	TypeRecurringGenerate = "recurring:generate"
+	TypeDBFlushTask       = "db:flush-task"
+	TypeDBFlushProject    = "db:flush-project"
 )
 
 // ActivityLogPayload holds data for creating an activity log entry.
@@ -66,6 +68,18 @@ type WebhookDeliverPayload struct {
 type RecurringGeneratePayload struct {
 	TaskID string `json:"task_id"`
 	OrgID  string `json:"org_id"`
+}
+
+// DBFlushTaskPayload holds data for flushing a single cached task to DB.
+type DBFlushTaskPayload struct {
+	ProjectID string `json:"project_id"`
+	TaskID    string `json:"task_id"`
+	Version   int64  `json:"version"`
+}
+
+// DBFlushProjectPayload holds data for flushing all dirty tasks in a project.
+type DBFlushProjectPayload struct {
+	ProjectID string `json:"project_id"`
 }
 
 // --- Task creators ---
@@ -122,6 +136,24 @@ func NewRecurringGenerateTask(p RecurringGeneratePayload) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeRecurringGenerate, data), nil
+}
+
+// NewDBFlushTask creates a task to flush a single dirty cached task to the database.
+func NewDBFlushTask(p DBFlushTaskPayload) (*asynq.Task, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeDBFlushTask, data), nil
+}
+
+// NewDBFlushProjectTask creates a task to flush all dirty cached tasks in a project to the database.
+func NewDBFlushProjectTask(p DBFlushProjectPayload) (*asynq.Task, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeDBFlushProject, data), nil
 }
 
 // Server wraps asynq server and client for background job processing.

@@ -1,37 +1,61 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import { Bell, CheckCheck } from "lucide-react";
-import { formatRelative, cn } from "@/lib/utils";
+import { cn, formatRelative } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { Notification } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, CheckCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
+
+function getNotificationHref(notif: Notification, orgSlug: string): string | null {
+  const p = notif.payload;
+  if (!p) return null;
+  const projectId = p.project_id as string | undefined;
+  const taskId = p.task_id as string | undefined;
+  if (projectId && taskId) return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
+  if (projectId) return `/${orgSlug}/projects/${projectId}`;
+  const teamId = p.team_id as string | undefined;
+  if (teamId) return `/${orgSlug}/teams`;
+  return null;
+}
 
 export function NotificationBell() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
 
   const { data: notifications } = useQuery({
     queryKey: ["notifications", currentOrg?.id],
     queryFn: () => api.notifications.list(currentOrg!.id, "limit=10"),
     enabled: !!currentOrg,
-    refetchInterval: 30000, // Poll every 30s
+    refetchInterval: 30000,
   });
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => api.notifications.markRead(currentOrg!.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.notifications.markAllRead(currentOrg!.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
   });
 
   const items = notifications?.data || [];
   const unread = items.filter((n: Notification) => !n.read_at).length;
+  const orgSlug = currentOrg?.slug || "";
+
+  const handleNotifClick = (notif: Notification) => {
+    if (!notif.read_at) markReadMutation.mutate(notif.id);
+    const href = getNotificationHref(notif, orgSlug);
+    if (href) {
+      setOpen(false);
+      router.push(href);
+    }
+  };
 
   return (
     <div className="dropdown dropdown-end">
@@ -65,7 +89,7 @@ export function NotificationBell() {
                     "p-3 border-b border-base-200 last:border-0 hover:bg-base-200 cursor-pointer",
                     !notif.read_at && "bg-primary/5"
                   )}
-                  onClick={() => !notif.read_at && markReadMutation.mutate(notif.id)}
+                  onClick={() => handleNotifClick(notif)}
                 >
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">

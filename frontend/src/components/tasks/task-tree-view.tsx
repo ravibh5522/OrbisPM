@@ -1,26 +1,26 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { Badge, Avatar, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
+import { Avatar, Badge, ConfirmDialog } from "@/components/ui/shared";
 import {
-  ChevronRight,
-  ChevronDown,
-  Plus,
-  MoreHorizontal,
-  Trash2,
-  Copy,
-  ExternalLink,
-  Circle,
-} from "lucide-react";
-import {
-  priorityColor,
-  statusLabel,
-  formatDate,
-  cn,
+    cn,
+    formatDate,
+    priorityColor,
+    statusLabel,
 } from "@/lib/utils";
-import type { Task, TaskTree, ProjectMember, TaskStatus, TaskPriority } from "@/types/domain";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import type { ProjectMember, Task, TaskPriority, TaskStatus, TaskTree } from "@/types/domain";
+import {
+    ChevronDown,
+    ChevronRight,
+    Circle,
+    Copy,
+    ExternalLink,
+    MoreHorizontal,
+    Plus,
+    Trash2,
+} from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Task Tree View — Collapsible hierarchical tree with inline editing
@@ -90,12 +90,28 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
   const handleUpdate = useCallback(async (taskId: string, data: Partial<Task>) => {
     if (!send) return;
     try {
-      await send("task:update", { task_id: taskId, ...data });
+      // Find the task in the tree to get version for optimistic concurrency
+      const findTask = (nodes: TaskTree[]): Task | undefined => {
+        for (const n of nodes) {
+          if (n.task.id === taskId) return n.task;
+          if (n.children) {
+            const found = findTask(n.children);
+            if (found) return found;
+          }
+        }
+        return undefined;
+      };
+      const currentTask = findTask(taskTree);
+      await send("task:update", {
+        task_id: taskId,
+        base_version: currentTask?.version ?? 0,
+        ...data,
+      });
       fetchTree();
     } catch (e) {
       console.error("[WS] task:update failed", e);
     }
-  }, [send, fetchTree]);
+  }, [send, fetchTree, taskTree]);
 
   const handleDelete = useCallback(async (taskId: string) => {
     if (!send) return;

@@ -1,55 +1,55 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input, Select } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
+import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/shared";
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+    cn,
+    formatDate,
+} from "@/lib/utils";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import type {
+    ProjectMember,
+    Task,
+    TaskPriority,
+    TaskStatus,
+} from "@/types/domain";
+import {
+    closestCenter,
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-  arrayMove,
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Plus,
-  Trash2,
-  ArrowUpDown,
-  ArrowUp,
-  ArrowDown,
-  ChevronRight,
-  Search,
-  X,
-  ExternalLink,
-  Copy,
-  Loader2,
-  GripVertical,
-  MoreHorizontal,
+    ArrowDown,
+    ArrowUp,
+    ArrowUpDown,
+    ChevronRight,
+    Copy,
+    ExternalLink,
+    GripVertical,
+    Loader2,
+    MoreHorizontal,
+    Plus,
+    Search,
+    Trash2,
+    X,
 } from "lucide-react";
-import {
-  formatDate,
-  cn,
-} from "@/lib/utils";
-import type {
-  Task,
-  TaskStatus,
-  TaskPriority,
-  ProjectMember,
-} from "@/types/domain";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 
 /* ═══════════════════════════════════════════════════════
    Sortable flat task list with inline editing
@@ -123,14 +123,19 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
   /* ── Inline update ── */
   const handleUpdate = useCallback(async (id: string, changes: Partial<Task>) => {
     if (!send) return;
+    const currentTask = tasks.find((t) => t.id === id);
     // Optimistic
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...changes } : t)));
     try {
-      await send("task:update", { task_id: id, ...changes });
+      await send("task:update", {
+        task_id: id,
+        base_version: currentTask?.version ?? 0,
+        ...changes,
+      });
     } catch {
       fetchList(); // rollback by re-fetching
     }
-  }, [send, fetchList]);
+  }, [send, fetchList, tasks]);
 
   /* ── Delete ── */
   const handleDelete = useCallback(async (id: string) => {

@@ -1,5 +1,5 @@
+import { clearAuth, getRefreshToken, isTokenExpired, saveTokens } from "@/lib/auth";
 import type { AuthUser } from "@/types/domain";
-import { getRefreshToken, isTokenExpired, saveTokens, clearAuth } from "@/lib/auth";
 
 // API response shapes
 export interface ListResponse<T> {
@@ -201,46 +201,46 @@ async function downloadBlob(path: string, filename: string): Promise<void> {
 
 // API namespaces
 import type {
-  Org,
-  OrgMember,
-  Team,
-  TeamMember,
-  Project,
-  ProjectMember,
-  Task,
-  TaskTree,
-  TaskDependency,
-  Checklist,
-  Comment,
-  TaskRule,
-  Notification,
-  NotificationPreference,
-  ActivityLog,
-  TaskTemplate,
-  Webhook,
-  APIKey,
-  Attachment,
-  TaskWatcher,
-  BillingPlan,
-  OrgSubscription,
-  CustomRole,
-  ImportJob,
-  DashboardStats,
-  TeamDashboardStats,
-  ProjectDashboardStats,
-  AuthTokens,
-  Permission,
-  Role,
-  ProjectTeam,
-  EffectiveMember,
-  TaskChangeRequest,
-  TaskUpdateResult,
-  TOTPRegistration,
-  MFAStatus,
-  BackupCodesResponse,
-  IDPInfo,
-  IDPStartResponse,
-  OIDCAuthorizeResponse,
+    ActivityLog,
+    APIKey,
+    Attachment,
+    AuthTokens,
+    BackupCodesResponse,
+    BillingPlan,
+    Checklist,
+    Comment,
+    CustomRole,
+    DashboardStats,
+    EffectiveMember,
+    IDPInfo,
+    IDPStartResponse,
+    ImportJob,
+    MFAStatus,
+    Notification,
+    NotificationPreference,
+    OIDCAuthorizeResponse,
+    Org,
+    OrgMember,
+    OrgSubscription,
+    Permission,
+    Project,
+    ProjectDashboardStats,
+    ProjectMember,
+    ProjectTeam,
+    Role,
+    Task,
+    TaskChangeRequest,
+    TaskDependency,
+    TaskRule,
+    TaskTemplate,
+    TaskTree,
+    TaskUpdateResult,
+    TaskWatcher,
+    Team,
+    TeamDashboardStats,
+    TeamMember,
+    TOTPRegistration,
+    Webhook,
 } from "@/types/domain";
 
 export const api = {
@@ -618,7 +618,9 @@ export const api = {
   // Search
   search: {
     tasks: (orgId: string, query: string, limit = 20) =>
-      get<ListResponse<Task>>(`${V1}/orgs/${orgId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+      get<ListResponse<Task>>(`${V1}/orgs/${orgId}/search/tasks?q=${encodeURIComponent(query)}&limit=${limit}`),
+    projects: (orgId: string, query: string, limit = 20) =>
+      get<ListResponse<Project>>(`${V1}/orgs/${orgId}/search/projects?q=${encodeURIComponent(query)}&limit=${limit}`),
   },
 
   // Dashboard

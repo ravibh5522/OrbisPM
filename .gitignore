@@ -1,5 +1,68 @@
-orbispm/frontend/node_modules/
-orbispm/frontend/.next/
+# ─── OS & Editor ───────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/settings.json
+
+# ─── Secrets — keep .env files tracked ─────────────────────
+# .env files are intentionally NOT ignored (tracked in git)
+# Add secrets to .env.local for local overrides (ignored below)
+frontend/.env.local
+frontend/.env.*.local
+
+# ─── Frontend (Next.js) ─────────────────────────────────────
+frontend/node_modules/
 frontend/.next/
-frontend/.next/cache/
-frontend/.next/trace
+frontend/out/
+frontend/dist/
+frontend/.turbo/
+frontend/coverage/
+frontend/.eslintcache
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.pnpm-debug.log*
+frontend/*.tsbuildinfo
+
+# ─── Backend (Go) ───────────────────────────────────────────
+backend/bin/
+backend/tmp/
+backend/*.test
+backend/coverage.out
+backend/coverage.html
+# compiled binaries
+backend/api
+
+# ─── Docker / infrastructure ────────────────────────────────
+docker-compose.override.yml
+*.bak
+
+# ─── Database / migration tools ─────────────────────────────
+*.dump
+*.sql.gz
+
+# ─── Logs ───────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Certificates / keys ────────────────────────────────────
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ─── Misc build artefacts ───────────────────────────────────
+dist/
+build/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+
+# ─── orbispm subdir (legacy) ────────────────────────────────
+orbispm/

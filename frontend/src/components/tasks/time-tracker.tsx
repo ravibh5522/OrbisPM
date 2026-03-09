@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, StopCircle, Timer, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import type { Task } from "@/types/domain";
+import { Pause, Play, RotateCcw, StopCircle, Timer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Time Tracking Timer Component
@@ -95,10 +95,14 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
     if (!send) return;
     setSaving(true);
     try {
-      await send("task:update", { task_id: task.id, actual_hours: newHours });
+      await send("task:update", {
+        task_id: task.id,
+        base_version: task.version ?? 0,
+        actual_hours: newHours,
+      });
       onUpdate?.();
     } catch {} finally { setSaving(false); }
-  }, [send, task.id, onUpdate]);
+  }, [send, task.id, task.version, onUpdate]);
 
   const start = useCallback(() => {
     const newState: TimerState = {

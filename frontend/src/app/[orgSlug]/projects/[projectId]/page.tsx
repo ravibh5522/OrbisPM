@@ -1,41 +1,40 @@
 "use client";
 
-import { useState, use, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { api } from "@/lib/api";
-import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { TaskColumns } from "@/components/tasks/task-columns";
-import { TaskListView } from "@/components/tasks/task-list-view";
-import { TaskTreeView } from "@/components/tasks/task-tree-view";
-import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectSettings } from "@/components/projects/project-settings";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
-import {
-  ArrowLeft,
-  Settings,
-  Users,
-  ListTodo,
-  Columns3,
-  List,
-  GitFork,
-  Trash2,
-  UserPlus,
-  Upload,
-  Download,
-  CalendarDays,
-  Link2,
-  Unlink,
-  GitPullRequest,
-} from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
+import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
+import { TaskColumns } from "@/components/tasks/task-columns";
+import { TaskListView } from "@/components/tasks/task-list-view";
+import { TaskTreeView } from "@/components/tasks/task-tree-view";
+import { Button } from "@/components/ui/button";
+import { Avatar, Card } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
+import { api } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import { useUIStore } from "@/stores/ui-store";
+import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    CalendarDays,
+    Columns3,
+    Download,
+    GitFork,
+    GitPullRequest,
+    Link2,
+    List,
+    ListTodo,
+    Settings,
+    Trash2,
+    Unlink,
+    Upload,
+    UserPlus,
+    Users
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { use, useCallback, useEffect, useState } from "react";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlug: string; projectId: string }> }) {
   const { projectId } = use(params);
@@ -77,6 +76,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     enabled: !!currentOrg,
   });
 
+  // Fetch org members for comprehensive name resolution in comments/previews
+  const { data: orgMembersData } = useQuery({
+    queryKey: ["org-members", currentOrg?.id],
+    queryFn: () => api.members.list(currentOrg!.id),
+    enabled: !!currentOrg,
+    staleTime: 5 * 60_000,
+  });
+
   // Set breadcrumb in top bar
   useEffect(() => {
     if (project && currentOrg) {
@@ -85,7 +92,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     return () => setBreadcrumb(null);
   }, [project, currentOrg, setBreadcrumb]);
 
-  if (projLoading) return <LoadingPage />;
+  if (projLoading) return (
+    <div className="h-full flex flex-col animate-pulse">
+      <div className="flex items-center gap-2 py-1.5 border-b border-base-200 mb-2">
+        <div className="h-8 bg-base-300 rounded w-96" />
+      </div>
+      <div className="flex-1 bg-base-200 rounded-lg border border-base-200" />
+    </div>
+  );
   if (!project) return <div className="text-center py-12">Project not found</div>;
 
   return (
@@ -185,6 +199,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               orgSlug={currentOrg!.slug}
               projectId={projectId}
               members={members?.data || []}
+              orgMembers={orgMembersData?.data}
               focusTaskId={focusTaskId}
             />
           )}

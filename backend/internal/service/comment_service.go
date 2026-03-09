@@ -19,11 +19,12 @@ import (
 var mentionRe = regexp.MustCompile(`@([a-zA-Z0-9._-]+)`)
 
 type CreateCommentParams struct {
-	OrgID    uuid.UUID  `json:"-"`
-	TaskID   uuid.UUID  `json:"-"`
-	UserID   uuid.UUID  `json:"-"`
-	Body     string     `json:"body" validate:"required,min=1"`
-	ParentID *uuid.UUID `json:"parent_id,omitempty"`
+	OrgID     uuid.UUID  `json:"-"`
+	TaskID    uuid.UUID  `json:"-"`
+	UserID    uuid.UUID  `json:"-"`
+	ProjectID uuid.UUID  `json:"-"`
+	Body      string     `json:"body" validate:"required,min=1"`
+	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
 }
 
 type CommentService struct {
@@ -60,13 +61,13 @@ func (s *CommentService) Create(ctx context.Context, params CreateCommentParams)
 	s.enqueueActivity(created.OrgID.String(), "comment", created.ID.String(), "created", created.UserID.String())
 
 	// Parse @mentions and notify mentioned users
-	go s.processMentions(context.Background(), created)
+	go s.processMentions(context.Background(), created, params.ProjectID)
 
 	return created, nil
 }
 
 // processMentions extracts @name tokens from the body, resolves them to org members, and sends notifications.
-func (s *CommentService) processMentions(ctx context.Context, comment *domain.Comment) {
+func (s *CommentService) processMentions(ctx context.Context, comment *domain.Comment, projectID uuid.UUID) {
 	matches := mentionRe.FindAllStringSubmatch(comment.Body, -1)
 	if len(matches) == 0 {
 		return
@@ -112,6 +113,7 @@ func (s *CommentService) processMentions(ctx context.Context, comment *domain.Co
 			map[string]any{
 				"task_id":    comment.TaskID.String(),
 				"comment_id": comment.ID.String(),
+				"project_id": projectID.String(),
 			},
 		)
 	}

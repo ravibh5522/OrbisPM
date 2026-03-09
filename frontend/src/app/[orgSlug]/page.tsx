@@ -1,25 +1,23 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
+import { Badge, Card, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { Card, PageHeader, LoadingPage, Badge, Avatar } from "@/components/ui/shared";
-import { statusColor, priorityColor, statusLabel, formatRelative, cn } from "@/lib/utils";
+import { cn, formatRelative, priorityColor, statusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { DashboardStats, Project } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
 import {
-  FolderKanban,
-  ListTodo,
-  Users,
-  AlertTriangle,
-  Users2,
-  ArrowRight,
-  TrendingUp,
-  CheckCircle2,
-  Clock,
-  BarChart3,
+    AlertTriangle,
+    ArrowRight,
+    CheckCircle2,
+    Clock,
+    FolderKanban,
+    ListTodo,
+    TrendingUp,
+    Users2
 } from "lucide-react";
 import Link from "next/link";
-import type { DashboardStats, Project } from "@/types/domain";
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 const STATUS_COLORS: Record<string, string> = {
   todo: "#94a3b8",
@@ -103,7 +101,26 @@ export default function DashboardPage() {
     enabled: !!currentOrg,
   });
 
-  if (isLoading || !stats) return <LoadingPage />;
+  if (isLoading || !stats) return (
+    <div className="animate-pulse">
+      <div className="h-8 bg-base-300 rounded w-48 mb-2" />
+      <div className="h-4 bg-base-300 rounded w-64 mb-6" />
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-20 bg-base-200 rounded-xl border border-base-200" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="h-48 bg-base-200 rounded-xl border border-base-200" />
+        ))}
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-2 h-64 bg-base-200 rounded-xl border border-base-200" />
+        <div className="lg:col-span-3 h-64 bg-base-200 rounded-xl border border-base-200" />
+      </div>
+    </div>
+  );
 
   const statusData = Object.entries(stats.tasks_by_status || {}).map(([k, v]) => ({ name: k, value: v }));
   const priorityData = Object.entries(stats.tasks_by_priority || {}).map(([k, v]) => ({ name: k, value: v }));

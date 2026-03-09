@@ -87,6 +87,7 @@ import (
 	_ "github.com/orbispm/orbispm/docs"
 
 	"github.com/orbispm/orbispm/internal/auth"
+	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/config"
 	"github.com/orbispm/orbispm/internal/email"
 	"github.com/orbispm/orbispm/internal/eventbus"
@@ -149,6 +150,13 @@ func main() {
 		log.Warn().Err(err).Msg("failed to ping redis (continuing without cache)")
 	} else {
 		log.Info().Msg("connected to Redis")
+	}
+
+	// --- Cache Manager (Redis-backed task cache) ---
+	var cacheManager *cache.Manager
+	if cfg.CacheEnabled {
+		cacheManager = cache.NewManager(rdb)
+		log.Info().Msg("Redis cache manager enabled")
 	}
 
 	// --- Zitadel Auth Client (gRPC + OIDC) ---
@@ -269,6 +277,7 @@ func main() {
 
 	// Inject review deps into task service + project service
 	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
+	taskSvc.SetCache(cacheManager)
 	projectSvc.SetProjectTeamRepo(projectTeamRepo)
 
 	// --- Handlers (existing) ---
@@ -529,6 +538,8 @@ func main() {
 		Pool:        pool,
 		EmailSender: emailSender,
 		FrontendURL: cfg.FrontendURL,
+		Cache:       cacheManager,
+		TxManager:   txm,
 	}
 	workerMux := asynq.NewServeMux()
 	workerHandlers.RegisterAll(workerMux)

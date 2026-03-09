@@ -1,51 +1,51 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { api } from "@/lib/api"; // kept for attachment upload/download (binary ops)
-import { ConfirmDialog, Avatar } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-editor";
+import { RecurrenceBadge, RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
-import { RecurrenceSelector, RecurrenceBadge } from "@/components/tasks/recurrence-selector";
+import { Button } from "@/components/ui/button";
+import { Avatar, ConfirmDialog } from "@/components/ui/shared";
+import { api } from "@/lib/api"; // kept for attachment upload/download (binary ops)
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import {
-  Plus,
-  Trash2,
-  Copy,
-  Loader2,
-  Send,
-  Square,
-  CheckSquare,
-  Upload,
-  Clock,
-  X,
-  Tag,
-  Download,
-  Eye,
-  FileText,
-  Image as ImageIcon,
-  Paperclip,
-  Link2,
-  MessageSquare,
-  ListChecks,
-  Users,
-  Settings2,
-} from "lucide-react";
-import { statusColor, priorityColor, statusLabel, formatDate, formatRelative, cn } from "@/lib/utils";
-import type { 
-  Task, 
-  TaskStatus, 
-  TaskPriority, 
-  ProjectMember, 
-  OrgMember,
-  Checklist, 
-  Comment, 
-  Attachment, 
-  TaskDependency, 
-  TaskWatcher 
+import { cn, formatDate, formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import type {
+    Attachment,
+    Checklist,
+    Comment,
+    OrgMember,
+    ProjectMember,
+    Task,
+    TaskDependency,
+    TaskPriority,
+    TaskStatus,
+    TaskWatcher
 } from "@/types/domain";
+import {
+    CheckSquare,
+    Clock,
+    Copy,
+    Download,
+    Eye,
+    FileText,
+    Image as ImageIcon,
+    Link2,
+    ListChecks,
+    Loader2,
+    MessageSquare,
+    Paperclip,
+    Plus,
+    Send,
+    Settings2,
+    Square,
+    Tag,
+    Trash2,
+    Upload,
+    Users,
+    X,
+} from "lucide-react";
 
 const MAX_DEPTH = 3;
 
@@ -185,12 +185,22 @@ export function TaskPreviewPanel({
   // Fetch helpers
   const fetchChecklists = useCallback(async () => {
     if (!send) return;
-    try { const res = await send("checklist:list", { task_id: task.id }); setChecklistItems(res?.data || []); } catch {}
+    try {
+      const res = await send("checklist:list", { task_id: task.id });
+      const data = res?.data || [];
+      setChecklistItems(data);
+      useProjectTaskStore.getState().setChecklists(task.id, data);
+    } catch {}
   }, [send, task.id]);
 
   const fetchComments = useCallback(async () => {
     if (!send) return;
-    try { const res = await send("comment:list", { task_id: task.id }); setCommentItems(res?.data || []); } catch {}
+    try {
+      const res = await send("comment:list", { task_id: task.id });
+      const data = res?.data || [];
+      setCommentItems(data);
+      useProjectTaskStore.getState().setComments(task.id, data);
+    } catch {}
   }, [send, task.id]);
 
   const fetchAttachments = useCallback(async () => {
@@ -231,6 +241,16 @@ export function TaskPreviewPanel({
     fetchDependencies();
     fetchWatchers();
   }, [fetchChecklists, fetchComments, fetchAttachments, fetchDependencies, fetchWatchers]);
+
+  // Sync comments & checklists from Zustand store (real-time WS broadcasts)
+  const storeComments = useProjectTaskStore((s) => s.comments.get(task.id));
+  const storeChecklists = useProjectTaskStore((s) => s.checklists.get(task.id));
+  useEffect(() => {
+    if (storeComments && storeComments.length > 0) setCommentItems(storeComments);
+  }, [storeComments]);
+  useEffect(() => {
+    if (storeChecklists && storeChecklists.length > 0) setChecklistItems(storeChecklists);
+  }, [storeChecklists]);
 
   // Tab badges
   const tabs: { id: TabType; label: string; icon: React.ReactNode; badge?: number }[] = [
@@ -782,9 +802,13 @@ function ChecklistTab({
     if (!send) return;
     setCreating(true);
     try {
-      await send("checklist:create", { task_id: taskId, title });
+      const res = await send("checklist:create", { task_id: taskId, title });
       setNewTitle("");
-      onRefresh();
+      if (res?.id) {
+        useProjectTaskStore.getState().addChecklist(taskId, res);
+      } else {
+        onRefresh();
+      }
     } catch {} finally { setCreating(false); }
   };
 
@@ -792,7 +816,7 @@ function ChecklistTab({
     if (!send) return;
     try {
       await send("checklist:update", { task_id: taskId, checklist_id: id, is_checked });
-      onRefresh();
+      useProjectTaskStore.getState().updateChecklist(taskId, id, { is_checked });
     } catch {}
   };
 
@@ -800,7 +824,7 @@ function ChecklistTab({
     if (!send) return;
     try {
       await send("checklist:delete", { task_id: taskId, checklist_id: id });
-      onRefresh();
+      useProjectTaskStore.getState().removeChecklist(taskId, id);
     } catch {}
   };
 
@@ -945,9 +969,14 @@ function CommentsTab({
     if (!send) return;
     setCreating(true);
     try {
-      await send("comment:create", { task_id: taskId, body: b });
+      const res = await send("comment:create", { task_id: taskId, body: b });
       setBody("");
-      onRefresh();
+      // Broadcast excludes sender, so add comment to store directly
+      if (res?.id) {
+        useProjectTaskStore.getState().addComment(taskId, res);
+      } else {
+        onRefresh();
+      }
     } catch {} finally { setCreating(false); }
   };
 
@@ -955,7 +984,8 @@ function CommentsTab({
     if (!send) return;
     try {
       await send("comment:delete", { task_id: taskId, comment_id: id });
-      onRefresh();
+      // Broadcast excludes sender, so remove from store directly
+      useProjectTaskStore.getState().removeComment(taskId, id);
     } catch {}
   };
 

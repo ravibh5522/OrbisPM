@@ -179,6 +179,7 @@ export interface Task {
   recurrence_rule?: string | null;
   recurrence_parent_id?: string | null;
   next_occurrence?: string | null;
+  version: number;
   created_at: string;
   updated_at: string;
 }
@@ -186,6 +187,14 @@ export interface Task {
 export interface TaskTree {
   task: Task;
   children?: TaskTree[];
+}
+
+export interface TaskConflict {
+  task_id: string;
+  server_version: number;
+  server_state: Task;
+  your_changes: Record<string, unknown>;
+  resolution: "auto-merged" | "conflict";
 }
 
 export interface TaskDependency {
