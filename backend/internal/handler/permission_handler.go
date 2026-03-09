@@ -13,11 +13,12 @@ import (
 
 // PermissionHandler handles permission and role HTTP endpoints.
 type PermissionHandler struct {
-	permSvc *service.PermissionService
+	permSvc  *service.PermissionService
+	resolver *service.PermissionResolver
 }
 
-func NewPermissionHandler(permSvc *service.PermissionService) *PermissionHandler {
-	return &PermissionHandler{permSvc: permSvc}
+func NewPermissionHandler(permSvc *service.PermissionService, resolver *service.PermissionResolver) *PermissionHandler {
+	return &PermissionHandler{permSvc: permSvc, resolver: resolver}
 }
 
 // Routes registers permission routes. Mounted under /orgs/{orgId}/permissions.
@@ -75,6 +76,9 @@ func (h *PermissionHandler) AdminRoutes() chi.Router {
 // Use this to mount at a single path and avoid chi duplicate-mount panics.
 func (h *PermissionHandler) CombinedRoutes(pool *pgxpool.Pool) chi.Router {
 	r := chi.NewRouter()
+
+	// My effective permissions (current user, any scope)
+	r.Get("/my-permissions", h.MyPermissions)
 
 	// Read-only routes — available to all org members
 	r.Get("/", h.ListPermissions)
@@ -251,4 +255,37 @@ func (h *PermissionHandler) SetTeamProjectRoleMap(w http.ResponseWriter, r *http
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// MyPermissions returns the current user's effective role and permissions in the requested scope.
+// Query params: scope (org|team|project), scope_id (uuid, required for team/project).
+func (h *PermissionHandler) MyPermissions(w http.ResponseWriter, r *http.Request) {
+	if h.resolver == nil {
+		JSON(w, http.StatusServiceUnavailable, ErrorResponse{Message: "resolver not available"})
+		return
+	}
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	scope := r.URL.Query().Get("scope")
+	if scope == "" {
+		scope = "org"
+	}
+
+	var scopeIDPtr *uuid.UUID
+	if scopeIDStr := r.URL.Query().Get("scope_id"); scopeIDStr != "" {
+		id, err := uuid.Parse(scopeIDStr)
+		if err != nil {
+			JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid scope_id"})
+			return
+		}
+		scopeIDPtr = &id
+	}
+
+	result, err := h.resolver.GetEffectivePermissions(r.Context(), userID, orgID, scope, scopeIDPtr)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, result)
 }

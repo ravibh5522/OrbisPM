@@ -1,5 +1,10 @@
+import {
+  clearAuth,
+  getRefreshToken,
+  isTokenExpired,
+  saveTokens,
+} from "@/lib/auth";
 import type { AuthUser } from "@/types/domain";
-import { getRefreshToken, isTokenExpired, saveTokens, clearAuth } from "@/lib/auth";
 
 // API response shapes
 export interface ListResponse<T> {
@@ -142,7 +147,10 @@ async function request<T>(
     } catch {
       // ignore parse error
     }
-    console.error(`[API] ${method} ${path} → ${res.status} ERROR: ${msg}`, detail || "");
+    console.error(
+      `[API] ${method} ${path} → ${res.status} ERROR: ${msg}`,
+      detail || "",
+    );
     throw new ApiError(res.status, msg, detail);
   }
 
@@ -201,78 +209,98 @@ async function downloadBlob(path: string, filename: string): Promise<void> {
 
 // API namespaces
 import type {
-  Org,
-  OrgMember,
-  Team,
-  TeamMember,
-  Project,
-  ProjectMember,
-  Task,
-  TaskTree,
-  TaskDependency,
-  Checklist,
-  Comment,
-  TaskRule,
-  Notification,
-  NotificationPreference,
   ActivityLog,
-  TaskTemplate,
-  Webhook,
   APIKey,
   Attachment,
-  TaskWatcher,
-  BillingPlan,
-  OrgSubscription,
-  CustomRole,
-  ImportJob,
-  DashboardStats,
-  TeamDashboardStats,
-  ProjectDashboardStats,
   AuthTokens,
-  Permission,
-  Role,
-  ProjectTeam,
-  EffectiveMember,
-  TaskChangeRequest,
-  TaskUpdateResult,
-  TOTPRegistration,
-  MFAStatus,
   BackupCodesResponse,
+  BillingPlan,
+  Checklist,
+  Comment,
+  CustomRole,
+  DashboardStats,
+  EffectiveMember,
   IDPInfo,
   IDPStartResponse,
+  ImportJob,
+  MFAStatus,
+  Notification,
+  NotificationPreference,
   OIDCAuthorizeResponse,
+  Org,
+  OrgMember,
+  OrgSubscription,
+  Permission,
+  Project,
+  ProjectDashboardStats,
+  ProjectMember,
+  ProjectTeam,
+  Role,
+  Task,
+  TaskChangeRequest,
+  TaskDependency,
+  TaskRule,
+  TaskTemplate,
+  TaskTree,
+  TaskUpdateResult,
+  TaskWatcher,
+  Team,
+  TeamDashboardStats,
+  TeamMember,
+  TOTPRegistration,
+  Webhook,
 } from "@/types/domain";
 
 export const api = {
   // Auth (Zitadel via backend) — all /auth/* endpoints are public, skip auto-refresh
   auth: {
-    signup(email: string, password: string, name?: string): Promise<AuthTokens> {
-      return request<AuthTokens>(`${V1}/auth/signup`, {
-        method: "POST",
-        body: JSON.stringify({
-          email,
-          password,
-          name: name || undefined,
-          data: name ? { name } : undefined,
-        }),
-      }, true);
+    signup(
+      email: string,
+      password: string,
+      name?: string,
+    ): Promise<AuthTokens> {
+      return request<AuthTokens>(
+        `${V1}/auth/signup`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            email,
+            password,
+            name: name || undefined,
+            data: name ? { name } : undefined,
+          }),
+        },
+        true,
+      );
     },
     login(email: string, password: string): Promise<AuthTokens> {
-      return request<AuthTokens>(`${V1}/auth/login`, {
-        method: "POST",
-        body: JSON.stringify({ email, password }),
-      }, true);
+      return request<AuthTokens>(
+        `${V1}/auth/login`,
+        {
+          method: "POST",
+          body: JSON.stringify({ email, password }),
+        },
+        true,
+      );
     },
     refresh(refreshToken: string): Promise<AuthTokens> {
-      return request<AuthTokens>(`${V1}/auth/refresh`, {
-        method: "POST",
-        body: JSON.stringify({ refresh_token: refreshToken }),
-      }, true);
+      return request<AuthTokens>(
+        `${V1}/auth/refresh`,
+        {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        },
+        true,
+      );
     },
     getUser(): Promise<AuthUser> {
       return get(`${V1}/auth/user`);
     },
-    updateUser(data: { data?: Record<string, unknown>; email?: string; phone?: string }): Promise<AuthUser> {
+    updateUser(data: {
+      data?: Record<string, unknown>;
+      email?: string;
+      phone?: string;
+    }): Promise<AuthUser> {
       return request<AuthUser>(`${V1}/auth/user`, {
         method: "PUT",
         body: JSON.stringify(data),
@@ -283,29 +311,108 @@ export const api = {
     },
 
     // OIDC PKCE flow (public — called pre-auth)
-    oidcAuthorize(redirectUri: string, state: string): Promise<OIDCAuthorizeResponse> {
-      return request(`${V1}/auth/oidc/authorize`, { method: "POST", body: JSON.stringify({ redirect_uri: redirectUri, state }) }, true);
+    oidcAuthorize(
+      redirectUri: string,
+      state: string,
+    ): Promise<OIDCAuthorizeResponse> {
+      return request(
+        `${V1}/auth/oidc/authorize`,
+        {
+          method: "POST",
+          body: JSON.stringify({ redirect_uri: redirectUri, state }),
+        },
+        true,
+      );
     },
-    oidcCallback(code: string, redirectUri: string, codeVerifier: string): Promise<AuthTokens> {
-      return request(`${V1}/auth/oidc/callback`, { method: "POST", body: JSON.stringify({ code, redirect_uri: redirectUri, code_verifier: codeVerifier }) }, true);
+    oidcCallback(
+      code: string,
+      redirectUri: string,
+      codeVerifier: string,
+    ): Promise<AuthTokens> {
+      return request(
+        `${V1}/auth/oidc/callback`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            code,
+            redirect_uri: redirectUri,
+            code_verifier: codeVerifier,
+          }),
+        },
+        true,
+      );
     },
     oidcRefresh(refreshToken: string): Promise<AuthTokens> {
-      return request(`${V1}/auth/oidc/refresh`, { method: "POST", body: JSON.stringify({ refresh_token: refreshToken }) }, true);
+      return request(
+        `${V1}/auth/oidc/refresh`,
+        {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken }),
+        },
+        true,
+      );
     },
 
-    verifyLoginMFA(sessionId: string, sessionToken: string, method: string, code: string): Promise<AuthTokens> {
-      return request(`${V1}/auth/mfa/login-verify`, { method: "POST", body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, method, code }) }, true);
+    verifyLoginMFA(
+      sessionId: string,
+      sessionToken: string,
+      method: string,
+      code: string,
+    ): Promise<AuthTokens> {
+      return request(
+        `${V1}/auth/mfa/login-verify`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            session_id: sessionId,
+            session_token: sessionToken,
+            method,
+            code,
+          }),
+        },
+        true,
+      );
     },
-    sendOTPChallenge(sessionId: string, sessionToken: string, method: string): Promise<void> {
-      return request(`${V1}/auth/mfa/send-otp-challenge`, { method: "POST", body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, method }) }, true);
+    sendOTPChallenge(
+      sessionId: string,
+      sessionToken: string,
+      method: string,
+    ): Promise<void> {
+      return request(
+        `${V1}/auth/mfa/send-otp-challenge`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            session_id: sessionId,
+            session_token: sessionToken,
+            method,
+          }),
+        },
+        true,
+      );
     },
 
     // Social / IDP (public — no auth required)
     listIDPs(): Promise<{ idps: IDPInfo[] }> {
       return request(`${V1}/auth/idps`, { method: "GET" }, true);
     },
-    startIDPLogin(idpId: string, successUrl: string, failureUrl: string): Promise<IDPStartResponse> {
-      return request(`${V1}/auth/idp/start`, { method: "POST", body: JSON.stringify({ idp_id: idpId, success_url: successUrl, failure_url: failureUrl }) }, true);
+    startIDPLogin(
+      idpId: string,
+      successUrl: string,
+      failureUrl: string,
+    ): Promise<IDPStartResponse> {
+      return request(
+        `${V1}/auth/idp/start`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            idp_id: idpId,
+            success_url: successUrl,
+            failure_url: failureUrl,
+          }),
+        },
+        true,
+      );
     },
   },
 
@@ -344,8 +451,10 @@ export const api = {
   orgs: {
     list: () => get<ListResponse<Org>>(`${V1}/orgs`),
     get: (id: string) => get<Org>(`${V1}/orgs/${id}`),
-    create: (data: { name: string; slug: string }) => post<Org>(`${V1}/orgs`, data),
-    update: (id: string, data: Partial<Org>) => patch<Org>(`${V1}/orgs/${id}`, data),
+    create: (data: { name: string; slug: string }) =>
+      post<Org>(`${V1}/orgs`, data),
+    update: (id: string, data: Partial<Org>) =>
+      patch<Org>(`${V1}/orgs/${id}`, data),
     delete: (id: string) => del(`${V1}/orgs/${id}`),
     me: (orgId: string) => get<OrgMember>(`${V1}/orgs/${orgId}/me`),
   },
@@ -355,18 +464,23 @@ export const api = {
     upload: (orgId: string, file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      return upload<{ url: string; filename: string; mime_type: string; object: string }>(
-        `${V1}/orgs/${orgId}/uploads`,
-        fd,
-      );
+      return upload<{
+        url: string;
+        filename: string;
+        mime_type: string;
+        object: string;
+      }>(`${V1}/orgs/${orgId}/uploads`, fd);
     },
   },
 
   // Org Members
   members: {
-    list: (orgId: string) => get<ListResponse<OrgMember>>(`${V1}/orgs/${orgId}/members`),
-    add: (orgId: string, data: { email?: string; user_id?: string; role: string }) =>
-      post<OrgMember>(`${V1}/orgs/${orgId}/members`, data),
+    list: (orgId: string) =>
+      get<ListResponse<OrgMember>>(`${V1}/orgs/${orgId}/members`),
+    add: (
+      orgId: string,
+      data: { email?: string; user_id?: string; role: string },
+    ) => post<OrgMember>(`${V1}/orgs/${orgId}/members`, data),
     update: (orgId: string, userId: string, data: { role: string }) =>
       patch<OrgMember>(`${V1}/orgs/${orgId}/members/${userId}`, data),
     remove: (orgId: string, userId: string) =>
@@ -375,13 +489,16 @@ export const api = {
 
   // Teams
   teams: {
-    list: (orgId: string) => get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams`),
-    get: (orgId: string, id: string) => get<Team>(`${V1}/orgs/${orgId}/teams/${id}`),
+    list: (orgId: string) =>
+      get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams`),
+    get: (orgId: string, id: string) =>
+      get<Team>(`${V1}/orgs/${orgId}/teams/${id}`),
     create: (orgId: string, data: { name: string; description?: string }) =>
       post<Team>(`${V1}/orgs/${orgId}/teams`, data),
     update: (orgId: string, id: string, data: Partial<Team>) =>
       patch<Team>(`${V1}/orgs/${orgId}/teams/${id}`, data),
-    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/teams/${id}`),
+    delete: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/teams/${id}`),
     dashboard: (orgId: string, teamId: string) =>
       get<TeamDashboardStats>(`${V1}/orgs/${orgId}/teams/${teamId}/dashboard`),
   },
@@ -389,11 +506,24 @@ export const api = {
   // Team members
   teamMembers: {
     list: (orgId: string, teamId: string) =>
-      get<ListResponse<TeamMember>>(`${V1}/orgs/${orgId}/teams/${teamId}/members`),
-    add: (orgId: string, teamId: string, data: { user_id: string; role: string }) =>
-      post<TeamMember>(`${V1}/orgs/${orgId}/teams/${teamId}/members`, data),
-    update: (orgId: string, teamId: string, userId: string, data: { role: string }) =>
-      patch<TeamMember>(`${V1}/orgs/${orgId}/teams/${teamId}/members/${userId}`, data),
+      get<ListResponse<TeamMember>>(
+        `${V1}/orgs/${orgId}/teams/${teamId}/members`,
+      ),
+    add: (
+      orgId: string,
+      teamId: string,
+      data: { user_id: string; role: string },
+    ) => post<TeamMember>(`${V1}/orgs/${orgId}/teams/${teamId}/members`, data),
+    update: (
+      orgId: string,
+      teamId: string,
+      userId: string,
+      data: { role: string },
+    ) =>
+      patch<TeamMember>(
+        `${V1}/orgs/${orgId}/teams/${teamId}/members/${userId}`,
+        data,
+      ),
     remove: (orgId: string, teamId: string, userId: string) =>
       del(`${V1}/orgs/${orgId}/teams/${teamId}/members/${userId}`),
   },
@@ -401,25 +531,55 @@ export const api = {
   // Projects
   projects: {
     list: (orgId: string, teamId?: string) =>
-      get<ListResponse<Project>>(`${V1}/orgs/${orgId}/projects${teamId ? `?team_id=${teamId}` : ""}`),
-    get: (orgId: string, id: string) => get<Project>(`${V1}/orgs/${orgId}/projects/${id}`),
-    create: (orgId: string, data: { name: string; team_id?: string; team_ids?: string[]; description?: string }) =>
-      post<Project>(`${V1}/orgs/${orgId}/projects`, data),
+      get<ListResponse<Project>>(
+        `${V1}/orgs/${orgId}/projects${teamId ? `?team_id=${teamId}` : ""}`,
+      ),
+    get: (orgId: string, id: string) =>
+      get<Project>(`${V1}/orgs/${orgId}/projects/${id}`),
+    create: (
+      orgId: string,
+      data: {
+        name: string;
+        team_id?: string;
+        team_ids?: string[];
+        description?: string;
+      },
+    ) => post<Project>(`${V1}/orgs/${orgId}/projects`, data),
     update: (orgId: string, id: string, data: Partial<Project>) =>
       patch<Project>(`${V1}/orgs/${orgId}/projects/${id}`, data),
-    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/projects/${id}`),
+    delete: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/projects/${id}`),
     dashboard: (orgId: string, projId: string) =>
-      get<ProjectDashboardStats>(`${V1}/orgs/${orgId}/projects/${projId}/dashboard`),
+      get<ProjectDashboardStats>(
+        `${V1}/orgs/${orgId}/projects/${projId}/dashboard`,
+      ),
   },
 
   // Project members
   projectMembers: {
     list: (orgId: string, projId: string) =>
-      get<ListResponse<ProjectMember>>(`${V1}/orgs/${orgId}/projects/${projId}/members`),
-    add: (orgId: string, projId: string, data: { user_id: string; role: string }) =>
-      post<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members`, data),
-    update: (orgId: string, projId: string, userId: string, data: { role: string }) =>
-      patch<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`, data),
+      get<ListResponse<ProjectMember>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/members`,
+      ),
+    add: (
+      orgId: string,
+      projId: string,
+      data: { user_id: string; role: string },
+    ) =>
+      post<ProjectMember>(
+        `${V1}/orgs/${orgId}/projects/${projId}/members`,
+        data,
+      ),
+    update: (
+      orgId: string,
+      projId: string,
+      userId: string,
+      data: { role: string },
+    ) =>
+      patch<ProjectMember>(
+        `${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`,
+        data,
+      ),
     remove: (orgId: string, projId: string, userId: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`),
   },
@@ -427,70 +587,155 @@ export const api = {
   // Tasks
   tasks: {
     list: (orgId: string, projId: string, params?: string) =>
-      get<ListResponse<Task>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks${params ? `?${params}` : ""}`),
+      get<ListResponse<Task>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks${params ? `?${params}` : ""}`,
+      ),
     get: (orgId: string, projId: string, id: string) =>
       get<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`),
     create: (orgId: string, projId: string, data: Partial<Task>) =>
       post<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks`, data),
     update: (orgId: string, projId: string, id: string, data: Partial<Task>) =>
-      patch<TaskUpdateResult>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`, data),
+      patch<TaskUpdateResult>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`,
+        data,
+      ),
     delete: (orgId: string, projId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}`),
     tree: (orgId: string, projId: string) =>
       get<TaskTree[]>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/tree`),
-    move: (orgId: string, projId: string, id: string, data: { parent_task_id?: string; position: number }) =>
-      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}/move`, data),
-    bulkUpdate: (orgId: string, projId: string, data: { task_ids: string[]; changes: Partial<Task> }) =>
-      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/bulk`, data),
-    reorder: (orgId: string, projId: string, items: { id: string; position: number; parent_id?: string }[]) =>
-      patch<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/reorder`, { items }),
+    move: (
+      orgId: string,
+      projId: string,
+      id: string,
+      data: { parent_task_id?: string; position: number },
+    ) =>
+      post<void>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}/move`,
+        data,
+      ),
+    bulkUpdate: (
+      orgId: string,
+      projId: string,
+      data: { task_ids: string[]; changes: Partial<Task> },
+    ) => post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/bulk`, data),
+    reorder: (
+      orgId: string,
+      projId: string,
+      items: { id: string; position: number; parent_id?: string }[],
+    ) =>
+      patch<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/reorder`, {
+        items,
+      }),
     duplicate: (orgId: string, projId: string, id: string) =>
-      post<Task>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}/duplicate`),
+      post<Task>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${id}/duplicate`,
+      ),
     export: (orgId: string, projId: string) =>
-      downloadBlob(`${V1}/orgs/${orgId}/projects/${projId}/tasks/export`, "tasks_export.csv"),
+      downloadBlob(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/export`,
+        "tasks_export.csv",
+      ),
     exportCalendar: (orgId: string, projId: string) =>
-      downloadBlob(`${V1}/orgs/${orgId}/projects/${projId}/tasks/calendar.ics`, "tasks.ics"),
+      downloadBlob(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/calendar.ics`,
+        "tasks.ics",
+      ),
   },
 
   // Task dependencies
   dependencies: {
     list: (orgId: string, projId: string, taskId: string) =>
-      get<ListResponse<TaskDependency>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/dependencies`),
-    add: (orgId: string, projId: string, taskId: string, data: { depends_on_id: string; type?: string }) =>
-      post<TaskDependency>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/dependencies`, data),
+      get<ListResponse<TaskDependency>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/dependencies`,
+      ),
+    add: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      data: { depends_on_id: string; type?: string },
+    ) =>
+      post<TaskDependency>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/dependencies`,
+        data,
+      ),
     remove: (orgId: string, projId: string, taskId: string, depId: string) =>
-      del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/dependencies/${depId}`),
+      del(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/dependencies/${depId}`,
+      ),
   },
 
   // Checklists
   checklists: {
     list: (orgId: string, projId: string, taskId: string) =>
-      get<ListResponse<Checklist>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists`),
-    create: (orgId: string, projId: string, taskId: string, data: { title: string }) =>
-      post<Checklist>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists`, data),
-    update: (orgId: string, projId: string, taskId: string, id: string, data: Partial<Checklist>) =>
-      patch<Checklist>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`, data),
+      get<ListResponse<Checklist>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists`,
+      ),
+    create: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      data: { title: string },
+    ) =>
+      post<Checklist>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists`,
+        data,
+      ),
+    update: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      id: string,
+      data: Partial<Checklist>,
+    ) =>
+      patch<Checklist>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`,
+        data,
+      ),
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
-      del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`),
+      del(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/checklists/${id}`,
+      ),
   },
 
   // Comments
   comments: {
     list: (orgId: string, projId: string, taskId: string) =>
-      get<ListResponse<Comment>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments`),
-    create: (orgId: string, projId: string, taskId: string, data: { body: string; parent_id?: string }) =>
-      post<Comment>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments`, data),
+      get<ListResponse<Comment>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments`,
+      ),
+    create: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      data: { body: string; parent_id?: string },
+    ) =>
+      post<Comment>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments`,
+        data,
+      ),
     // Note: Backend does not support comment updates
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
-      del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments/${id}`),
+      del(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/comments/${id}`,
+      ),
   },
 
   // Task rules
   rules: {
     list: (orgId: string, projId: string, taskId: string) =>
-      get<ListResponse<TaskRule>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules`),
-    create: (orgId: string, projId: string, taskId: string, data: Partial<TaskRule>) =>
-      post<TaskRule>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules`, data),
+      get<ListResponse<TaskRule>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules`,
+      ),
+    create: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      data: Partial<TaskRule>,
+    ) =>
+      post<TaskRule>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules`,
+        data,
+      ),
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules/${id}`),
   },
@@ -498,7 +743,9 @@ export const api = {
   // Notifications (user-scoped, no org prefix)
   notifications: {
     list: (_orgId: string, params?: string) =>
-      get<ListResponse<Notification>>(`${V1}/notifications${params ? `?${params}` : ""}`),
+      get<ListResponse<Notification>>(
+        `${V1}/notifications${params ? `?${params}` : ""}`,
+      ),
     markRead: (_orgId: string, id: string) =>
       patch<void>(`${V1}/notifications/${id}/read`, {}),
     markAllRead: (_orgId: string) =>
@@ -508,7 +755,9 @@ export const api = {
   // Notification preferences
   notificationPreferences: {
     list: (orgId: string) =>
-      get<ListResponse<NotificationPreference>>(`${V1}/orgs/${orgId}/notification-preferences`),
+      get<ListResponse<NotificationPreference>>(
+        `${V1}/orgs/${orgId}/notification-preferences`,
+      ),
     upsert: (orgId: string, data: Partial<NotificationPreference>) =>
       put<void>(`${V1}/orgs/${orgId}/notification-preferences`, data),
   },
@@ -516,116 +765,176 @@ export const api = {
   // Activity logs
   activity: {
     list: (orgId: string, params?: string) =>
-      get<ListResponse<ActivityLog>>(`${V1}/orgs/${orgId}/activity${params ? `?${params}` : ""}`),
+      get<ListResponse<ActivityLog>>(
+        `${V1}/orgs/${orgId}/activity${params ? `?${params}` : ""}`,
+      ),
   },
 
   // Templates
   templates: {
-    list: (orgId: string) => get<ListResponse<TaskTemplate>>(`${V1}/orgs/${orgId}/templates`),
-    get: (orgId: string, id: string) => get<TaskTemplate>(`${V1}/orgs/${orgId}/templates/${id}`),
+    list: (orgId: string) =>
+      get<ListResponse<TaskTemplate>>(`${V1}/orgs/${orgId}/templates`),
+    get: (orgId: string, id: string) =>
+      get<TaskTemplate>(`${V1}/orgs/${orgId}/templates/${id}`),
     create: (orgId: string, data: Partial<TaskTemplate>) =>
       post<TaskTemplate>(`${V1}/orgs/${orgId}/templates`, data),
     update: (orgId: string, id: string, data: Partial<TaskTemplate>) =>
       patch<TaskTemplate>(`${V1}/orgs/${orgId}/templates/${id}`, data),
-    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/templates/${id}`),
+    delete: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/templates/${id}`),
     apply: (orgId: string, projId: string, templateId: string) =>
-      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/apply-template`, { template_id: templateId }),
+      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/apply-template`, {
+        template_id: templateId,
+      }),
     export: (orgId: string, id: string, name: string) =>
-      downloadBlob(`${V1}/orgs/${orgId}/templates/${id}/export`, `template_${name}.json`),
-    import: (orgId: string, data: { name: string; description?: string; structure: Record<string, unknown>; is_shared?: boolean }) =>
-      post<TaskTemplate>(`${V1}/orgs/${orgId}/templates/import`, data),
+      downloadBlob(
+        `${V1}/orgs/${orgId}/templates/${id}/export`,
+        `template_${name}.json`,
+      ),
+    import: (
+      orgId: string,
+      data: {
+        name: string;
+        description?: string;
+        structure: Record<string, unknown>;
+        is_shared?: boolean;
+      },
+    ) => post<TaskTemplate>(`${V1}/orgs/${orgId}/templates/import`, data),
   },
 
   // Webhooks
   webhooks: {
-    list: (orgId: string) => get<ListResponse<Webhook>>(`${V1}/orgs/${orgId}/webhooks`),
+    list: (orgId: string) =>
+      get<ListResponse<Webhook>>(`${V1}/orgs/${orgId}/webhooks`),
     create: (orgId: string, data: Partial<Webhook>) =>
       post<Webhook>(`${V1}/orgs/${orgId}/webhooks`, data),
     update: (orgId: string, id: string, data: Partial<Webhook>) =>
       patch<Webhook>(`${V1}/orgs/${orgId}/webhooks/${id}`, data),
-    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/webhooks/${id}`),
+    delete: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/webhooks/${id}`),
   },
 
   // API Keys
   apiKeys: {
-    list: (orgId: string) => get<ListResponse<APIKey>>(`${V1}/orgs/${orgId}/api-keys`),
-    create: (orgId: string, data: { name: string; scopes: string[]; expires_at?: string }) =>
-      post<APIKey>(`${V1}/orgs/${orgId}/api-keys`, data),
-    revoke: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/api-keys/${id}`),
+    list: (orgId: string) =>
+      get<ListResponse<APIKey>>(`${V1}/orgs/${orgId}/api-keys`),
+    create: (
+      orgId: string,
+      data: { name: string; scopes: string[]; expires_at?: string },
+    ) => post<APIKey>(`${V1}/orgs/${orgId}/api-keys`, data),
+    revoke: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/api-keys/${id}`),
   },
 
   // Attachments
   attachments: {
     list: (orgId: string, projId: string, taskId: string) =>
-      get<ListResponse<Attachment>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`),
+      get<ListResponse<Attachment>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`,
+      ),
     upload: (orgId: string, projId: string, taskId: string, file: File) => {
       const fd = new FormData();
       fd.append("file", file);
-      return upload<Attachment>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`, fd);
+      return upload<Attachment>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`,
+        fd,
+      );
     },
     download: (orgId: string, projId: string, taskId: string, id: string) =>
       get<{ attachment: Attachment; download_url: string }>(
         `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}/download`,
       ),
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
-      del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}`),
+      del(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}`,
+      ),
   },
 
   // Watchers
   watchers: {
     list: (orgId: string, projId: string, taskId: string) =>
-      get<ListResponse<TaskWatcher>>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`),
+      get<ListResponse<TaskWatcher>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`,
+      ),
     watch: (orgId: string, projId: string, taskId: string) =>
-      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`, {}),
+      post<void>(
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`,
+        {},
+      ),
     unwatch: (orgId: string, projId: string, taskId: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/watchers`),
   },
 
   // Billing
   billing: {
-    plans: (orgId: string) => get<ListResponse<BillingPlan>>(`${V1}/orgs/${orgId}/billing/plans`),
-    subscription: (orgId: string) => get<OrgSubscription>(`${V1}/orgs/${orgId}/billing/subscription`),
-    checkout: (orgId: string, data: { price_id: string; success_url?: string; cancel_url?: string }) =>
-      post<{ checkout_url: string; session_id: string }>(`${V1}/orgs/${orgId}/billing/checkout`, data),
+    plans: (orgId: string) =>
+      get<ListResponse<BillingPlan>>(`${V1}/orgs/${orgId}/billing/plans`),
+    subscription: (orgId: string) =>
+      get<OrgSubscription>(`${V1}/orgs/${orgId}/billing/subscription`),
+    checkout: (
+      orgId: string,
+      data: { price_id: string; success_url?: string; cancel_url?: string },
+    ) =>
+      post<{ checkout_url: string; session_id: string }>(
+        `${V1}/orgs/${orgId}/billing/checkout`,
+        data,
+      ),
     portal: (orgId: string) =>
       post<{ portal_url: string }>(`${V1}/orgs/${orgId}/billing/portal`, {}),
   },
 
   // Custom Roles
   customRoles: {
-    list: (orgId: string) => get<ListResponse<CustomRole>>(`${V1}/orgs/${orgId}/roles`),
+    list: (orgId: string) =>
+      get<ListResponse<CustomRole>>(`${V1}/orgs/${orgId}/roles`),
     create: (orgId: string, data: Partial<CustomRole>) =>
       post<CustomRole>(`${V1}/orgs/${orgId}/roles`, data),
     update: (orgId: string, id: string, data: Partial<CustomRole>) =>
       patch<CustomRole>(`${V1}/orgs/${orgId}/roles/${id}`, data),
-    delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/roles/${id}`),
+    delete: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/roles/${id}`),
   },
 
   // Import
   import: {
-    start: (orgId: string, projId: string, file: File, columnMapping: Record<string, string>) => {
+    start: (
+      orgId: string,
+      projId: string,
+      file: File,
+      columnMapping: Record<string, string>,
+    ) => {
       const fd = new FormData();
       fd.append("file", file);
       fd.append("column_mapping", JSON.stringify(columnMapping));
-      return upload<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/imports`, fd);
+      return upload<ImportJob>(
+        `${V1}/orgs/${orgId}/projects/${projId}/imports`,
+        fd,
+      );
     },
     status: (orgId: string, projId: string, jobId: string) =>
       get<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/imports/${jobId}`),
     list: (orgId: string, projId: string) =>
-      get<ListResponse<ImportJob>>(`${V1}/orgs/${orgId}/projects/${projId}/imports`),
+      get<ListResponse<ImportJob>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/imports`,
+      ),
   },
 
   // Search
   search: {
     tasks: (orgId: string, query: string, limit = 20) =>
-      get<ListResponse<Task>>(`${V1}/orgs/${orgId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
+      get<ListResponse<Task>>(
+        `${V1}/orgs/${orgId}/search?q=${encodeURIComponent(query)}&limit=${limit}`,
+      ),
   },
 
   // Dashboard
   dashboard: {
-    stats: (orgId: string) => get<DashboardStats>(`${V1}/orgs/${orgId}/dashboard/stats`),
+    stats: (orgId: string) =>
+      get<DashboardStats>(`${V1}/orgs/${orgId}/dashboard/stats`),
     myTasks: (orgId: string, limit = 50, offset = 0) =>
-      get<ListResponse<Task>>(`${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`),
+      get<ListResponse<Task>>(
+        `${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`,
+      ),
   },
 
   // Presence (real-time indicators)
@@ -637,39 +946,85 @@ export const api = {
         resource_id: string;
         display_name?: string;
         avatar_url?: string;
-      }
+      },
     ) => post<void>(`${V1}/orgs/${orgId}/presence/heartbeat`, params),
 
-    get: (orgId: string, resourceType: "task" | "project", resourceId: string) =>
-      get<{ user_id: string; display_name?: string; avatar_url?: string; viewing_since: string }[]>(
-        `${V1}/orgs/${orgId}/presence?resource_type=${resourceType}&resource_id=${resourceId}`
+    get: (
+      orgId: string,
+      resourceType: "task" | "project",
+      resourceId: string,
+    ) =>
+      get<
+        {
+          user_id: string;
+          display_name?: string;
+          avatar_url?: string;
+          viewing_since: string;
+        }[]
+      >(
+        `${V1}/orgs/${orgId}/presence?resource_type=${resourceType}&resource_id=${resourceId}`,
       ),
   },
 
   // --- Permission System ---
   permissions: {
     list: (orgId: string, scope?: string) =>
-      get<Permission[]>(`${V1}/orgs/${orgId}/permissions${scope ? `?scope=${scope}` : ""}`),
+      get<Permission[]>(
+        `${V1}/orgs/${orgId}/permissions${scope ? `?scope=${scope}` : ""}`,
+      ),
     roles: {
       list: (orgId: string, scope?: string) =>
-        get<Role[]>(`${V1}/orgs/${orgId}/permissions/roles${scope ? `?scope=${scope}` : ""}`),
+        get<Role[]>(
+          `${V1}/orgs/${orgId}/permissions/roles${scope ? `?scope=${scope}` : ""}`,
+        ),
       get: (orgId: string, roleId: string) =>
         get<Role>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`),
-      create: (orgId: string, data: { scope: string; slug: string; name: string; description?: string }) =>
-        post<Role>(`${V1}/orgs/${orgId}/permissions/roles`, data),
-      update: (orgId: string, roleId: string, data: { name?: string; description?: string }) =>
-        patch<Role>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`, data),
+      create: (
+        orgId: string,
+        data: {
+          scope: string;
+          slug: string;
+          name: string;
+          description?: string;
+        },
+      ) => post<Role>(`${V1}/orgs/${orgId}/permissions/roles`, data),
+      update: (
+        orgId: string,
+        roleId: string,
+        data: { name?: string; description?: string },
+      ) => patch<Role>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`, data),
       delete: (orgId: string, roleId: string) =>
         del(`${V1}/orgs/${orgId}/permissions/roles/${roleId}`),
-      setPermissions: (orgId: string, roleId: string, permissionIds: string[]) =>
-        put<void>(`${V1}/orgs/${orgId}/permissions/roles/${roleId}/permissions`, { permission_ids: permissionIds }),
+      setPermissions: (
+        orgId: string,
+        roleId: string,
+        permissionIds: string[],
+      ) =>
+        put<void>(
+          `${V1}/orgs/${orgId}/permissions/roles/${roleId}/permissions`,
+          { permission_ids: permissionIds },
+        ),
     },
     teamProjectRoleMap: {
       get: (orgId: string) =>
-        get<Record<string, string>>(`${V1}/orgs/${orgId}/permissions/team-project-role-map`),
+        get<Record<string, string>>(
+          `${V1}/orgs/${orgId}/permissions/team-project-role-map`,
+        ),
       set: (orgId: string, roleMap: Record<string, string>) =>
-        put<void>(`${V1}/orgs/${orgId}/permissions/team-project-role-map`, roleMap),
+        put<void>(
+          `${V1}/orgs/${orgId}/permissions/team-project-role-map`,
+          roleMap,
+        ),
     },
+    myPermissions: (orgId: string, scope: string, scopeId?: string) =>
+      get<{
+        scope: string;
+        scope_id?: string;
+        role: string;
+        permissions: string[];
+      }>(
+        `${V1}/orgs/${orgId}/permissions/my-permissions?scope=${scope}${scopeId ? `&scope_id=${scopeId}` : ""}`,
+      ),
   },
 
   // --- Project Teams ---
@@ -677,46 +1032,74 @@ export const api = {
     list: (orgId: string, projId: string) =>
       get<ProjectTeam[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams`),
     link: (orgId: string, projId: string, teamIds: string[]) =>
-      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/teams`, { team_ids: teamIds }),
+      post<void>(`${V1}/orgs/${orgId}/projects/${projId}/teams`, {
+        team_ids: teamIds,
+      }),
     unlink: (orgId: string, projId: string, teamId: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/teams/${teamId}`),
     eligibleMembers: (orgId: string, projId: string) =>
-      get<EffectiveMember[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams/eligible-members`),
+      get<EffectiveMember[]>(
+        `${V1}/orgs/${orgId}/projects/${projId}/teams/eligible-members`,
+      ),
   },
 
   // --- Change Requests ---
   changeRequests: {
-    listByTask: (orgId: string, projId: string, taskId: string, status?: string) =>
+    listByTask: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      status?: string,
+    ) =>
       get<TaskChangeRequest[]>(
-        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/change-requests${status ? `?status=${status}` : ""}`
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/change-requests${status ? `?status=${status}` : ""}`,
       ),
-    create: (orgId: string, projId: string, taskId: string, data: { changes: Record<string, unknown>; reason?: string }) =>
+    create: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      data: { changes: Record<string, unknown>; reason?: string },
+    ) =>
       post<TaskChangeRequest>(
         `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/change-requests`,
-        data
+        data,
       ),
     listByProject: (orgId: string, projId: string, params?: string) =>
       get<ListResponse<TaskChangeRequest>>(
-        `${V1}/orgs/${orgId}/projects/${projId}/change-requests${params ? `?${params}` : ""}`
+        `${V1}/orgs/${orgId}/projects/${projId}/change-requests${params ? `?${params}` : ""}`,
       ),
     approve: (orgId: string, crId: string, note?: string) =>
-      post<TaskChangeRequest>(`${V1}/orgs/${orgId}/change-requests/${crId}/approve`, { note: note || "" }),
+      post<TaskChangeRequest>(
+        `${V1}/orgs/${orgId}/change-requests/${crId}/approve`,
+        { note: note || "" },
+      ),
     reject: (orgId: string, crId: string, note?: string) =>
-      post<TaskChangeRequest>(`${V1}/orgs/${orgId}/change-requests/${crId}/reject`, { note: note || "" }),
+      post<TaskChangeRequest>(
+        `${V1}/orgs/${orgId}/change-requests/${crId}/reject`,
+        { note: note || "" },
+      ),
     attachments: {
       list: (orgId: string, crId: string) =>
-        get<ListResponse<Attachment>>(`${V1}/orgs/${orgId}/change-requests/${crId}/attachments`),
-      create: (orgId: string, crId: string, data: { filename: string; file_size: number; mime_type: string }) =>
+        get<ListResponse<Attachment>>(
+          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments`,
+        ),
+      create: (
+        orgId: string,
+        crId: string,
+        data: { filename: string; file_size: number; mime_type: string },
+      ) =>
         post<{ attachment: Attachment; upload_url: string }>(
           `${V1}/orgs/${orgId}/change-requests/${crId}/attachments`,
-          data
+          data,
         ),
       download: (orgId: string, crId: string, attachmentId: string) =>
         get<{ attachment: Attachment; download_url: string }>(
-          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}/download`
+          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}/download`,
         ),
       delete: (orgId: string, crId: string, attachmentId: string) =>
-        del(`${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}`),
+        del(
+          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}`,
+        ),
     },
   },
 };

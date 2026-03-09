@@ -215,6 +215,56 @@ func (r *PermissionResolver) roleHasPermission(ctx context.Context, orgID uuid.U
 	return false, nil
 }
 
+// EffectivePermissionsResult is the response shape for GetEffectivePermissions.
+type EffectivePermissionsResult struct {
+	Scope       string   `json:"scope"`
+	ScopeID     string   `json:"scope_id,omitempty"`
+	Role        string   `json:"role"`
+	Permissions []string `json:"permissions"` // "resource.action" strings
+}
+
+// GetEffectivePermissions returns the user's effective role and all granted permissions in the given scope.
+func (r *PermissionResolver) GetEffectivePermissions(ctx context.Context, userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID) (*EffectivePermissionsResult, error) {
+	effectiveRole, err := r.GetEffectiveRole(ctx, userID, orgID, scope, scopeID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &EffectivePermissionsResult{
+		Scope: scope,
+		Role:  effectiveRole,
+	}
+	if scopeID != nil {
+		result.ScopeID = scopeID.String()
+	}
+
+	// Owner gets everything — return wildcard indicator
+	if effectiveRole == domain.RoleOrgOwner {
+		result.Permissions = []string{"*.*"}
+		return result, nil
+	}
+
+	// Look up the DB role and its permissions
+	role, err := r.roleRepo.GetBySlug(ctx, orgID, scope, effectiveRole)
+	if err != nil {
+		// Role not found in DB — return empty permissions rather than failing
+		result.Permissions = []string{}
+		return result, nil
+	}
+
+	perms, err := r.roleRepo.GetPermissions(ctx, role.ID)
+	if err != nil {
+		return nil, fmt.Errorf("get permissions for role: %w", err)
+	}
+
+	grantedPerms := make([]string, 0, len(perms))
+	for _, p := range perms {
+		grantedPerms = append(grantedPerms, p.Resource+"."+p.Action)
+	}
+	result.Permissions = grantedPerms
+	return result, nil
+}
+
 // getTeamProjectRoleMap returns the team→project role mapping for an org.
 func (r *PermissionResolver) getTeamProjectRoleMap(ctx context.Context, orgID uuid.UUID) (map[string]string, error) {
 	org, err := r.orgRepo.GetByID(ctx, orgID)

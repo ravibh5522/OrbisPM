@@ -313,7 +313,7 @@ func main() {
 	contactHandler := handler.NewContactHandler(contactRepo)
 
 	// --- Handlers (RBAC / Review) ---
-	permHandler := handler.NewPermissionHandler(permSvc)
+	permHandler := handler.NewPermissionHandler(permSvc, permResolver)
 	projectTeamHandler := handler.NewProjectTeamHandler(projectTeamSvc)
 	changeReqHandler := handler.NewChangeRequestHandler(changeReqSvc)
 

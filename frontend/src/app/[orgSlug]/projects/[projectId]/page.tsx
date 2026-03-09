@@ -1,52 +1,61 @@
 "use client";
 
-import { useState, use, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { api } from "@/lib/api";
-import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { TaskColumns } from "@/components/tasks/task-columns";
-import { TaskListView } from "@/components/tasks/task-list-view";
-import { TaskTreeView } from "@/components/tasks/task-tree-view";
-import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectSettings } from "@/components/projects/project-settings";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
-import {
-  ArrowLeft,
-  Settings,
-  Users,
-  ListTodo,
-  Columns3,
-  List,
-  GitFork,
-  Trash2,
-  UserPlus,
-  Upload,
-  Download,
-  CalendarDays,
-  Link2,
-  Unlink,
-  GitPullRequest,
-} from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
+import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
+import { TaskColumns } from "@/components/tasks/task-columns";
+import { TaskListView } from "@/components/tasks/task-list-view";
+import { TaskTreeView } from "@/components/tasks/task-tree-view";
+import { Button } from "@/components/ui/button";
+import { Avatar, Card, LoadingPage } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
+import { api } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import { useUIStore } from "@/stores/ui-store";
+import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  CalendarDays,
+  Columns3,
+  Download,
+  GitFork,
+  GitPullRequest,
+  Link2,
+  List,
+  ListTodo,
+  Settings,
+  Trash2,
+  Unlink,
+  Upload,
+  UserPlus,
+  Users,
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { use, useCallback, useEffect, useState } from "react";
 
-export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlug: string; projectId: string }> }) {
+export default function ProjectDetailPage({
+  params,
+}: {
+  params: Promise<{ orgSlug: string; projectId: string }>;
+}) {
   const { projectId } = use(params);
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialFocusTaskId = searchParams.get("task") || undefined;
-  const [openedTaskId, setOpenedTaskId] = useState<string | undefined>(undefined);
+  const [openedTaskId, setOpenedTaskId] = useState<string | undefined>(
+    undefined,
+  );
   const focusTaskId = openedTaskId || initialFocusTaskId;
   const currentOrg = useAuthStore((s) => s.currentOrg);
-  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "teams" | "reviews" | "dashboard" | "settings">("tasks");
-  const [taskView, setTaskView] = useState<"columns" | "list" | "tree">("columns");
+  const [activeTab, setActiveTab] = useState<
+    "tasks" | "members" | "teams" | "reviews" | "dashboard" | "settings"
+  >("tasks");
+  const [taskView, setTaskView] = useState<"columns" | "list" | "tree">(
+    "columns",
+  );
   const [importOpen, setImportOpen] = useState(false);
   const { can } = usePermissions();
   const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
@@ -80,41 +89,72 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
   // Set breadcrumb in top bar
   useEffect(() => {
     if (project && currentOrg) {
-      setBreadcrumb({ label: project.name, backHref: `/${currentOrg.slug}/projects` });
+      setBreadcrumb({
+        label: project.name,
+        backHref: `/${currentOrg.slug}/projects`,
+      });
     }
     return () => setBreadcrumb(null);
   }, [project, currentOrg, setBreadcrumb]);
 
   if (projLoading) return <LoadingPage />;
-  if (!project) return <div className="text-center py-12">Project not found</div>;
+  if (!project)
+    return <div className="text-center py-12">Project not found</div>;
 
   return (
     <div className="h-full flex flex-col">
       {/* Single consolidated toolbar row */}
       <div className="flex items-center justify-between gap-2 py-1.5 border-b border-base-200 mb-2 flex-wrap">
         {/* Tabs */}
-        <div role="tablist" className="tabs tabs-boxed bg-base-200/50 flex-shrink-0">
-          <button role="tab" className={`tab tab-sm ${activeTab === "dashboard" ? "tab-active" : ""}`} onClick={() => setActiveTab("dashboard")}>
+        <div
+          role="tablist"
+          className="tabs tabs-boxed bg-base-200/50 flex-shrink-0"
+        >
+          <button
+            role="tab"
+            className={`tab tab-sm ${activeTab === "dashboard" ? "tab-active" : ""}`}
+            onClick={() => setActiveTab("dashboard")}
+          >
             <ListTodo className="w-3.5 h-3.5 mr-1" /> Dashboard
           </button>
-          <button role="tab" className={`tab tab-sm ${activeTab === "tasks" ? "tab-active" : ""}`} onClick={() => setActiveTab("tasks")}>
+          <button
+            role="tab"
+            className={`tab tab-sm ${activeTab === "tasks" ? "tab-active" : ""}`}
+            onClick={() => setActiveTab("tasks")}
+          >
             <Columns3 className="w-3.5 h-3.5 mr-1" /> Tasks
           </button>
           {can("projects", "manage_members") && (
-            <button role="tab" className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`} onClick={() => setActiveTab("members")}>
+            <button
+              role="tab"
+              className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`}
+              onClick={() => setActiveTab("members")}
+            >
               <Users className="w-3.5 h-3.5 mr-1" /> Members
             </button>
           )}
           {can("projects", "manage_members") && (
-            <button role="tab" className={`tab tab-sm ${activeTab === "teams" ? "tab-active" : ""}`} onClick={() => setActiveTab("teams")}>
+            <button
+              role="tab"
+              className={`tab tab-sm ${activeTab === "teams" ? "tab-active" : ""}`}
+              onClick={() => setActiveTab("teams")}
+            >
               <Link2 className="w-3.5 h-3.5 mr-1" /> Teams
             </button>
           )}
-          <button role="tab" className={`tab tab-sm ${activeTab === "reviews" ? "tab-active" : ""}`} onClick={() => setActiveTab("reviews")}>
+          <button
+            role="tab"
+            className={`tab tab-sm ${activeTab === "reviews" ? "tab-active" : ""}`}
+            onClick={() => setActiveTab("reviews")}
+          >
             <GitPullRequest className="w-3.5 h-3.5 mr-1" /> Reviews
           </button>
           {can("settings", "update") && (
-            <button role="tab" className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`} onClick={() => setActiveTab("settings")}>
+            <button
+              role="tab"
+              className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`}
+              onClick={() => setActiveTab("settings")}
+            >
               <Settings className="w-3.5 h-3.5 mr-1" /> Settings
             </button>
           )}
@@ -123,16 +163,41 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
         {/* Actions: Import/Export + View toggle (only visible when Tasks tab is active) */}
         {activeTab === "tasks" && (
           <div className="flex items-center gap-2 flex-shrink-0">
-            <Button variant="outline" size="xs" onClick={() => setImportOpen(true)}>
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => setImportOpen(true)}
+            >
               <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
             </Button>
             <div className="dropdown dropdown-end">
-              <div tabIndex={0} role="button" className="btn btn-outline btn-xs">
+              <div
+                tabIndex={0}
+                role="button"
+                className="btn btn-outline btn-xs"
+              >
                 <Download className="w-3.5 h-3.5 mr-1" /> Export
               </div>
-              <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-44">
-                <li><a onClick={() => api.tasks.export(currentOrg!.id, projectId)}><Download className="w-4 h-4" /> CSV</a></li>
-                <li><a onClick={() => api.tasks.exportCalendar(currentOrg!.id, projectId)}><CalendarDays className="w-4 h-4" /> iCal (.ics)</a></li>
+              <ul
+                tabIndex={0}
+                className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-44"
+              >
+                <li>
+                  <a
+                    onClick={() => api.tasks.export(currentOrg!.id, projectId)}
+                  >
+                    <Download className="w-4 h-4" /> CSV
+                  </a>
+                </li>
+                <li>
+                  <a
+                    onClick={() =>
+                      api.tasks.exportCalendar(currentOrg!.id, projectId)
+                    }
+                  >
+                    <CalendarDays className="w-4 h-4" /> iCal (.ics)
+                  </a>
+                </li>
               </ul>
             </div>
             <div className="join">
@@ -210,7 +275,11 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
 
       {/* Members tab */}
       {activeTab === "members" && (
-        <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
+        <ProjectMembersSection
+          orgId={currentOrg!.id}
+          projectId={projectId}
+          members={members?.data || []}
+        />
       )}
 
       {/* Teams tab */}
@@ -220,7 +289,14 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
 
       {/* Reviews tab */}
       {activeTab === "reviews" && (
-        <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={(members?.data || []) as unknown as import("@/types/domain").OrgMember[]} />
+        <ProjectChangeRequests
+          orgId={currentOrg!.id}
+          projectId={projectId}
+          members={
+            (members?.data ||
+              []) as unknown as import("@/types/domain").OrgMember[]
+          }
+        />
       )}
 
       {/* Settings tab */}
@@ -251,13 +327,17 @@ function ProjectMembersSection({
     queryFn: () => api.members.list(orgId),
   });
 
-  const { data: customRoles } = useQuery({
-    queryKey: ["custom-roles", orgId],
-    queryFn: () => api.customRoles.list(orgId),
+  const { data: projectRoles } = useQuery({
+    queryKey: ["permissions-roles", orgId, "project"],
+    queryFn: () => api.permissions.roles.list(orgId, "project"),
   });
 
   const addMutation = useMutation({
-    mutationFn: () => api.projectMembers.add(orgId, projectId, { user_id: addUserId, role: addRole }),
+    mutationFn: () =>
+      api.projectMembers.add(orgId, projectId, {
+        user_id: addUserId,
+        role: addRole,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
       setAddUserId("");
@@ -266,24 +346,31 @@ function ProjectMembersSection({
   });
 
   const removeMutation = useMutation({
-    mutationFn: (userId: string) => api.projectMembers.remove(orgId, projectId, userId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] }),
+    mutationFn: (userId: string) =>
+      api.projectMembers.remove(orgId, projectId, userId),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] }),
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.projectMembers.update(orgId, projectId, userId, { role }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] }),
   });
 
   const memberIds = new Set(members.map((m) => m.user_id));
-  const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
-  const roleOptions = [
-    { value: "lead", label: "Lead" },
-    { value: "member", label: "Member" },
-    { value: "viewer", label: "Viewer" },
-    ...(customRoles?.data || []).map((r) => ({ value: r.name, label: r.name })),
-  ];
+  const availableOrg = (orgMembers?.data || []).filter(
+    (m) => !memberIds.has(m.user_id),
+  );
+  const roleOptions =
+    projectRoles && projectRoles.length > 0
+      ? projectRoles.map((r) => ({ value: r.slug, label: r.name }))
+      : [
+          { value: "lead", label: "Lead" },
+          { value: "member", label: "Member" },
+          { value: "viewer", label: "Viewer" },
+        ];
 
   return (
     <div className="space-y-4">
@@ -292,10 +379,15 @@ function ProjectMembersSection({
         <h3 className="font-semibold mb-3">Add Project Member</h3>
         <form
           className="flex gap-2 items-end"
-          onSubmit={(e) => { e.preventDefault(); if (addUserId) addMutation.mutate(); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (addUserId) addMutation.mutate();
+          }}
         >
           <div className="flex-1">
-            <label className="label"><span className="label-text text-xs">Org Member</span></label>
+            <label className="label">
+              <span className="label-text text-xs">Org Member</span>
+            </label>
             <select
               className="select select-bordered select-sm w-full"
               value={addUserId}
@@ -303,19 +395,34 @@ function ProjectMembersSection({
             >
               <option value="">Select member…</option>
               {availableOrg.map((m) => (
-                <option key={m.user_id} value={m.user_id}>{m.display_name || m.email || m.user_id.slice(0, 16)}</option>
+                <option key={m.user_id} value={m.user_id}>
+                  {m.display_name || m.email || m.user_id.slice(0, 16)}
+                </option>
               ))}
             </select>
           </div>
           <div>
-            <label className="label"><span className="label-text text-xs">Role</span></label>
-            <select className="select select-bordered select-sm" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
+            <label className="label">
+              <span className="label-text text-xs">Role</span>
+            </label>
+            <select
+              className="select select-bordered select-sm"
+              value={addRole}
+              onChange={(e) => setAddRole(e.target.value)}
+            >
               {roleOptions.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
+                <option key={r.value} value={r.value}>
+                  {r.label}
+                </option>
               ))}
             </select>
           </div>
-          <Button type="submit" size="sm" loading={addMutation.isPending} disabled={!addUserId}>
+          <Button
+            type="submit"
+            size="sm"
+            loading={addMutation.isPending}
+            disabled={!addUserId}
+          >
             <UserPlus className="w-4 h-4" /> Add
           </Button>
         </form>
@@ -324,7 +431,9 @@ function ProjectMembersSection({
       {/* Members table */}
       <Card>
         {members.length === 0 ? (
-          <p className="text-center py-6 text-base-content/50">No project members yet</p>
+          <p className="text-center py-6 text-base-content/50">
+            No project members yet
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="table">
@@ -342,10 +451,24 @@ function ProjectMembersSection({
                   <tr key={m.user_id}>
                     <td>
                       <div className="flex items-center gap-2">
-                        <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} src={m.avatar_url} size="sm" />
+                        <Avatar
+                          name={
+                            m.display_name || m.email || m.user_id.slice(0, 4)
+                          }
+                          src={m.avatar_url}
+                          size="sm"
+                        />
                         <div>
-                          <span className="text-sm font-medium">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
-                          {m.email && m.display_name && <span className="block text-xs text-base-content/50">{m.email}</span>}
+                          <span className="text-sm font-medium">
+                            {m.display_name ||
+                              m.email ||
+                              m.user_id.slice(0, 12)}
+                          </span>
+                          {m.email && m.display_name && (
+                            <span className="block text-xs text-base-content/50">
+                              {m.email}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -353,11 +476,18 @@ function ProjectMembersSection({
                       <select
                         className="select select-ghost select-xs capitalize"
                         value={m.role}
-                        onChange={(e) => updateRoleMutation.mutate({ userId: m.user_id, role: e.target.value })}
+                        onChange={(e) =>
+                          updateRoleMutation.mutate({
+                            userId: m.user_id,
+                            role: e.target.value,
+                          })
+                        }
                         disabled={m.source === "team"}
                       >
                         {roleOptions.map((r) => (
-                          <option key={r.value} value={r.value}>{r.label}</option>
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
                         ))}
                       </select>
                     </td>
@@ -367,16 +497,24 @@ function ProjectMembersSection({
                           Team: {m.source_team_name || "—"}
                         </span>
                       ) : (
-                        <span className="badge badge-primary badge-sm">Direct</span>
+                        <span className="badge badge-primary badge-sm">
+                          Direct
+                        </span>
                       )}
                     </td>
-                    <td className="text-sm text-base-content/60">{formatDate(m.joined_at)}</td>
+                    <td className="text-sm text-base-content/60">
+                      {formatDate(m.joined_at)}
+                    </td>
                     <td>
                       <button
                         className="btn btn-ghost btn-xs text-error"
                         onClick={() => removeMutation.mutate(m.user_id)}
                         disabled={m.source === "team"}
-                        title={m.source === "team" ? "Inherited from team — unlink team to remove" : "Remove member"}
+                        title={
+                          m.source === "team"
+                            ? "Inherited from team — unlink team to remove"
+                            : "Remove member"
+                        }
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -394,7 +532,13 @@ function ProjectMembersSection({
 
 /* ─── Project Teams Section ─── */
 
-function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: string }) {
+function ProjectTeamsSection({
+  orgId,
+  projectId,
+}: {
+  orgId: string;
+  projectId: string;
+}) {
   const qc = useQueryClient();
   const [showLink, setShowLink] = useState(false);
 
@@ -411,7 +555,8 @@ function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: s
   });
 
   const linkMutation = useMutation({
-    mutationFn: (teamIds: string[]) => api.projectTeams.link(orgId, projectId, teamIds),
+    mutationFn: (teamIds: string[]) =>
+      api.projectTeams.link(orgId, projectId, teamIds),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
       qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
@@ -420,15 +565,20 @@ function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: s
   });
 
   const unlinkMutation = useMutation({
-    mutationFn: (teamId: string) => api.projectTeams.unlink(orgId, projectId, teamId),
+    mutationFn: (teamId: string) =>
+      api.projectTeams.unlink(orgId, projectId, teamId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
       qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
     },
   });
 
-  const linkedIds = new Set((linkedTeams || []).map((t: ProjectTeam) => t.team_id));
-  const availableTeams = (allTeams?.data || []).filter((t: Team) => !linkedIds.has(t.id));
+  const linkedIds = new Set(
+    (linkedTeams || []).map((t: ProjectTeam) => t.team_id),
+  );
+  const availableTeams = (allTeams?.data || []).filter(
+    (t: Team) => !linkedIds.has(t.id),
+  );
 
   return (
     <div className="space-y-4">
@@ -436,14 +586,18 @@ function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: s
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="font-semibold">Linked Teams</h3>
-            <p className="text-sm text-base-content/60">Teams linked to this project. Team members inherit project roles based on the role mapping.</p>
+            <p className="text-sm text-base-content/60">
+              Teams linked to this project. Team members inherit project roles
+              based on the role mapping.
+            </p>
           </div>
-          <Button 
-            size="sm" 
+          <Button
+            size="sm"
             onClick={() => setShowLink(!showLink)}
             variant={showLink ? "secondary" : "primary"}
           >
-            <Link2 className="w-4 h-4 mr-1" /> {showLink ? "Cancel" : "Link Team"}
+            <Link2 className="w-4 h-4 mr-1" />{" "}
+            {showLink ? "Cancel" : "Link Team"}
           </Button>
         </div>
 
@@ -481,9 +635,13 @@ function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: s
         )}
 
         {isLoading ? (
-          <div className="flex justify-center py-4"><div className="loading loading-spinner" /></div>
+          <div className="flex justify-center py-4">
+            <div className="loading loading-spinner" />
+          </div>
         ) : !linkedTeams || linkedTeams.length === 0 ? (
-          <p className="text-center py-6 text-base-content/50">No teams linked yet</p>
+          <p className="text-center py-6 text-base-content/50">
+            No teams linked yet
+          </p>
         ) : (
           <div className="overflow-x-auto">
             <table className="table">
@@ -497,16 +655,26 @@ function ProjectTeamsSection({ orgId, projectId }: { orgId: string; projectId: s
               <tbody>
                 {linkedTeams.map((pt: ProjectTeam) => (
                   <tr key={pt.team_id}>
-                    <td className="font-medium">{pt.team_name || pt.team_id.slice(0, 12)}</td>
+                    <td className="font-medium">
+                      {pt.team_name || pt.team_id.slice(0, 12)}
+                    </td>
                     <td className="text-sm text-base-content/60">
-                      {pt.added_at ? new Date(pt.added_at).toLocaleDateString() : "—"}
+                      {pt.added_at
+                        ? new Date(pt.added_at).toLocaleDateString()
+                        : "—"}
                     </td>
                     <td>
                       <button
                         className="btn btn-ghost btn-xs text-error"
                         onClick={() => unlinkMutation.mutate(pt.team_id)}
-                        disabled={unlinkMutation.isPending || (linkedTeams.length <= 1)}
-                        title={linkedTeams.length <= 1 ? "Cannot unlink the last team" : "Unlink team"}
+                        disabled={
+                          unlinkMutation.isPending || linkedTeams.length <= 1
+                        }
+                        title={
+                          linkedTeams.length <= 1
+                            ? "Cannot unlink the last team"
+                            : "Unlink team"
+                        }
                       >
                         <Unlink className="w-3 h-3" />
                       </button>
