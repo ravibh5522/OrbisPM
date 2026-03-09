@@ -1,2 +1,96 @@
-orbispm/frontend/node_modules/
-orbispm/frontend/.next/
+# ============================================================
+# Root .gitignore — OrbisPM Monorepo
+# ============================================================
+
+# ── Environment & Secrets ───────────────────────────────────
+!.env
+!.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets/
+
+# ── Frontend — Next.js ──────────────────────────────────────
+frontend/.next/
+frontend/out/
+frontend/dist/
+frontend/build/
+frontend/node_modules/
+frontend/.vercel/
+frontend/.turbo/
+frontend/next-env.d.ts
+frontend/.eslintcache
+frontend/.cache/
+frontend/storybook-static/
+
+# ── Backend — Go ────────────────────────────────────────────
+backend/bin/
+backend/dist/
+backend/vendor/
+backend/*.exe
+backend/*.test
+backend/coverage.out
+backend/coverage.html
+backend/cpu.prof
+backend/mem.prof
+backend/.air/
+tmp/
+
+# ── Database ────────────────────────────────────────────────
+*.sql.bak
+db/data/
+postgres-data/
+redis-data/
+minio-data/
+
+# ── Docker ──────────────────────────────────────────────────
+docker-compose.override.yml
+.docker/
+
+# ── IDE & Editors ───────────────────────────────────────────
+.vscode/settings.json
+.vscode/launch.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Logs & Temp ─────────────────────────────────────────────
+*.log
+*.log.*
+logs/
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# ── OS ──────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+desktop.ini
+
+# ── Kong / Gateway ──────────────────────────────────────────
+kong/logs/
+
+# ── Zitadel ─────────────────────────────────────────────────
+zitadel-data/
+
+# ── Misc ─────────────────────────────────────────────────────
+*.bak
+*.backup
+*.tmp
+.cache/
+scripts/__pycache__/
+scripts/*.pyc
+
+# ── Test artifacts ──────────────────────────────────────────
+jest-results/
+coverage/
+.nyc_output/

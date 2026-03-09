@@ -1,2 +1,42 @@
+# ============================================================
+# Frontend .gitignore — Next.js 15 (App Router)
+# ============================================================
+
+# Dependencies
 node_modules/
-/node_modules
+.pnp
+.pnp.js
+.yarn/install-state.gz
+
+# Next.js build output & cache — ALL of it
+.next/
+out/
+dist/
+build/
+
+# Vercel / Turbo
+.vercel/
+.turbo/
+
+# TypeScript build info
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment
+!.env
+!.env.*
+!.env.example
+
+# ESLint cache
+.eslintcache
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Storybook
+storybook-static/
+
