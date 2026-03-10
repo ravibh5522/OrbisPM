@@ -1,34 +1,34 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
-import Link from "next/link";
-import { useEffect } from "react";
-import { useOrgSocket } from "@/hooks/use-org-socket";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore, THEMES } from "@/stores/ui-store";
-import { useRequireAuth } from "@/hooks/use-auth-guard";
-import { api } from "@/lib/api";
 import { Avatar } from "@/components/ui/shared";
-import {
-  LayoutDashboard,
-  FolderKanban,
-  ListTodo,
-  Users,
-  Bell,
-  FileText,
-  Search,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  LogOut,
-  Palette,
-  Activity,
-  ChevronDown,
-  UserCircle,
-  Building2,
-} from "lucide-react";
-import type { OrgRole } from "@/types/domain";
+import { useRequireAuth } from "@/hooks/use-auth-guard";
+import { useOrgSocket } from "@/hooks/use-org-socket";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { THEMES, useUIStore } from "@/stores/ui-store";
+import type { OrgRole } from "@/types/domain";
+import {
+    Activity,
+    Bell,
+    Building2,
+    ChevronDown,
+    ChevronLeft,
+    ChevronRight,
+    FileText,
+    FolderKanban,
+    LayoutDashboard,
+    ListTodo,
+    LogOut,
+    Menu,
+    Palette,
+    Search,
+    UserCircle,
+    Users,
+} from "lucide-react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 import { NotificationBell } from "@/components/notification-bell";
 

@@ -86,9 +86,9 @@ func (s *ProjectTeamService) LinkTeams(ctx context.Context, params LinkTeamsPara
 
 // UnlinkTeamParams defines params for unlinking a team with optional task reassignment.
 type UnlinkTeamParams struct {
-	ProjectID   uuid.UUID  `json:"-"`
-	TeamID      uuid.UUID  `json:"-"`
-	ReassignTo  *uuid.UUID `json:"reassign_to,omitempty"`  // nil = unassign all tasks
+	ProjectID  uuid.UUID  `json:"-"`
+	TeamID     uuid.UUID  `json:"-"`
+	ReassignTo *uuid.UUID `json:"reassign_to,omitempty"` // nil = unassign all tasks
 }
 
 // UnlinkTeam unlinks a team from a project (min 1 must remain).

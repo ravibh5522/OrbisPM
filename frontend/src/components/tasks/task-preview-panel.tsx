@@ -4,7 +4,7 @@ import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-ed
 import { RecurrenceBadge, RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarStack, ConfirmDialog } from "@/components/ui/shared";
+import { Avatar, ConfirmDialog } from "@/components/ui/shared";
 import { api } from "@/lib/api"; // kept for attachment upload/download (binary ops)
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -15,7 +15,6 @@ import type {
     Attachment,
     Checklist,
     Comment,
-    DeadlineConflict,
     OrgMember,
     ProjectMember,
     Task,

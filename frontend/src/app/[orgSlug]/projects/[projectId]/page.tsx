@@ -1,49 +1,48 @@
 "use client";
 
-import { useState, use, useEffect, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
-import { useUIStore } from "@/stores/ui-store";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { api } from "@/lib/api";
-import { Card, LoadingPage, Avatar } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { TaskColumns } from "@/components/tasks/task-columns";
-import { TaskListView } from "@/components/tasks/task-list-view";
-import { TaskTreeView } from "@/components/tasks/task-tree-view";
-import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectSettings } from "@/components/projects/project-settings";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
+import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import {
-  GlobalFilterDropdown,
-  EMPTY_GLOBAL_FILTER,
-  isGlobalFilterActive,
-  activeFilterCount,
-  type GlobalFilterState,
+    activeFilterCount,
+    EMPTY_GLOBAL_FILTER,
+    GlobalFilterDropdown,
+    isGlobalFilterActive,
+    type GlobalFilterState,
 } from "@/components/tasks/global-filter-dropdown";
-import {
-  ArrowLeft,
-  Settings,
-  Users,
-  ListTodo,
-  Columns3,
-  List,
-  GitFork,
-  Trash2,
-  UserPlus,
-  Upload,
-  Download,
-  CalendarDays,
-  Link2,
-  Unlink,
-  GitPullRequest,
-  Filter,
-} from "lucide-react";
-import { formatDate, cn } from "@/lib/utils";
-import type { ProjectMember, ProjectTeam, Team, UnlinkPreview } from "@/types/domain";
+import { TaskColumns } from "@/components/tasks/task-columns";
+import { TaskListView } from "@/components/tasks/task-list-view";
+import { TaskTreeView } from "@/components/tasks/task-tree-view";
+import { Button } from "@/components/ui/button";
+import { Avatar, Card } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
+import { api } from "@/lib/api";
+import { cn, formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import { useUIStore } from "@/stores/ui-store";
+import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+    CalendarDays,
+    Columns3,
+    Download,
+    Filter,
+    GitFork,
+    GitPullRequest,
+    Link2,
+    List,
+    ListTodo,
+    Settings,
+    Trash2,
+    Unlink,
+    Upload,
+    UserPlus,
+    Users
+} from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { use, useCallback, useEffect, useState } from "react";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlug: string; projectId: string }> }) {
   const { projectId } = use(params);

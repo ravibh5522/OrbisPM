@@ -1,18 +1,18 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
-import { api } from "@/lib/api"; // kept for CSV file upload (binary)
 import { Button } from "@/components/ui/button";
-import {
-  Upload,
-  FileSpreadsheet,
-  X,
-  CheckCircle2,
-  AlertTriangle,
-  ArrowRight,
-  ArrowLeft,
-} from "lucide-react";
+import { api } from "@/lib/api"; // kept for CSV file upload (binary)
 import type { ImportJob } from "@/types/domain";
+import {
+    AlertTriangle,
+    ArrowLeft,
+    ArrowRight,
+    CheckCircle2,
+    FileSpreadsheet,
+    Upload,
+    X,
+} from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 
 // Task fields that can be mapped to CSV columns
 const TASK_FIELDS = [

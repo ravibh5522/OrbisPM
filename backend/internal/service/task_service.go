@@ -17,39 +17,39 @@ import (
 )
 
 type CreateTaskParams struct {
-	OrgID                uuid.UUID    `json:"-"`
-	ProjectID            uuid.UUID    `json:"-"`
-	ParentTaskID         *uuid.UUID   `json:"parent_task_id,omitempty"`
-	Title                string       `json:"title" validate:"required,min=1,max=500"`
-	Description          string       `json:"description,omitempty"`
-	Priority             string       `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
-	AssigneeID           *uuid.UUID   `json:"assignee_id,omitempty"`
-	AssigneeIDs          []uuid.UUID  `json:"assignee_ids,omitempty"`
-	ReporterID           *uuid.UUID   `json:"reporter_id,omitempty"`
-	DueDate              *time.Time   `json:"due_date,omitempty"`
-	StartDate            *time.Time   `json:"start_date,omitempty"`
-	Labels               []string     `json:"labels,omitempty"`
+	OrgID                 uuid.UUID   `json:"-"`
+	ProjectID             uuid.UUID   `json:"-"`
+	ParentTaskID          *uuid.UUID  `json:"parent_task_id,omitempty"`
+	Title                 string      `json:"title" validate:"required,min=1,max=500"`
+	Description           string      `json:"description,omitempty"`
+	Priority              string      `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
+	AssigneeID            *uuid.UUID  `json:"assignee_id,omitempty"`
+	AssigneeIDs           []uuid.UUID `json:"assignee_ids,omitempty"`
+	ReporterID            *uuid.UUID  `json:"reporter_id,omitempty"`
+	DueDate               *time.Time  `json:"due_date,omitempty"`
+	StartDate             *time.Time  `json:"start_date,omitempty"`
+	Labels                []string    `json:"labels,omitempty"`
 	ExtendParentDeadlines bool        `json:"extend_parent_deadlines,omitempty"`
 }
 
 type UpdateTaskParams struct {
-	ActorID               *uuid.UUID  `json:"-"` // Set by handler from auth context
-	BaseVersion           int64       `json:"base_version,omitempty"`
-	Title                 *string     `json:"title,omitempty" validate:"omitempty,min=1,max=500"`
-	Description           *string     `json:"description,omitempty"`
-	Status                *string     `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
-	Priority              *string     `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
-	AssigneeID            *string     `json:"assignee_id"`
-	AssigneeIDs           []string    `json:"assignee_ids,omitempty"`
-	ReporterID            *string     `json:"reporter_id"`
-	DueDate               *time.Time  `json:"due_date,omitempty"`
-	StartDate             *time.Time  `json:"start_date,omitempty"`
-	EstimatedHours        *float64    `json:"estimated_hours,omitempty"`
-	ActualHours           *float64    `json:"actual_hours,omitempty"`
-	Labels                []string    `json:"labels,omitempty"`
-	RecurrenceRule        *string     `json:"recurrence_rule,omitempty"`
-	ExtendParentDeadlines *bool       `json:"extend_parent_deadlines,omitempty"`
-	AdjustChildDeadlines  *bool       `json:"adjust_child_deadlines,omitempty"`
+	ActorID               *uuid.UUID `json:"-"` // Set by handler from auth context
+	BaseVersion           int64      `json:"base_version,omitempty"`
+	Title                 *string    `json:"title,omitempty" validate:"omitempty,min=1,max=500"`
+	Description           *string    `json:"description,omitempty"`
+	Status                *string    `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
+	Priority              *string    `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
+	AssigneeID            *string    `json:"assignee_id"`
+	AssigneeIDs           []string   `json:"assignee_ids,omitempty"`
+	ReporterID            *string    `json:"reporter_id"`
+	DueDate               *time.Time `json:"due_date,omitempty"`
+	StartDate             *time.Time `json:"start_date,omitempty"`
+	EstimatedHours        *float64   `json:"estimated_hours,omitempty"`
+	ActualHours           *float64   `json:"actual_hours,omitempty"`
+	Labels                []string   `json:"labels,omitempty"`
+	RecurrenceRule        *string    `json:"recurrence_rule,omitempty"`
+	ExtendParentDeadlines *bool      `json:"extend_parent_deadlines,omitempty"`
+	AdjustChildDeadlines  *bool      `json:"adjust_child_deadlines,omitempty"`
 }
 
 type TaskService struct {
@@ -967,9 +967,9 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	ancestorsUpdated = append(ancestorsUpdated, descendantsUpdated...)
 
 	result := &domain.TaskUpdateResult{
-		Task:              updated,
-		AppliedChanges:    directChanges,
-		AncestorsUpdated:  ancestorsUpdated,
+		Task:             updated,
+		AppliedChanges:   directChanges,
+		AncestorsUpdated: ancestorsUpdated,
 	}
 
 	// Create change request for review fields if any

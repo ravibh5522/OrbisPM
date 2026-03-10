@@ -1,12 +1,12 @@
 "use client";
 
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
-import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
-import { Avatar, AvatarStack, ConfirmDialog } from "@/components/ui/shared";
+import { AvatarStack, ConfirmDialog } from "@/components/ui/shared";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";

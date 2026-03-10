@@ -1,20 +1,34 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import {
-  User, Briefcase, Globe, CheckCircle, Calendar, Camera,
-  Shield, Smartphone, Mail, Key, AlertTriangle, Trash2, Download, Copy, RefreshCw, Palette, Monitor, Sun, Moon,
-} from "lucide-react";
-import { formatDate, cn } from "@/lib/utils";
-import { useUIStore, THEMES } from "@/stores/ui-store";
+import { Avatar, Card, PageHeader } from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
+import { cn, formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { THEMES, useUIStore } from "@/stores/ui-store";
 import type { TOTPRegistration } from "@/types/domain";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+    AlertTriangle,
+    Briefcase,
+    Calendar, Camera,
+    CheckCircle,
+    Copy,
+    Download,
+    Globe,
+    Key,
+    Mail,
+    Moon,
+    Palette,
+    RefreshCw,
+    Shield, Smartphone,
+    Sun,
+    Trash2,
+    User
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 
 const TIMEZONE_OPTIONS = [
   { value: "", label: "Select timezone" },

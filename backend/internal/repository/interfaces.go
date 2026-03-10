@@ -18,11 +18,11 @@ type ListFilter struct {
 // TaskFilter extends ListFilter with task-specific filters.
 type TaskFilter struct {
 	ListFilter
-	Status      *string    // single status (backward compat)
-	Statuses    []string   // multi-status filter
-	Priority    *string    // single priority (backward compat)
-	Priorities  []string   // multi-priority filter
-	AssigneeID  *uuid.UUID // single assignee (backward compat)
+	Status      *string     // single status (backward compat)
+	Statuses    []string    // multi-status filter
+	Priority    *string     // single priority (backward compat)
+	Priorities  []string    // multi-priority filter
+	AssigneeID  *uuid.UUID  // single assignee (backward compat)
 	AssigneeIDs []uuid.UUID // multi-assignee filter
 	Search      *string
 	ParentID    *string // "root" for root tasks (parent IS NULL), UUID for children of a specific task, nil for all
