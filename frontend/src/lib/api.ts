@@ -417,7 +417,7 @@ export const api = {
   projectMembers: {
     list: (orgId: string, projId: string) =>
       get<ListResponse<ProjectMember>>(`${V1}/orgs/${orgId}/projects/${projId}/members`),
-    add: (orgId: string, projId: string, data: { user_id: string; role: string }) =>
+    add: (orgId: string, projId: string, data: { user_id: string; role: string; source_team_id?: string }) =>
       post<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members`, data),
     update: (orgId: string, projId: string, userId: string, data: { role: string }) =>
       patch<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`, data),

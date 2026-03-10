@@ -1,15 +1,38 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import {
-  LayoutDashboard, Users, FolderKanban, CheckSquare, Shield, Bell,
-  Zap, Globe, BarChart3, Clock, GitBranch, FileText, Search,
-  ChevronRight, Star, ArrowRight, Menu, X, Send, Mail, MapPin,
-  Phone, MessageSquare, Workflow, Lock, Layers, Target, TrendingUp,
-  Sparkles, Eye, CalendarDays, ListChecks, Webhook, KeyRound,
-  Activity, ChevronDown
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  CheckSquare,
+  ChevronDown,
+  Clock,
+  Eye,
+  FileText,
+  FolderKanban,
+  GitBranch,
+  Globe,
+  Layers,
+  Lock,
+  Mail, MapPin,
+  Menu,
+  MessageSquare,
+  Phone,
+  Search,
+  Send,
+  Shield,
+  Sparkles,
+  Star,
+  Target, TrendingUp,
+  Users,
+  Webhook,
+  Workflow,
+  X,
+  Zap
 } from "lucide-react";
+import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 /* ─────────────────── Contact Form State ─────────────────── */
 interface ContactForm {
@@ -179,7 +202,7 @@ const plans = [
 const faqs = [
   {
     q: "How does OrbisPM differ from other project management tools?",
-    a: "OrbisPM is built as an AI-native platform from the ground up. Unlike legacy tools, it features real-time WebSocket collaboration, granular RBAC with custom roles, change request workflows for regulated environments, and a modern DaisyUI interface — all open source.",
+    a: "OrbisPM is built as an AI-native platform from the ground up. Unlike legacy tools, it features real-time WebSocket collaboration, granular RBAC with custom roles, change request workflows for regulated environments, AI-powered sprint planning, smart task estimation, and a modern DaisyUI interface.",
   },
   {
     q: "Can I migrate from Jira, Asana, or Trello?",
@@ -190,8 +213,8 @@ const faqs = [
     a: "Absolutely. OrbisPM uses Zitadel for enterprise-grade authentication with MFA support, row-level security in PostgreSQL, encrypted API keys, and granular permission controls. Enterprise plans support on-premise deployment.",
   },
   {
-    q: "Does OrbisPM support self-hosting?",
-    a: "Yes! OrbisPM is fully open source and ships with Docker Compose for easy self-hosting. The entire stack (PostgreSQL, Redis, MinIO, Meilisearch) runs in containers.",
+    q: "Does OrbisPM support on-premise deployment?",
+    a: "Yes! OrbisPM Enterprise offers on-premise deployment with Docker Compose. The entire stack (PostgreSQL, Redis, MinIO, Meilisearch) runs in containers, giving your team full control over infrastructure.",
   },
   {
     q: "What integrations are available?",
@@ -336,7 +359,7 @@ export default function LandingPage() {
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] rounded-full bg-accent/3 blur-3xl" />
         </div>
 
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center max-w-4xl mx-auto">
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 text-primary text-sm font-medium mb-8">
@@ -354,7 +377,7 @@ export default function LandingPage() {
 
             <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-2xl mx-auto leading-relaxed">
               OrbisPM brings real-time collaboration, granular permissions, change request workflows,
-              and powerful automation to modern engineering teams. Open source & self-hostable.
+              and powerful automation to modern engineering teams. AI-powered & enterprise-ready.
             </p>
 
             {/* CTA Buttons */}
@@ -373,13 +396,13 @@ export default function LandingPage() {
                 <Shield className="w-4 h-4" /> Enterprise-grade security
               </div>
               <div className="flex items-center gap-1.5">
-                <Globe className="w-4 h-4" /> Self-hostable
+                <Globe className="w-4 h-4" /> On-premise deployment
               </div>
               <div className="flex items-center gap-1.5">
                 <Zap className="w-4 h-4" /> Real-time collaboration
               </div>
               <div className="flex items-center gap-1.5">
-                <Lock className="w-4 h-4" /> SOC 2 ready
+                <Lock className="w-4 h-4" /> Free to get started
               </div>
             </div>
           </div>
@@ -462,7 +485,7 @@ export default function LandingPage() {
 
       {/* ─────────── Stats Section ─────────── */}
       <section className="py-16 bg-base-100 border-y border-base-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
             <div>
               <AnimatedCounter target={10000} suffix="+" />
@@ -486,14 +509,14 @@ export default function LandingPage() {
 
       {/* ─────────── Features Grid ─────────── */}
       <section id="features" className="py-20 md:py-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-sm font-medium mb-4">
               <Zap className="w-3.5 h-3.5" /> Powerful Features
             </div>
             <h2 className="text-3xl md:text-4xl font-bold">Everything you need to manage projects at scale</h2>
             <p className="mt-4 text-base-content/60 text-lg">
-              From task management to enterprise compliance — OrbisPM has every feature your team needs, built into one unified platform.
+              From task management to team governance — OrbisPM has every feature your team needs, built into one unified platform.
             </p>
           </div>
 
@@ -501,7 +524,7 @@ export default function LandingPage() {
             <FeatureCard delay={0} icon={FolderKanban} title="Multi-View Projects" description="Switch between Kanban boards, list views, tree hierarchies, and calendar views. Each project adapts to how your team works best." />
             <FeatureCard delay={100} icon={Users} title="Team Collaboration" description="Real-time WebSocket updates, @mentions in comments, task watchers, and presence indicators. Everyone stays in sync instantly." />
             <FeatureCard delay={200} icon={Shield} title="Enterprise RBAC" description="Granular role-based access with custom roles, org/team/project scopes, and permission inheritance. Control exactly who can do what." />
-            <FeatureCard delay={300} icon={GitBranch} title="Change Requests" description="Submit task changes for review before they go live. Perfect for regulated environments, SOX compliance, and approval workflows." />
+            <FeatureCard delay={300} icon={GitBranch} title="Change Requests" description="Submit task changes for review before they go live. Requires designated approvers to sign off, giving teams full control over what actually changes." />
             <FeatureCard delay={400} icon={Workflow} title="Custom Rules & Automation" description="Set task completion rules, auto-assign tasks, create dependency chains, and build custom workflows with powerful rule engines." />
             <FeatureCard delay={500} icon={BarChart3} title="Rich Dashboards" description="Organization and project dashboards with real-time charts, task distribution, velocity tracking, and team performance metrics." />
             <FeatureCard delay={600} icon={Bell} title="Smart Notifications" description="Configurable notification preferences per channel. Get notified about what matters — assignments, mentions, reviews, and deadlines." />
@@ -509,14 +532,14 @@ export default function LandingPage() {
             <FeatureCard delay={800} icon={FileText} title="Templates & Import" description="Create task templates for repeatable workflows. Import tasks via CSV/XLSX with progress tracking and validation." />
             <FeatureCard delay={900} icon={CheckSquare} title="Checklists & Subtasks" description="Break tasks into checklists, create unlimited subtask hierarchies, set dependencies, and track completion with progress bars." />
             <FeatureCard delay={1000} icon={Webhook} title="Webhooks & API" description="Connect OrbisPM to your existing tools. Full REST API with Swagger docs, webhook event notifications, and API key management." />
-            <FeatureCard delay={1100} icon={Activity} title="Activity Audit Log" description="Complete audit trail of every action in your organization. Track who did what, when, and where — perfect for compliance." />
+            <FeatureCard delay={1100} icon={Activity} title="Activity Audit Log" description="Complete audit trail of every action in your organization. Track who did what, when, and where — full operational transparency." />
           </div>
         </div>
       </section>
 
       {/* ─────────── How It Works ─────────── */}
       <section id="how-it-works" className="py-20 md:py-28 bg-base-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/10 text-accent text-sm font-medium mb-4">
               <Target className="w-3.5 h-3.5" /> Getting Started
@@ -554,7 +577,7 @@ export default function LandingPage() {
 
       {/* ─────────── Feature Showcase (alternating) ─────────── */}
       <section className="py-20 md:py-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-24">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 space-y-24">
           {/* Showcase 1: Real-time Collaboration */}
           <div className="grid md:grid-cols-2 gap-12 items-center">
             <div>
@@ -753,10 +776,10 @@ export default function LandingPage() {
 
       {/* ─────────── Tech Stack ─────────── */}
       <section className="py-16 bg-base-100 border-y border-base-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center mb-12">
             <h3 className="text-2xl font-bold">Built with Modern Technology</h3>
-            <p className="text-base-content/50 mt-2">Open source stack designed for performance, reliability, and developer experience</p>
+            <p className="text-base-content/50 mt-2">Enterprise-grade stack designed for performance, reliability, and developer experience</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-6">
             {[
@@ -783,7 +806,7 @@ export default function LandingPage() {
 
       {/* ─────────── Testimonials ─────────── */}
       <section id="testimonials" className="py-20 md:py-28">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
               <Star className="w-3.5 h-3.5" /> Testimonials
@@ -819,7 +842,7 @@ export default function LandingPage() {
 
       {/* ─────────── Pricing ─────────── */}
       <section id="pricing" className="py-20 md:py-28 bg-base-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary/10 text-secondary text-sm font-medium mb-4">
               <Sparkles className="w-3.5 h-3.5" /> Pricing
@@ -913,7 +936,7 @@ export default function LandingPage() {
 
       {/* ─────────── Contact Us ─────────── */}
       <section id="contact" className="py-20 md:py-28 bg-base-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center max-w-3xl mx-auto mb-16">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium mb-4">
               <Mail className="w-3.5 h-3.5" /> Contact Us
@@ -942,7 +965,7 @@ export default function LandingPage() {
                   </div>
                   <div>
                     <div className="font-medium text-sm">Email</div>
-                    <div className="text-base-content/60 text-sm">hello@orbispm.dev</div>
+                    <div className="text-base-content/60 text-sm">hello@orbispm.in</div>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
@@ -1085,7 +1108,7 @@ export default function LandingPage() {
 
       {/* ─────────── Footer ─────────── */}
       <footer className="bg-base-100 border-t border-base-200 py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
             <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2 mb-4">
@@ -1095,44 +1118,48 @@ export default function LandingPage() {
                 <span className="text-lg font-bold">OrbisPM</span>
               </Link>
               <p className="text-sm text-base-content/50 leading-relaxed">
-                AI-native project management for modern engineering teams. Open source & self-hostable.
+                AI-native project management for modern engineering teams. Enterprise-ready.
               </p>
             </div>
             <div>
               <h4 className="font-semibold text-sm mb-4">Product</h4>
               <ul className="space-y-2 text-sm text-base-content/50">
-                <li><a href="#features" className="hover:text-primary transition-colors">Features</a></li>
-                <li><a href="#pricing" className="hover:text-primary transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Changelog</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Roadmap</a></li>
+                <li><Link href="/features" className="hover:text-primary transition-colors">Features</Link></li>
+                <li><Link href="/pricing" className="hover:text-primary transition-colors">Pricing</Link></li>
+                <li><Link href="/blog" className="hover:text-primary transition-colors">Blog</Link></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-semibold text-sm mb-4">Alternatives</h4>
+              <ul className="space-y-2 text-sm text-base-content/50">
+                <li><Link href="/alternatives/jira" className="hover:text-primary transition-colors">OrbisPM vs Jira</Link></li>
+                <li><Link href="/alternatives/asana" className="hover:text-primary transition-colors">OrbisPM vs Asana</Link></li>
+                <li><Link href="/alternatives/trello" className="hover:text-primary transition-colors">OrbisPM vs Trello</Link></li>
               </ul>
             </div>
             <div>
               <h4 className="font-semibold text-sm mb-4">Resources</h4>
               <ul className="space-y-2 text-sm text-base-content/50">
-                <li><a href="#" className="hover:text-primary transition-colors">Documentation</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">API Reference</a></li>
                 <li><a href="#faq" className="hover:text-primary transition-colors">FAQ</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Blog</a></li>
+                <li><Link href="/about" className="hover:text-primary transition-colors">About</Link></li>
+                <li><Link href="/contact" className="hover:text-primary transition-colors">Contact</Link></li>
               </ul>
             </div>
             <div>
-              <h4 className="font-semibold text-sm mb-4">Company</h4>
+              <h4 className="font-semibold text-sm mb-4">Legal</h4>
               <ul className="space-y-2 text-sm text-base-content/50">
-                <li><a href="#" className="hover:text-primary transition-colors">About</a></li>
-                <li><a href="#contact" className="hover:text-primary transition-colors">Contact</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Privacy</a></li>
-                <li><a href="#" className="hover:text-primary transition-colors">Terms</a></li>
+                <li><Link href="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link></li>
+                <li><Link href="/terms" className="hover:text-primary transition-colors">Terms of Service</Link></li>
               </ul>
             </div>
           </div>
           <div className="border-t border-base-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-base-content/40">&copy; {new Date().getFullYear()} OrbisPM. All rights reserved.</p>
             <div className="flex items-center gap-4">
-              <a href="#" className="text-base-content/40 hover:text-primary transition-colors text-sm">GitHub</a>
-              <a href="#" className="text-base-content/40 hover:text-primary transition-colors text-sm">Twitter</a>
-              <a href="#" className="text-base-content/40 hover:text-primary transition-colors text-sm">Discord</a>
-              <a href="#" className="text-base-content/40 hover:text-primary transition-colors text-sm">LinkedIn</a>
+              <a href="https://github.com/orbispm" target="_blank" rel="noopener noreferrer" className="text-base-content/40 hover:text-primary transition-colors text-sm">GitHub</a>
+              <a href="https://twitter.com/orbispm" target="_blank" rel="noopener noreferrer" className="text-base-content/40 hover:text-primary transition-colors text-sm">Twitter</a>
+              <a href="https://discord.gg/orbispm" target="_blank" rel="noopener noreferrer" className="text-base-content/40 hover:text-primary transition-colors text-sm">Discord</a>
+              <a href="https://linkedin.com/company/orbispm" target="_blank" rel="noopener noreferrer" className="text-base-content/40 hover:text-primary transition-colors text-sm">LinkedIn</a>
             </div>
           </div>
         </div>

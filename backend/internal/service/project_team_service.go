@@ -102,34 +102,23 @@ func (s *ProjectTeamService) UnlinkTeam(ctx context.Context, params UnlinkTeamPa
 		return domain.ErrBadRequest.WithDetail("project must have at least one team")
 	}
 
-	// Get team members who will lose access (team-only, not also direct members)
-	teamMembers, err := s.teamMemberRepo.ListByTeam(ctx, params.TeamID)
+	// Find project members sourced from this team
+	allMembers, err := s.projectMemberRepo.ListByProject(ctx, params.ProjectID)
 	if err != nil {
-		return fmt.Errorf("list team members: %w", err)
+		return fmt.Errorf("list project members: %w", err)
 	}
 
-	// Get direct project members so we can exclude them
-	directMembers, err := s.projectMemberRepo.ListByProject(ctx, params.ProjectID)
-	if err != nil {
-		return fmt.Errorf("list direct members: %w", err)
-	}
-	directSet := make(map[uuid.UUID]bool, len(directMembers))
-	for _, dm := range directMembers {
-		directSet[dm.UserID] = true
-	}
-
-	// Collect team-only user IDs (those who will lose project access)
-	var teamOnlyUserIDs []uuid.UUID
-	for _, tm := range teamMembers {
-		if !directSet[tm.UserID] {
-			teamOnlyUserIDs = append(teamOnlyUserIDs, tm.UserID)
+	var teamSourcedUserIDs []uuid.UUID
+	for _, m := range allMembers {
+		if m.SourceTeamID != nil && *m.SourceTeamID == params.TeamID {
+			teamSourcedUserIDs = append(teamSourcedUserIDs, m.UserID)
 		}
 	}
 
 	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
-		// Reassign or unassign tasks from team-only members
-		if len(teamOnlyUserIDs) > 0 {
-			affected, err := s.taskRepo.ReassignOrUnassignTasks(ctx, tx, params.ProjectID, teamOnlyUserIDs, params.ReassignTo)
+		// Reassign or unassign tasks from members sourced from this team
+		if len(teamSourcedUserIDs) > 0 {
+			affected, err := s.taskRepo.ReassignOrUnassignTasks(ctx, tx, params.ProjectID, teamSourcedUserIDs, params.ReassignTo)
 			if err != nil {
 				return fmt.Errorf("reassign tasks during team unlink: %w", err)
 			}
@@ -138,6 +127,11 @@ func (s *ProjectTeamService) UnlinkTeam(ctx context.Context, params UnlinkTeamPa
 				Str("team_id", params.TeamID.String()).
 				Int64("tasks_affected", affected).
 				Msg("tasks reassigned during team unlink")
+
+			// Remove all project members sourced from this team
+			if err := s.projectMemberRepo.RemoveBySourceTeam(ctx, tx, params.ProjectID, params.TeamID); err != nil {
+				return fmt.Errorf("remove team-sourced members: %w", err)
+			}
 		}
 
 		return s.projectTeamRepo.Unlink(ctx, tx, params.ProjectID, params.TeamID)
@@ -156,26 +150,18 @@ func (s *ProjectTeamService) PreviewUnlinkTeam(ctx context.Context, projectID, t
 		return nil, err
 	}
 
-	teamMembers, err := s.teamMemberRepo.ListByTeam(ctx, teamID)
+	// Find project members sourced from this team
+	allMembers, err := s.projectMemberRepo.ListByProject(ctx, projectID)
 	if err != nil {
-		return nil, fmt.Errorf("list team members: %w", err)
+		return nil, fmt.Errorf("list project members: %w", err)
 	}
 
-	directMembers, err := s.projectMemberRepo.ListByProject(ctx, projectID)
-	if err != nil {
-		return nil, fmt.Errorf("list direct members: %w", err)
-	}
-	directSet := make(map[uuid.UUID]bool, len(directMembers))
-	for _, dm := range directMembers {
-		directSet[dm.UserID] = true
-	}
-
-	var teamOnlyUserIDs []uuid.UUID
-	teamMemberMap := make(map[uuid.UUID]*domain.TeamMember)
-	for _, tm := range teamMembers {
-		if !directSet[tm.UserID] {
-			teamOnlyUserIDs = append(teamOnlyUserIDs, tm.UserID)
-			teamMemberMap[tm.UserID] = tm
+	var teamSourcedUserIDs []uuid.UUID
+	memberMap := make(map[uuid.UUID]*domain.ProjectMember)
+	for _, m := range allMembers {
+		if m.SourceTeamID != nil && *m.SourceTeamID == teamID {
+			teamSourcedUserIDs = append(teamSourcedUserIDs, m.UserID)
+			memberMap[m.UserID] = m
 		}
 	}
 
@@ -185,25 +171,25 @@ func (s *ProjectTeamService) PreviewUnlinkTeam(ctx context.Context, projectID, t
 		AffectedMembers: make([]*domain.UnlinkPreviewMember, 0),
 	}
 
-	if len(teamOnlyUserIDs) == 0 {
+	if len(teamSourcedUserIDs) == 0 {
 		return preview, nil
 	}
 
-	taskCounts, err := s.taskRepo.CountByAssigneesInProject(ctx, projectID, teamOnlyUserIDs)
+	taskCounts, err := s.taskRepo.CountByAssigneesInProject(ctx, projectID, teamSourcedUserIDs)
 	if err != nil {
 		return nil, fmt.Errorf("count assignee tasks: %w", err)
 	}
 
 	total := 0
-	for _, uid := range teamOnlyUserIDs {
-		tm := teamMemberMap[uid]
+	for _, uid := range teamSourcedUserIDs {
+		m := memberMap[uid]
 		cnt := taskCounts[uid]
 		total += cnt
 		preview.AffectedMembers = append(preview.AffectedMembers, &domain.UnlinkPreviewMember{
 			UserID:      uid,
-			Email:       tm.Email,
-			DisplayName: tm.DisplayName,
-			AvatarURL:   tm.AvatarURL,
+			Email:       m.Email,
+			DisplayName: m.DisplayName,
+			AvatarURL:   m.AvatarURL,
 			TaskCount:   cnt,
 		})
 	}
@@ -211,7 +197,7 @@ func (s *ProjectTeamService) PreviewUnlinkTeam(ctx context.Context, projectID, t
 	return preview, nil
 }
 
-// ListEligibleMembers returns union of direct + team-inherited members.
+// ListEligibleMembers returns all explicitly-added project members.
 func (s *ProjectTeamService) ListEligibleMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error) {
 	return s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
 }

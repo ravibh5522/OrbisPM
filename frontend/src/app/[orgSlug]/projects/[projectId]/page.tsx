@@ -308,6 +308,11 @@ function ProjectMembersSection({
   const [addUserId, setAddUserId] = useState("");
   const [addRole, setAddRole] = useState("member");
 
+  // Internal tab — add member from a linked team
+  const [addInternalTeamId, setAddInternalTeamId] = useState("");
+  const [addInternalUserId, setAddInternalUserId] = useState("");
+  const [addInternalRole, setAddInternalRole] = useState("member");
+
   // Removal dialog state
   const [removeTarget, setRemoveTarget] = useState<ProjectMember | null>(null);
   const [removeTaskCount, setRemoveTaskCount] = useState<number | null>(null);
@@ -324,12 +329,40 @@ function ProjectMembersSection({
     queryFn: () => api.customRoles.list(orgId),
   });
 
+  // Linked teams for the internal add form
+  const { data: linkedTeams } = useQuery({
+    queryKey: ["project-teams", orgId, projectId],
+    queryFn: () => api.projectTeams.list(orgId, projectId),
+    enabled: !!orgId,
+  });
+
+  // Members of the currently selected linked team (for internal add)
+  const { data: selectedTeamMembers } = useQuery({
+    queryKey: ["team-members", orgId, addInternalTeamId],
+    queryFn: () => api.teamMembers.list(orgId, addInternalTeamId),
+    enabled: !!addInternalTeamId,
+  });
+
   const addMutation = useMutation({
     mutationFn: () => api.projectMembers.add(orgId, projectId, { user_id: addUserId, role: addRole }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
       setAddUserId("");
       setAddRole("member");
+    },
+  });
+
+  const addInternalMutation = useMutation({
+    mutationFn: () =>
+      api.projectMembers.add(orgId, projectId, {
+        user_id: addInternalUserId,
+        role: addInternalRole,
+        source_team_id: addInternalTeamId,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+      setAddInternalUserId("");
+      setAddInternalRole("member");
     },
   });
 
@@ -354,6 +387,19 @@ function ProjectMembersSection({
 
   const memberIds = new Set(members.map((m) => m.user_id));
   const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
+
+  // For internal add: team members of the selected linked team who are not yet project members
+  const availableTeamMembers = addInternalTeamId && selectedTeamMembers
+    ? (selectedTeamMembers.data || []).filter((tm) => !memberIds.has(tm.user_id))
+    : [];
+
+  // For external add: org members NOT in any linked team AND not already project members
+  const linkedTeamMemberIds = new Set<string>();
+  // We only have the selected team's members loaded; for a full filter we check internalMembers
+  for (const m of internalMembers) {
+    linkedTeamMemberIds.add(m.user_id);
+  }
+  const availableExternal = availableOrg.filter((m) => !linkedTeamMemberIds.has(m.user_id));
 
   const roleOptions = [
     { value: "lead", label: "Lead" },
@@ -474,11 +520,62 @@ function ProjectMembersSection({
         </div>
       )}
 
-      {/* Internal tab — team-inherited members (read-only, managed from Teams page) */}
+      {/* Internal tab — members added from linked teams */}
       {subTab === "internal" && (
         <>
+          {/* Add Internal Member form */}
+          <Card>
+            <h3 className="font-semibold mb-1">Add Internal Member</h3>
+            <p className="text-xs text-base-content/50 mb-3">
+              Select a linked team and pick a member to add to this project.
+            </p>
+            <form
+              className="flex gap-2 items-end flex-wrap"
+              onSubmit={(e) => { e.preventDefault(); if (addInternalUserId && addInternalTeamId) addInternalMutation.mutate(); }}
+            >
+              <div className="flex-1 min-w-[140px]">
+                <label className="label"><span className="label-text text-xs">Team</span></label>
+                <select
+                  className="select select-bordered select-sm w-full"
+                  value={addInternalTeamId}
+                  onChange={(e) => { setAddInternalTeamId(e.target.value); setAddInternalUserId(""); }}
+                >
+                  <option value="">Select team…</option>
+                  {(linkedTeams || []).map((pt: ProjectTeam) => (
+                    <option key={pt.team_id} value={pt.team_id}>{pt.team_name || pt.team_id.slice(0, 12)}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1 min-w-[140px]">
+                <label className="label"><span className="label-text text-xs">Member</span></label>
+                <select
+                  className="select select-bordered select-sm w-full"
+                  value={addInternalUserId}
+                  onChange={(e) => setAddInternalUserId(e.target.value)}
+                  disabled={!addInternalTeamId}
+                >
+                  <option value="">Select member…</option>
+                  {availableTeamMembers.map((tm) => (
+                    <option key={tm.user_id} value={tm.user_id}>{tm.display_name || tm.email || tm.user_id.slice(0, 16)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label"><span className="label-text text-xs">Role</span></label>
+                <select className="select select-bordered select-sm" value={addInternalRole} onChange={(e) => setAddInternalRole(e.target.value)}>
+                  {roleOptions.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
+                  ))}
+                </select>
+              </div>
+              <Button type="submit" size="sm" loading={addInternalMutation.isPending} disabled={!addInternalUserId || !addInternalTeamId}>
+                <UserPlus className="w-4 h-4" /> Add
+              </Button>
+            </form>
+          </Card>
+
           {internalMembers.length === 0 ? (
-            <Card><p className="text-center py-6 text-base-content/50">No team-inherited members. Link a team in the Teams tab to add internal members.</p></Card>
+            <Card><p className="text-center py-6 text-base-content/50">No internal members yet. Add members from linked teams above.</p></Card>
           ) : (
             Array.from(teamGroups.entries()).map(([teamId, group]) => (
               <Card key={teamId}>
@@ -559,7 +656,7 @@ function ProjectMembersSection({
                   onChange={(e) => setAddUserId(e.target.value)}
                 >
                   <option value="">Select member…</option>
-                  {availableOrg.map((m) => (
+                  {availableExternal.map((m) => (
                     <option key={m.user_id} value={m.user_id}>{m.display_name || m.email || m.user_id.slice(0, 16)}</option>
                   ))}
                 </select>

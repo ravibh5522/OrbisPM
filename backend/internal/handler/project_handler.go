@@ -216,8 +216,9 @@ func (h *ProjectHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 }
 
 type addProjectMemberRequest struct {
-	UserID string `json:"user_id" validate:"required"`
-	Role   string `json:"role" validate:"required"`
+	UserID       string  `json:"user_id" validate:"required"`
+	Role         string  `json:"role" validate:"required"`
+	SourceTeamID *string `json:"source_team_id,omitempty"`
 }
 
 // AddMember godoc
@@ -250,7 +251,16 @@ func (h *ProjectHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
 		return
 	}
-	if err := h.projectSvc.AddMember(r.Context(), projectID, userID, req.Role); err != nil {
+	var sourceTeamID *uuid.UUID
+	if req.SourceTeamID != nil && *req.SourceTeamID != "" {
+		tid, err := uuid.Parse(*req.SourceTeamID)
+		if err != nil {
+			JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid source_team_id"})
+			return
+		}
+		sourceTeamID = &tid
+	}
+	if err := h.projectSvc.AddMember(r.Context(), projectID, userID, req.Role, sourceTeamID); err != nil {
 		Error(w, r, err)
 		return
 	}

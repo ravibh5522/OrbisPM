@@ -86,6 +86,7 @@ type ProjectMemberRepository interface {
 	UpdateRole(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID, role string) error
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error)
 	ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error)
+	RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID uuid.UUID) error
 }
 
 // --- Task ---

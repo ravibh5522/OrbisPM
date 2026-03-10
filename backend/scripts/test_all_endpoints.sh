@@ -7,7 +7,7 @@ PASS=0
 FAIL=0
 TOTAL=0
 TS=$(date +%s)
-TEST_EMAIL="test${TS}@orbispm.dev"
+TEST_EMAIL="test${TS}@orbispm.in"
 
 red()   { printf "\e[31m%s\e[0m\n" "$*"; }
 green() { printf "\e[32m%s\e[0m\n" "$*"; }

@@ -194,11 +194,49 @@ func (s *ProjectService) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID 
 
 // --- Members ---
 
-func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.UUID, role string) error {
+func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.UUID, role string, sourceTeamID *uuid.UUID) error {
 	if role == "" {
 		role = domain.RoleProjectContributor
 	}
-	m := &domain.ProjectMember{ProjectID: projectID, UserID: userID, Role: role}
+	source := "direct"
+	if sourceTeamID != nil {
+		source = "team"
+		// Validate the team is linked to this project
+		if s.projectTeamRepo != nil {
+			linked, err := s.projectTeamRepo.ListByProject(ctx, projectID)
+			if err != nil {
+				return fmt.Errorf("check team link: %w", err)
+			}
+			found := false
+			for _, pt := range linked {
+				if pt.TeamID == *sourceTeamID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("team is not linked to this project")
+			}
+		}
+		// Validate the user is a member of that team
+		if s.teamMemberRepo != nil {
+			teamMembers, err := s.teamMemberRepo.ListByTeam(ctx, *sourceTeamID)
+			if err != nil {
+				return fmt.Errorf("check team membership: %w", err)
+			}
+			found := false
+			for _, tm := range teamMembers {
+				if tm.UserID == userID {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return fmt.Errorf("user is not a member of the specified team")
+			}
+		}
+	}
+	m := &domain.ProjectMember{ProjectID: projectID, UserID: userID, Role: role, Source: source, SourceTeamID: sourceTeamID}
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.Add(ctx, tx, m)
 	})
@@ -214,25 +252,8 @@ func (s *ProjectService) RemoveMember(ctx context.Context, projectID, userID uui
 }
 
 // RemoveMemberWithReassign removes a member and reassigns (or unassigns) all their tasks transactionally.
-// For team-inherited members, it removes them from the team instead of the project_members table.
 func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID, userID uuid.UUID, reassignTo *uuid.UUID) error {
-	// Find the member source before the transaction
-	effective, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
-	if err != nil {
-		return fmt.Errorf("list effective members: %w", err)
-	}
-	var member *domain.EffectiveMember
-	for _, em := range effective {
-		if em.UserID == userID {
-			member = em
-			break
-		}
-	}
-	if member == nil {
-		return fmt.Errorf("member not found in project")
-	}
-
-	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		// Reassign/unassign tasks
 		if s.taskRepo != nil {
 			affected, err := s.taskRepo.ReassignOrUnassignTasks(ctx, tx, projectID, []uuid.UUID{userID}, reassignTo)
@@ -246,10 +267,6 @@ func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID
 				Msg("tasks reassigned during member removal")
 		}
 
-		// Remove from the correct table based on source
-		if member.Source == "team" && member.SourceTeamID != nil && s.teamMemberRepo != nil {
-			return s.teamMemberRepo.Remove(ctx, tx, *member.SourceTeamID, userID)
-		}
 		return s.projectMemberRepo.Remove(ctx, tx, projectID, userID)
 	})
 	if err != nil {
@@ -276,26 +293,7 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 		return fmt.Errorf("role is required")
 	}
 
-	// Find the member source to update in the correct table
-	effective, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
-	if err != nil {
-		return fmt.Errorf("list effective members: %w", err)
-	}
-	var member *domain.EffectiveMember
-	for _, em := range effective {
-		if em.UserID == userID {
-			member = em
-			break
-		}
-	}
-	if member == nil {
-		return fmt.Errorf("member not found in project")
-	}
-
-	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
-		if member.Source == "team" && member.SourceTeamID != nil && s.teamMemberRepo != nil {
-			return s.teamMemberRepo.UpdateRole(ctx, tx, *member.SourceTeamID, userID, role)
-		}
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.UpdateRole(ctx, tx, projectID, userID, role)
 	})
 	if err != nil {
@@ -306,26 +304,7 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 }
 
 func (s *ProjectService) ListMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
-	effective, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
-	if err != nil {
-		return nil, err
-	}
-	members := make([]*domain.ProjectMember, 0, len(effective))
-	for _, em := range effective {
-		members = append(members, &domain.ProjectMember{
-			ProjectID:      projectID,
-			UserID:         em.UserID,
-			Email:          em.Email,
-			DisplayName:    em.DisplayName,
-			AvatarURL:      em.AvatarURL,
-			Role:           em.Role,
-			Source:         em.Source,
-			SourceTeamID:   em.SourceTeamID,
-			SourceTeamName: em.SourceTeamName,
-			JoinedAt:       em.JoinedAt,
-		})
-	}
-	return members, nil
+	return s.projectMemberRepo.ListByProject(ctx, projectID)
 }
 
 // publishEvent publishes a domain event for real-time propagation via SSE.

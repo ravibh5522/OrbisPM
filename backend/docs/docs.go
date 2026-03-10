@@ -13,7 +13,7 @@ const docTemplate = `{
         "contact": {
             "name": "OrbisPM Support",
             "url": "https://orbispm.dev/support",
-            "email": "support@orbispm.dev"
+            "email": "support@orbispm.in"
         },
         "license": {
             "name": "MIT",

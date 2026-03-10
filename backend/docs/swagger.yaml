@@ -907,7 +907,7 @@ definitions:
 host: localhost:8080
 info:
   contact:
-    email: support@orbispm.dev
+    email: support@orbispm.in
     name: OrbisPM Support
     url: https://orbispm.dev/support
   description: OrbisPM — AI-native project management platform API.

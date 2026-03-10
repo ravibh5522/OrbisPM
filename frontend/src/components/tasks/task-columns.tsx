@@ -551,11 +551,12 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     }
     setUpdatePending(true);
     try {
-      const updated = await send("task:update", {
+      const payload = {
         task_id: taskId,
         base_version: currentTask?.version ?? 0,
         ...data,
-      });
+      };
+      const updated = await send("task:update", payload);
       // Check for deadline warning (no applied_changes, only conflicts)
       if (updated?.deadline_conflicts?.length && !updated?.applied_changes?.length) {
         // Revert optimistic update

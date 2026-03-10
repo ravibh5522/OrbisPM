@@ -150,7 +150,7 @@ export function TaskPreviewPanel({
   orgSlug: _orgSlug,
   projectId,
   members,
-  projectMembers: _projectMembers,
+  projectMembers,
   currentUserId,
   userProjectRole,
   updating,
@@ -358,6 +358,7 @@ export function TaskPreviewPanel({
           <DetailsTab
             task={task}
             members={members}
+            pickerMembers={projectMembers}
             access={access}
             onUpdate={onUpdate}
             orgId={orgId}
@@ -465,6 +466,7 @@ export function TaskPreviewPanel({
 function DetailsTab({
   task,
   members,
+  pickerMembers,
   access,
   onUpdate,
   orgId,
@@ -476,6 +478,7 @@ function DetailsTab({
 }: {
   task: Task;
   members: OrgMember[];
+  pickerMembers?: ProjectMember[];
   access: AccessControl;
   onUpdate: (data: Partial<Task>) => void;
   orgId: string;
@@ -485,6 +488,18 @@ function DetailsTab({
   descDraft: string;
   setDescDraft: (v: string) => void;
 }) {
+  // Use project members for pickers (assignee/reporter), org members for name resolution
+  const selectableMembers: OrgMember[] = pickerMembers
+    ? pickerMembers.map((m) => ({
+        org_id: orgId,
+        user_id: m.user_id,
+        email: m.email || "",
+        display_name: m.display_name || m.email || "",
+        avatar_url: m.avatar_url,
+        role: "member" as const,
+        joined_at: m.joined_at,
+      }))
+    : members;
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
@@ -574,7 +589,7 @@ function DetailsTab({
                 </button>
                 {assigneeDropdownOpen && (
                   <div className="absolute top-full left-0 mt-1 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
-                    {members
+                    {selectableMembers
                       .filter((m) => !(task.assignee_ids || []).includes(m.user_id))
                       .map((m) => (
                         <button
@@ -590,7 +605,7 @@ function DetailsTab({
                           <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
                         </button>
                       ))}
-                    {members.filter((m) => !(task.assignee_ids || []).includes(m.user_id)).length === 0 && (
+                    {selectableMembers.filter((m) => !(task.assignee_ids || []).includes(m.user_id)).length === 0 && (
                       <div className="px-3 py-1.5 text-xs text-base-content/40">All members assigned</div>
                     )}
                   </div>
@@ -608,7 +623,7 @@ function DetailsTab({
             disabled={!access.canEdit}
           >
             <option value="">None</option>
-            {members.map((m) => (
+            {selectableMembers.map((m) => (
               <option key={m.user_id} value={m.user_id}>
                 {m.display_name || m.email || m.user_id.slice(0, 12)}
               </option>

@@ -5,7 +5,7 @@
 //
 // @contact.name OrbisPM Support
 // @contact.url https://orbispm.dev/support
-// @contact.email support@orbispm.dev
+// @contact.email support@orbispm.in
 //
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT

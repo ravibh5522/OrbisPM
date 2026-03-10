@@ -723,10 +723,10 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 			if mErr != nil {
 				return nil, mErr
 			}
-			if resolution == "auto-merged" {
+			switch resolution {
+			case "auto-merged":
 				changes = mergedChanges
-				// Proceed with the merge
-			} else {
+			case "conflict":
 				return nil, &cache.ConflictError{
 					TaskID:        task.ID,
 					ServerVersion: newVersion,
@@ -734,6 +734,9 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 					YourChanges:   changes,
 					Resolution:    "conflict",
 				}
+			default:
+				// "" means server version matches base version — no conflict,
+				// the Redis version key was stale/expired. Proceed normally.
 			}
 		}
 	}
@@ -878,6 +881,7 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	var updated *domain.Task
 	var ancestorsUpdated []*domain.Task
 	var descendantsUpdated []*domain.Task
+
 	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		updated, err = s.taskRepo.Update(ctx, tx, task)
 		if err != nil {
