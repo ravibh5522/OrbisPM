@@ -96,11 +96,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <circle cx="86" cy="29" r="4.2" fill="white" fillOpacity="0.95"/>
               <circle cx="86" cy="29" r="2.0" fill="#c7d2fe"/>
             </svg>
-            <span className="font-semibold text-lg tracking-tight" style={{ color: "#1e1b4b" }}>
-              Orbis<span style={{ color: "#4f46e5", fontWeight: 700 }}>PM</span>
+            <span className="font-semibold text-lg tracking-tight text-base-content">
+              Orbis<span className="text-primary font-bold">PM</span>
             </span>
           </a>
-          <div className="flex items-center gap-5 text-sm" style={{ color: "#1e1b4b99" }}>
+          <div className="flex items-center gap-5 text-sm text-base-content/60">
             <a href="https://orbispm.crewsity.com" className="hover:opacity-100 transition-opacity" style={{ opacity: 0.6 }}>
               Home
             </a>

@@ -33,6 +33,8 @@ type ProjectService struct {
 	projectRepo       repository.ProjectRepository
 	projectMemberRepo repository.ProjectMemberRepository
 	projectTeamRepo   repository.ProjectTeamRepository
+	taskRepo          repository.TaskRepository
+	teamMemberRepo    repository.TeamMemberRepository
 	txm               *repository.TxManager
 	workerSrv         *worker.Server
 	publisher         EventPublisher
@@ -55,6 +57,16 @@ func NewProjectService(
 // SetProjectTeamRepo injects the optional multi-team dependency.
 func (s *ProjectService) SetProjectTeamRepo(ptr repository.ProjectTeamRepository) {
 	s.projectTeamRepo = ptr
+}
+
+// SetTaskRepo injects the task repository for task reassignment during member removal.
+func (s *ProjectService) SetTaskRepo(tr repository.TaskRepository) {
+	s.taskRepo = tr
+}
+
+// SetTeamMemberRepo injects the team member repository for removing team-inherited members.
+func (s *ProjectService) SetTeamMemberRepo(tmr repository.TeamMemberRepository) {
+	s.teamMemberRepo = tmr
 }
 
 func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams) (*domain.Project, error) {
@@ -198,7 +210,46 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.U
 }
 
 func (s *ProjectService) RemoveMember(ctx context.Context, projectID, userID uuid.UUID) error {
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	return s.RemoveMemberWithReassign(ctx, projectID, userID, nil)
+}
+
+// RemoveMemberWithReassign removes a member and reassigns (or unassigns) all their tasks transactionally.
+// For team-inherited members, it removes them from the team instead of the project_members table.
+func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID, userID uuid.UUID, reassignTo *uuid.UUID) error {
+	// Find the member source before the transaction
+	effective, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("list effective members: %w", err)
+	}
+	var member *domain.EffectiveMember
+	for _, em := range effective {
+		if em.UserID == userID {
+			member = em
+			break
+		}
+	}
+	if member == nil {
+		return fmt.Errorf("member not found in project")
+	}
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		// Reassign/unassign tasks
+		if s.taskRepo != nil {
+			affected, err := s.taskRepo.ReassignOrUnassignTasks(ctx, tx, projectID, []uuid.UUID{userID}, reassignTo)
+			if err != nil {
+				return fmt.Errorf("reassign tasks: %w", err)
+			}
+			log.Info().
+				Str("project_id", projectID.String()).
+				Str("user_id", userID.String()).
+				Int64("tasks_affected", affected).
+				Msg("tasks reassigned during member removal")
+		}
+
+		// Remove from the correct table based on source
+		if member.Source == "team" && member.SourceTeamID != nil && s.teamMemberRepo != nil {
+			return s.teamMemberRepo.Remove(ctx, tx, *member.SourceTeamID, userID)
+		}
 		return s.projectMemberRepo.Remove(ctx, tx, projectID, userID)
 	})
 	if err != nil {
@@ -208,11 +259,43 @@ func (s *ProjectService) RemoveMember(ctx context.Context, projectID, userID uui
 	return nil
 }
 
+// PreviewRemoveMember returns the number of tasks assigned to the member.
+func (s *ProjectService) PreviewRemoveMember(ctx context.Context, projectID, userID uuid.UUID) (int, error) {
+	if s.taskRepo == nil {
+		return 0, nil
+	}
+	counts, err := s.taskRepo.CountByAssigneesInProject(ctx, projectID, []uuid.UUID{userID})
+	if err != nil {
+		return 0, err
+	}
+	return counts[userID], nil
+}
+
 func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID uuid.UUID, role string) error {
 	if role == "" {
 		return fmt.Errorf("role is required")
 	}
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+
+	// Find the member source to update in the correct table
+	effective, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("list effective members: %w", err)
+	}
+	var member *domain.EffectiveMember
+	for _, em := range effective {
+		if em.UserID == userID {
+			member = em
+			break
+		}
+	}
+	if member == nil {
+		return fmt.Errorf("member not found in project")
+	}
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		if member.Source == "team" && member.SourceTeamID != nil && s.teamMemberRepo != nil {
+			return s.teamMemberRepo.UpdateRole(ctx, tx, *member.SourceTeamID, userID, role)
+		}
 		return s.projectMemberRepo.UpdateRole(ctx, tx, projectID, userID, role)
 	})
 	if err != nil {
@@ -223,7 +306,26 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 }
 
 func (s *ProjectService) ListMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
-	return s.projectMemberRepo.ListByProject(ctx, projectID)
+	effective, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
+	members := make([]*domain.ProjectMember, 0, len(effective))
+	for _, em := range effective {
+		members = append(members, &domain.ProjectMember{
+			ProjectID:      projectID,
+			UserID:         em.UserID,
+			Email:          em.Email,
+			DisplayName:    em.DisplayName,
+			AvatarURL:      em.AvatarURL,
+			Role:           em.Role,
+			Source:         em.Source,
+			SourceTeamID:   em.SourceTeamID,
+			SourceTeamName: em.SourceTeamName,
+			JoinedAt:       em.JoinedAt,
+		})
+	}
+	return members, nil
 }
 
 // publishEvent publishes a domain event for real-time propagation via SSE.

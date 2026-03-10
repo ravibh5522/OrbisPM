@@ -51,6 +51,7 @@ type EffectiveMember struct {
 	Source         string     `json:"source"` // "direct" or "team"
 	SourceTeamID   *uuid.UUID `json:"source_team_id,omitempty"`
 	SourceTeamName string     `json:"source_team_name,omitempty"`
+	JoinedAt       time.Time  `json:"joined_at"`
 }
 
 // ProjectTeam represents the link between a project and a team.
@@ -59,4 +60,21 @@ type ProjectTeam struct {
 	TeamID    uuid.UUID `json:"team_id"`
 	TeamName  string    `json:"team_name,omitempty"` // populated on read
 	AddedAt   time.Time `json:"added_at"`
+}
+
+// UnlinkPreviewMember summarises a team member who will lose access when the team is unlinked.
+type UnlinkPreviewMember struct {
+	UserID      uuid.UUID `json:"user_id"`
+	Email       string    `json:"email"`
+	DisplayName string    `json:"display_name,omitempty"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
+	TaskCount   int       `json:"task_count"`
+}
+
+// UnlinkPreview summarises the impact of unlinking a team from a project.
+type UnlinkPreview struct {
+	TeamID          uuid.UUID              `json:"team_id"`
+	TeamName        string                 `json:"team_name"`
+	AffectedMembers []*UnlinkPreviewMember `json:"affected_members"`
+	TotalTasks      int                    `json:"total_tasks"`
 }

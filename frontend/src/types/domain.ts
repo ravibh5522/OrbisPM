@@ -130,6 +130,21 @@ export interface EffectiveMember {
   source_team_name?: string;
 }
 
+export interface UnlinkPreviewMember {
+  user_id: string;
+  email: string;
+  display_name?: string;
+  avatar_url?: string;
+  task_count: number;
+}
+
+export interface UnlinkPreview {
+  team_id: string;
+  team_name: string;
+  affected_members: UnlinkPreviewMember[];
+  total_tasks: number;
+}
+
 export type ChangeRequestStatus = "pending" | "approved" | "rejected";
 
 export interface TaskChangeRequest {
@@ -151,6 +166,8 @@ export interface TaskUpdateResult {
   change_request?: TaskChangeRequest | null;
   applied_changes?: Record<string, unknown>;
   pending_review?: boolean;
+  deadline_conflicts?: DeadlineConflict[];
+  ancestors_updated?: Task[];
 }
 
 export type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
@@ -166,6 +183,7 @@ export interface Task {
   status: TaskStatus;
   priority: TaskPriority;
   assignee_id?: string | null;
+  assignee_ids?: string[];
   reporter_id?: string | null;
   depth: number;
   position: number;
@@ -182,6 +200,22 @@ export interface Task {
   version: number;
   created_at: string;
   updated_at: string;
+  progress?: number;
+}
+
+export interface DeadlineConflict {
+  task_id: string;
+  title: string;
+  due_date: string | null;
+  start_date?: string | null;
+  depth: number;
+  direction?: "ancestor" | "descendant";
+}
+
+export interface TaskCreateResult {
+  task?: Task;
+  deadline_conflicts?: DeadlineConflict[];
+  ancestors_updated?: Task[];
 }
 
 export interface TaskTree {

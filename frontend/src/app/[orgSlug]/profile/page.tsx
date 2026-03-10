@@ -709,7 +709,7 @@ export default function ProfilePage() {
                 </Button>
               </div>
               {showCodesModal && backupCodes && (
-                <div className="modal modal-open">
+                <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
                   <div className="modal-box max-w-md">
                     <h3 className="font-bold text-lg mb-2">Your Backup Codes</h3>
                     <div className="alert alert-warning mb-4 text-xs">
@@ -727,8 +727,8 @@ export default function ProfilePage() {
                       <Button size="sm" className="ml-auto" onClick={() => { setShowCodesModal(false); setBackupCodes(null); }}>Done</Button>
                     </div>
                   </div>
-                  <div className="modal-backdrop" onClick={() => { setShowCodesModal(false); setBackupCodes(null); }} />
-                </div>
+                  <div className="modal-backdrop bg-transparent" onClick={() => { setShowCodesModal(false); setBackupCodes(null); }} />
+                </dialog>
               )}
             </Card>
           )}

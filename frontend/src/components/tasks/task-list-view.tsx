@@ -1,5 +1,6 @@
 "use client";
 
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
@@ -48,7 +49,7 @@ import {
     X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 
 /* ═══════════════════════════════════════════════════════
@@ -63,9 +64,10 @@ interface TaskListViewProps {
   orgSlug: string;
   projectId: string;
   members: ProjectMember[];
+  globalFilter?: GlobalFilterState;
 }
 
-export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListViewProps) {
+export function TaskListView({ orgId, orgSlug, projectId, members, globalFilter }: TaskListViewProps) {
   const send = useProjectTaskStore((s) => s.send);
   const router = useRouter();
 
@@ -104,7 +106,14 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
         sort_order: sortOrder,
         status: filterStatus || undefined,
         priority: filterPriority || undefined,
-        search: searchText.trim() || undefined,
+        search: searchText.trim() || globalFilter?.search || undefined,
+        // Global filter fields (server-side)
+        statuses: globalFilter?.statuses?.length ? globalFilter.statuses : undefined,
+        priorities: globalFilter?.priorities?.length ? globalFilter.priorities : undefined,
+        assignee_ids: globalFilter?.assigneeIds?.length ? globalFilter.assigneeIds.filter(Boolean) : undefined,
+        labels: globalFilter?.labels?.length ? globalFilter.labels : undefined,
+        due_date_from: globalFilter?.dueDateFrom || undefined,
+        due_date_to: globalFilter?.dueDateTo || undefined,
       });
       setTasks(res?.data || []);
       setTotal(res?.total || 0);
@@ -114,7 +123,7 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [send, page, sortBy, sortOrder, filterStatus, filterPriority, searchText]);
+  }, [send, page, sortBy, sortOrder, filterStatus, filterPriority, searchText, globalFilter]);
 
   useEffect(() => { fetchList(); }, [fetchList]);
 
@@ -311,7 +320,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
             className="select select-bordered select-xs"
             defaultValue=""
             onChange={(e) => {
-              if (e.target.value) bulkAction({ assignee_id: e.target.value === "__none__" ? null : e.target.value });
+              if (e.target.value) {
+                const ids = e.target.value === "__none__" ? [] : [e.target.value];
+                bulkAction({ assignee_ids: ids, assignee_id: ids[0] || "" } as Partial<Task>);
+              }
               e.target.value = "";
             }}
           >
@@ -666,22 +678,18 @@ function TaskRow({
         </select>
       </td>
 
-      {/* Assignee — inline dropdown */}
+      {/* Assignee — multi-select dropdown */}
       <td>
-        <select
-          className="select select-ghost select-xs w-full max-w-28"
-          value={task.assignee_id || ""}
-          onChange={(e) =>
-            onUpdate({ assignee_id: e.target.value || null })
+        <MultiAssigneeCell
+          assigneeIds={task.assignee_ids || []}
+          members={members}
+          onChange={(next) =>
+            onUpdate({
+              assignee_ids: next,
+              assignee_id: next.length > 0 ? next[0] : "",
+            } as Partial<Task>)
           }
-        >
-          <option value="">Unassigned</option>
-          {members.map((m) => (
-            <option key={m.user_id} value={m.user_id}>
-              {m.display_name || m.email || m.user_id.slice(0, 8)}
-            </option>
-          ))}
-        </select>
+        />
       </td>
 
       {/* Due date — inline input */}
@@ -732,6 +740,99 @@ function TaskRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Multi-Assignee Cell (inline dropdown with checkboxes)
+   ═══════════════════════════════════════════════════════ */
+
+function MultiAssigneeCell({
+  assigneeIds,
+  members,
+  onChange,
+}: {
+  assigneeIds: string[];
+  members: ProjectMember[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click or Escape
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const toggle = (userId: string) => {
+    const next = assigneeIds.includes(userId)
+      ? assigneeIds.filter((id) => id !== userId)
+      : [...assigneeIds, userId];
+    onChange(next);
+  };
+
+  const assignedMembers = members.filter((m) => assigneeIds.includes(m.user_id));
+  const label =
+    assignedMembers.length === 0
+      ? "Unassigned"
+      : assignedMembers.length === 1
+        ? (assignedMembers[0].display_name || assignedMembers[0].email || assignedMembers[0].user_id.slice(0, 8))
+        : `${assignedMembers.length} assigned`;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        className="btn btn-ghost btn-xs w-full max-w-32 justify-start truncate text-left font-normal"
+        onClick={() => setOpen((p) => !p)}
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-48 overflow-y-auto z-50">
+          <button
+            className={cn(
+              "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200",
+              assigneeIds.length === 0 && "font-medium",
+            )}
+            onClick={() => { onChange([]); setOpen(false); }}
+          >
+            Clear All
+          </button>
+          {members.map((m) => {
+            const checked = assigneeIds.includes(m.user_id);
+            return (
+              <button
+                key={m.user_id}
+                className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200"
+                onClick={() => toggle(m.user_id)}
+              >
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-xs"
+                  checked={checked}
+                  readOnly
+                />
+                <span className="truncate">
+                  {m.display_name || m.email || m.user_id.slice(0, 8)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -787,6 +888,7 @@ function CreateTaskModal({
         status: data.status,
         priority: data.priority,
         assignee_id: data.assignee_id || undefined,
+        assignee_ids: data.assignee_id ? [data.assignee_id] : [],
         due_date: data.due_date ? new Date(data.due_date).toISOString() : undefined,
       });
       onCreated();

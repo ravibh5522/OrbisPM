@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
@@ -228,6 +229,25 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 		AssigneeID: queryUUID(r, "assignee_id"),
 		Search:     queryStr(r, "search"),
 		ParentID:   queryStr(r, "parent_id"),
+		DueDateFrom: queryStr(r, "due_date_from"),
+		DueDateTo:   queryStr(r, "due_date_to"),
+	}
+	// Multi-value query params (comma-separated)
+	if s := r.URL.Query().Get("statuses"); s != "" {
+		filter.Statuses = strings.Split(s, ",")
+	}
+	if p := r.URL.Query().Get("priorities"); p != "" {
+		filter.Priorities = strings.Split(p, ",")
+	}
+	if l := r.URL.Query().Get("labels"); l != "" {
+		filter.Labels = strings.Split(l, ",")
+	}
+	if a := r.URL.Query().Get("assignee_ids"); a != "" {
+		for _, idStr := range strings.Split(a, ",") {
+			if uid, pErr := uuid.Parse(strings.TrimSpace(idStr)); pErr == nil {
+				filter.AssigneeIDs = append(filter.AssigneeIDs, uid)
+			}
+		}
 	}
 	if sb := r.URL.Query().Get("sort_by"); sb != "" {
 		filter.SortBy = sb
@@ -309,7 +329,7 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid task id"})
 		return
 	}
-	if err := h.taskSvc.Delete(r.Context(), id); err != nil {
+	if _, err := h.taskSvc.Delete(r.Context(), id); err != nil {
 		Error(w, r, err)
 		return
 	}

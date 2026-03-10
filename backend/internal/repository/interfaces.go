@@ -18,13 +18,19 @@ type ListFilter struct {
 // TaskFilter extends ListFilter with task-specific filters.
 type TaskFilter struct {
 	ListFilter
-	Status     *string
-	Priority   *string
-	AssigneeID *uuid.UUID
-	Search     *string
-	ParentID   *string // "root" for root tasks (parent IS NULL), UUID for children of a specific task, nil for all
-	SortBy     string  // column to sort by (title, status, priority, due_date, created_at, updated_at, position)
-	SortOrder  string  // "asc" or "desc"
+	Status      *string    // single status (backward compat)
+	Statuses    []string   // multi-status filter
+	Priority    *string    // single priority (backward compat)
+	Priorities  []string   // multi-priority filter
+	AssigneeID  *uuid.UUID // single assignee (backward compat)
+	AssigneeIDs []uuid.UUID // multi-assignee filter
+	Search      *string
+	ParentID    *string // "root" for root tasks (parent IS NULL), UUID for children of a specific task, nil for all
+	Labels      []string
+	DueDateFrom *string // "YYYY-MM-DD"
+	DueDateTo   *string // "YYYY-MM-DD"
+	SortBy      string  // column to sort by (title, status, priority, due_date, created_at, updated_at, position)
+	SortOrder   string  // "asc" or "desc"
 }
 
 // --- Organisation ---
@@ -89,6 +95,9 @@ type TaskRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Task, error)
 	GetByIDTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.Task, error)
 	GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain.Task, error)
+	GetTreeTx(ctx context.Context, tx pgx.Tx, rootTaskID uuid.UUID) ([]*domain.Task, error)
+	GetAncestors(ctx context.Context, taskID uuid.UUID) ([]*domain.Task, error)
+	GetAncestorsTx(ctx context.Context, tx pgx.Tx, taskID uuid.UUID) ([]*domain.Task, error)
 	ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error)
 	List(ctx context.Context, projectID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error)
 	ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, limit, offset int) ([]*domain.Task, int, error)
@@ -97,6 +106,8 @@ type TaskRepository interface {
 	CountByProject(ctx context.Context, projectID uuid.UUID) (int, error)
 	UpdatePosition(ctx context.Context, tx pgx.Tx, id uuid.UUID, position int) error
 	Reparent(ctx context.Context, tx pgx.Tx, id uuid.UUID, newParentID *uuid.UUID, position int) error
+	ReassignOrUnassignTasks(ctx context.Context, tx pgx.Tx, projectID uuid.UUID, oldUserIDs []uuid.UUID, newUserID *uuid.UUID) (int64, error)
+	CountByAssigneesInProject(ctx context.Context, projectID uuid.UUID, userIDs []uuid.UUID) (map[uuid.UUID]int, error)
 }
 
 // --- Checklist ---

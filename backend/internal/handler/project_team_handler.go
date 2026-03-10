@@ -25,6 +25,7 @@ func (h *ProjectTeamHandler) Routes() chi.Router {
 	r.Get("/", h.ListTeams)
 	r.Post("/", h.LinkTeams)
 	r.Delete("/{teamId}", h.UnlinkTeam)
+	r.Get("/{teamId}/unlink-preview", h.PreviewUnlinkTeam)
 	r.Get("/eligible-members", h.ListEligibleMembers)
 
 	return r
@@ -85,7 +86,7 @@ func (h *ProjectTeamHandler) LinkTeams(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UnlinkTeam removes a team from a project.
+// UnlinkTeam removes a team from a project, with optional task reassignment.
 func (h *ProjectTeamHandler) UnlinkTeam(w http.ResponseWriter, r *http.Request) {
 	projectID, err := uuidParam(r, "projectId")
 	if err != nil {
@@ -97,7 +98,29 @@ func (h *ProjectTeamHandler) UnlinkTeam(w http.ResponseWriter, r *http.Request) 
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
 		return
 	}
-	if err := h.ptSvc.UnlinkTeam(r.Context(), projectID, teamID); err != nil {
+
+	// Parse optional body for reassignment
+	var body struct {
+		ReassignTo *string `json:"reassign_to,omitempty"` // user_id or empty
+	}
+	// Body is optional for DELETE, ignore parse errors
+	_ = parseBody(r, &body)
+
+	params := service.UnlinkTeamParams{
+		ProjectID: projectID,
+		TeamID:    teamID,
+	}
+
+	if body.ReassignTo != nil && *body.ReassignTo != "" {
+		uid, err := uuid.Parse(*body.ReassignTo)
+		if err != nil {
+			JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid reassign_to user id"})
+			return
+		}
+		params.ReassignTo = &uid
+	}
+
+	if err := h.ptSvc.UnlinkTeam(r.Context(), params); err != nil {
 		Error(w, r, err)
 		return
 	}
@@ -117,4 +140,24 @@ func (h *ProjectTeamHandler) ListEligibleMembers(w http.ResponseWriter, r *http.
 		return
 	}
 	JSON(w, http.StatusOK, members)
+}
+
+// PreviewUnlinkTeam returns the impact of unlinking a team (affected members and task counts).
+func (h *ProjectTeamHandler) PreviewUnlinkTeam(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	teamID, err := uuidParam(r, "teamId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
+		return
+	}
+	preview, err := h.ptSvc.PreviewUnlinkTeam(r.Context(), projectID, teamID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, preview)
 }

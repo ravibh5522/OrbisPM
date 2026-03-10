@@ -204,7 +204,7 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
   if (!open) return null;
 
   return (
-    <dialog className="modal modal-open">
+    <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
       <div className="modal-box w-11/12 max-w-3xl">
         <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" onClick={handleClose}>
           <X className="w-4 h-4" />
@@ -424,7 +424,7 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
           </div>
         )}
       </div>
-      <form method="dialog" className="modal-backdrop">
+      <form method="dialog" className="modal-backdrop bg-transparent">
         <button onClick={handleClose}>close</button>
       </form>
     </dialog>

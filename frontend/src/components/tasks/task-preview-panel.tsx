@@ -4,7 +4,7 @@ import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-ed
 import { RecurrenceBadge, RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { Button } from "@/components/ui/button";
-import { Avatar, ConfirmDialog } from "@/components/ui/shared";
+import { Avatar, AvatarStack, ConfirmDialog } from "@/components/ui/shared";
 import { api } from "@/lib/api"; // kept for attachment upload/download (binary ops)
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -15,6 +15,7 @@ import type {
     Attachment,
     Checklist,
     Comment,
+    DeadlineConflict,
     OrgMember,
     ProjectMember,
     Task,
@@ -33,7 +34,6 @@ import {
     Image as ImageIcon,
     Link2,
     ListChecks,
-    Loader2,
     MessageSquare,
     Paperclip,
     Plus,
@@ -441,11 +441,7 @@ export function TaskPreviewPanel({
           )}
         </div>
         
-        {updating && (
-          <div className="text-center">
-            <Loader2 className="w-3 h-3 animate-spin inline text-primary" />
-          </div>
-        )}
+
       </div>
       
       <ConfirmDialog
@@ -492,6 +488,7 @@ function DetailsTab({
 }) {
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
   
   return (
     <div className="p-3 space-y-4">
@@ -527,23 +524,81 @@ function DetailsTab({
         </div>
       </div>
       
-      {/* Assignee & Reporter */}
-      <div className="grid grid-cols-2 gap-2">
+      {/* Assignees & Reporter */}
+      <div className="space-y-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Assignee</label>
-          <select
-            className="select select-bordered select-xs w-full"
-            value={task.assignee_id || ""}
-            onChange={(e) => onUpdate({ assignee_id: e.target.value })}
-            disabled={!access.canEdit}
-          >
-            <option value="">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.display_name || m.email || m.user_id.slice(0, 12)}
-              </option>
-            ))}
-          </select>
+          <label className="text-xs text-base-content/50 block mb-1">Assignees</label>
+          <div className="flex items-center gap-1 flex-wrap">
+            {(task.assignee_ids || []).map((uid) => {
+              const m = members.find((x) => x.user_id === uid);
+              if (!m) return null;
+              const initials = (m.display_name || m.email || "?")
+                .split(" ")
+                .map((w) => w[0])
+                .join("")
+                .toUpperCase()
+                .slice(0, 2);
+              return (
+                <div key={uid} className="relative group">
+                  <div
+                    className="w-7 h-7 rounded-full bg-primary text-primary-content flex items-center justify-center text-[10px] font-medium ring-2 ring-base-100"
+                    title={m.display_name || m.email || uid}
+                  >
+                    {m.avatar_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={m.avatar_url} alt="" className="rounded-full w-full h-full object-cover" />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  {access.canEdit && (
+                    <button
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-error text-error-content text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={() => {
+                        const next = (task.assignee_ids || []).filter((id) => id !== uid);
+                        onUpdate({ assignee_ids: next, assignee_id: next[0] || null } as Partial<Task>);
+                      }}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {access.canEdit && (
+              <div className="relative">
+                <button
+                  className="w-7 h-7 rounded-full border-2 border-dashed border-base-300 flex items-center justify-center text-base-content/40 hover:border-primary hover:text-primary transition-colors"
+                  onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+                {assigneeDropdownOpen && (
+                  <div className="absolute top-full left-0 mt-1 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
+                    {members
+                      .filter((m) => !(task.assignee_ids || []).includes(m.user_id))
+                      .map((m) => (
+                        <button
+                          key={m.user_id}
+                          className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-base-200"
+                          onClick={() => {
+                            const next = [...(task.assignee_ids || []), m.user_id];
+                            onUpdate({ assignee_ids: next, assignee_id: next[0] } as Partial<Task>);
+                            setAssigneeDropdownOpen(false);
+                          }}
+                        >
+                          <Avatar name={m.display_name || m.email || ""} size="xs" src={m.avatar_url} />
+                          <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
+                        </button>
+                      ))}
+                    {members.filter((m) => !(task.assignee_ids || []).includes(m.user_id)).length === 0 && (
+                      <div className="px-3 py-1.5 text-xs text-base-content/40">All members assigned</div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         <div>
           <label className="text-xs text-base-content/50 block mb-1">Reporter</label>
@@ -663,9 +718,9 @@ function DetailsTab({
           <Tag className="w-3 h-3" /> Labels
         </label>
         <div className="flex flex-wrap gap-1">
-          {(task.labels || []).map((l) => (
-            <span key={l} className="badge badge-xs badge-outline gap-1 group">
-              {l}
+          {(task.labels || []).slice(0, 7).map((l) => (
+            <span key={l} className="badge badge-xs badge-outline gap-1 group" title={l.length > 10 ? l : undefined}>
+              {l.length > 10 ? l.slice(0, 10) + "…" : l}
               {access.canEdit && (
                 <button
                   className="opacity-0 group-hover:opacity-100"
@@ -676,6 +731,9 @@ function DetailsTab({
               )}
             </span>
           ))}
+          {(task.labels || []).length > 7 && (
+            <span className="badge badge-xs badge-ghost">+{(task.labels || []).length - 7}</span>
+          )}
           {access.canEdit && (
             labelsOpen ? (
               <div className="flex gap-1 items-center">

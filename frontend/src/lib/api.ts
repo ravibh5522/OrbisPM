@@ -1,5 +1,5 @@
-import { clearAuth, getRefreshToken, isTokenExpired, saveTokens } from "@/lib/auth";
 import type { AuthUser } from "@/types/domain";
+import { getRefreshToken, isTokenExpired, saveTokens, clearAuth } from "@/lib/auth";
 
 // API response shapes
 export interface ListResponse<T> {
@@ -176,8 +176,8 @@ function patch<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-function del<T = void>(path: string): Promise<T> {
-  return request<T>(path, { method: "DELETE" });
+function del<T = void>(path: string, opts?: RequestInit): Promise<T> {
+  return request<T>(path, { method: "DELETE", ...opts });
 }
 
 function upload<T>(path: string, formData: FormData): Promise<T> {
@@ -201,46 +201,47 @@ async function downloadBlob(path: string, filename: string): Promise<void> {
 
 // API namespaces
 import type {
-    ActivityLog,
-    APIKey,
-    Attachment,
-    AuthTokens,
-    BackupCodesResponse,
-    BillingPlan,
-    Checklist,
-    Comment,
-    CustomRole,
-    DashboardStats,
-    EffectiveMember,
-    IDPInfo,
-    IDPStartResponse,
-    ImportJob,
-    MFAStatus,
-    Notification,
-    NotificationPreference,
-    OIDCAuthorizeResponse,
-    Org,
-    OrgMember,
-    OrgSubscription,
-    Permission,
-    Project,
-    ProjectDashboardStats,
-    ProjectMember,
-    ProjectTeam,
-    Role,
-    Task,
-    TaskChangeRequest,
-    TaskDependency,
-    TaskRule,
-    TaskTemplate,
-    TaskTree,
-    TaskUpdateResult,
-    TaskWatcher,
-    Team,
-    TeamDashboardStats,
-    TeamMember,
-    TOTPRegistration,
-    Webhook,
+  Org,
+  OrgMember,
+  Team,
+  TeamMember,
+  Project,
+  ProjectMember,
+  Task,
+  TaskTree,
+  TaskDependency,
+  Checklist,
+  Comment,
+  TaskRule,
+  Notification,
+  NotificationPreference,
+  ActivityLog,
+  TaskTemplate,
+  Webhook,
+  APIKey,
+  Attachment,
+  TaskWatcher,
+  BillingPlan,
+  OrgSubscription,
+  CustomRole,
+  ImportJob,
+  DashboardStats,
+  TeamDashboardStats,
+  ProjectDashboardStats,
+  AuthTokens,
+  Permission,
+  Role,
+  ProjectTeam,
+  EffectiveMember,
+  UnlinkPreview,
+  TaskChangeRequest,
+  TaskUpdateResult,
+  TOTPRegistration,
+  MFAStatus,
+  BackupCodesResponse,
+  IDPInfo,
+  IDPStartResponse,
+  OIDCAuthorizeResponse,
 } from "@/types/domain";
 
 export const api = {
@@ -420,8 +421,14 @@ export const api = {
       post<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members`, data),
     update: (orgId: string, projId: string, userId: string, data: { role: string }) =>
       patch<ProjectMember>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`, data),
-    remove: (orgId: string, projId: string, userId: string) =>
-      del(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`),
+    remove: (orgId: string, projId: string, userId: string, reassignTo?: string) =>
+      request<void>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(reassignTo ? { reassign_to: reassignTo } : {}),
+      }),
+    previewRemove: (orgId: string, projId: string, userId: string) =>
+      get<{ task_count: number }>(`${V1}/orgs/${orgId}/projects/${projId}/members/${userId}/preview`),
   },
 
   // Tasks
@@ -680,8 +687,13 @@ export const api = {
       get<ProjectTeam[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams`),
     link: (orgId: string, projId: string, teamIds: string[]) =>
       post<void>(`${V1}/orgs/${orgId}/projects/${projId}/teams`, { team_ids: teamIds }),
-    unlink: (orgId: string, projId: string, teamId: string) =>
-      del(`${V1}/orgs/${orgId}/projects/${projId}/teams/${teamId}`),
+    unlink: (orgId: string, projId: string, teamId: string, reassignTo?: string) =>
+      del(`${V1}/orgs/${orgId}/projects/${projId}/teams/${teamId}`, {
+        body: JSON.stringify(reassignTo ? { reassign_to: reassignTo } : {}),
+        headers: { "Content-Type": "application/json" },
+      }),
+    unlinkPreview: (orgId: string, projId: string, teamId: string) =>
+      get<UnlinkPreview>(`${V1}/orgs/${orgId}/projects/${projId}/teams/${teamId}/unlink-preview`),
     eligibleMembers: (orgId: string, projId: string) =>
       get<EffectiveMember[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams/eligible-members`),
   },

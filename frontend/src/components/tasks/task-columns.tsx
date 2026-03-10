@@ -2,15 +2,16 @@
 
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
-import { Avatar, ConfirmDialog } from "@/components/ui/shared";
+import { Avatar, AvatarStack, ConfirmDialog } from "@/components/ui/shared";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
-import type { OrgMember, ProjectMember, Task, TaskPriority, TaskStatus } from "@/types/domain";
+import type { DeadlineConflict, OrgMember, ProjectMember, Task, TaskPriority, TaskStatus } from "@/types/domain";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
     Check,
@@ -29,6 +30,7 @@ import {
     X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 
 const MAX_DEPTH = 3;
@@ -72,9 +74,34 @@ function isFilterActive(f: ColumnFilterState | undefined): boolean {
   );
 }
 
-function applyFilter(tasks: Task[], f: ColumnFilterState | undefined): Task[] {
-  if (!f || !isFilterActive(f)) return tasks;
-  return tasks.filter((t) => {
+function applyFilter(tasks: Task[], f: ColumnFilterState | undefined, gf?: GlobalFilterState): Task[] {
+  let result = tasks;
+  // Apply global filter first
+  if (gf) {
+    result = result.filter((t) => {
+      if (gf.assigneeIds.length > 0) {
+        const ids = t.assignee_ids?.length ? t.assignee_ids : t.assignee_id ? [t.assignee_id] : [];
+        // "" means unassigned
+        const matchesUnassigned = gf.assigneeIds.includes("") && ids.length === 0;
+        const matchesAny = ids.some((id) => gf.assigneeIds.includes(id));
+        if (!matchesUnassigned && !matchesAny) return false;
+      }
+      if (gf.statuses.length > 0 && !gf.statuses.includes(t.status)) return false;
+      if (gf.priorities.length > 0 && !gf.priorities.includes(t.priority)) return false;
+      if (gf.labels.length > 0) {
+        if (!t.labels || !t.labels.some((l) => gf.labels.includes(l))) return false;
+      }
+      if (gf.dueDateFrom && (!t.due_date || t.due_date < gf.dueDateFrom)) return false;
+      if (gf.dueDateTo && (!t.due_date || t.due_date > gf.dueDateTo)) return false;
+      if (gf.search) {
+        const q = gf.search.toLowerCase();
+        if (!t.title.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  if (!f || !isFilterActive(f)) return result;
+  return result.filter((t) => {
     if (f.statuses.length > 0 && !f.statuses.includes(t.status)) return false;
     if (f.priorities.length > 0 && !f.priorities.includes(t.priority)) return false;
     if (f.assigneeIds.length > 0) {
@@ -106,9 +133,13 @@ interface TaskColumnsProps {
   orgMembers?: OrgMember[];
   /** Optional task ID to auto-focus on mount */
   focusTaskId?: string;
+  /** If provided, toolbar buttons are portaled into this element instead of rendered inline */
+  toolbarPortal?: HTMLElement | null;
+  /** Global filter state from the toolbar */
+  globalFilter?: GlobalFilterState;
 }
 
-export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, focusTaskId }: TaskColumnsProps) {
+export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, focusTaskId, toolbarPortal, globalFilter }: TaskColumnsProps) {
   const send = useProjectTaskStore((s) => s.send);
   const user = useAuthStore((s) => s.user);
   const orgMembership = useAuthStore((s) => s.currentMembership);
@@ -155,6 +186,10 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   // Mutation state
   const [updatePending, setUpdatePending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+
+  // Deadline conflict state for updates
+  const [updateDeadlineConflicts, setUpdateDeadlineConflicts] = useState<DeadlineConflict[]>([]);
+  const pendingUpdateRef = useRef<{ taskId: string; data: Partial<Task>; baseVersion: number } | null>(null);
 
   // Reset deep-link state when focusTaskId changes
   if (focusTaskId !== prevFocusTaskId) {
@@ -521,12 +556,32 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         base_version: currentTask?.version ?? 0,
         ...data,
       });
-      // Reconcile with server response
-      if (updated?.id) {
-        useProjectTaskStore.getState().upsertTask(updated);
+      // Check for deadline warning (no applied_changes, only conflicts)
+      if (updated?.deadline_conflicts?.length && !updated?.applied_changes?.length) {
+        // Revert optimistic update
+        if (currentTask) {
+          useProjectTaskStore.getState().upsertTask(currentTask);
+          setColumnData((prev) =>
+            prev.map((col) => col.map((t) => (t.id === taskId ? currentTask : t)))
+          );
+        }
+        pendingUpdateRef.current = { taskId, data, baseVersion: currentTask?.version ?? 0 };
+        setUpdateDeadlineConflicts(updated.deadline_conflicts);
+        return;
+      }
+      // Reconcile with server response — handle both direct task and wrapped result
+      const task = updated?.task ?? updated;
+      if (task?.id) {
+        useProjectTaskStore.getState().upsertTask(task);
         setColumnData((prev) =>
-          prev.map((col) => col.map((t) => (t.id === taskId ? updated : t)))
+          prev.map((col) => col.map((t) => (t.id === taskId ? task : t)))
         );
+      }
+      // Handle ancestor updates from deadline cascade
+      if (updated?.ancestors_updated?.length) {
+        for (const anc of updated.ancestors_updated) {
+          useProjectTaskStore.getState().upsertTask(anc);
+        }
       }
       // Push undo command
       pushCommand({
@@ -537,7 +592,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
           if (!s) return;
           await s("task:update", {
             task_id: taskId,
-            base_version: updated?.version ?? 0,
+            base_version: task?.version ?? updated?.version ?? 0,
             ...oldValues,
           });
           refetchAllRef.current();
@@ -556,6 +611,41 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
       refetchAll();
     } finally { setUpdatePending(false); }
   }, [send, refetchAll, columnData, pushCommand]);
+
+  const confirmExtendDeadlinesOnUpdate = useCallback(async () => {
+    const pending = pendingUpdateRef.current;
+    if (!pending || !send) return;
+    const conflicts = updateDeadlineConflicts;
+    setUpdateDeadlineConflicts([]);
+    pendingUpdateRef.current = null;
+    setUpdatePending(true);
+    try {
+      const hasAncestor = conflicts.some((c) => c.direction === "ancestor");
+      const hasDescendant = conflicts.some((c) => c.direction === "descendant");
+      const updated = await send("task:update", {
+        task_id: pending.taskId,
+        base_version: pending.baseVersion,
+        ...pending.data,
+        ...(hasAncestor && { extend_parent_deadlines: true }),
+        ...(hasDescendant && { adjust_child_deadlines: true }),
+      });
+      const task = updated?.task ?? updated;
+      if (task?.id) {
+        useProjectTaskStore.getState().upsertTask(task);
+        setColumnData((prev) =>
+          prev.map((col) => col.map((t) => (t.id === pending.taskId ? task : t)))
+        );
+      }
+      if (updated?.ancestors_updated?.length) {
+        for (const anc of updated.ancestors_updated) {
+          useProjectTaskStore.getState().upsertTask(anc);
+        }
+        refetchAll();
+      }
+    } catch {
+      refetchAll();
+    } finally { setUpdatePending(false); }
+  }, [send, refetchAll, updateDeadlineConflicts]);
 
   const handleDuplicate = useCallback(async (id: string) => {
     if (!send) return;
@@ -745,6 +835,20 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     setCreateParentId(depth > 0 ? selected[depth - 1] : null);
   };
 
+  // Resolve parent task for create modal (inherits fields)
+  const createParentTask = useMemo(() => {
+    if (!createParentId) return null;
+    for (const tasks of columnData) {
+      const found = tasks?.find((t) => t.id === createParentId);
+      if (found) return found;
+    }
+    for (const tasks of splitColumnData) {
+      const found = tasks?.find((t) => t.id === createParentId);
+      if (found) return found;
+    }
+    return null;
+  }, [createParentId, columnData, splitColumnData]);
+
   const openBulkCreate = (depth: number) => {
     setBulkCreateDepth(depth);
     setBulkCreateParentId(depth > 0 ? selected[depth - 1] : null);
@@ -802,7 +906,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const delta = moveEvent.clientX - startX;
-      const newWidth = Math.max(120, Math.min(400, startWidth + delta));
+      const newWidth = Math.max(80, Math.min(600, startWidth + delta));
       currentWidths = [...currentWidths];
       currentWidths[colIndex] = newWidth;
       setColumnWidths(currentWidths);
@@ -866,13 +970,13 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   }, []);
 
   const filteredColumnData = useMemo(() =>
-    columnData.map((tasks, depth) => applyFilter(tasks, columnFilters.get(depth))),
-    [columnData, columnFilters]
+    columnData.map((tasks, depth) => applyFilter(tasks, columnFilters.get(depth), globalFilter)),
+    [columnData, columnFilters, globalFilter]
   );
 
   const filteredSplitColumnData = useMemo(() =>
-    splitColumnData.map((tasks, depth) => applyFilter(tasks, columnFilters.get(depth))),
-    [splitColumnData, columnFilters]
+    splitColumnData.map((tasks, depth) => applyFilter(tasks, columnFilters.get(depth), globalFilter)),
+    [splitColumnData, columnFilters, globalFilter]
   );
 
   /* ── Render ── */
@@ -890,60 +994,72 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     { depth: 3, label: columnNames[3], tasks: filteredSplitColumnData[3], loading: splitColumnLoading[3], show: !!splitSelected[2] },
   ];
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-180px)] min-h-[500px] border border-base-200 rounded-lg overflow-hidden bg-base-100 relative">
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-3 py-1.5 border-b border-base-200 bg-base-200/20">
-        <div className="flex items-center gap-2">
-          <button
-            className={cn(
-              "btn btn-xs gap-1",
-              bulkActionMode ? "btn-primary" : "btn-ghost"
-            )}
-            onClick={toggleBulkActionMode}
-          >
-            <Check className="w-3 h-3" />
-            {bulkActionMode ? `Select Mode (${multiSelected.size})` : "Select"}
-          </button>
-          {bulkActionMode && multiSelected.size > 0 && (
-            <button className="btn btn-ghost btn-xs" onClick={clearMultiSelection}>
-              Clear
-            </button>
+  /* Toolbar buttons (rendered inline or portaled) */
+  const toolbarContent = (
+    <>
+      <div className="flex items-center gap-1">
+        <button
+          className={cn(
+            "btn btn-xs gap-1",
+            bulkActionMode ? "btn-primary" : "btn-ghost"
           )}
-        </div>
-        <div className="flex items-center gap-1">
-          <button
-            className={cn("btn btn-xs gap-1", splitView ? "btn-secondary" : "btn-ghost")}
-            onClick={() => setSplitView((p) => !p)}
-            title="Toggle split view"
-          >
-            {splitView ? "Unsplit" : "Split"}
+          onClick={toggleBulkActionMode}
+        >
+          <Check className="w-3 h-3" />
+          {bulkActionMode ? `Select (${multiSelected.size})` : "Select"}
+        </button>
+        {bulkActionMode && multiSelected.size > 0 && (
+          <button className="btn btn-ghost btn-xs" onClick={clearMultiSelection}>
+            Clear
           </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
-            onClick={undo}
-            disabled={!canUndo}
-            title="Undo (Ctrl+Z)"
-          >
-            <Undo2 className="w-3.5 h-3.5" />
-          </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
-            onClick={redo}
-            disabled={!canRedo}
-            title="Redo (Ctrl+Y)"
-          >
-            <Redo2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        )}
       </div>
+      <div className="flex items-center gap-0.5">
+        <button
+          className={cn("btn btn-xs gap-1", splitView ? "btn-secondary" : "btn-ghost")}
+          onClick={() => setSplitView((p) => !p)}
+          title="Toggle split view"
+        >
+          {splitView ? "Unsplit" : "Split"}
+        </button>
+        <button
+          className="btn btn-ghost btn-xs btn-square"
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          className="btn btn-ghost btn-xs btn-square"
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Y)"
+        >
+          <Redo2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-100 relative">
+      {/* Toolbar: portal to parent row if available, otherwise render inline */}
+      {toolbarPortal
+        ? createPortal(toolbarContent, toolbarPortal)
+        : (
+          <div className="flex items-center justify-between px-3 py-1 border-b border-base-200 bg-base-200/20">
+            {toolbarContent}
+          </div>
+        )
+      }
 
       {/* Main content */}
       <div className="flex flex-col lg:flex-row flex-1 min-h-0">
       {/* Columns area — scrollable, fills space beside preview panel */}
       <div className={cn("flex flex-col flex-1 min-w-0", splitView && "divide-y divide-base-300")}>
         {/* Top row — always shown */}
-        <div className={cn("flex flex-row min-w-0 overflow-x-auto", splitView ? "flex-1 min-h-0" : "flex-1")}>
+        <div className={cn("flex flex-row min-w-0 overflow-hidden", splitView ? "flex-1 min-h-0" : "flex-1")}>
         {columnMeta.map(
           (col) =>
             col.show && (
@@ -989,7 +1105,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         </div>
         {/* Bottom row — split view only */}
         {splitView && (
-          <div className="flex flex-row flex-1 min-w-0 min-h-0 overflow-x-auto">
+          <div className="flex flex-row flex-1 min-w-0 min-h-0 overflow-hidden">
             {splitColumnMeta.map(
               (col) =>
                 col.show && (
@@ -1036,8 +1152,8 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         )}
       </div>
 
-      {/* Detail panel — fixed 25% width, no gap */}
-      <div className="w-full lg:w-1/4 lg:min-w-[280px] lg:max-w-[480px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
+      {/* Detail panel — flexible width, shrinks with viewport */}
+      <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
         {focusedTask ? (
           <TaskPreviewPanel
             task={focusedTask}
@@ -1072,6 +1188,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
           orgId={orgId}
           projectId={projectId}
           parentId={createParentId}
+          parentTask={createParentTask}
           members={members}
           onClose={() => {
             setCreateDepth(null);
@@ -1116,6 +1233,66 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         title="Delete Selected Tasks"
         message={`Delete ${multiSelected.size} selected task${multiSelected.size !== 1 ? "s" : ""} and all their subtasks?`}
       />
+
+      {/* Update deadline conflict confirmation */}
+      {updateDeadlineConflicts.length > 0 && (() => {
+        const ancestorConflicts = updateDeadlineConflicts.filter((c) => c.direction === "ancestor");
+        const descendantConflicts = updateDeadlineConflicts.filter((c) => c.direction === "descendant" || !c.direction);
+        return (
+          <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
+            <div className="modal-box shadow-2xl max-w-md">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <span className="text-warning">⚠</span> Date Range Conflict
+              </h3>
+              <div className="py-3 space-y-2 text-sm">
+                {ancestorConflicts.length > 0 && (
+                  <div>
+                    <p className="text-base-content/70 mb-1">
+                      The new due date extends beyond {ancestorConflicts.length} parent task{ancestorConflicts.length !== 1 ? "s" : ""}:
+                    </p>
+                    <ul className="list-disc list-inside text-xs space-y-0.5">
+                      {ancestorConflicts.map((c) => (
+                        <li key={c.task_id} className="text-base-content/60">
+                          {c.title} <span className="text-warning">(due {c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {descendantConflicts.length > 0 && (
+                  <div>
+                    <p className="text-base-content/70 mb-1">
+                      {descendantConflicts.length} subtask{descendantConflicts.length !== 1 ? "s" : ""} fall outside the new date range:
+                    </p>
+                    <ul className="list-disc list-inside text-xs space-y-0.5">
+                      {descendantConflicts.slice(0, 8).map((c) => (
+                        <li key={c.task_id} className="text-base-content/60">
+                          {c.title} <span className="text-warning">(due {c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"})</span>
+                        </li>
+                      ))}
+                      {descendantConflicts.length > 8 && (
+                        <li className="text-base-content/40">…and {descendantConflicts.length - 8} more</li>
+                      )}
+                    </ul>
+                  </div>
+                )}
+                <p className="text-base-content/50 text-xs pt-1">
+                  Apply to automatically adjust all affected tasks to fit within the new range.
+                </p>
+              </div>
+              <div className="modal-action">
+                <button className="btn btn-sm" onClick={() => { setUpdateDeadlineConflicts([]); pendingUpdateRef.current = null; }}>
+                  Cancel
+                </button>
+                <button className="btn btn-sm btn-warning" onClick={confirmExtendDeadlinesOnUpdate}>
+                  Apply &amp; Adjust
+                </button>
+              </div>
+            </div>
+            <div className="modal-backdrop" style={{ background: "transparent" }} onClick={() => { setUpdateDeadlineConflicts([]); pendingUpdateRef.current = null; }} />
+          </dialog>
+        );
+      })()}
 
       </div>{/* end main content */}
 
@@ -1369,14 +1546,14 @@ function TaskColumn({
   const virtualizer = useVirtualizer({
     count: tasks.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 52,
+    estimateSize: () => 58,
     overscan: 5,
   });
 
   return (
     <div 
-      className="flex flex-col border-r border-base-200 shrink-0 relative flex-1"
-      style={{ minWidth: `${width}px`, flex: width }}
+      className="flex flex-col border-r border-base-200 relative flex-1 min-w-0"
+      style={{ flex: `${width} 1 0%` }}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-base-200 flex items-center justify-between bg-base-200/30">
@@ -1507,7 +1684,10 @@ function TaskColumn({
               const isSelected = task.id === selectedId;
               const isMultiSelected = multiSelected.has(task.id);
               const isDragOver = dragOverTaskId === task.id;
-              const assignee = members.find((m) => m.user_id === task.assignee_id);
+              const ids = task.assignee_ids || (task.assignee_id ? [task.assignee_id] : []);
+              const progress = task.progress ?? 0;
+              const startStr = task.start_date ? new Date(task.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
+              const dueStr = task.due_date ? new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
               return (
                 <button
                   key={task.id}
@@ -1539,58 +1719,71 @@ function TaskColumn({
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                   className={cn(
-                    "w-full text-left px-3 py-2 flex items-center gap-2 transition-all duration-200 border-l-2",
-                    "hover:bg-base-200/50",
-                    isSelected && !bulkMode ? "bg-primary/10 border-l-primary" : "border-l-transparent",
-                    bulkMode && isMultiSelected && "bg-primary/10 border-l-primary",
+                    "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2",
+                    "hover:bg-pink-50 dark:hover:bg-pink-950/20",
+                    isSelected && !bulkMode ? "bg-primary/20 border-l-primary shadow-sm" : "border-l-transparent",
+                    bulkMode && isMultiSelected && "bg-primary/20 border-l-primary shadow-sm",
                     isDragOver && "bg-accent/20 border-l-accent scale-[1.02] shadow-md",
                   )}
                 >
-                  {/* Checkbox in bulk mode */}
-                  {bulkMode && (
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-xs checkbox-primary shrink-0"
-                      checked={isMultiSelected}
-                      readOnly
-                    />
-                  )}
-                  {/* Status dot */}
-                  <span
-                    className={cn(
-                      "w-2 h-2 rounded-full shrink-0",
-                      task.status === "done" && "bg-success",
-                      task.status === "in_progress" && "bg-info",
-                      task.status === "blocked" && "bg-error",
-                      task.status === "todo" && "bg-base-content/20",
+                  {/* Row 1: checkbox + status dot + title + avatars + chevron */}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {bulkMode && (
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-xs checkbox-primary shrink-0"
+                        checked={isMultiSelected}
+                        readOnly
+                      />
                     )}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate leading-tight">{task.title}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span
-                        className={cn(
-                          "text-[10px] leading-none px-1 py-0.5 rounded",
-                          task.priority === "critical" && "bg-error/10 text-error",
-                          task.priority === "high" && "bg-warning/10 text-warning",
-                          task.priority === "medium" && "bg-info/10 text-info",
-                          task.priority === "low" && "bg-base-200 text-base-content/50",
-                        )}
-                      >
-                        {task.priority}
-                      </span>
-                      {assignee && (
-                        <Avatar
-                          name={assignee.display_name || assignee.email || ""}
-                          size="xs"
-                          src={assignee.avatar_url}
-                        />
+                    <span
+                      className={cn(
+                        "w-2 h-2 rounded-full shrink-0",
+                        task.status === "done" && "bg-success",
+                        task.status === "in_progress" && "bg-info",
+                        task.status === "blocked" && "bg-error",
+                        task.status === "todo" && "bg-base-content/20",
                       )}
+                    />
+                    <span className="text-sm truncate leading-tight flex-1 min-w-0">{task.title}</span>
+                    <AvatarStack members={members} assigneeIds={ids} max={3} size="xs" />
+                    {task.depth < MAX_DEPTH && (
+                      <ChevronRight className="w-3.5 h-3.5 text-base-content/20 shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Row 2: priority + dates */}
+                  <div className="flex items-center gap-1.5 mt-px pl-[14px]">
+                    <span
+                      className={cn(
+                        "text-[10px] leading-none px-1 py-0.5 rounded",
+                        task.priority === "critical" && "bg-error/10 text-error",
+                        task.priority === "high" && "bg-warning/10 text-warning",
+                        task.priority === "medium" && "bg-info/10 text-info",
+                        task.priority === "low" && "bg-base-200 text-base-content/50",
+                      )}
+                    >
+                      {task.priority}
+                    </span>
+                    {(startStr || dueStr) && (
+                      <span className="text-[11px] font-medium text-base-content/60 truncate">
+                        {startStr && dueStr ? `${startStr} → ${dueStr}` : startStr || dueStr}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Row 3: thin progress bar */}
+                  <div className="w-full mt-auto">
+                    <div className="w-full h-[2px] bg-base-200 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          progress >= 0.8 ? "bg-success" : progress >= 0.4 ? "bg-info" : progress > 0 ? "bg-warning" : "bg-base-200",
+                        )}
+                        style={{ width: `${Math.round(progress * 100)}%` }}
+                      />
                     </div>
                   </div>
-                  {task.depth < MAX_DEPTH && (
-                    <ChevronRight className="w-3.5 h-3.5 text-base-content/20 shrink-0" />
-                  )}
                 </button>
               );
             })}
@@ -1816,13 +2009,18 @@ interface CreateForm {
   title: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assignee_id: string;
+  assignee_ids: string[];
+  due_date: string;
+  start_date: string;
+  reporter_id: string;
+  labels: string[];
 }
 
 function CreateTaskModal({
   orgId,
   projectId,
   parentId,
+  parentTask,
   members,
   onClose,
   onCreated,
@@ -1830,6 +2028,7 @@ function CreateTaskModal({
   orgId: string;
   projectId: string;
   parentId: string | null;
+  parentTask: Task | null;
   members: ProjectMember[];
   onClose: () => void;
   onCreated: () => void;
@@ -1837,28 +2036,49 @@ function CreateTaskModal({
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors: formErrors },
   } = useForm<CreateForm>({
-    defaultValues: { status: "todo", priority: "medium", assignee_id: "" },
+    defaultValues: {
+      status: "todo",
+      priority: parentTask?.priority || "medium",
+      assignee_ids: parentTask?.assignee_ids?.length ? [...parentTask.assignee_ids] : [],
+      due_date: parentTask?.due_date ? parentTask.due_date.slice(0, 10) : "",
+      start_date: parentTask?.start_date ? parentTask.start_date.slice(0, 10) : "",
+      reporter_id: parentTask?.reporter_id || "",
+      labels: parentTask?.labels?.length ? [...parentTask.labels] : [],
+    },
   });
   const send = useProjectTaskStore((s) => s.send);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [deadlineConflicts, setDeadlineConflicts] = useState<DeadlineConflict[]>([]);
+  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
+  const watchedAssignees = watch("assignee_ids");
 
-  const onSubmit = async (data: CreateForm) => {
+  const toggleAssignee = (userId: string) => {
+    const current = watchedAssignees || [];
+    const next = current.includes(userId)
+      ? current.filter((id) => id !== userId)
+      : [...current, userId];
+    setValue("assignee_ids", next);
+  };
+
+  const submitPayload = async (payload: Record<string, unknown>) => {
     if (!send) return;
     setCreating(true);
     setError("");
     try {
-      const payload: Record<string, unknown> = {
-        title: data.title,
-        status: data.status,
-        priority: data.priority,
-      };
-      if (data.assignee_id) payload.assignee_id = data.assignee_id;
-      if (parentId) payload.parent_task_id = parentId;
-      const task = await send("task:create", payload);
-      // Broadcast excludes the sender, so add the task to the store directly
+      const result = await send("task:create", payload);
+      // Check for deadline warning (no task returned, only conflicts)
+      if (!result?.id && result?.deadline_conflicts?.length) {
+        setDeadlineConflicts(result.deadline_conflicts);
+        setPendingPayload(payload);
+        setCreating(false);
+        return;
+      }
+      const task = result?.id ? result : result?.task;
       if (task?.id) {
         const store = useProjectTaskStore.getState();
         const parentKey = parentId || "root";
@@ -1866,72 +2086,211 @@ function CreateTaskModal({
         if (!existing.find((t: Task) => t.id === task.id)) {
           store.setTasks(parentKey, [...existing, task], (store.totals.get(parentKey) ?? 0) + 1);
         }
+        // Update ancestors if they were changed
+        if (result?.ancestors_updated) {
+          for (const anc of result.ancestors_updated) {
+            store.upsertTask(anc);
+          }
+        }
       }
       onCreated();
-    } catch (e: any) {
-      setError(e?.message || "Failed to create task");
+    } catch (e: unknown) {
+      setError((e as Error)?.message || "Failed to create task");
     } finally {
       setCreating(false);
     }
   };
 
+  const onSubmit = async (data: CreateForm) => {
+    const payload: Record<string, unknown> = {
+      title: data.title,
+      status: data.status,
+      priority: data.priority,
+    };
+    if (data.assignee_ids?.length) {
+      payload.assignee_ids = data.assignee_ids;
+      payload.assignee_id = data.assignee_ids[0];
+    }
+    if (data.due_date) {
+      payload.due_date = new Date(data.due_date).toISOString();
+    }
+    if (data.start_date) {
+      payload.start_date = new Date(data.start_date).toISOString();
+    }
+    if (data.reporter_id) {
+      payload.reporter_id = data.reporter_id;
+    }
+    if (data.labels?.length) {
+      payload.labels = data.labels;
+    }
+    if (parentId) payload.parent_task_id = parentId;
+    await submitPayload(payload);
+  };
+
+  const confirmExtendDeadlines = async () => {
+    if (!pendingPayload) return;
+    setDeadlineConflicts([]);
+    await submitPayload({ ...pendingPayload, extend_parent_deadlines: true });
+  };
+
   return (
-    <Modal open onClose={onClose} title={parentId ? "New Subtask" : "New Task"} className="max-w-md">
-      {error && (
-        <div className="alert alert-error mb-3 text-sm">
-          <span>{error}</span>
-        </div>
+    <>
+      <Modal open onClose={onClose} title={parentId ? "New Subtask" : "New Task"} className="max-w-md">
+        {error && (
+          <div className="alert alert-error mb-3 text-sm">
+            <span>{error}</span>
+          </div>
+        )}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+          <Input
+            label="Title"
+            placeholder="Task title"
+            {...register("title", { required: "Title is required" })}
+            error={formErrors.title?.message}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Status"
+              options={[
+                { value: "todo", label: "Todo" },
+                { value: "in_progress", label: "In Progress" },
+                { value: "done", label: "Done" },
+                { value: "blocked", label: "Blocked" },
+              ]}
+              {...register("status")}
+            />
+            <Select
+              label="Priority"
+              options={[
+                { value: "critical", label: "Critical" },
+                { value: "high", label: "High" },
+                { value: "medium", label: "Medium" },
+                { value: "low", label: "Low" },
+              ]}
+              {...register("priority")}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-base-content/50 block mb-1">Start Date</label>
+              <input
+                type="date"
+                className="input input-bordered input-sm w-full"
+                {...register("start_date")}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-base-content/50 block mb-1">Due Date</label>
+              <input
+                type="date"
+                className="input input-bordered input-sm w-full"
+                {...register("due_date")}
+              />
+            </div>
+          </div>
+          {/* Reporter */}
+          <div>
+            <label className="text-xs text-base-content/50 block mb-1">Reporter</label>
+            <select className="select select-bordered select-sm w-full" {...register("reporter_id")}>
+              <option value="">None</option>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.display_name || m.email || m.user_id.slice(0, 12)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Multi-assignee selector */}
+          <div>
+            <label className="text-xs text-base-content/50 block mb-1">Assignees</label>
+            <div className="border border-base-300 rounded-lg max-h-28 overflow-y-auto">
+              {members.length === 0 && (
+                <div className="px-3 py-2 text-xs text-base-content/40">No members</div>
+              )}
+              {members.map((m) => (
+                <label
+                  key={m.user_id}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-xs checkbox-primary"
+                    checked={watchedAssignees?.includes(m.user_id) || false}
+                    onChange={() => toggleAssignee(m.user_id)}
+                  />
+                  <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
+                </label>
+              ))}
+            </div>
+            {watchedAssignees?.length > 0 && (
+              <div className="text-xs text-base-content/50 mt-1">
+                {watchedAssignees.length} assignee{watchedAssignees.length !== 1 ? "s" : ""} selected
+              </div>
+            )}
+          </div>
+          {/* Labels */}
+          <div>
+            <label className="text-xs text-base-content/50 block mb-1">Labels</label>
+            <input
+              type="text"
+              className="input input-bordered input-sm w-full"
+              placeholder="Comma-separated labels"
+              {...register("labels", {
+                setValueAs: (v: string | string[]) => Array.isArray(v) ? v : (typeof v === "string" && v.trim() ? v.split(",").map((l) => l.trim()).filter(Boolean) : []),
+              })}
+              defaultValue={parentTask?.labels?.join(", ") || ""}
+            />
+          </div>
+          {parentId && parentTask && (
+            <div className="text-xs text-base-content/40 italic">
+              Inherited from parent: {parentTask.title}
+            </div>
+          )}
+          <div className="modal-action">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={creating}>
+              Create
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {deadlineConflicts.length > 0 && (
+        <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
+          <div className="modal-box shadow-2xl max-w-md">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <span className="text-warning">⚠</span> Date Range Conflict
+            </h3>
+            <div className="py-3 space-y-2 text-sm">
+              <p className="text-base-content/70">
+                The due date extends beyond {deadlineConflicts.length} parent task{deadlineConflicts.length !== 1 ? "s" : ""}:
+              </p>
+              <ul className="list-disc list-inside text-xs space-y-0.5">
+                {deadlineConflicts.map((c) => (
+                  <li key={c.task_id} className="text-base-content/60">
+                    {c.title} <span className="text-warning">(due {c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"})</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-base-content/50 text-xs pt-1">
+                Apply to extend parent deadlines to accommodate this task.
+              </p>
+            </div>
+            <div className="modal-action">
+              <button className="btn btn-sm" onClick={() => { setDeadlineConflicts([]); setPendingPayload(null); }}>
+                Cancel
+              </button>
+              <button className="btn btn-sm btn-warning" onClick={confirmExtendDeadlines}>
+                Apply &amp; Extend
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop" style={{ background: "transparent" }} onClick={() => { setDeadlineConflicts([]); setPendingPayload(null); }} />
+        </dialog>
       )}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <Input
-          label="Title"
-          placeholder="Task title"
-          {...register("title", { required: "Title is required" })}
-          error={formErrors.title?.message}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <Select
-            label="Status"
-            options={[
-              { value: "todo", label: "Todo" },
-              { value: "in_progress", label: "In Progress" },
-              { value: "done", label: "Done" },
-              { value: "blocked", label: "Blocked" },
-            ]}
-            {...register("status")}
-          />
-          <Select
-            label="Priority"
-            options={[
-              { value: "critical", label: "Critical" },
-              { value: "high", label: "High" },
-              { value: "medium", label: "Medium" },
-              { value: "low", label: "Low" },
-            ]}
-            {...register("priority")}
-          />
-        </div>
-        <Select
-          label="Assignee"
-          options={[
-            { value: "", label: "Unassigned" },
-            ...members.map((m) => ({
-              value: m.user_id,
-              label: m.display_name || m.email || m.user_id.slice(0, 12),
-            })),
-          ]}
-          {...register("assignee_id")}
-        />
-        <div className="modal-action">
-          <Button type="button" variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" loading={creating}>
-            Create
-          </Button>
-        </div>
-      </form>
-    </Modal>
+    </>
   );
 }
 

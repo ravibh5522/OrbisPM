@@ -97,7 +97,7 @@ interface ConfirmDialogProps {
 export function ConfirmDialog({ open, onClose, onConfirm, title, message, confirmLabel = "Delete", loading }: ConfirmDialogProps) {
   if (!open) return null;
   return (
-    <dialog className="modal modal-open">
+    <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
       <div className="modal-box">
         <h3 className="font-bold text-lg">{title}</h3>
         <p className="py-4">{message}</p>
@@ -109,9 +109,7 @@ export function ConfirmDialog({ open, onClose, onConfirm, title, message, confir
           </button>
         </div>
       </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onClose}>close</button>
-      </form>
+      <div className="modal-backdrop" style={{ background: "transparent" }} onClick={onClose} />
     </dialog>
   );
 }
@@ -146,6 +144,72 @@ export function Avatar({ name, src, size = "md", className }: AvatarProps) {
       <div className={cn("bg-primary text-primary-content rounded-full", sizeMap[size])}>
         <span>{initials}</span>
       </div>
+    </div>
+  );
+}
+
+/* ─── AvatarStack ─── */
+
+interface AvatarStackProps {
+  members: { user_id: string; display_name?: string; email?: string; avatar_url?: string }[];
+  assigneeIds: string[];
+  max?: number;
+  size?: "xs" | "sm";
+}
+
+export function AvatarStack({ members, assigneeIds, max = 3, size = "xs" }: AvatarStackProps) {
+  const sizeClass = size === "xs" ? "w-5 h-5 text-[9px]" : "w-6 h-6 text-[10px]";
+  const offsetClass = size === "xs" ? "-ml-1.5" : "-ml-2";
+
+  const assigned = assigneeIds
+    .map((id) => members.find((m) => m.user_id === id))
+    .filter(Boolean) as typeof members;
+  const shown = assigned.slice(0, max);
+  const extra = assigned.length - max;
+
+  if (shown.length === 0) return null;
+
+  return (
+    <div className="flex items-center">
+      {shown.map((m, i) => {
+        const initials = (m.display_name || m.email || "?")
+          .split(" ")
+          .map((w) => w[0])
+          .join("")
+          .toUpperCase()
+          .slice(0, 2);
+        return (
+          <div
+            key={m.user_id}
+            className={cn(
+              "rounded-full ring-2 ring-base-100 flex items-center justify-center shrink-0",
+              sizeClass,
+              i > 0 && offsetClass,
+            )}
+            title={m.display_name || m.email || m.user_id}
+          >
+            {m.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={m.avatar_url} alt={m.display_name || ""} className="rounded-full w-full h-full object-cover" />
+            ) : (
+              <span className="bg-primary text-primary-content rounded-full w-full h-full flex items-center justify-center font-medium">
+                {initials}
+              </span>
+            )}
+          </div>
+        );
+      })}
+      {extra > 0 && (
+        <div
+          className={cn(
+            "rounded-full ring-2 ring-base-100 bg-base-300 text-base-content flex items-center justify-center shrink-0 font-medium",
+            sizeClass,
+            offsetClass,
+          )}
+        >
+          +{extra}
+        </div>
+      )}
     </div>
   );
 }

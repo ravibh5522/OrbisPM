@@ -38,6 +38,7 @@ func (h *ProjectHandler) Routes() chi.Router {
 		r.Post("/members", h.AddMember)
 		r.Patch("/members/{userId}", h.UpdateMemberRole)
 		r.Delete("/members/{userId}", h.RemoveMember)
+		r.Get("/members/{userId}/preview", h.PreviewRemoveMember)
 
 		// Dashboard
 		r.Get("/dashboard", h.Dashboard)
@@ -258,13 +259,15 @@ func (h *ProjectHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 
 // RemoveMember godoc
 // @Summary Remove project member
-// @Description Remove a member from a project
+// @Description Remove a member from a project, optionally reassigning their tasks
 // @Tags Projects
+// @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param orgId path string true "Organization ID" format(uuid)
 // @Param projectId path string true "Project ID" format(uuid)
 // @Param userId path string true "User ID" format(uuid)
+// @Param body body object false "Optional reassign_to user ID"
 // @Success 204 "No Content"
 // @Failure 404 {object} ErrorResponse
 // @Router /orgs/{orgId}/projects/{projectId}/members/{userId} [delete]
@@ -279,11 +282,59 @@ func (h *ProjectHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
 		return
 	}
-	if err := h.projectSvc.RemoveMember(r.Context(), projectID, userID); err != nil {
+
+	// Parse optional reassign_to from body
+	var body struct {
+		ReassignTo *string `json:"reassign_to,omitempty"`
+	}
+	// Body is optional for DELETE, ignore parse errors
+	_ = parseBody(r, &body)
+
+	var reassignTo *uuid.UUID
+	if body.ReassignTo != nil && *body.ReassignTo != "" {
+		uid, err := uuid.Parse(*body.ReassignTo)
+		if err != nil {
+			JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid reassign_to user id"})
+			return
+		}
+		reassignTo = &uid
+	}
+
+	if err := h.projectSvc.RemoveMemberWithReassign(r.Context(), projectID, userID, reassignTo); err != nil {
 		Error(w, r, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// PreviewRemoveMember godoc
+// @Summary Preview member removal impact
+// @Description Returns the number of tasks assigned to the member that will be affected
+// @Tags Projects
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Param userId path string true "User ID" format(uuid)
+// @Success 200 {object} map[string]int
+// @Router /orgs/{orgId}/projects/{projectId}/members/{userId}/preview [get]
+func (h *ProjectHandler) PreviewRemoveMember(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	taskCount, err := h.projectSvc.PreviewRemoveMember(r.Context(), projectID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]int{"task_count": taskCount})
 }
 
 type updateProjectMemberRoleRequest struct {

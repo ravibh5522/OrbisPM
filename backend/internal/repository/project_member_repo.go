@@ -82,6 +82,7 @@ func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID 
 			       COALESCE(u.display_name, '') AS display_name,
 			       COALESCE(u.avatar_url, '') AS avatar_url,
 			       pm.role, 'direct' AS source, NULL::uuid AS source_team_id, '' AS source_team_name,
+			       pm.joined_at,
 			       1 AS priority
 			FROM project_members pm
 			LEFT JOIN users u ON u.id = pm.user_id
@@ -92,6 +93,7 @@ func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID 
 			       COALESCE(u.display_name, '') AS display_name,
 			       COALESCE(u.avatar_url, '') AS avatar_url,
 			       tm.role, 'team' AS source, t.id AS source_team_id, t.name AS source_team_name,
+			       tm.joined_at,
 			       2 AS priority
 			FROM project_teams pt
 			JOIN team_members tm ON tm.team_id = pt.team_id
@@ -100,7 +102,7 @@ func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID 
 			WHERE pt.project_id = $1
 			AND tm.user_id NOT IN (SELECT user_id FROM project_members WHERE project_id = $1)
 		)
-		SELECT user_id, email, display_name, avatar_url, role, source, source_team_id, source_team_name
+		SELECT user_id, email, display_name, avatar_url, role, source, source_team_id, source_team_name, joined_at
 		FROM (
 			SELECT * FROM direct
 			UNION ALL
@@ -116,7 +118,7 @@ func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID 
 	for rows.Next() {
 		var m domain.EffectiveMember
 		if err := rows.Scan(&m.UserID, &m.Email, &m.DisplayName, &m.AvatarURL,
-			&m.Role, &m.Source, &m.SourceTeamID, &m.SourceTeamName); err != nil {
+			&m.Role, &m.Source, &m.SourceTeamID, &m.SourceTeamName, &m.JoinedAt); err != nil {
 			return nil, err
 		}
 		members = append(members, &m)

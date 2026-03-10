@@ -468,3 +468,162 @@ func (m *Manager) GetCachedVersion(ctx context.Context, projectID, taskID uuid.U
 	}
 	return strconv.ParseInt(val, 10, 64)
 }
+
+// ─── Progress Calculation ────────────────────────────────────
+
+// statusProgress maps a task status to a progress value for leaf tasks.
+func statusProgress(status string) float64 {
+	switch status {
+	case domain.TaskStatusDone:
+		return 1.0
+	case domain.TaskStatusInProgress:
+		return 0.5
+	default:
+		return 0.0
+	}
+}
+
+// ComputeProgress calculates progress for a single task:
+// - Leaf (no children): derived from status
+// - Parent: average of children's progress (read from cache)
+// Stores the result in cache and returns it.
+func (m *Manager) ComputeProgress(ctx context.Context, projectID, taskID uuid.UUID) (float64, error) {
+	// Get children IDs from sorted set
+	childrenKey := ProjectChildrenKey(projectID, taskID.String())
+	childIDs, err := m.rdb.ZRangeByScore(ctx, childrenKey, &redis.ZRangeBy{
+		Min: "-inf", Max: "+inf",
+	}).Result()
+	if err != nil {
+		return 0, fmt.Errorf("get children for progress: %w", err)
+	}
+
+	var progress float64
+	if len(childIDs) == 0 {
+		// Leaf task — derive from status
+		task, err := m.GetTask(ctx, projectID, taskID)
+		if err != nil {
+			return 0, err
+		}
+		progress = statusProgress(task.Status)
+	} else {
+		// Parent — average of children's cached progress
+		pipe := m.rdb.Pipeline()
+		cmds := make([]*redis.StringCmd, len(childIDs))
+		for i, cid := range childIDs {
+			cUUID, parseErr := uuid.Parse(cid)
+			if parseErr != nil {
+				continue
+			}
+			cmds[i] = pipe.Get(ctx, ProjectProgressKey(projectID, cUUID))
+		}
+		_, _ = pipe.Exec(ctx)
+
+		var sum float64
+		var count int
+		for _, cmd := range cmds {
+			if cmd == nil {
+				continue
+			}
+			val, err := cmd.Float64()
+			if err != nil {
+				continue // child not yet computed, treat as 0
+			}
+			sum += val
+			count++
+		}
+		// Include children whose progress keys don't exist yet (progress = 0)
+		total := len(childIDs)
+		if total > 0 {
+			progress = sum / float64(total)
+		}
+		_ = count // used for sum; total includes missing
+	}
+
+	// Store computed progress
+	progressKey := ProjectProgressKey(projectID, taskID)
+	m.rdb.Set(ctx, progressKey, progress, DefaultTTL)
+
+	return progress, nil
+}
+
+// RecalcProgressUp recomputes progress for a task and all its ancestors.
+// Call this after any task create/update/delete that could affect progress.
+// Returns the ancestor tasks (not the starting task) that had their progress updated.
+func (m *Manager) RecalcProgressUp(ctx context.Context, projectID uuid.UUID, taskID uuid.UUID) []*domain.Task {
+	var updated []*domain.Task
+	// Walk from this task up to root, recomputing at each level
+	current := taskID
+	visited := map[uuid.UUID]bool{}
+	for i := 0; i < MaxTaskDepth+2; i++ { // safety limit
+		if visited[current] {
+			break
+		}
+		visited[current] = true
+
+		progress, err := m.ComputeProgress(ctx, projectID, current)
+		if err != nil {
+			log.Warn().Err(err).Str("task_id", current.String()).Msg("failed to compute progress")
+			break
+		}
+
+		// Update the cached task JSON's Progress field
+		task, err := m.GetTask(ctx, projectID, current)
+		if err != nil {
+			break
+		}
+		task.Progress = progress
+		if setErr := m.SetTask(ctx, projectID, task); setErr != nil {
+			log.Warn().Err(setErr).Msg("failed to update task with progress")
+		}
+
+		// Collect ancestors (skip the starting task itself)
+		if current != taskID {
+			updated = append(updated, task)
+		}
+
+		// Move to parent
+		if task.ParentTaskID == nil {
+			break
+		}
+		current = *task.ParentTaskID
+	}
+	return updated
+}
+
+// PrecomputeAllProgress computes and caches progress for all tasks in a project.
+// Should be called after PreloadProject. Processes bottom-up by depth.
+func (m *Manager) PrecomputeAllProgress(ctx context.Context, projectID uuid.UUID, tasks []*domain.Task) {
+	// Group by depth, process deepest first
+	maxDepth := 0
+	byDepth := map[int][]*domain.Task{}
+	for _, t := range tasks {
+		byDepth[t.Depth] = append(byDepth[t.Depth], t)
+		if t.Depth > maxDepth {
+			maxDepth = t.Depth
+		}
+	}
+
+	for d := maxDepth; d >= 0; d-- {
+		for _, t := range byDepth[d] {
+			progress, err := m.ComputeProgress(ctx, projectID, t.ID)
+			if err != nil {
+				continue
+			}
+			t.Progress = progress
+		}
+	}
+
+	// Write all updated tasks back to cache with progress values
+	pipe := m.rdb.Pipeline()
+	for _, t := range tasks {
+		data, err := json.Marshal(t)
+		if err != nil {
+			continue
+		}
+		pipe.Set(ctx, ProjectTaskKey(projectID, t.ID), data, DefaultTTL)
+	}
+	_, _ = pipe.Exec(ctx)
+}
+
+// MaxTaskDepth mirrors domain.MaxTaskDepth for the cache layer (avoid import cycle if needed).
+const MaxTaskDepth = 3

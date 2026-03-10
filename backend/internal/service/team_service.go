@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/repository"
@@ -24,10 +25,20 @@ type UpdateTeamParams struct {
 }
 
 type TeamService struct {
-	teamRepo       repository.TeamRepository
-	teamMemberRepo repository.TeamMemberRepository
-	txm            *repository.TxManager
-	publisher      EventPublisher
+	teamRepo          repository.TeamRepository
+	teamMemberRepo    repository.TeamMemberRepository
+	projectTeamRepo   repository.ProjectTeamRepository
+	projectMemberRepo repository.ProjectMemberRepository
+	taskRepo          repository.TaskRepository
+	txm               *repository.TxManager
+	publisher         EventPublisher
+}
+
+// SetProjectDeps injects optional project-related dependencies for membership lifecycle hooks.
+func (s *TeamService) SetProjectDeps(ptRepo repository.ProjectTeamRepository, pmRepo repository.ProjectMemberRepository, tRepo repository.TaskRepository) {
+	s.projectTeamRepo = ptRepo
+	s.projectMemberRepo = pmRepo
+	s.taskRepo = tRepo
 }
 
 func NewTeamService(teamRepo repository.TeamRepository, teamMemberRepo repository.TeamMemberRepository, txm *repository.TxManager, publisher ...EventPublisher) *TeamService {
@@ -111,7 +122,22 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 	}
 	m := &domain.TeamMember{TeamID: teamID, UserID: userID, Role: role}
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
-		return s.teamMemberRepo.Add(ctx, tx, m)
+		if err := s.teamMemberRepo.Add(ctx, tx, m); err != nil {
+			return err
+		}
+		// Auto-demote: if this user is a direct (external) member of any project linked
+		// to this team, remove the direct membership so they appear as internal (team-inherited).
+		if s.projectTeamRepo != nil && s.projectMemberRepo != nil {
+			linkedProjects, lErr := s.projectTeamRepo.ListByTeam(ctx, teamID)
+			if lErr != nil {
+				log.Warn().Err(lErr).Msg("auto-demote: failed to list linked projects")
+			} else {
+				for _, pt := range linkedProjects {
+					_ = s.projectMemberRepo.Remove(ctx, tx, pt.ProjectID, userID)
+				}
+			}
+		}
+		return nil
 	})
 	if err == nil {
 		s.publishEvent(ctx, domain.EventMemberInvited, "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
@@ -121,7 +147,42 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 
 func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID uuid.UUID) error {
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
-		return s.teamMemberRepo.Remove(ctx, tx, teamID, userID)
+		if err := s.teamMemberRepo.Remove(ctx, tx, teamID, userID); err != nil {
+			return err
+		}
+		// Auto-promote: if this user has any tasks assigned in projects linked to this team,
+		// add them as a direct (external) project member so their tasks aren't orphaned.
+		if s.projectTeamRepo != nil && s.projectMemberRepo != nil && s.taskRepo != nil {
+			linkedProjects, lErr := s.projectTeamRepo.ListByTeam(ctx, teamID)
+			if lErr != nil {
+				log.Warn().Err(lErr).Msg("auto-promote: failed to list linked projects")
+			} else {
+				for _, pt := range linkedProjects {
+					counts, cErr := s.taskRepo.CountByAssigneesInProject(ctx, pt.ProjectID, []uuid.UUID{userID})
+					if cErr != nil {
+						log.Warn().Err(cErr).Msg("auto-promote: failed to count tasks")
+						continue
+					}
+					if counts[userID] > 0 {
+						// User has tasks — promote to direct member
+						dm := &domain.ProjectMember{
+							ProjectID: pt.ProjectID,
+							UserID:    userID,
+							Role:      domain.RoleProjectContributor,
+						}
+						if aErr := s.projectMemberRepo.Add(ctx, tx, dm); aErr != nil {
+							log.Warn().Err(aErr).Str("project_id", pt.ProjectID.String()).Msg("auto-promote: failed to add direct member")
+						} else {
+							log.Info().
+								Str("user_id", userID.String()).
+								Str("project_id", pt.ProjectID.String()).
+								Msg("auto-promoted team member to direct project member")
+						}
+					}
+				}
+			}
+		}
+		return nil
 	})
 	if err == nil {
 		s.publishEvent(ctx, "member.removed", "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})

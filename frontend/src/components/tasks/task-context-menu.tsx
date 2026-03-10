@@ -67,16 +67,22 @@ export function TaskContextMenu({
     };
   }, [onClose]);
 
-  // Adjust position to stay on screen
+  // Adjust position to stay on screen — spawn right at cursor, clamp to viewport
   const [pos, setPos] = useState({ x, y });
+  const [flipSub, setFlipSub] = useState(false);
   useEffect(() => {
     if (!ref.current) return;
     const rect = ref.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const pad = 4;
     let nx = x, ny = y;
-    if (x + rect.width > window.innerWidth) nx = x - rect.width;
-    if (y + rect.height > window.innerHeight) ny = y - rect.height;
-    if (nx < 0) nx = 4;
-    if (ny < 0) ny = 4;
+    // Horizontal: prefer right of cursor, flip left if overflows
+    if (nx + rect.width > vw - pad) nx = Math.max(pad, vw - rect.width - pad);
+    // Vertical: prefer below cursor, shift up if overflows
+    if (ny + rect.height > vh - pad) ny = Math.max(pad, vh - rect.height - pad);
+    // Decide if submenus should open to left instead of right
+    setFlipSub(nx + rect.width + 160 > vw);
     setPos({ x: nx, y: ny });
   }, [x, y]);
 
@@ -146,7 +152,7 @@ export function TaskContextMenu({
           { submenuKey: "status" }
         )}
         {subMenu === "status" && (
-          <div className="absolute left-full top-0 ml-0.5 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[140px] z-10">
+          <div className={cn("absolute top-0 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[140px] z-10", flipSub ? "right-full mr-0.5" : "left-full ml-0.5")}>
             {statusOptions.map((s) => (
               <button
                 key={s.value}
@@ -174,7 +180,7 @@ export function TaskContextMenu({
           { submenuKey: "priority" }
         )}
         {subMenu === "priority" && (
-          <div className="absolute left-full top-0 ml-0.5 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[130px] z-10">
+          <div className={cn("absolute top-0 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[130px] z-10", flipSub ? "right-full mr-0.5" : "left-full ml-0.5")}>
             {priorityOptions.map((p) => (
               <button
                 key={p.value}
@@ -193,7 +199,7 @@ export function TaskContextMenu({
         )}
       </div>
 
-      {/* Assign To submenu */}
+      {/* Assign To submenu (multi-select) */}
       <div className="relative">
         {menuItem(
           "Assign To",
@@ -202,30 +208,42 @@ export function TaskContextMenu({
           { submenuKey: "assign" }
         )}
         {subMenu === "assign" && (
-          <div className="absolute left-full top-0 ml-0.5 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[170px] max-h-48 overflow-y-auto z-10">
+          <div className={cn("absolute top-0 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[170px] max-h-48 overflow-y-auto z-10", flipSub ? "right-full mr-0.5" : "left-full ml-0.5")}>
             <button
               className={cn(
                 "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
-                !task.assignee_id && "font-medium"
+                !(task.assignee_ids?.length) && "font-medium"
               )}
-              onClick={() => { onUpdate({ assignee_id: "" } as Partial<Task>); onClose(); }}
+              onClick={() => { onUpdate({ assignee_ids: [], assignee_id: "" } as Partial<Task>); onClose(); }}
             >
-              Unassigned
-              {!task.assignee_id && <Check className="w-3 h-3 ml-auto text-primary" />}
+              Clear All
+              {!(task.assignee_ids?.length) && <Check className="w-3 h-3 ml-auto text-primary" />}
             </button>
-            {members.map((m) => (
-              <button
-                key={m.user_id}
-                className={cn(
-                  "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
-                  task.assignee_id === m.user_id && "font-medium"
-                )}
-                onClick={() => { onUpdate({ assignee_id: m.user_id } as Partial<Task>); onClose(); }}
-              >
-                <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
-                {task.assignee_id === m.user_id && <Check className="w-3 h-3 ml-auto text-primary" />}
-              </button>
-            ))}
+            {members.map((m) => {
+              const isAssigned = (task.assignee_ids || []).includes(m.user_id);
+              return (
+                <button
+                  key={m.user_id}
+                  className={cn(
+                    "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
+                    isAssigned && "font-medium"
+                  )}
+                  onClick={() => {
+                    const current = task.assignee_ids || [];
+                    const next = isAssigned
+                      ? current.filter((id) => id !== m.user_id)
+                      : [...current, m.user_id];
+                    onUpdate({
+                      assignee_ids: next,
+                      assignee_id: next.length > 0 ? next[0] : "",
+                    } as Partial<Task>);
+                  }}
+                >
+                  <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
+                  {isAssigned && <Check className="w-3 h-3 ml-auto text-primary" />}
+                </button>
+              );
+            })}
           </div>
         )}
       </div>

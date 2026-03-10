@@ -25,14 +25,14 @@ func (r *taskRepo) Create(ctx context.Context, tx pgx.Tx, task *domain.Task) (*d
 	q := conn(r.pool, tx)
 	row := q.QueryRow(ctx,
 		`INSERT INTO tasks (org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)
 		 RETURNING id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at`,
 		task.OrgID, task.ProjectID, task.ParentTaskID, task.Title, nilStr(task.Description),
-		task.Status, task.Priority, task.AssigneeID, task.ReporterID,
+		task.Status, task.Priority, task.AssigneeID, task.AssigneeIDs, task.ReporterID,
 		task.Depth, task.Position, task.DueDate, task.StartDate,
 		task.EstimatedHours, task.ActualHours, task.Labels, task.Metadata, task.ReviewStatus,
 		task.RecurrenceRule, task.RecurrenceParentID, task.NextOccurrence,
@@ -43,7 +43,7 @@ func (r *taskRepo) Create(ctx context.Context, tx pgx.Tx, task *domain.Task) (*d
 func (r *taskRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
 	row := r.pool.QueryRow(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
 		 FROM tasks WHERE id = $1`, id)
 	t, err := scanTask(row)
@@ -59,7 +59,7 @@ func (r *taskRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Task, err
 func (r *taskRepo) GetByIDTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.Task, error) {
 	row := tx.QueryRow(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
 		 FROM tasks WHERE id = $1`, id)
 	t, err := scanTask(row)
@@ -73,28 +73,38 @@ func (r *taskRepo) GetByIDTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*dom
 }
 
 func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain.Task, error) {
-	rows, err := r.pool.Query(ctx,
-		`WITH RECURSIVE task_tree AS (
-			SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-			  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-			  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at,
-			  ARRAY[id] AS path, ARRAY[position] AS sort_path
-			FROM tasks WHERE id = $1
-			UNION ALL
-			SELECT t.id, t.org_id, t.project_id, t.parent_task_id, t.title, t.description, t.status, t.priority,
-			  t.assignee_id, t.reporter_id, t.depth, t.position, t.due_date, t.start_date, t.estimated_hours, t.actual_hours,
-			  t.labels, t.metadata, t.review_status, t.recurrence_rule, t.recurrence_parent_id, t.next_occurrence, t.version, t.created_at, t.updated_at,
-			  tt.path || t.id, tt.sort_path || t.position
-			FROM tasks t
-			INNER JOIN task_tree tt ON t.parent_task_id = tt.id
-			WHERE t.depth <= 3 AND NOT t.id = ANY(tt.path)
-		)
-		SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
-		FROM task_tree ORDER BY sort_path`, rootTaskID)
+	rows, err := r.pool.Query(ctx, treeSQL, rootTaskID)
 	if err != nil {
 		return nil, fmt.Errorf("get task tree: %w", err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
+const treeSQL = `WITH RECURSIVE task_tree AS (
+	SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+	  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+	  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at,
+	  ARRAY[id] AS path, ARRAY[position] AS sort_path
+	FROM tasks WHERE id = $1
+	UNION ALL
+	SELECT t.id, t.org_id, t.project_id, t.parent_task_id, t.title, t.description, t.status, t.priority,
+	  t.assignee_id, t.assignee_ids, t.reporter_id, t.depth, t.position, t.due_date, t.start_date, t.estimated_hours, t.actual_hours,
+	  t.labels, t.metadata, t.review_status, t.recurrence_rule, t.recurrence_parent_id, t.next_occurrence, t.version, t.created_at, t.updated_at,
+	  tt.path || t.id, tt.sort_path || t.position
+	FROM tasks t
+	INNER JOIN task_tree tt ON t.parent_task_id = tt.id
+	WHERE t.depth <= 3 AND NOT t.id = ANY(tt.path)
+)
+SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
+FROM task_tree ORDER BY sort_path`
+
+func (r *taskRepo) GetTreeTx(ctx context.Context, tx pgx.Tx, rootTaskID uuid.UUID) ([]*domain.Task, error) {
+	rows, err := tx.Query(ctx, treeSQL, rootTaskID)
+	if err != nil {
+		return nil, fmt.Errorf("get task tree tx: %w", err)
 	}
 	defer rows.Close()
 	return collectTasks(rows)
@@ -103,7 +113,7 @@ func (r *taskRepo) GetTree(ctx context.Context, rootTaskID uuid.UUID) ([]*domain
 func (r *taskRepo) ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
 		FROM tasks WHERE project_id = $1
 		ORDER BY depth, position, created_at`, projectID)
@@ -119,18 +129,46 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 	args := []any{projectID}
 	argIdx := 2
 
-	if filter.Status != nil {
+	// Status: multi takes precedence over single
+	if len(filter.Statuses) > 0 {
+		placeholders := make([]string, len(filter.Statuses))
+		for i, s := range filter.Statuses {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, s)
+			argIdx++
+		}
+		where = append(where, fmt.Sprintf("status IN (%s)", strings.Join(placeholders, ",")))
+	} else if filter.Status != nil {
 		where = append(where, fmt.Sprintf("status = $%d", argIdx))
 		args = append(args, *filter.Status)
 		argIdx++
 	}
-	if filter.Priority != nil {
+	// Priority: multi takes precedence over single
+	if len(filter.Priorities) > 0 {
+		placeholders := make([]string, len(filter.Priorities))
+		for i, p := range filter.Priorities {
+			placeholders[i] = fmt.Sprintf("$%d", argIdx)
+			args = append(args, p)
+			argIdx++
+		}
+		where = append(where, fmt.Sprintf("priority IN (%s)", strings.Join(placeholders, ",")))
+	} else if filter.Priority != nil {
 		where = append(where, fmt.Sprintf("priority = $%d", argIdx))
 		args = append(args, *filter.Priority)
 		argIdx++
 	}
-	if filter.AssigneeID != nil {
-		where = append(where, fmt.Sprintf("assignee_id = $%d", argIdx))
+	// Assignee: multi takes precedence over single
+	if len(filter.AssigneeIDs) > 0 {
+		placeholders := make([]string, len(filter.AssigneeIDs))
+		for i, aid := range filter.AssigneeIDs {
+			placeholders[i] = fmt.Sprintf("($%d = ANY(assignee_ids) OR assignee_id = $%d)", argIdx, argIdx)
+			args = append(args, aid)
+			argIdx++
+			_ = i
+		}
+		where = append(where, "("+strings.Join(placeholders, " OR ")+")")
+	} else if filter.AssigneeID != nil {
+		where = append(where, fmt.Sprintf("($%d = ANY(assignee_ids) OR assignee_id = $%d)", argIdx, argIdx))
 		args = append(args, *filter.AssigneeID)
 		argIdx++
 	}
@@ -147,6 +185,21 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 			args = append(args, *filter.ParentID)
 			argIdx++
 		}
+	}
+	if len(filter.Labels) > 0 {
+		where = append(where, fmt.Sprintf("labels && $%d", argIdx))
+		args = append(args, filter.Labels)
+		argIdx++
+	}
+	if filter.DueDateFrom != nil && *filter.DueDateFrom != "" {
+		where = append(where, fmt.Sprintf("due_date >= $%d", argIdx))
+		args = append(args, *filter.DueDateFrom)
+		argIdx++
+	}
+	if filter.DueDateTo != nil && *filter.DueDateTo != "" {
+		where = append(where, fmt.Sprintf("due_date <= $%d", argIdx))
+		args = append(args, *filter.DueDateTo)
+		argIdx++
 	}
 
 	whereClause := strings.Join(where, " AND ")
@@ -190,7 +243,7 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 
 	query := fmt.Sprintf(
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
 		 FROM tasks WHERE %s ORDER BY %s LIMIT %d OFFSET %d`,
 		whereClause, orderClause, limit, offset)
@@ -212,15 +265,15 @@ func (r *taskRepo) Update(ctx context.Context, tx pgx.Tx, task *domain.Task) (*d
 	q := conn(r.pool, tx)
 	row := q.QueryRow(ctx,
 		`UPDATE tasks SET title=$1, description=$2, status=$3, priority=$4,
-		  assignee_id=$5, reporter_id=$6, depth=$7, position=$8, due_date=$9, start_date=$10,
-		  estimated_hours=$11, actual_hours=$12, labels=$13, metadata=$14, review_status=$15,
-		  parent_task_id=$16, recurrence_rule=$17, recurrence_parent_id=$18, next_occurrence=$19
-		 WHERE id=$20
+		  assignee_id=$5, assignee_ids=$6, reporter_id=$7, depth=$8, position=$9, due_date=$10, start_date=$11,
+		  estimated_hours=$12, actual_hours=$13, labels=$14, metadata=$15, review_status=$16,
+		  parent_task_id=$17, recurrence_rule=$18, recurrence_parent_id=$19, next_occurrence=$20
+		 WHERE id=$21
 		 RETURNING id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at`,
 		task.Title, nilStr(task.Description), task.Status, task.Priority,
-		task.AssigneeID, task.ReporterID, task.Depth, task.Position,
+		task.AssigneeID, task.AssigneeIDs, task.ReporterID, task.Depth, task.Position,
 		task.DueDate, task.StartDate, task.EstimatedHours, task.ActualHours,
 		task.Labels, task.Metadata, task.ReviewStatus, task.ParentTaskID,
 		task.RecurrenceRule, task.RecurrenceParentID, task.NextOccurrence, task.ID,
@@ -245,7 +298,7 @@ func scanTask(row pgx.Row) (*domain.Task, error) {
 	var desc *string
 	err := row.Scan(
 		&t.ID, &t.OrgID, &t.ProjectID, &t.ParentTaskID, &t.Title, &desc,
-		&t.Status, &t.Priority, &t.AssigneeID, &t.ReporterID,
+		&t.Status, &t.Priority, &t.AssigneeID, &t.AssigneeIDs, &t.ReporterID,
 		&t.Depth, &t.Position, &t.DueDate, &t.StartDate,
 		&t.EstimatedHours, &t.ActualHours, &t.Labels, &t.Metadata,
 		&t.ReviewStatus, &t.RecurrenceRule, &t.RecurrenceParentID, &t.NextOccurrence,
@@ -260,6 +313,9 @@ func scanTask(row pgx.Row) (*domain.Task, error) {
 	if t.Labels == nil {
 		t.Labels = []string{}
 	}
+	if t.AssigneeIDs == nil {
+		t.AssigneeIDs = []uuid.UUID{}
+	}
 	if t.Metadata == nil {
 		t.Metadata = map[string]any{}
 	}
@@ -273,7 +329,7 @@ func collectTasks(rows pgx.Rows) ([]*domain.Task, error) {
 		var desc *string
 		err := rows.Scan(
 			&t.ID, &t.OrgID, &t.ProjectID, &t.ParentTaskID, &t.Title, &desc,
-			&t.Status, &t.Priority, &t.AssigneeID, &t.ReporterID,
+			&t.Status, &t.Priority, &t.AssigneeID, &t.AssigneeIDs, &t.ReporterID,
 			&t.Depth, &t.Position, &t.DueDate, &t.StartDate,
 			&t.EstimatedHours, &t.ActualHours, &t.Labels, &t.Metadata,
 			&t.ReviewStatus, &t.RecurrenceRule, &t.RecurrenceParentID, &t.NextOccurrence,
@@ -287,6 +343,9 @@ func collectTasks(rows pgx.Rows) ([]*domain.Task, error) {
 		}
 		if t.Labels == nil {
 			t.Labels = []string{}
+		}
+		if t.AssigneeIDs == nil {
+			t.AssigneeIDs = []uuid.UUID{}
 		}
 		if t.Metadata == nil {
 			t.Metadata = map[string]any{}
@@ -307,7 +366,7 @@ func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID u
 
 	var total int
 	err := r.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND assignee_id = $2`, orgID, assigneeID,
+		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)`, orgID, assigneeID,
 	).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count assigned tasks: %w", err)
@@ -315,9 +374,9 @@ func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID u
 
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
-		 FROM tasks WHERE org_id = $1 AND assignee_id = $2
+		 FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)
 		 ORDER BY
 		   CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'todo' THEN 1 WHEN status = 'blocked' THEN 2 ELSE 3 END,
 		   CASE WHEN due_date IS NOT NULL AND due_date < NOW() THEN 0 ELSE 1 END,
@@ -345,6 +404,48 @@ func (r *taskRepo) UpdatePosition(ctx context.Context, tx pgx.Tx, id uuid.UUID, 
 		return fmt.Errorf("update task position: %w", err)
 	}
 	return nil
+}
+
+// GetAncestors walks up the parent chain and returns all ancestors (immediate parent first).
+func (r *taskRepo) GetAncestors(ctx context.Context, taskID uuid.UUID) ([]*domain.Task, error) {
+	rows, err := r.pool.Query(ctx,
+		`WITH RECURSIVE ancestors AS (
+			SELECT parent_task_id FROM tasks WHERE id = $1
+			UNION ALL
+			SELECT t.parent_task_id FROM tasks t
+			INNER JOIN ancestors a ON t.id = a.parent_task_id
+		)
+		SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
+		FROM tasks WHERE id IN (SELECT parent_task_id FROM ancestors WHERE parent_task_id IS NOT NULL)
+		ORDER BY depth DESC`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("get ancestors: %w", err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
+// GetAncestorsTx is the transaction-aware version of GetAncestors.
+func (r *taskRepo) GetAncestorsTx(ctx context.Context, tx pgx.Tx, taskID uuid.UUID) ([]*domain.Task, error) {
+	rows, err := tx.Query(ctx,
+		`WITH RECURSIVE ancestors AS (
+			SELECT parent_task_id FROM tasks WHERE id = $1
+			UNION ALL
+			SELECT t.parent_task_id FROM tasks t
+			INNER JOIN ancestors a ON t.id = a.parent_task_id
+		)
+		SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
+		FROM tasks WHERE id IN (SELECT parent_task_id FROM ancestors WHERE parent_task_id IS NOT NULL)
+		ORDER BY depth DESC`, taskID)
+	if err != nil {
+		return nil, fmt.Errorf("get ancestors tx: %w", err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
 }
 
 // Reparent moves a task under a new parent (or to root if newParentID is nil) and sets its position.
@@ -392,4 +493,80 @@ func (r *taskRepo) Reparent(ctx context.Context, tx pgx.Tx, id uuid.UUID, newPar
 		}
 	}
 	return nil
+}
+
+// ReassignOrUnassignTasks bulk-reassigns tasks within a project from old users to a new user (or unassigns if newUserID is nil).
+// It updates both the legacy assignee_id (single) and the assignee_ids (multi) array.
+// Returns the total number of affected rows.
+func (r *taskRepo) ReassignOrUnassignTasks(ctx context.Context, tx pgx.Tx, projectID uuid.UUID, oldUserIDs []uuid.UUID, newUserID *uuid.UUID) (int64, error) {
+	q := conn(r.pool, tx)
+
+	if newUserID != nil {
+		// Replace old users in assignee_ids array with new user, update assignee_id if it matched
+		tag, err := q.Exec(ctx,
+			`UPDATE tasks
+			 SET assignee_ids = (
+			       SELECT COALESCE(array_agg(DISTINCT uid), ARRAY[$3::uuid]) FROM (
+			         SELECT uid FROM unnest(assignee_ids) AS uid
+			         WHERE uid != ALL($2::uuid[])
+			         UNION
+			         SELECT $3::uuid
+			       ) sub
+			     ),
+			     assignee_id = CASE WHEN assignee_id = ANY($2::uuid[]) THEN $3 ELSE assignee_id END,
+			     updated_at = NOW()
+			 WHERE project_id = $1
+			   AND (assignee_id = ANY($2::uuid[]) OR assignee_ids && $2::uuid[])`,
+			projectID, oldUserIDs, *newUserID,
+		)
+		if err != nil {
+			return 0, fmt.Errorf("reassign tasks: %w", err)
+		}
+		return tag.RowsAffected(), nil
+	}
+
+	// Unassign: remove old users from assignee_ids, clear assignee_id if it matched
+	tag, err := q.Exec(ctx,
+		`UPDATE tasks
+		 SET assignee_ids = (
+		       SELECT COALESCE(array_agg(x), '{}')
+		       FROM unnest(assignee_ids) AS x
+		       WHERE x != ALL($2::uuid[])
+		     ),
+		     assignee_id = CASE WHEN assignee_id = ANY($2::uuid[]) THEN NULL ELSE assignee_id END,
+		     updated_at = NOW()
+		 WHERE project_id = $1
+		   AND (assignee_id = ANY($2::uuid[]) OR assignee_ids && $2::uuid[])`,
+		projectID, oldUserIDs,
+	)
+	if err != nil {
+		return 0, fmt.Errorf("unassign tasks: %w", err)
+	}
+	return tag.RowsAffected(), nil
+}
+
+// CountByAssigneesInProject returns a map of user_id → task count for the given user IDs within a project.
+func (r *taskRepo) CountByAssigneesInProject(ctx context.Context, projectID uuid.UUID, userIDs []uuid.UUID) (map[uuid.UUID]int, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT u.uid, COUNT(*)
+		 FROM unnest($2::uuid[]) AS u(uid)
+		 JOIN tasks t ON t.project_id = $1 AND (t.assignee_id = u.uid OR u.uid = ANY(t.assignee_ids))
+		 GROUP BY u.uid`,
+		projectID, userIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("count tasks by assignees: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[uuid.UUID]int, len(userIDs))
+	for rows.Next() {
+		var uid uuid.UUID
+		var cnt int
+		if err := rows.Scan(&uid, &cnt); err != nil {
+			return nil, err
+		}
+		result[uid] = cnt
+	}
+	return result, rows.Err()
 }

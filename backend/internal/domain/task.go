@@ -43,6 +43,7 @@ type Task struct {
 	Status             string         `json:"status"`
 	Priority           string         `json:"priority"`
 	AssigneeID         *uuid.UUID     `json:"assignee_id,omitempty"`
+	AssigneeIDs        []uuid.UUID    `json:"assignee_ids"`
 	ReporterID         *uuid.UUID     `json:"reporter_id,omitempty"`
 	Depth              int            `json:"depth"`
 	Position           int            `json:"position"`
@@ -59,6 +60,18 @@ type Task struct {
 	Version            int64          `json:"version"`
 	CreatedAt          time.Time      `json:"created_at"`
 	UpdatedAt          time.Time      `json:"updated_at"`
+	Progress           float64        `json:"progress"`
+}
+
+// DeadlineConflict describes a related task (ancestor or descendant) whose dates
+// conflict with the updated task's new date range.
+type DeadlineConflict struct {
+	TaskID    uuid.UUID  `json:"task_id"`
+	Title     string     `json:"title"`
+	DueDate   *time.Time `json:"due_date"`
+	StartDate *time.Time `json:"start_date"`
+	Depth     int        `json:"depth"`
+	Direction string     `json:"direction"` // "ancestor" or "descendant"
 }
 
 // TaskTree represents a task with its children in a tree.

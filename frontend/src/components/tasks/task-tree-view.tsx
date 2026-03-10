@@ -2,6 +2,8 @@
 
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, ConfirmDialog } from "@/components/ui/shared";
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown";
 import {
     cn,
     formatDate,
@@ -32,9 +34,10 @@ interface TaskTreeViewProps {
   projectId: string;
   members: ProjectMember[];
   onOpenTask?: (taskId: string) => void;
+  globalFilter?: GlobalFilterState;
 }
 
-export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }: TaskTreeViewProps) {
+export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask, globalFilter }: TaskTreeViewProps) {
   const send = useProjectTaskStore((s) => s.send);
   const taskTree = useProjectTaskStore((s) => s.taskTree);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
@@ -147,11 +150,44 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
 
   const tree = taskTree;
 
-  if (tree.length === 0) {
+  // Apply global filter recursively
+  const filterTree = (nodes: TaskTree[]): TaskTree[] => {
+    if (!globalFilter || !isGlobalFilterActive(globalFilter)) return nodes;
+    return nodes.reduce<TaskTree[]>((acc, node) => {
+      const t = node.task;
+      let match = true;
+      if (globalFilter.assigneeIds.length > 0) {
+        const ids = t.assignee_ids?.length ? t.assignee_ids : t.assignee_id ? [t.assignee_id] : [];
+        const matchesUnassigned = globalFilter.assigneeIds.includes("") && ids.length === 0;
+        const matchesAny = ids.some((id) => globalFilter.assigneeIds.includes(id));
+        if (!matchesUnassigned && !matchesAny) match = false;
+      }
+      if (globalFilter.statuses.length > 0 && !globalFilter.statuses.includes(t.status)) match = false;
+      if (globalFilter.priorities.length > 0 && !globalFilter.priorities.includes(t.priority)) match = false;
+      if (globalFilter.labels.length > 0) {
+        if (!t.labels || !t.labels.some((l) => globalFilter.labels.includes(l))) match = false;
+      }
+      if (globalFilter.dueDateFrom && (!t.due_date || t.due_date < globalFilter.dueDateFrom)) match = false;
+      if (globalFilter.dueDateTo && (!t.due_date || t.due_date > globalFilter.dueDateTo)) match = false;
+      if (globalFilter.search) {
+        const q = globalFilter.search.toLowerCase();
+        if (!t.title.toLowerCase().includes(q)) match = false;
+      }
+      const filteredChildren = node.children ? filterTree(node.children) : [];
+      if (match || filteredChildren.length > 0) {
+        acc.push({ ...node, children: filteredChildren });
+      }
+      return acc;
+    }, []);
+  };
+  const hasFilter = globalFilter && isGlobalFilterActive(globalFilter);
+  const filteredTree = filterTree(tree);
+
+  if (filteredTree.length === 0) {
     return (
       <div className="text-center py-12 text-base-content/60">
-        <p className="mb-4">No tasks yet. Create your first task to get started.</p>
-        <CreateTaskButton parentId={null} onCreated={fetchTree} />
+        <p className="mb-4">{hasFilter ? "No tasks match the current filters." : "No tasks yet. Create your first task to get started."}</p>
+        {!hasFilter && <CreateTaskButton parentId={null} onCreated={fetchTree} />}
       </div>
     );
   }
@@ -174,7 +210,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
       {/* Tree container */}
       <div className="border border-base-300 rounded-lg bg-base-100">
         <div className="divide-y divide-base-200">
-          {tree.map((node) => (
+          {filteredTree.map((node) => (
             <TreeNode
               key={node.task.id}
               node={node}

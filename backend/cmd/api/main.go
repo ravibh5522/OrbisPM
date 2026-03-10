@@ -272,13 +272,17 @@ func main() {
 	// --- Services (RBAC / Review) ---
 	permSvc := service.NewPermissionService(permRepo, roleRepo, orgRepo, txm)
 	permResolver := service.NewPermissionResolver(orgMemberRepo, teamMemberRepo, projectMemberRepo, projectTeamRepo, roleRepo, orgRepo)
-	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, txm, workerSrv, publisher)
+	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, teamMemberRepo, taskRepo, txm, workerSrv, publisher)
 	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, txm, workerSrv, publisher)
 
 	// Inject review deps into task service + project service
 	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
 	taskSvc.SetCache(cacheManager)
+	taskSvc.SetMembershipRepo(projectMemberRepo)
 	projectSvc.SetProjectTeamRepo(projectTeamRepo)
+	projectSvc.SetTaskRepo(taskRepo)
+	projectSvc.SetTeamMemberRepo(teamMemberRepo)
+	teamSvc.SetProjectDeps(projectTeamRepo, projectMemberRepo, taskRepo)
 
 	// --- Handlers (existing) ---
 	orgHandler := handler.NewOrgHandler(orgSvc)
@@ -472,7 +476,9 @@ func main() {
 							r.Delete("/", projectHandler.Delete)
 							r.Get("/members", projectHandler.ListMembers)
 							r.Post("/members", projectHandler.AddMember)
+							r.Patch("/members/{userId}", projectHandler.UpdateMemberRole)
 							r.Delete("/members/{userId}", projectHandler.RemoveMember)
+							r.Get("/members/{userId}/preview", projectHandler.PreviewRemoveMember)
 							r.Get("/dashboard", projectHandler.Dashboard)
 
 							// Project teams (multi-team)

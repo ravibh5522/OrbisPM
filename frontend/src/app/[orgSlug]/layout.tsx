@@ -325,7 +325,6 @@ function TopBar() {
     <header
       className={cn(
         "sticky top-0 z-30 h-14 bg-base-100 border-b border-base-200 flex items-center px-4 gap-4 transition-all duration-300 ease-in-out glass-topbar",
-        "lg:ml-64", // Desktop sidebar offset
         sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
       )}
     >
@@ -408,7 +407,7 @@ function MobileSidebar() {
       />
       
       {/* Drawer */}
-      <aside className="fixed left-0 top-0 h-full w-72 bg-base-100 z-50 lg:hidden shadow-xl glass-sidebar">
+      <aside className="fixed left-0 top-0 h-full w-72 max-w-[calc(100vw-3rem)] bg-base-100 z-50 lg:hidden shadow-xl glass-sidebar">
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-base-200">
@@ -587,8 +586,8 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
       <MobileSidebar />
       <TopBar />
       <main className={cn(
-        "transition-all duration-300 ease-in-out pt-4 pb-8 px-4 md:px-6",
-        "min-h-[calc(100vh-3.5rem)]",
+        "transition-all duration-300 ease-in-out py-3 px-3 md:px-4",
+        "h-[calc(100vh-3.5rem)] overflow-auto",
         sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
       )}>
         {children}

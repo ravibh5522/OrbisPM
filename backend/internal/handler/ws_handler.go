@@ -13,6 +13,7 @@ import (
 	ws "nhooyr.io/websocket"
 
 	"github.com/orbispm/orbispm/internal/cache"
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
@@ -295,15 +296,21 @@ func (h *WSHandler) handleTaskList(ctx context.Context, conn *websocket.OrgConn,
 	}
 
 	type listReq struct {
-		Limit      int    `json:"limit"`
-		Offset     int    `json:"offset"`
-		Status     string `json:"status"`
-		Priority   string `json:"priority"`
-		AssigneeID string `json:"assignee_id"`
-		ParentID   string `json:"parent_id"`
-		Search     string `json:"search"`
-		SortBy     string `json:"sort_by"`
-		SortOrder  string `json:"sort_order"`
+		Limit       int      `json:"limit"`
+		Offset      int      `json:"offset"`
+		Status      string   `json:"status"`
+		Priority    string   `json:"priority"`
+		AssigneeID  string   `json:"assignee_id"`
+		ParentID    string   `json:"parent_id"`
+		Search      string   `json:"search"`
+		SortBy      string   `json:"sort_by"`
+		SortOrder   string   `json:"sort_order"`
+		Statuses    []string `json:"statuses"`
+		Priorities  []string `json:"priorities"`
+		AssigneeIDs []string `json:"assignee_ids"`
+		Labels      []string `json:"labels"`
+		DueDateFrom string   `json:"due_date_from"`
+		DueDateTo   string   `json:"due_date_to"`
 	}
 	req, _ := parsePayload[listReq](msg.Payload)
 
@@ -329,6 +336,29 @@ func (h *WSHandler) handleTaskList(ctx context.Context, conn *websocket.OrgConn,
 	}
 	if req.ParentID != "" {
 		filter.ParentID = &req.ParentID
+	}
+	// Multi-value filters
+	if len(req.Statuses) > 0 {
+		filter.Statuses = req.Statuses
+	}
+	if len(req.Priorities) > 0 {
+		filter.Priorities = req.Priorities
+	}
+	if len(req.AssigneeIDs) > 0 {
+		for _, idStr := range req.AssigneeIDs {
+			if uid, err := uuid.Parse(idStr); err == nil {
+				filter.AssigneeIDs = append(filter.AssigneeIDs, uid)
+			}
+		}
+	}
+	if len(req.Labels) > 0 {
+		filter.Labels = req.Labels
+	}
+	if req.DueDateFrom != "" {
+		filter.DueDateFrom = &req.DueDateFrom
+	}
+	if req.DueDateTo != "" {
+		filter.DueDateTo = &req.DueDateTo
 	}
 	if filter.Limit == 0 {
 		filter.Limit = 100
@@ -393,14 +423,25 @@ func (h *WSHandler) handleTaskCreate(ctx context.Context, conn *websocket.OrgCon
 	params.OrgID = conn.OrgID
 	params.ProjectID = projectID
 
-	task, err := h.taskSvc.Create(ctx, params)
+	result, err := h.taskSvc.Create(ctx, params)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
 		return
 	}
 
-	h.reply(conn, msg.ID, msg.Action, task, "")
-	h.broadcastProject(conn.OrgID, projectID, "task:created", task, conn.UserID.String(), conn)
+	// If only deadline conflicts returned (no task created), send warning
+	if result.Task == nil && len(result.DeadlineConflicts) > 0 {
+		h.reply(conn, msg.ID, "task:deadline-warning", result, "")
+		return
+	}
+
+	h.reply(conn, msg.ID, msg.Action, result.Task, "")
+	h.broadcastProject(conn.OrgID, projectID, "task:created", result.Task, conn.UserID.String(), conn)
+
+	// If ancestors were updated, broadcast those updates too
+	for _, anc := range result.AncestorsUpdated {
+		h.broadcastProject(conn.OrgID, projectID, "task:updated", &domain.TaskUpdateResult{Task: anc}, "", nil)
+	}
 }
 
 func (h *WSHandler) handleTaskUpdate(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {
@@ -439,8 +480,19 @@ func (h *WSHandler) handleTaskUpdate(ctx context.Context, conn *websocket.OrgCon
 		return
 	}
 
+	// If only deadline conflicts returned (no actual update), send warning
+	if len(result.DeadlineConflicts) > 0 && len(result.AppliedChanges) == 0 {
+		h.reply(conn, msg.ID, "task:deadline-warning", result, "")
+		return
+	}
+
 	h.reply(conn, msg.ID, msg.Action, result, "")
 	h.broadcastProject(conn.OrgID, projectID, "task:updated", result, conn.UserID.String(), conn)
+
+	// If ancestors were updated, broadcast those updates too
+	for _, anc := range result.AncestorsUpdated {
+		h.broadcastProject(conn.OrgID, projectID, "task:updated", &domain.TaskUpdateResult{Task: anc}, "", nil)
+	}
 }
 
 func (h *WSHandler) handleTaskDelete(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {
@@ -459,13 +511,19 @@ func (h *WSHandler) handleTaskDelete(ctx context.Context, conn *websocket.OrgCon
 		h.reply(conn, msg.ID, msg.Action, nil, "invalid task_id")
 		return
 	}
-	if err := h.taskSvc.Delete(ctx, id); err != nil {
+	progressAncestors, err := h.taskSvc.Delete(ctx, id)
+	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
 		return
 	}
 
 	h.reply(conn, msg.ID, msg.Action, map[string]string{"task_id": req.TaskID}, "")
 	h.broadcastProject(conn.OrgID, projectID, "task:deleted", map[string]string{"task_id": req.TaskID}, conn.UserID.String(), conn)
+
+	// Broadcast progress-updated ancestors
+	for _, anc := range progressAncestors {
+		h.broadcastProject(conn.OrgID, projectID, "task:updated", &domain.TaskUpdateResult{Task: anc}, "", nil)
+	}
 }
 
 func (h *WSHandler) handleTaskBulkCreate(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {

@@ -53,3 +53,8 @@ func OrgDashboardStatsKey(orgID uuid.UUID) string {
 func UserMyTasksKey(orgID, userID uuid.UUID) string {
 	return fmt.Sprintf("%sorg:%s:user:%s:my-tasks", keyPrefix, orgID, userID)
 }
+
+// ProjectProgressKey returns the Redis key for a task's computed progress value.
+func ProjectProgressKey(projectID, taskID uuid.UUID) string {
+	return fmt.Sprintf("%sproject:%s:progress:%s", keyPrefix, projectID, taskID)
+}
