@@ -1,16 +1,38 @@
+import { JsonLd } from "@/components/marketing/json-ld";
+import { MarketingFooter } from "@/components/marketing/marketing-footer";
+import { MarketingHeader } from "@/components/marketing/marketing-header";
+import {
+    Activity,
+    ArrowRight,
+    BarChart3,
+    Bell,
+    Bot,
+    Brain,
+    CalendarDays,
+    CheckSquare,
+    Cpu,
+    Eye,
+    FileText,
+    FolderKanban,
+    Gauge,
+    GitBranch,
+    Globe,
+    LineChart,
+    Lock,
+    MessageCircle, Network,
+    Puzzle, Repeat,
+    Search,
+    Settings2,
+    Shield,
+    Sparkles,
+    SquareStack, Table2,
+    Timer,
+    Users,
+    Webhook,
+    Workflow
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  FolderKanban, Users, Shield, GitBranch, Workflow, BarChart3,
-  Bell, Search, FileText, CheckSquare, Webhook, Activity,
-  Zap, Lock, ArrowRight, Eye, CalendarDays,
-  Sparkles, Brain, Bot, Gauge, LineChart, Timer,
-  Puzzle, Repeat, MessageCircle, Network,
-  Settings2, Globe, Cpu, SquareStack, Table2
-} from "lucide-react";
-import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { MarketingFooter } from "@/components/marketing/marketing-footer";
-import { JsonLd } from "@/components/marketing/json-ld";
 
 export const metadata: Metadata = {
   title: "Features – AI-Powered Project Management Tools for Engineering Teams",

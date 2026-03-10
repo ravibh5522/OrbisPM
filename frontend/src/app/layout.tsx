@@ -1,6 +1,6 @@
+import { Providers } from "@/components/providers";
 import type { Metadata } from "next";
 import "./globals.css";
-import { Providers } from "@/components/providers";
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbispm.dev";
 

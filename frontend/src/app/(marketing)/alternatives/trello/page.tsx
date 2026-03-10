@@ -1,9 +1,9 @@
+import { JsonLd } from "@/components/marketing/json-ld";
+import { MarketingFooter } from "@/components/marketing/marketing-footer";
+import { MarketingHeader } from "@/components/marketing/marketing-header";
+import { ArrowRight, BarChart3, CheckSquare, Layers, Shield, Sparkles, X, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckSquare, X, ArrowRight, Zap, Shield, Layers, BarChart3, Sparkles } from "lucide-react";
-import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { MarketingFooter } from "@/components/marketing/marketing-footer";
-import { JsonLd } from "@/components/marketing/json-ld";
 
 export const metadata: Metadata = {
   title: "OrbisPM vs Trello – Best AI-Powered Trello Alternative in 2026",

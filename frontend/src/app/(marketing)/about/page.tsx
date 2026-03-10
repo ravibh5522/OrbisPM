@@ -1,11 +1,15 @@
+import { JsonLd } from "@/components/marketing/json-ld";
+import { MarketingFooter } from "@/components/marketing/marketing-footer";
+import { MarketingHeader } from "@/components/marketing/marketing-header";
+import {
+    ArrowRight,
+    Heart, Lightbulb,
+    Shield,
+    Target, Users,
+    Zap
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  ArrowRight, Shield, Zap, Heart, Lightbulb, Target, Users
-} from "lucide-react";
-import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { MarketingFooter } from "@/components/marketing/marketing-footer";
-import { JsonLd } from "@/components/marketing/json-ld";
 
 export const metadata: Metadata = {
   title: "About OrbisPM – Our Mission to Reinvent Project Management with AI",

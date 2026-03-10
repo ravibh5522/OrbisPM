@@ -1,7 +1,7 @@
 "use client";
 
+import { CheckSquare, Send } from "lucide-react";
 import { useState } from "react";
-import { Send, CheckSquare } from "lucide-react";
 
 interface ContactFormData {
   name: string;

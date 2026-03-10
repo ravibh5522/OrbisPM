@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { ArrowRight, ChevronDown, Layers, Menu, X } from "lucide-react";
 import Link from "next/link";
-import { Layers, ArrowRight, Menu, X, ChevronDown } from "lucide-react";
+import { useState } from "react";
 
 const navLinks = [
   { label: "Features", href: "/features" },

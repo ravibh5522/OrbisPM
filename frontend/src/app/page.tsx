@@ -1,7 +1,7 @@
-import type { Metadata } from "next";
-import LandingPage from "./(marketing)/landing/page";
 import { AuthRedirect } from "@/components/marketing/auth-redirect";
 import { JsonLd } from "@/components/marketing/json-ld";
+import type { Metadata } from "next";
+import LandingPage from "./(marketing)/landing/page";
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbispm.dev";
 

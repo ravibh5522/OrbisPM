@@ -1,9 +1,9 @@
+import { JsonLd } from "@/components/marketing/json-ld";
+import { MarketingFooter } from "@/components/marketing/marketing-footer";
+import { MarketingHeader } from "@/components/marketing/marketing-header";
+import { ArrowRight, CheckSquare, Sparkles, X, Zap } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckSquare, Sparkles, ArrowRight, Zap, X } from "lucide-react";
-import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { MarketingFooter } from "@/components/marketing/marketing-footer";
-import { JsonLd } from "@/components/marketing/json-ld";
 import { PricingFAQ } from "./pricing-faq";
 
 export const metadata: Metadata = {
