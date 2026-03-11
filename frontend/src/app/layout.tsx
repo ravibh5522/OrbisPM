@@ -2,7 +2,7 @@ import { Providers } from "@/components/providers";
 import type { Metadata } from "next";
 import "./globals.css";
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbispm.dev";
+const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbisom.live";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

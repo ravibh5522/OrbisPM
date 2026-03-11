@@ -286,12 +286,12 @@ export default function FeaturesPage() {
           "@type": "WebPage",
           name: "OrbisPM Features – 30+ AI-Powered Project Management Tools",
           description: "Complete feature overview of OrbisPM project management platform with AI sprint planning, smart estimation, and 30+ tools for engineering teams",
-          url: "https://orbispm.dev/features",
+          url: "https://orbisom.live/features",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbispm.dev" },
-              { "@type": "ListItem", position: 2, name: "Features", item: "https://orbispm.dev/features" },
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
+              { "@type": "ListItem", position: 2, name: "Features", item: "https://orbisom.live/features" },
             ],
           },
         }}

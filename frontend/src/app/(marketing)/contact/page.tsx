@@ -34,7 +34,7 @@ export default function ContactPage() {
           "@type": "ContactPage",
           name: "Contact OrbisPM",
           description: "Contact the OrbisPM team for sales, support, and partnerships",
-          url: "https://orbispm.dev/contact",
+          url: "https://orbisom.live/contact",
           mainEntity: {
             "@type": "Organization",
             name: "OrbisPM",

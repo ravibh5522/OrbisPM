@@ -27,11 +27,11 @@ export default function RealTimeCollabArticle() {
           "@type": "Article",
           headline: "Real-Time Collaboration: Why WebSocket-Based Project Management Changes Everything",
           description: "How WebSocket-based real-time collaboration keeps distributed engineering teams in sync",
-          url: "https://orbispm.dev/blog/real-time-collaboration-engineering-teams",
+          url: "https://orbisom.live/blog/real-time-collaboration-engineering-teams",
           datePublished: "2025-10-28",
           dateModified: "2025-10-28",
           author: { "@type": "Organization", name: "OrbisPM" },
-          publisher: { "@type": "Organization", name: "OrbisPM", url: "https://orbispm.dev" },
+          publisher: { "@type": "Organization", name: "OrbisPM", url: "https://orbisom.live" },
         }}
       />
       <MarketingHeader />

@@ -38,12 +38,12 @@ export default function AISprintPlanningGuide() {
           "@type": "Article",
           headline: "AI Sprint Planning: The Complete Guide for Engineering Teams in 2026",
           description: "How AI is revolutionizing sprint planning for engineering teams",
-          url: "https://orbispm.dev/blog/ai-sprint-planning-complete-guide",
+          url: "https://orbisom.live/blog/ai-sprint-planning-complete-guide",
           datePublished: "2026-03-10",
           dateModified: "2026-03-10",
           author: { "@type": "Organization", name: "OrbisPM" },
-          publisher: { "@type": "Organization", name: "OrbisPM", url: "https://orbispm.dev" },
-          mainEntityOfPage: "https://orbispm.dev/blog/ai-sprint-planning-complete-guide",
+          publisher: { "@type": "Organization", name: "OrbisPM", url: "https://orbisom.live" },
+          mainEntityOfPage: "https://orbisom.live/blog/ai-sprint-planning-complete-guide",
         }}
       />
       <MarketingHeader />

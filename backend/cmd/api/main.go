@@ -1,10 +1,10 @@
 // @title OrbisPM API
 // @version 1.0
 // @description OrbisPM — AI-native project management platform API.
-// @termsOfService https://orbispm.dev/terms
+// @termsOfService https://orbisom.live/terms
 //
 // @contact.name OrbisPM Support
-// @contact.url https://orbispm.dev/support
+// @contact.url https://orbisom.live/support
 // @contact.email support@orbispm.in
 //
 // @license.name MIT
@@ -347,7 +347,7 @@ func main() {
 	r := chi.NewRouter()
 
 	// Global middleware
-	corsHandler := middleware.NewCORSHandler(cfg.FrontendURL)
+	corsHandler := middleware.NewCORSHandler(cfg.AllowedOrigins)
 	r.Use(corsHandler.Handler)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)

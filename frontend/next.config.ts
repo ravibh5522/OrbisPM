@@ -8,7 +8,8 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       { protocol: "http", hostname: "localhost" },
-      { protocol: "https", hostname: "*.orbispm.dev" },
+      { protocol: "https", hostname: "*.orbisom.live" },
+      { protocol: "https", hostname: "*.orbisom.in" },
     ],
   },
   async redirects() {

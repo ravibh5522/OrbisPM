@@ -909,12 +909,12 @@ info:
   contact:
     email: support@orbispm.in
     name: OrbisPM Support
-    url: https://orbispm.dev/support
+    url: https://orbisom.live/support
   description: OrbisPM — AI-native project management platform API.
   license:
     name: MIT
     url: https://opensource.org/licenses/MIT
-  termsOfService: https://orbispm.dev/terms
+  termsOfService: https://orbisom.live/terms
   title: OrbisPM API
   version: "1.0"
 paths:

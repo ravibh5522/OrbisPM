@@ -66,11 +66,11 @@ export default function BlogPage() {
           "@type": "Blog",
           name: "OrbisPM Blog",
           description: "Expert articles on AI-powered project management, agile practices, and engineering productivity",
-          url: "https://orbispm.dev/blog",
+          url: "https://orbisom.live/blog",
           publisher: {
             "@type": "Organization",
             name: "OrbisPM",
-            url: "https://orbispm.dev",
+            url: "https://orbisom.live",
           },
         }}
       />

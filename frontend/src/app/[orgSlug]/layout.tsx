@@ -9,22 +9,22 @@ import { useAuthStore } from "@/stores/auth-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
 import type { OrgRole } from "@/types/domain";
 import {
-    Activity,
-    Bell,
-    Building2,
-    ChevronDown,
-    ChevronLeft,
-    ChevronRight,
-    FileText,
-    FolderKanban,
-    LayoutDashboard,
-    ListTodo,
-    LogOut,
-    Menu,
-    Palette,
-    Search,
-    UserCircle,
-    Users,
+  Activity,
+  Bell,
+  Building2,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  FolderKanban,
+  LayoutDashboard,
+  ListTodo,
+  LogOut,
+  Menu,
+  Palette,
+  Search,
+  UserCircle,
+  Users,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";

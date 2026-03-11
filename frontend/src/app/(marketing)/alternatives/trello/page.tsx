@@ -59,13 +59,13 @@ export default function TrelloAlternativePage() {
           "@type": "WebPage",
           name: "OrbisPM vs Trello – Best AI-Powered Trello Alternative",
           description: "Feature comparison of OrbisPM and Trello project management platforms",
-          url: "https://orbispm.dev/alternatives/trello",
+          url: "https://orbisom.live/alternatives/trello",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbispm.dev" },
-              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbispm.dev/alternatives/jira" },
-              { "@type": "ListItem", position: 3, name: "OrbisPM vs Trello", item: "https://orbispm.dev/alternatives/trello" },
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
+              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbisom.live/alternatives/jira" },
+              { "@type": "ListItem", position: 3, name: "OrbisPM vs Trello", item: "https://orbisom.live/alternatives/trello" },
             ],
           },
         }}

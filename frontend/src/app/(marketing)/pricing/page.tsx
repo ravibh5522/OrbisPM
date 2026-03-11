@@ -140,7 +140,7 @@ export default function PricingPage() {
           "@type": "WebPage",
           name: "OrbisPM Pricing",
           description: "AI-powered project management platform pricing plans",
-          url: "https://orbispm.dev/pricing",
+          url: "https://orbisom.live/pricing",
         }}
       />
       <JsonLd
@@ -149,7 +149,7 @@ export default function PricingPage() {
           "@type": "Product",
           name: "OrbisPM",
           description: "AI-powered project management platform for engineering teams",
-          url: "https://orbispm.dev",
+          url: "https://orbisom.live",
           brand: { "@type": "Brand", name: "OrbisPM" },
           offers: [
             { "@type": "Offer", price: "0", priceCurrency: "USD", name: "Starter", description: "Free plan for small teams" },

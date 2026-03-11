@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -41,7 +42,8 @@ type Config struct {
 	MeiliMasterKey string
 
 	// CORS
-	FrontendURL string
+	FrontendURL    string
+	AllowedOrigins []string
 
 	// SMTP / Email
 	SMTPHost     string
@@ -92,6 +94,7 @@ func Load() (*Config, error) {
 		MeiliURL:            getEnv("MEILI_URL", "http://localhost:7700"),
 		MeiliMasterKey:      getEnv("MEILI_MASTER_KEY", "masterkey-for-dev-only"),
 		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),
+		AllowedOrigins:      parseOrigins(getEnv("ALLOWED_ORIGINS", ""), getEnv("FRONTEND_URL", "http://localhost:3000")),
 		SMTPHost:            getEnv("SMTP_HOST", "localhost"),
 		SMTPPort:            getEnvInt("SMTP_PORT", 1025),
 		SMTPUser:            getEnv("SMTP_USER", ""),
@@ -114,6 +117,43 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func parseOrigins(origins, frontendURL string) []string {
+	defaultOrigins := []string{
+		"https://orbisom.live",
+		"https://www.orbisom.live",
+		"https://orbisom.in",
+		"https://www.orbisom.in",
+	}
+	result := make(map[string]struct{})
+	result[frontendURL] = struct{}{}
+	for _, o := range defaultOrigins {
+		result[o] = struct{}{}
+	}
+	if origins != "" {
+		for _, o := range splitAndTrim(origins) {
+			if o != "" {
+				result[o] = struct{}{}
+			}
+		}
+	}
+	out := make([]string, 0, len(result))
+	for o := range result {
+		out = append(out, o)
+	}
+	return out
+}
+
+func splitAndTrim(s string) []string {
+	parts := make([]string, 0)
+	for _, p := range strings.Split(s, ",") {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			parts = append(parts, p)
+		}
+	}
+	return parts
 }
 
 func getEnv(key, fallback string) string {

@@ -79,8 +79,8 @@ export default function AboutPage() {
           "@context": "https://schema.org",
           "@type": "Organization",
           name: "OrbisPM",
-          url: "https://orbispm.dev",
-          logo: "https://orbispm.dev/logo.svg",
+          url: "https://orbisom.live",
+          logo: "https://orbisom.live/logo.svg",
           description: "AI-powered project management platform for modern engineering teams",
           foundingDate: "2024",
           sameAs: [

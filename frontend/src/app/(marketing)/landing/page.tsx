@@ -419,7 +419,7 @@ export default function LandingPage() {
                 </div>
                 <div className="flex-1 flex justify-center">
                   <div className="bg-base-200 rounded-lg px-4 py-1 text-xs text-base-content/40 min-w-[200px] text-center">
-                    app.orbispm.dev
+                    app.orbisom.live
                   </div>
                 </div>
               </div>

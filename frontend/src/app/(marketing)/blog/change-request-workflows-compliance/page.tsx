@@ -38,12 +38,12 @@ export default function ChangeRequestWorkflowsArticle() {
           "@type": "Article",
           headline: "Change Request Workflows: How Engineering Teams Stay in Control",
           description: "How change request workflows prevent accountability gaps and keep projects on track.",
-          url: "https://orbispm.dev/blog/change-request-workflows-compliance",
+          url: "https://orbisom.live/blog/change-request-workflows-compliance",
           datePublished: "2026-02-15",
           dateModified: "2026-02-15",
           author: { "@type": "Organization", name: "OrbisPM" },
-          publisher: { "@type": "Organization", name: "OrbisPM", url: "https://orbispm.dev" },
-          mainEntityOfPage: "https://orbispm.dev/blog/change-request-workflows-compliance",
+          publisher: { "@type": "Organization", name: "OrbisPM", url: "https://orbisom.live" },
+          mainEntityOfPage: "https://orbisom.live/blog/change-request-workflows-compliance",
         }}
       />
       <MarketingHeader />

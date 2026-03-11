@@ -61,13 +61,13 @@ export default function JiraAlternativePage() {
           "@type": "WebPage",
           name: "OrbisPM vs Jira – Best AI-Powered Jira Alternative",
           description: "Detailed feature comparison of OrbisPM and Jira",
-          url: "https://orbispm.dev/alternatives/jira",
+          url: "https://orbisom.live/alternatives/jira",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbispm.dev" },
-              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbispm.dev/alternatives/jira" },
-              { "@type": "ListItem", position: 3, name: "OrbisPM vs Jira", item: "https://orbispm.dev/alternatives/jira" },
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
+              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbisom.live/alternatives/jira" },
+              { "@type": "ListItem", position: 3, name: "OrbisPM vs Jira", item: "https://orbisom.live/alternatives/jira" },
             ],
           },
         }}

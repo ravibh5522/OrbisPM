@@ -19,9 +19,9 @@ func CORS(frontendURL string) func(next interface{}) interface{} {
 }
 
 // NewCORSHandler creates a cors.Handler for use in chi middleware chain.
-func NewCORSHandler(frontendURL string) *cors.Cors {
+func NewCORSHandler(allowedOrigins []string) *cors.Cors {
 	return cors.New(cors.Options{
-		AllowedOrigins:   []string{frontendURL},
+		AllowedOrigins:   allowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Request-ID", "X-API-Key"},
 		ExposedHeaders:   []string{"X-Request-ID"},

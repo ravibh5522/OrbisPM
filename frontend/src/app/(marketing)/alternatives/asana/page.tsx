@@ -58,13 +58,13 @@ export default function AsanaAlternativePage() {
           "@type": "WebPage",
           name: "OrbisPM vs Asana – Best AI-Powered Asana Alternative",
           description: "Feature comparison of OrbisPM and Asana project management platforms",
-          url: "https://orbispm.dev/alternatives/asana",
+          url: "https://orbisom.live/alternatives/asana",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbispm.dev" },
-              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbispm.dev/alternatives/jira" },
-              { "@type": "ListItem", position: 3, name: "OrbisPM vs Asana", item: "https://orbispm.dev/alternatives/asana" },
+              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
+              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbisom.live/alternatives/jira" },
+              { "@type": "ListItem", position: 3, name: "OrbisPM vs Asana", item: "https://orbisom.live/alternatives/asana" },
             ],
           },
         }}

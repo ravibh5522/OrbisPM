@@ -7,14 +7,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { DashboardStats, Project } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import {
-    AlertTriangle,
-    ArrowRight,
-    CheckCircle2,
-    Clock,
-    FolderKanban,
-    ListTodo,
-    TrendingUp,
-    Users2
+  AlertTriangle,
+  ArrowRight,
+  CheckCircle2,
+  Clock,
+  FolderKanban,
+  ListTodo,
+  TrendingUp,
+  Users2
 } from "lucide-react";
 import Link from "next/link";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";

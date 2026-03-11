@@ -20,7 +20,7 @@ export default function PrivacyPage() {
 
           <h2>1. Introduction</h2>
           <p>
-            OrbisPM (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) operates the orbispm.dev website
+            OrbisPM (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) operates the orbisom.live website
             and the OrbisPM project management platform (the &quot;Service&quot;). This Privacy Policy explains how
             we collect, use, disclose, and protect your personal information when you use our Service.
           </p>
