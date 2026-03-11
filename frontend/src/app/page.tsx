@@ -1,35 +1,38 @@
+import { getBaseUrl } from "@/lib/base-url";
 import { AuthRedirect } from "@/components/marketing/auth-redirect";
 import { JsonLd } from "@/components/marketing/json-ld";
 import type { Metadata } from "next";
 import LandingPage from "./(marketing)/landing/page";
 
-const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://orbisom.live";
-
-export const metadata: Metadata = {
-  title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
-  description:
-    "OrbisPM is the AI-native project management platform built for modern engineering teams. Real-time collaboration, enterprise RBAC, AI sprint planning, smart task estimation, change request workflows, and powerful automation. The best Jira alternative in 2026.",
-  alternates: { canonical: SITE_URL },
-  openGraph: {
+export async function generateMetadata(): Promise<Metadata> {
+  const siteUrl = await getBaseUrl();
+  return {
     title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
     description:
+      "OrbisPM is the AI-native project management platform built for modern engineering teams. Real-time collaboration, enterprise RBAC, AI sprint planning, smart task estimation, change request workflows, and powerful automation. The best Jira alternative in 2026.",
+    alternates: { canonical: siteUrl },
+    openGraph: {
+      title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+      description:
       "Ship faster with AI-native project management. Real-time collaboration, enterprise RBAC, AI sprint planning, smart estimation, and workflow automation. The #1 Jira alternative.",
-    url: SITE_URL,
-    type: "website",
-  },
-};
+      url: siteUrl,
+      type: "website",
+    },
+  };
+}
 
-export default function Home() {
+export default async function Home() {
+  const siteUrl = await getBaseUrl();
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
     name: "OrbisPM",
-    url: SITE_URL,
+    url: siteUrl,
     description:
       "AI-native project management platform for modern engineering teams.",
     potentialAction: {
       "@type": "SearchAction",
-      target: `${SITE_URL}/search?q={search_term_string}`,
+      target: `${siteUrl}/search?q={search_term_string}`,
       "query-input": "required name=search_term_string",
     },
   };
@@ -38,8 +41,8 @@ export default function Home() {
     "@context": "https://schema.org",
     "@type": "Organization",
     name: "OrbisPM",
-    url: SITE_URL,
-    logo: `${SITE_URL}/logo.svg`,
+    url: siteUrl,
+    logo: `${siteUrl}/logo.svg`,
     description:
       "AI-native project management platform built for modern engineering teams.",
     sameAs: [
@@ -55,7 +58,7 @@ export default function Home() {
     name: "OrbisPM",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web, Docker",
-    url: SITE_URL,
+    url: siteUrl,
     description:
       "AI-native project management with real-time collaboration, enterprise RBAC, change requests, AI sprint planning, kanban boards, and workflow automation.",
     offers: [

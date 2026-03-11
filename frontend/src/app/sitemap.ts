@@ -1,7 +1,8 @@
+import { getBaseUrl } from "@/lib/base-url";
 import type { MetadataRoute } from "next";
 
-export default function sitemap(): MetadataRoute.Sitemap {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://orbisom.live";
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const siteUrl = await getBaseUrl();
   const now = new Date();
 
   return [

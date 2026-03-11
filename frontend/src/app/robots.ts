@@ -1,7 +1,8 @@
+import { getBaseUrl } from "@/lib/base-url";
 import type { MetadataRoute } from "next";
 
-export default function robots(): MetadataRoute.Robots {
-  const siteUrl = process.env.NEXT_PUBLIC_APP_URL || "https://orbisom.live";
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const siteUrl = await getBaseUrl();
 
   return {
     rules: [
