@@ -1,5 +1,5 @@
-import { getBaseUrl } from "@/lib/base-url";
 import { Providers } from "@/components/providers";
+import { getBaseUrl } from "@/lib/base-url";
 import type { Metadata } from "next";
 import "./globals.css";
 

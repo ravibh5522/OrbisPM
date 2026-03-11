@@ -1,6 +1,6 @@
-import { getBaseUrl } from "@/lib/base-url";
 import { AuthRedirect } from "@/components/marketing/auth-redirect";
 import { JsonLd } from "@/components/marketing/json-ld";
+import { getBaseUrl } from "@/lib/base-url";
 import type { Metadata } from "next";
 import LandingPage from "./(marketing)/landing/page";
 
