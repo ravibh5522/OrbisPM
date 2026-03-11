@@ -121,10 +121,12 @@ func Load() (*Config, error) {
 
 func parseOrigins(origins, frontendURL string) []string {
 	defaultOrigins := []string{
-		"https://orbisom.live",
-		"https://www.orbisom.live",
-		"https://orbisom.in",
-		"https://www.orbisom.in",
+		"https://orbispm.live",
+		"https://www.orbispm.live",
+		"https://app.orbispm.live",
+		"https://orbispm.in",
+		"https://www.orbispm.in",
+		"https://app.orbispm.in",
 	}
 	result := make(map[string]struct{})
 	result[frontendURL] = struct{}{}
