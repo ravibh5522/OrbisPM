@@ -586,7 +586,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
       <MobileSidebar />
       <TopBar />
       <main className={cn(
-        "transition-all duration-300 ease-in-out py-3 px-3 md:px-4",
+        "transition-all duration-300 ease-in-out py-3 px-3 md:px-5 lg:px-6",
         "h-[calc(100vh-3.5rem)] overflow-auto",
         sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
       )}>

@@ -271,22 +271,30 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
 
       {/* Members tab */}
       {activeTab === "members" && (
-        <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
+        <div className="flex-1 overflow-auto">
+          <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} members={members?.data || []} />
+        </div>
       )}
 
       {/* Teams tab */}
       {activeTab === "teams" && (
-        <ProjectTeamsSection orgId={currentOrg!.id} projectId={projectId} />
+        <div className="flex-1 overflow-auto">
+          <ProjectTeamsSection orgId={currentOrg!.id} projectId={projectId} />
+        </div>
       )}
 
       {/* Reviews tab */}
       {activeTab === "reviews" && (
-        <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={(members?.data || []) as unknown as import("@/types/domain").OrgMember[]} />
+        <div className="flex-1 overflow-auto">
+          <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={(members?.data || []) as unknown as import("@/types/domain").OrgMember[]} />
+        </div>
       )}
 
       {/* Settings tab */}
       {activeTab === "settings" && (
-        <ProjectSettings orgId={currentOrg!.id} project={project} />
+        <div className="flex-1 overflow-auto">
+          <ProjectSettings orgId={currentOrg!.id} project={project} />
+        </div>
       )}
     </div>
   );

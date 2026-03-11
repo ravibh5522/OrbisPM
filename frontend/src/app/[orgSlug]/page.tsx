@@ -38,12 +38,12 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 function MiniStat({ label, value, icon, color, sub }: { label: string; value: number; icon: React.ReactNode; color: string; sub?: string }) {
   return (
-    <div className="flex items-center gap-3 p-4 bg-base-100 rounded-xl border border-base-200 shadow-sm glass-card">
-      <div className={cn("flex items-center justify-center w-10 h-10 rounded-lg", color)}>
+    <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 shadow-sm glass-card">
+      <div className={cn("flex items-center justify-center w-9 h-9 rounded-lg", color)}>
         {icon}
       </div>
       <div className="min-w-0">
-        <div className="text-2xl font-bold leading-tight">{value}</div>
+        <div className="text-xl font-bold leading-tight">{value}</div>
         <div className="text-xs text-base-content/50 truncate">{label}</div>
         {sub && <div className="text-[10px] text-base-content/40">{sub}</div>}
       </div>
@@ -142,7 +142,7 @@ export default function DashboardPage() {
       />
 
       {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
         <MiniStat label="Projects" value={stats.total_projects} icon={<FolderKanban className="w-5 h-5 text-primary-content" />} color="bg-primary" />
         <MiniStat label="Total Tasks" value={stats.total_tasks} icon={<ListTodo className="w-5 h-5 text-secondary-content" />} color="bg-secondary" />
         <MiniStat label="In Progress" value={inProgress} icon={<TrendingUp className="w-5 h-5 text-info-content" />} color="bg-info" />
@@ -152,7 +152,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card title="Task Status" compact>
           <DonutChart data={statusData} colors={STATUS_COLORS} title="By Status" />
         </Card>
