@@ -4,8 +4,8 @@
 # All configuration comes from .env (auto-loaded by Compose).
 #
 # External services (configured in .env):
-#   - PostgreSQL  → 35.207.238.251:9000
-#   - Redis       → 35.207.238.251:9001
+#   - PostgreSQL  → 35.207.246.183:9000
+#   - Redis       → 35.207.246.183:9001
 #   - MinIO       → external HTTPS endpoint
 #
 # Local services:
@@ -89,7 +89,7 @@ services:
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       STRIPE_ENABLED: "${STRIPE_ENABLED:-false}"
     extra_hosts:
-      - "zitadel.animastuff.fun:35.207.238.251"
+      - "zitadel.animastuff.fun:35.207.246.183"
 
   kong:
     build:
@@ -109,7 +109,7 @@ services:
       KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
     extra_hosts:
-      - "zitadel.animastuff.fun:35.207.238.251"
+      - "zitadel.animastuff.fun:35.207.246.183"
     depends_on:
       - api
       - nocodb

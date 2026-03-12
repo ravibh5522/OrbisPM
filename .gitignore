@@ -5,3 +5,4 @@ frontend/.next/cache/
 frontend/.next/trace
 frontend/.next/
 frontend/.next/trace
+node_modules/
