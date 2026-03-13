@@ -30,6 +30,7 @@ type TeamService struct {
 	projectTeamRepo   repository.ProjectTeamRepository
 	projectMemberRepo repository.ProjectMemberRepository
 	taskRepo          repository.TaskRepository
+	roleRepo          repository.RoleRepository
 	txm               *repository.TxManager
 	publisher         EventPublisher
 }
@@ -40,6 +41,9 @@ func (s *TeamService) SetProjectDeps(ptRepo repository.ProjectTeamRepository, pm
 	s.projectMemberRepo = pmRepo
 	s.taskRepo = tRepo
 }
+
+// SetRoleRepo injects the role repository for role validation.
+func (s *TeamService) SetRoleRepo(rr repository.RoleRepository) { s.roleRepo = rr }
 
 func NewTeamService(teamRepo repository.TeamRepository, teamMemberRepo repository.TeamMemberRepository, txm *repository.TxManager, publisher ...EventPublisher) *TeamService {
 	s := &TeamService{teamRepo: teamRepo, teamMemberRepo: teamMemberRepo, txm: txm}
@@ -120,20 +124,37 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 	if role == "" {
 		role = domain.RoleTeamMember
 	}
+	if err := s.validateRole(ctx, teamID, role); err != nil {
+		return err
+	}
 	m := &domain.TeamMember{TeamID: teamID, UserID: userID, Role: role}
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		if err := s.teamMemberRepo.Add(ctx, tx, m); err != nil {
 			return err
 		}
-		// Auto-demote: if this user is a direct (external) member of any project linked
-		// to this team, remove the direct membership so they appear as internal (team-inherited).
+		// Sync: add user to all projects linked to this team as a team-inherited member.
+		// Also remove any existing direct membership to avoid duplicates (auto-demote).
 		if s.projectTeamRepo != nil && s.projectMemberRepo != nil {
 			linkedProjects, lErr := s.projectTeamRepo.ListByTeam(ctx, teamID)
 			if lErr != nil {
-				log.Warn().Err(lErr).Msg("auto-demote: failed to list linked projects")
+				log.Warn().Err(lErr).Msg("team-add-sync: failed to list linked projects")
 			} else {
+				projectRole := domain.DefaultTeamProjectRoleMap[role]
+				if projectRole == "" {
+					projectRole = domain.RoleProjectObserver
+				}
 				for _, pt := range linkedProjects {
+					// Remove any direct membership first (auto-demote)
 					_ = s.projectMemberRepo.Remove(ctx, tx, pt.ProjectID, userID)
+					// Add as team-inherited member
+					pm := &domain.ProjectMember{
+						ProjectID:    pt.ProjectID,
+						UserID:       userID,
+						Role:         projectRole,
+						Source:       "team",
+						SourceTeamID: &teamID,
+					}
+					_ = s.projectMemberRepo.Add(ctx, tx, pm) // ON CONFLICT DO NOTHING
 				}
 			}
 		}
@@ -150,33 +171,39 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID uuid.UUID
 		if err := s.teamMemberRepo.Remove(ctx, tx, teamID, userID); err != nil {
 			return err
 		}
-		// Auto-promote: if this user has any tasks assigned in projects linked to this team,
-		// add them as a direct (external) project member so their tasks aren't orphaned.
-		if s.projectTeamRepo != nil && s.projectMemberRepo != nil && s.taskRepo != nil {
+		// Remove team-inherited project memberships for this user.
+		// If the user has assigned tasks, auto-promote to direct member instead of losing access.
+		if s.projectTeamRepo != nil && s.projectMemberRepo != nil {
 			linkedProjects, lErr := s.projectTeamRepo.ListByTeam(ctx, teamID)
 			if lErr != nil {
-				log.Warn().Err(lErr).Msg("auto-promote: failed to list linked projects")
+				log.Warn().Err(lErr).Msg("team-remove-sync: failed to list linked projects")
 			} else {
 				for _, pt := range linkedProjects {
-					counts, cErr := s.taskRepo.CountByAssigneesInProject(ctx, pt.ProjectID, []uuid.UUID{userID})
-					if cErr != nil {
-						log.Warn().Err(cErr).Msg("auto-promote: failed to count tasks")
-						continue
-					}
-					if counts[userID] > 0 {
-						// User has tasks — promote to direct member
-						dm := &domain.ProjectMember{
-							ProjectID: pt.ProjectID,
-							UserID:    userID,
-							Role:      domain.RoleProjectContributor,
+					// Remove team-inherited membership
+					_ = s.projectMemberRepo.RemoveBySourceTeamAndUser(ctx, tx, pt.ProjectID, teamID, userID)
+
+					// Auto-promote: if user has tasks, add as direct member
+					if s.taskRepo != nil {
+						counts, cErr := s.taskRepo.CountByAssigneesInProject(ctx, pt.ProjectID, []uuid.UUID{userID})
+						if cErr != nil {
+							log.Warn().Err(cErr).Msg("team-remove-sync: failed to count tasks")
+							continue
 						}
-						if aErr := s.projectMemberRepo.Add(ctx, tx, dm); aErr != nil {
-							log.Warn().Err(aErr).Str("project_id", pt.ProjectID.String()).Msg("auto-promote: failed to add direct member")
-						} else {
-							log.Info().
-								Str("user_id", userID.String()).
-								Str("project_id", pt.ProjectID.String()).
-								Msg("auto-promoted team member to direct project member")
+						if counts[userID] > 0 {
+							dm := &domain.ProjectMember{
+								ProjectID: pt.ProjectID,
+								UserID:    userID,
+								Role:      domain.RoleProjectContributor,
+								Source:    "direct",
+							}
+							if aErr := s.projectMemberRepo.Add(ctx, tx, dm); aErr != nil {
+								log.Warn().Err(aErr).Str("project_id", pt.ProjectID.String()).Msg("team-remove-sync: failed to auto-promote")
+							} else {
+								log.Info().
+									Str("user_id", userID.String()).
+									Str("project_id", pt.ProjectID.String()).
+									Msg("auto-promoted team member to direct project member")
+							}
 						}
 					}
 				}
@@ -194,6 +221,9 @@ func (s *TeamService) UpdateMemberRole(ctx context.Context, teamID, userID uuid.
 	if role == "" {
 		return fmt.Errorf("role is required")
 	}
+	if err := s.validateRole(ctx, teamID, role); err != nil {
+		return err
+	}
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.teamMemberRepo.UpdateRole(ctx, tx, teamID, userID, role)
 	})
@@ -205,6 +235,22 @@ func (s *TeamService) UpdateMemberRole(ctx context.Context, teamID, userID uuid.
 
 func (s *TeamService) ListMembers(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error) {
 	return s.teamMemberRepo.ListByTeam(ctx, teamID)
+}
+
+// validateRole checks that a role slug is valid for the team scope.
+func (s *TeamService) validateRole(ctx context.Context, teamID uuid.UUID, slug string) error {
+	if s.roleRepo == nil {
+		return nil
+	}
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	_, err = s.roleRepo.GetBySlug(ctx, team.OrgID, domain.ScopeTeam, slug)
+	if err != nil {
+		return domain.ErrBadRequest.WithDetail("invalid role: " + slug)
+	}
+	return nil
 }
 
 // publishEvent publishes a domain event for real-time propagation via SSE.

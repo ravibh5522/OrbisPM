@@ -91,6 +91,11 @@ export interface ProjectMember {
 
 export type PermissionScope = "org" | "team" | "project";
 
+export interface ScopePermissionsResponse {
+  role: string;
+  permissions: { resource: string; action: string }[];
+}
+
 export interface Permission {
   id: string;
   resource: string;

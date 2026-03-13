@@ -8,6 +8,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -15,10 +16,16 @@ import (
 type ProjectHandler struct {
 	projectSvc   *service.ProjectService
 	dashboardSvc *service.DashboardService
+	permResolver *service.PermissionResolver
 }
 
 func NewProjectHandler(projectSvc *service.ProjectService, dashboardSvc *service.DashboardService) *ProjectHandler {
 	return &ProjectHandler{projectSvc: projectSvc, dashboardSvc: dashboardSvc}
+}
+
+// SetPermResolver injects the permission resolver for GetMyPermissions.
+func (h *ProjectHandler) SetPermResolver(pr *service.PermissionResolver) {
+	h.permResolver = pr
 }
 
 // Routes registers project routes. Mounted under /orgs/{orgId}/projects.
@@ -39,6 +46,9 @@ func (h *ProjectHandler) Routes() chi.Router {
 		r.Patch("/members/{userId}", h.UpdateMemberRole)
 		r.Delete("/members/{userId}", h.RemoveMember)
 		r.Get("/members/{userId}/preview", h.PreviewRemoveMember)
+
+		// Permissions
+		r.Get("/my-permissions", h.GetMyPermissions)
 
 		// Dashboard
 		r.Get("/dashboard", h.Dashboard)
@@ -66,6 +76,7 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params.OrgID = middleware.OrgIDFromCtx(r.Context())
+	params.UserID = tenant.UserID(r.Context())
 
 	project, err := h.projectSvc.Create(r.Context(), params)
 	if err != nil {
@@ -390,7 +401,7 @@ func (h *ProjectHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request
 
 // Dashboard godoc
 // @Summary Get project dashboard analytics
-// @Description Returns aggregated analytics including burndown, distribution, velocity, and member workload for a project
+// @Description Returns aggregated analytics including burndown, distribution, velocity, and member workload for a project (filtered by user's role)
 // @Tags Projects
 // @Produce json
 // @Param orgId path string true "Organization ID"
@@ -405,10 +416,55 @@ func (h *ProjectHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, map[string]string{"message": "invalid project id"})
 		return
 	}
-	stats, err := h.dashboardSvc.GetProjectDashboard(r.Context(), projID)
+	userID := middleware.UserIDFromCtx(r.Context())
+	stats, err := h.dashboardSvc.GetProjectDashboard(r.Context(), projID, userID)
 	if err != nil {
 		Error(w, r, err)
 		return
 	}
 	JSON(w, http.StatusOK, stats)
+}
+
+// GetMyPermissions godoc
+// @Summary Get my effective permissions for a project
+// @Description Returns the caller's effective role and permissions for a specific project
+// @Tags Projects
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Success 200 {object} map[string]interface{}
+// @Router /orgs/{orgId}/projects/{projectId}/my-permissions [get]
+func (h *ProjectHandler) GetMyPermissions(w http.ResponseWriter, r *http.Request) {
+	if h.permResolver == nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "permission resolver not configured"})
+		return
+	}
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	userID := tenant.UserID(r.Context())
+	orgID := middleware.OrgIDFromCtx(r.Context())
+
+	role, perms, err := h.permResolver.GetEffectivePermissions(r.Context(), userID, orgID, domain.ScopeProject, &projectID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	type permItem struct {
+		Resource string `json:"resource"`
+		Action   string `json:"action"`
+	}
+	items := make([]permItem, 0, len(perms))
+	for _, p := range perms {
+		items = append(items, permItem{Resource: p.Resource, Action: p.Action})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"role":        role,
+		"permissions": items,
+	})
 }

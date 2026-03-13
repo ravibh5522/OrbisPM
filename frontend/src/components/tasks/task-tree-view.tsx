@@ -5,22 +5,22 @@ import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown"
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, ConfirmDialog } from "@/components/ui/shared";
 import {
-    cn,
-    formatDate,
-    priorityColor,
-    statusLabel,
+  cn,
+  formatDate,
+  priorityColor,
+  statusLabel,
 } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type { ProjectMember, Task, TaskPriority, TaskStatus, TaskTree } from "@/types/domain";
 import {
-    ChevronDown,
-    ChevronRight,
-    Circle,
-    Copy,
-    ExternalLink,
-    MoreHorizontal,
-    Plus,
-    Trash2,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Copy,
+  ExternalLink,
+  MoreHorizontal,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 

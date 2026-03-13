@@ -242,6 +242,7 @@ import type {
     TOTPRegistration,
     UnlinkPreview,
     Webhook,
+    ScopePermissionsResponse,
 } from "@/types/domain";
 
 export const api = {
@@ -385,6 +386,8 @@ export const api = {
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/teams/${id}`),
     dashboard: (orgId: string, teamId: string) =>
       get<TeamDashboardStats>(`${V1}/orgs/${orgId}/teams/${teamId}/dashboard`),
+    myPermissions: (orgId: string, teamId: string) =>
+      get<ScopePermissionsResponse>(`${V1}/orgs/${orgId}/teams/${teamId}/my-permissions`),
   },
 
   // Team members
@@ -411,6 +414,8 @@ export const api = {
     delete: (orgId: string, id: string) => del(`${V1}/orgs/${orgId}/projects/${id}`),
     dashboard: (orgId: string, projId: string) =>
       get<ProjectDashboardStats>(`${V1}/orgs/${orgId}/projects/${projId}/dashboard`),
+    myPermissions: (orgId: string, projId: string) =>
+      get<ScopePermissionsResponse>(`${V1}/orgs/${orgId}/projects/${projId}/my-permissions`),
   },
 
   // Project members

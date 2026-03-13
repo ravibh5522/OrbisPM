@@ -265,7 +265,7 @@ func main() {
 	apikeySvc := service.NewAPIKeyService(apikeyRepo, txm)
 	importSvc := service.NewImportService(importJobRepo, taskRepo, txm)
 	billingSvc := service.NewBillingService(planRepo, subRepo, txm)
-	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, txm)
+	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, projectMemberRepo, orgMemberRepo, txm)
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
 
@@ -282,7 +282,10 @@ func main() {
 	projectSvc.SetProjectTeamRepo(projectTeamRepo)
 	projectSvc.SetTaskRepo(taskRepo)
 	projectSvc.SetTeamMemberRepo(teamMemberRepo)
+	projectSvc.SetRoleRepo(roleRepo)
 	teamSvc.SetProjectDeps(projectTeamRepo, projectMemberRepo, taskRepo)
+	teamSvc.SetRoleRepo(roleRepo)
+	orgSvc.SetRoleRepo(roleRepo)
 
 	// --- Handlers (existing) ---
 	orgHandler := handler.NewOrgHandler(orgSvc)
@@ -295,6 +298,11 @@ func main() {
 	activityHandler := handler.NewActivityHandler(activitySvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
 	healthHandler := handler.NewHealthHandler(pool, rdb)
+
+	// Inject permission resolver into handlers
+	permResolver.SetPermRepo(permRepo)
+	projectHandler.SetPermResolver(permResolver)
+	teamHandler.SetPermResolver(permResolver)
 
 	// --- Handlers (new) ---
 	authHandler := handler.NewAuthHandler(zitadelClient, pool)
@@ -420,6 +428,11 @@ func main() {
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireOrgMember(pool))
 
+					// Permission check shorthand
+					prm := func(scope, paramName, resource, action string) func(http.Handler) http.Handler {
+						return middleware.PermissionResolverMiddleware(permResolver, scope, paramName, resource, action)
+					}
+
 					r.Get("/me", orgHandler.GetMyMembership)
 					r.Get("/members", orgHandler.ListMembers)
 
@@ -427,7 +440,22 @@ func main() {
 					r.Mount("/permissions", permHandler.CombinedRoutes(pool))
 
 					// Teams
-					r.Mount("/teams", teamHandler.Routes())
+					r.Route("/teams", func(r chi.Router) {
+						r.With(prm("org", "", "teams", "create")).Post("/", teamHandler.Create)
+						r.With(prm("org", "", "teams", "read")).Get("/", teamHandler.List)
+
+						r.Route("/{teamId}", func(r chi.Router) {
+							r.With(prm("team", "teamId", "team", "read")).Get("/", teamHandler.Get)
+							r.With(prm("team", "teamId", "team", "update")).Patch("/", teamHandler.Update)
+							r.With(prm("team", "teamId", "team", "delete")).Delete("/", teamHandler.Delete)
+							r.With(prm("team", "teamId", "team", "read")).Get("/dashboard", teamHandler.Dashboard)
+							r.With(prm("team", "teamId", "team", "read")).Get("/my-permissions", teamHandler.GetMyPermissions)
+							r.With(prm("team", "teamId", "team", "read")).Get("/members", teamHandler.ListMembers)
+							r.With(prm("team", "teamId", "members", "manage")).Post("/members", teamHandler.AddMember)
+							r.With(prm("team", "teamId", "members", "manage")).Patch("/members/{userId}", teamHandler.UpdateMemberRole)
+							r.With(prm("team", "teamId", "members", "manage")).Delete("/members/{userId}", teamHandler.RemoveMember)
+						})
+					})
 
 					// Activity
 					r.Mount("/activity", activityHandler.Routes())
@@ -467,19 +495,20 @@ func main() {
 
 					// Projects
 					r.Route("/projects", func(r chi.Router) {
-						r.Post("/", projectHandler.Create)
-						r.Get("/", projectHandler.List)
+						r.With(prm("org", "", "projects", "create")).Post("/", projectHandler.Create)
+						r.With(prm("org", "", "projects", "read")).Get("/", projectHandler.List)
 
 						r.Route("/{projectId}", func(r chi.Router) {
-							r.Get("/", projectHandler.Get)
-							r.Patch("/", projectHandler.Update)
-							r.Delete("/", projectHandler.Delete)
-							r.Get("/members", projectHandler.ListMembers)
-							r.Post("/members", projectHandler.AddMember)
-							r.Patch("/members/{userId}", projectHandler.UpdateMemberRole)
-							r.Delete("/members/{userId}", projectHandler.RemoveMember)
-							r.Get("/members/{userId}/preview", projectHandler.PreviewRemoveMember)
-							r.Get("/dashboard", projectHandler.Dashboard)
+							r.With(prm("project", "projectId", "project", "read")).Get("/", projectHandler.Get)
+							r.With(prm("project", "projectId", "project", "update")).Patch("/", projectHandler.Update)
+							r.With(prm("project", "projectId", "project", "delete")).Delete("/", projectHandler.Delete)
+							r.With(prm("project", "projectId", "project", "read")).Get("/members", projectHandler.ListMembers)
+							r.With(prm("project", "projectId", "members", "manage")).Post("/members", projectHandler.AddMember)
+							r.With(prm("project", "projectId", "members", "manage")).Patch("/members/{userId}", projectHandler.UpdateMemberRole)
+							r.With(prm("project", "projectId", "members", "manage")).Delete("/members/{userId}", projectHandler.RemoveMember)
+							r.With(prm("project", "projectId", "project", "read")).Get("/members/{userId}/preview", projectHandler.PreviewRemoveMember)
+							r.With(prm("project", "projectId", "project", "read")).Get("/dashboard", projectHandler.Dashboard)
+							r.With(prm("project", "projectId", "project", "read")).Get("/my-permissions", projectHandler.GetMyPermissions)
 
 							// Project teams (multi-team)
 							r.Mount("/teams", projectTeamHandler.Routes())
@@ -492,22 +521,22 @@ func main() {
 
 							// Tasks
 							r.Route("/tasks", func(r chi.Router) {
-								r.Post("/", taskHandler.Create)
-								r.Get("/", taskHandler.List)
-								r.Get("/tree", taskHandler.ListTree)               // project-level tree (must be before /{taskId})
-								r.Get("/export", taskHandler.Export)               // CSV export (must be before /{taskId})
-								r.Get("/calendar.ics", taskHandler.CalendarExport) // iCal export (must be before /{taskId})
-								r.Post("/bulk", taskHandler.BulkUpdate)            // must be before /{taskId}
-								r.Patch("/reorder", taskHandler.Reorder)           // must be before /{taskId}
+								r.With(prm("project", "projectId", "tasks", "create")).Post("/", taskHandler.Create)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/", taskHandler.List)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/tree", taskHandler.ListTree)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/export", taskHandler.Export)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/calendar.ics", taskHandler.CalendarExport)
+								r.With(prm("project", "projectId", "tasks", "update")).Post("/bulk", taskHandler.BulkUpdate)
+								r.With(prm("project", "projectId", "tasks", "update")).Patch("/reorder", taskHandler.Reorder)
 
 								r.Route("/{taskId}", func(r chi.Router) {
-									r.Get("/", taskHandler.Get)
-									r.Patch("/", taskHandler.Update)
-									r.Delete("/", taskHandler.Delete)
-									r.Get("/tree", taskHandler.GetTree)
-									r.Post("/submit-review", taskHandler.SubmitForReview)
-									r.Post("/complete", taskHandler.MarkComplete)
-									r.Post("/duplicate", taskHandler.Duplicate)
+									r.With(prm("project", "projectId", "tasks", "read")).Get("/", taskHandler.Get)
+									r.With(prm("project", "projectId", "tasks", "update")).Patch("/", taskHandler.Update)
+									r.With(prm("project", "projectId", "tasks", "delete")).Delete("/", taskHandler.Delete)
+									r.With(prm("project", "projectId", "tasks", "read")).Get("/tree", taskHandler.GetTree)
+									r.With(prm("project", "projectId", "tasks", "update")).Post("/submit-review", taskHandler.SubmitForReview)
+									r.With(prm("project", "projectId", "tasks", "update")).Post("/complete", taskHandler.MarkComplete)
+									r.With(prm("project", "projectId", "tasks", "create")).Post("/duplicate", taskHandler.Duplicate)
 
 									// Task sub-resources
 									r.Mount("/checklists", checklistHandler.Routes())

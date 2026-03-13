@@ -87,6 +87,7 @@ type ProjectMemberRepository interface {
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error)
 	ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error)
 	RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID uuid.UUID) error
+	RemoveBySourceTeamAndUser(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID, userID uuid.UUID) error
 }
 
 // --- Task ---

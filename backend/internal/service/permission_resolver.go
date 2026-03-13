@@ -18,6 +18,7 @@ type PermissionResolver struct {
 	projectTeamRepo   repository.ProjectTeamRepository
 	roleRepo          repository.RoleRepository
 	orgRepo           repository.OrgRepository
+	permRepo          repository.PermissionRepository
 }
 
 func NewPermissionResolver(
@@ -127,7 +128,14 @@ func (r *PermissionResolver) HasPermission(ctx context.Context, userID, orgID uu
 		}
 	}
 
-	// 4. Fall through to org-level permissions
+	// 4. For project/team scoped requests, do NOT fall through to org-level.
+	// Only owner/admin (handled above) bypass. Regular members must have
+	// direct or team-inherited membership in the specific project/team.
+	if (scope == domain.ScopeProject || scope == domain.ScopeTeam) && scopeID != nil {
+		return false, nil
+	}
+
+	// 5. Fall through to org-level permissions (for org-scoped resources only)
 	has, err := r.roleHasPermission(ctx, orgID, domain.ScopeOrg, orgMember.Role, resource, action)
 	if err != nil {
 		return false, err
@@ -188,6 +196,15 @@ func (r *PermissionResolver) GetEffectiveRole(ctx context.Context, userID, orgID
 		}
 	}
 
+	// For project/team scoped requests, return org role only for owner/admin.
+	// Regular members without direct/team membership get empty role.
+	if (scope == domain.ScopeProject || scope == domain.ScopeTeam) && scopeID != nil {
+		if orgMember.Role == domain.RoleOrgOwner || orgMember.Role == domain.RoleOrgAdmin {
+			return orgMember.Role, nil
+		}
+		return "", nil
+	}
+
 	return orgMember.Role, nil
 }
 
@@ -233,4 +250,44 @@ func (r *PermissionResolver) getTeamProjectRoleMap(ctx context.Context, orgID uu
 		}
 	}
 	return domain.DefaultTeamProjectRoleMap, nil
+}
+
+// GetEffectivePermissions returns all permissions a user has in the given scope.
+func (r *PermissionResolver) GetEffectivePermissions(ctx context.Context, userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID) (string, []*domain.Permission, error) {
+	role, err := r.GetEffectiveRole(ctx, userID, orgID, scope, scopeID)
+	if err != nil {
+		return "", nil, err
+	}
+
+	// Owner/admin gets all permissions for the scope
+	if role == domain.RoleOrgOwner || role == domain.RoleOrgAdmin {
+		perms, err := r.getAllPermissionsForScope(ctx, scope)
+		return role, perms, err
+	}
+
+	// Look up the role's permissions from DB
+	dbRole, err := r.roleRepo.GetBySlug(ctx, orgID, scope, role)
+	if err != nil {
+		// Try org scope as fallback
+		dbRole, err = r.roleRepo.GetBySlug(ctx, orgID, domain.ScopeOrg, role)
+		if err != nil {
+			return role, nil, nil
+		}
+	}
+
+	perms, err := r.roleRepo.GetPermissions(ctx, dbRole.ID)
+	if err != nil {
+		return role, nil, err
+	}
+	return role, perms, nil
+}
+
+// getAllPermissionsForScope returns all canonical permissions for a scope (used for admin/owner).
+func (r *PermissionResolver) getAllPermissionsForScope(ctx context.Context, scope string) ([]*domain.Permission, error) {
+	return r.permRepo.List(ctx, &scope)
+}
+
+// SetPermRepo injects the permission repo for GetEffectivePermissions.
+func (r *PermissionResolver) SetPermRepo(pr repository.PermissionRepository) {
+	r.permRepo = pr
 }

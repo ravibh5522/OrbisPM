@@ -12,6 +12,7 @@ import {
   Activity,
   Bell,
   Building2,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -43,6 +44,7 @@ function getSidebarItems(orgSlug: string): NavItem[] {
   return [
     { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
     { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
+    { href: `/${orgSlug}/calendar`, label: "Calendar", icon: <CalendarDays className="w-5 h-5" /> },
     { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
     { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
     { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
@@ -367,6 +369,7 @@ function MobileSidebar() {
     { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
     { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
     { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
+    { href: `/${orgSlug}/calendar`, label: "Calendar", icon: <CalendarDays className="w-5 h-5" /> },
     { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
     { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
     { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },

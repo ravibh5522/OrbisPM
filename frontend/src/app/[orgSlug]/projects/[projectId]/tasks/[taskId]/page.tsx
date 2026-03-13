@@ -38,7 +38,7 @@ import { TimeTracker } from "@/components/tasks/time-tracker";
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { PresenceIndicator } from "@/components/ui/presence-indicator";
 import { TaskChangeRequests, ChangeRequestToast } from "@/components/tasks/change-requests";
-import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskWatcher, TaskStatus, TaskPriority, OrgMember, TaskUpdateResult } from "@/types/domain";
 
 /* ─── helpers ─── */
@@ -83,7 +83,7 @@ export default function TaskDetailPage({
   const qc = useQueryClient();
   const orgId = currentOrg?.id || "";
 
-  const { can } = usePermissions();
+  const { can } = useProjectPermissions(projectId);
   const canEdit = can("tasks", "update");
   const { members } = useMemberMap(orgId);
 

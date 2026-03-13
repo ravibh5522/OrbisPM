@@ -100,13 +100,12 @@ plugins:
       origins:
         - http://localhost:3000
         - http://localhost:3001
-        - https://orbispm.crewsity.com
-        - https://www.orbispm.crewsity.com
-        - https://orbisom.live
-        - https://www.orbisom.live
-        - https://orbisom.in
-        - https://www.orbisom.in
-        - http://xgkwk0wkwg4c8cogg4ow44gk.35.207.238.251.sslip.io
+        - https://orbispm.live
+        - https://www.orbispm.live
+        - https://app.orbispm.live
+        - https://orbispm.in
+        - https://www.orbispm.in
+        - https://app.orbispm.in
       methods:
         - GET
         - POST

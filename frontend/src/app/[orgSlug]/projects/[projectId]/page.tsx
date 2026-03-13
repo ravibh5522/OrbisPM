@@ -14,15 +14,16 @@ import {
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskListView } from "@/components/tasks/task-list-view";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
+import { CalendarView, getDateRange, type CalendarViewMode } from "@/components/calendar";
 import { Button } from "@/components/ui/button";
 import { Avatar, Card } from "@/components/ui/shared";
-import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import { api } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useUIStore } from "@/stores/ui-store";
-import type { ProjectMember, ProjectTeam, Team } from "@/types/domain";
+import type { ProjectMember, ProjectTeam, Role, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
     CalendarDays,
@@ -42,7 +43,7 @@ import {
     Users
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { use, useCallback, useEffect, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlug: string; projectId: string }> }) {
   const { projectId } = use(params);
@@ -53,13 +54,17 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
   const focusTaskId = openedTaskId || initialFocusTaskId;
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const [activeTab, setActiveTab] = useState<"tasks" | "members" | "teams" | "reviews" | "dashboard" | "settings">("tasks");
-  const [taskView, setTaskView] = useState<"columns" | "list" | "tree">("columns");
+  const [taskView, setTaskView] = useState<"columns" | "list" | "tree" | "calendar">("columns");
   const [importOpen, setImportOpen] = useState(false);
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
   const [globalFilter, setGlobalFilter] = useState<GlobalFilterState>({ ...EMPTY_GLOBAL_FILTER });
   const [showGlobalFilter, setShowGlobalFilter] = useState(false);
-  const { can } = usePermissions();
+  const projPerms = useProjectPermissions(projectId);
   const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
+
+  // Calendar view state
+  const calInitRange = useMemo(() => getDateRange(new Date(), "month"), []);
+  const [calDateRange, setCalDateRange] = useState(calInitRange);
 
   // Callback for tree/list view "Open" action — switch to columns and expand the task
   const handleOpenTask = useCallback((taskId: string) => {
@@ -95,6 +100,23 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
     staleTime: 5 * 60_000,
   });
 
+  // Calendar tasks fetched only when calendar view is active
+  const { data: calTasksData, isLoading: calTasksLoading } = useQuery({
+    queryKey: ["calendar-tasks-project", currentOrg?.id, projectId, calDateRange.from, calDateRange.to],
+    queryFn: () => {
+      const p = new URLSearchParams();
+      p.set("due_date_from", calDateRange.from);
+      p.set("due_date_to", calDateRange.to);
+      p.set("limit", "200");
+      return api.tasks.list(currentOrg!.id, projectId, p.toString());
+    },
+    enabled: !!currentOrg && taskView === "calendar",
+  });
+
+  const handleCalRangeChange = useCallback((from: string, to: string) => {
+    setCalDateRange({ from, to });
+  }, []);
+
   // Set breadcrumb in top bar
   useEffect(() => {
     if (project && currentOrg) {
@@ -125,12 +147,12 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
           <button role="tab" className={`tab tab-sm ${activeTab === "tasks" ? "tab-active" : ""}`} onClick={() => setActiveTab("tasks")}>
             <Columns3 className="w-3.5 h-3.5 mr-1" /> Tasks
           </button>
-          {can("projects", "manage_members") && (
+          {projPerms.can("members", "manage") && (
             <button role="tab" className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`} onClick={() => setActiveTab("members")}>
               <Users className="w-3.5 h-3.5 mr-1" /> Members
             </button>
           )}
-          {can("projects", "manage_members") && (
+          {projPerms.can("members", "manage") && (
             <button role="tab" className={`tab tab-sm ${activeTab === "teams" ? "tab-active" : ""}`} onClick={() => setActiveTab("teams")}>
               <Link2 className="w-3.5 h-3.5 mr-1" /> Teams
             </button>
@@ -138,7 +160,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
           <button role="tab" className={`tab tab-sm ${activeTab === "reviews" ? "tab-active" : ""}`} onClick={() => setActiveTab("reviews")}>
             <GitPullRequest className="w-3.5 h-3.5 mr-1" /> Reviews
           </button>
-          {can("settings", "update") && (
+          {projPerms.can("project", "update") && (
             <button role="tab" className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`} onClick={() => setActiveTab("settings")}>
               <Settings className="w-3.5 h-3.5 mr-1" /> Settings
             </button>
@@ -213,6 +235,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               >
                 <List className="w-4 h-4" />
               </button>
+              <button
+                className={`join-item btn btn-sm ${taskView === "calendar" ? "btn-active" : ""}`}
+                onClick={() => setTaskView("calendar")}
+                title="Calendar View"
+              >
+                <CalendarDays className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -264,6 +293,18 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
               projectId={projectId}
               members={members?.data || []}
               globalFilter={globalFilter}
+            />
+          )}
+          {taskView === "calendar" && (
+            <CalendarView
+              tasks={calTasksData?.data || []}
+              members={members?.data || []}
+              isLoading={calTasksLoading}
+              onTaskClick={(task) => {
+                setOpenedTaskId(task.id);
+                setTaskView("columns");
+              }}
+              onRangeChange={handleCalRangeChange}
             />
           )}
         </div>
@@ -332,9 +373,9 @@ function ProjectMembersSection({
     queryFn: () => api.members.list(orgId),
   });
 
-  const { data: customRoles } = useQuery({
-    queryKey: ["custom-roles", orgId],
-    queryFn: () => api.customRoles.list(orgId),
+  const { data: projectRoles } = useQuery({
+    queryKey: ["project-roles", orgId],
+    queryFn: () => api.permissions.roles.list(orgId, "project"),
   });
 
   // Linked teams for the internal add form
@@ -409,15 +450,10 @@ function ProjectMembersSection({
   }
   const availableExternal = availableOrg.filter((m) => !linkedTeamMemberIds.has(m.user_id));
 
-  const roleOptions = [
-    { value: "lead", label: "Lead" },
-    { value: "contributor", label: "Contributor" },
-    { value: "member", label: "Member" },
-    { value: "reviewer", label: "Reviewer" },
-    { value: "observer", label: "Observer" },
-    { value: "viewer", label: "Viewer" },
-    ...(customRoles?.data || []).map((r) => ({ value: r.name, label: r.name })),
-  ];
+  const roleOptions = (projectRoles || []).map((r: Role) => ({
+    value: r.slug,
+    label: r.name + (r.is_system ? "" : " (Custom)"),
+  }));
 
   // Open remove dialog — fetch task count
   const openRemoveDialog = async (member: ProjectMember) => {
