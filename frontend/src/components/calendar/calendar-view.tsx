@@ -1,35 +1,33 @@
 "use client";
 
-import { Badge, Avatar } from "@/components/ui/shared";
-import { cn } from "@/lib/utils";
-import { statusColor, priorityColor, statusLabel } from "@/lib/utils";
-import type { Task, TaskPriority, TaskStatus, ProjectMember } from "@/types/domain";
+import { Avatar, Badge } from "@/components/ui/shared";
+import { cn, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import type { ProjectMember, Task, TaskPriority, TaskStatus } from "@/types/domain";
 import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  Repeat,
-  Layers,
+    CalendarDays,
+    ChevronLeft,
+    ChevronRight,
+    Clock,
+    Layers,
+    Repeat,
 } from "lucide-react";
-import { useState, useMemo, useCallback } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
-  getMonthGridWithStrips,
-  getWeekGrid,
-  getDayGrid,
-  getWeekdayLabels,
-  formatMonthYear,
-  formatWeekRange,
-  formatDayHeader,
-  navigateDate,
-  getDateRange,
-  sortTasksByPriority,
-  formatDateRange,
-  type CalendarDay,
-  type CalendarViewMode,
-  type CalendarGroupBy,
-  type MonthWeekRow,
-  type TaskStrip,
+    formatDateRange,
+    formatDayHeader,
+    formatMonthYear,
+    formatWeekRange,
+    getDateRange,
+    getDayGrid,
+    getMonthGridWithStrips,
+    getWeekdayLabels,
+    getWeekGrid,
+    navigateDate,
+    sortTasksByPriority,
+    type CalendarGroupBy,
+    type CalendarViewMode,
+    type MonthWeekRow,
+    type TaskStrip
 } from "./calendar-utils";
 
 /* ── Priority-based strip colors ── */

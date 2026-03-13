@@ -223,11 +223,11 @@ func (s *BillingService) HandlePaymentFailed(ctx context.Context, inv *stripe.In
 
 // DashboardService handles dashboard/analytics queries.
 type DashboardService struct {
-	taskRepo      repository.TaskRepository
-	projectRepo   repository.ProjectRepository
+	taskRepo       repository.TaskRepository
+	projectRepo    repository.ProjectRepository
 	projectMemRepo repository.ProjectMemberRepository
-	orgMemberRepo repository.OrgMemberRepository
-	txm           *repository.TxManager
+	orgMemberRepo  repository.OrgMemberRepository
+	txm            *repository.TxManager
 }
 
 // NewDashboardService creates a new DashboardService.
@@ -277,7 +277,7 @@ func (s *DashboardService) GetStats(ctx context.Context, orgID, userID uuid.UUID
 	// For org admin/owner, show all projects. For members/viewers, get only accessible projects
 	var projectIDs []uuid.UUID
 	isAdmin := orgMember.Role == "owner" || orgMember.Role == "admin"
-	
+
 	if isAdmin {
 		// Admin sees all projects in org
 		projects, err := s.projectRepo.ListByOrg(ctx, orgID, nil)

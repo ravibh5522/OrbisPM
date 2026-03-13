@@ -1,26 +1,25 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
+import { CalendarView, getDateRange } from "@/components/calendar";
+import { Avatar, Badge, Card, LoadingPage, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { Card, PageHeader, LoadingPage, Badge, Avatar } from "@/components/ui/shared";
-import { statusColor, priorityColor, statusLabel, formatRelative } from "@/lib/utils";
-import { CalendarView, getDateRange, type CalendarViewMode } from "@/components/calendar";
-import type { Task, Project } from "@/types/domain";
+import { formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Task, Team, TeamDashboardStats } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
 import {
-  FolderKanban,
-  ListTodo,
-  Users,
-  AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  ArrowLeft,
-  CalendarDays,
+    AlertTriangle,
+    ArrowLeft,
+    CalendarDays,
+    Clock,
+    FolderKanban,
+    ListTodo,
+    TrendingDown,
+    TrendingUp,
+    Users,
 } from "lucide-react";
 import Link from "next/link";
 import { use, useCallback, useMemo, useState } from "react";
-import type { Team, TeamDashboardStats } from "@/types/domain";
 
 /* ── Stat Card ── */
 function StatCard({

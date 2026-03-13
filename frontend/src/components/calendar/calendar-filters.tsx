@@ -1,17 +1,16 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { statusLabel } from "@/lib/utils";
 import type {
-  Project,
-  Team,
-  OrgMember,
-  Task,
-  TaskPriority,
-  TaskStatus,
+    OrgMember,
+    Project,
+    Task,
+    TaskPriority,
+    TaskStatus,
+    Team,
 } from "@/types/domain";
-import { Filter, X, Tag, FolderTree } from "lucide-react";
-import { useEffect, useRef, useState, useMemo } from "react";
+import { FolderTree, Tag, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { extractFilterOptions, type CalendarGroupBy } from "./calendar-utils";
 
 export interface CalendarFilterState {

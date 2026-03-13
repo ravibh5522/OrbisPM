@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 export interface ProjectPermissionsApi {
   can: (resource: string, action: string) => boolean;

@@ -1,5 +1,6 @@
 "use client";
 
+import { CalendarView, getDateRange } from "@/components/calendar";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectSettings } from "@/components/projects/project-settings";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
@@ -14,7 +15,6 @@ import {
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskListView } from "@/components/tasks/task-list-view";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
-import { CalendarView, getDateRange, type CalendarViewMode } from "@/components/calendar";
 import { Button } from "@/components/ui/button";
 import { Avatar, Card } from "@/components/ui/shared";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";

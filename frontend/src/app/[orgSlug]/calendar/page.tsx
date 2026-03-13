@@ -1,26 +1,26 @@
 "use client";
 
 import {
-  CalendarView,
-  CalendarFilterDropdown,
-  AppliedFilterChips,
-  GroupBySelector,
-  EMPTY_CALENDAR_FILTER,
-  isCalendarFilterActive,
-  calendarFilterCount,
-  getDateRange,
-  type CalendarFilterState,
-  type CalendarViewMode,
-  type CalendarGroupBy,
+    AppliedFilterChips,
+    calendarFilterCount,
+    CalendarFilterDropdown,
+    CalendarView,
+    EMPTY_CALENDAR_FILTER,
+    getDateRange,
+    GroupBySelector,
+    isCalendarFilterActive,
+    type CalendarFilterState,
+    type CalendarGroupBy,
+    type CalendarViewMode,
 } from "@/components/calendar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
-import type { Task, Project, Team, OrgMember } from "@/types/domain";
+import type { Task } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
-import { CalendarDays, Filter, Layers } from "lucide-react";
+import { CalendarDays, Filter } from "lucide-react";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 
 export default function OrgCalendarPage({

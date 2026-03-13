@@ -228,6 +228,7 @@ import type {
     ProjectMember,
     ProjectTeam,
     Role,
+    ScopePermissionsResponse,
     Task,
     TaskChangeRequest,
     TaskDependency,
@@ -242,7 +243,6 @@ import type {
     TOTPRegistration,
     UnlinkPreview,
     Webhook,
-    ScopePermissionsResponse,
 } from "@/types/domain";
 
 export const api = {
