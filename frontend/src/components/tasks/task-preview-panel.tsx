@@ -419,6 +419,7 @@ export function TaskPreviewPanel({
             onRefreshWatchers={fetchWatchers}
           />
         )}
+
       </div>
       
       {/* Footer Actions */}
@@ -613,22 +614,6 @@ function DetailsTab({
               </div>
             )}
           </div>
-        </div>
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Reporter</label>
-          <select
-            className="select select-bordered select-xs w-full"
-            value={task.reporter_id || ""}
-            onChange={(e) => onUpdate({ reporter_id: e.target.value })}
-            disabled={!access.canEdit}
-          >
-            <option value="">None</option>
-            {selectableMembers.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.display_name || m.email || m.user_id.slice(0, 12)}
-              </option>
-            ))}
-          </select>
         </div>
       </div>
       

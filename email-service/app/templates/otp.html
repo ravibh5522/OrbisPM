@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>Your Verification Code — {{ app_name }}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+
+  <!-- Preheader text (hidden) -->
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
+    Your {{ app_name }} verification code. Expires in {{ expiry_minutes | default(10) }} minutes. Do not share this code.
+  </div>
+
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f4f6;">
+    <tr>
+      <td align="center" style="padding:40px 16px 48px;">
+
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;">
+
+          <!-- Header -->
+          <tr>
+            <td style="padding-bottom:24px;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td>
+                    <span style="font-size:18px;font-weight:700;color:#6366f1;letter-spacing:-0.3px;">{{ app_name }}</span>
+                  </td>
+                  <td align="right">
+                    <span style="font-size:12px;color:#9ca3af;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;">Verification</span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Main card -->
+          <tr>
+            <td style="background-color:#ffffff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);overflow:hidden;">
+
+              <!-- Top accent bar -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);height:4px;font-size:0;line-height:0;">&nbsp;</td>
+                </tr>
+              </table>
+
+              <!-- Card body -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td style="padding:40px 40px 36px;text-align:center;">
+
+                    <!-- Shield icon -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 24px;">
+                      <tr>
+                        <td style="background-color:#eef2ff;border-radius:14px;width:60px;height:60px;text-align:center;vertical-align:middle;">
+                          <span style="font-size:26px;line-height:60px;display:block;">&#x1F6E1;&#xFE0F;</span>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Title -->
+                    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;line-height:1.35;letter-spacing:-0.2px;">Verification Code</h1>
+                    <p style="margin:0 0 32px;font-size:15px;color:#4b5563;line-height:1.6;">Use the code below to verify your identity. Enter it in the {{ app_name }} app to proceed.</p>
+
+                    <!-- OTP code display -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 12px;">
+                      <tr>
+                        <td style="background:linear-gradient(135deg,#f5f3ff 0%,#ede9fe 100%);border:2px solid #c4b5fd;border-radius:14px;padding:28px 40px;text-align:center;">
+                          <span style="display:block;font-size:42px;font-weight:800;color:#4f46e5;letter-spacing:14px;font-family:'Courier New',Courier,monospace;line-height:1.1;text-align:center;">{{ otp_code }}</span>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Copy hint -->
+                    <p style="margin:0 0 32px;font-size:12px;color:#9ca3af;">Copy and paste this code into the verification field.</p>
+
+                    <!-- Divider -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;">
+                      <tr>
+                        <td style="border-top:1px solid #f3f4f6;font-size:0;line-height:0;">&nbsp;</td>
+                      </tr>
+                    </table>
+
+                    <!-- Expiry warning -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 20px;">
+                      <tr>
+                        <td style="background-color:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 20px;text-align:center;">
+                          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">&#x23F0;&nbsp; This code expires in <strong>{{ expiry_minutes | default(10) }} minutes</strong>.</p>
+                        </td>
+                      </tr>
+                    </table>
+
+                    <!-- Security notice -->
+                    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center;">Never share this code with anyone. {{ app_name }} will never ask for your code over the phone or via email.</p>
+
+                  </td>
+                </tr>
+              </table>
+
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding-top:28px;text-align:center;">
+              <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;"><strong style="color:#6b7280;">{{ app_name }}</strong> &mdash; Secure verification.</p>
+              <p style="margin:0;font-size:12px;color:#d1d5db;">If you did not request this code, please ignore this email or contact support.</p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+
+</body>
+</html>

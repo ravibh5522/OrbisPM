@@ -2,6 +2,7 @@
 
 import { CalendarView, getDateRange } from "@/components/calendar";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
+import { ProjectAnnouncements } from "@/components/projects/project-announcements";
 import { ProjectSettings } from "@/components/projects/project-settings";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
@@ -35,6 +36,7 @@ import {
     Link2,
     List,
     ListTodo,
+    Megaphone,
     Settings,
     Trash2,
     Unlink,
@@ -53,7 +55,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
   const [openedTaskId, setOpenedTaskId] = useState<string | undefined>(undefined);
   const focusTaskId = openedTaskId || initialFocusTaskId;
   const currentOrg = useAuthStore((s) => s.currentOrg);
-  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "teams" | "reviews" | "dashboard" | "settings">("tasks");
+  const [activeTab, setActiveTab] = useState<"tasks" | "members" | "teams" | "reviews" | "announcements" | "dashboard" | "settings">("tasks");
   const [taskView, setTaskView] = useState<"columns" | "list" | "tree" | "calendar">("columns");
   const [importOpen, setImportOpen] = useState(false);
   const [toolbarEl, setToolbarEl] = useState<HTMLDivElement | null>(null);
@@ -159,6 +161,9 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
           )}
           <button role="tab" className={`tab tab-sm ${activeTab === "reviews" ? "tab-active" : ""}`} onClick={() => setActiveTab("reviews")}>
             <GitPullRequest className="w-3.5 h-3.5 mr-1" /> Reviews
+          </button>
+          <button role="tab" className={`tab tab-sm ${activeTab === "announcements" ? "tab-active" : ""}`} onClick={() => setActiveTab("announcements")}>
+            <Megaphone className="w-3.5 h-3.5 mr-1" /> Announcements
           </button>
           {projPerms.can("project", "update") && (
             <button role="tab" className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`} onClick={() => setActiveTab("settings")}>
@@ -328,6 +333,13 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ orgSlu
       {activeTab === "reviews" && (
         <div className="flex-1 overflow-auto">
           <ProjectChangeRequests orgId={currentOrg!.id} projectId={projectId} members={(members?.data || []) as unknown as import("@/types/domain").OrgMember[]} />
+        </div>
+      )}
+
+      {/* Announcements tab */}
+      {activeTab === "announcements" && (
+        <div className="flex-1 overflow-auto">
+          <ProjectAnnouncements orgId={currentOrg!.id} projectId={projectId} />
         </div>
       )}
 

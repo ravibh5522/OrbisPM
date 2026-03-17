@@ -24,6 +24,11 @@ const (
 	EventChangeRequestCreated  = "change_request.created"
 	EventChangeRequestApproved = "change_request.approved"
 	EventChangeRequestRejected = "change_request.rejected"
+
+	// Announcement events.
+	EventAnnouncementCreated = "announcement.created"
+	EventAnnouncementUpdated = "announcement.updated"
+	EventAnnouncementDeleted = "announcement.deleted"
 )
 
 // DomainEvent carries event data for pub/sub and notifications.

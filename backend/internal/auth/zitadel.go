@@ -1032,6 +1032,105 @@ func (c *ZitadelClient) HealthCheck(ctx context.Context) error {
 	return nil
 }
 
+// --- Password Management ---
+
+// ChangePassword changes a user's password (requires old password verification).
+func (c *ZitadelClient) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
+	req := &userv2.SetPasswordRequest{
+		UserId: userID,
+		NewPassword: &userv2.Password{
+			Password:       newPassword,
+			ChangeRequired: false,
+		},
+		Verification: &userv2.SetPasswordRequest_CurrentPassword{
+			CurrentPassword: oldPassword,
+		},
+	}
+	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// AdminResetPassword sets a user's password without requiring the old one (admin action).
+func (c *ZitadelClient) AdminResetPassword(ctx context.Context, userID, newPassword string) error {
+	req := &userv2.SetPasswordRequest{
+		UserId: userID,
+		NewPassword: &userv2.Password{
+			Password:       newPassword,
+			ChangeRequired: true,
+		},
+	}
+	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// RequestPasswordReset initiates a password reset flow via Zitadel.
+// Returns a verification code that should be sent to the user's email.
+func (c *ZitadelClient) RequestPasswordReset(ctx context.Context, userID string) (string, error) {
+	req := &userv2.PasswordResetRequest{
+		UserId: userID,
+		Medium: &userv2.PasswordResetRequest_ReturnCode{
+			ReturnCode: &userv2.ReturnPasswordResetCode{},
+		},
+	}
+	resp, err := c.grpc.UserServiceV2().PasswordReset(ctx, req)
+	if err != nil {
+		return "", c.wrapGRPCError(err)
+	}
+	code := ""
+	if resp.GetVerificationCode() != "" {
+		code = resp.GetVerificationCode()
+	}
+	return code, nil
+}
+
+// ResetPasswordWithCode completes a password reset using a verification code.
+func (c *ZitadelClient) ResetPasswordWithCode(ctx context.Context, userID, code, newPassword string) error {
+	req := &userv2.SetPasswordRequest{
+		UserId: userID,
+		NewPassword: &userv2.Password{
+			Password:       newPassword,
+			ChangeRequired: false,
+		},
+		Verification: &userv2.SetPasswordRequest_VerificationCode{
+			VerificationCode: code,
+		},
+	}
+	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// FindUserByEmail searches for a user by email and returns their Zitadel user ID.
+func (c *ZitadelClient) FindUserByEmail(ctx context.Context, email string) (string, error) {
+	resp, err := c.grpc.UserServiceV2().ListUsers(ctx, &userv2.ListUsersRequest{
+		Query: &objectv2.ListQuery{Limit: 1},
+		Queries: []*userv2.SearchQuery{
+			{
+				Query: &userv2.SearchQuery_EmailQuery{
+					EmailQuery: &userv2.EmailQuery{
+						EmailAddress: email,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return "", c.wrapGRPCError(err)
+	}
+	if len(resp.GetResult()) == 0 {
+		return "", fmt.Errorf("user not found")
+	}
+	return resp.GetResult()[0].GetUserId(), nil
+}
+
 // --- Getters ---
 
 // Issuer returns the external Zitadel issuer URL.

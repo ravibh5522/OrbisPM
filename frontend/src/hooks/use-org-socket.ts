@@ -223,6 +223,20 @@ function handleOrgEvent(event: DomainEvent | undefined, qc: ReturnType<typeof us
     qc.invalidateQueries({ queryKey: ["notifications", orgId] });
   }
 
+  // Announcements — invalidate all announcement queries (project-scoped keys vary)
+  if (type.startsWith("announcement.")) {
+    qc.invalidateQueries({ queryKey: ["announcements"] });
+  }
+
+  // Change requests — invalidate dashboard + my-tasks on approval
+  if (type.startsWith("change_request.")) {
+    qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
+    qc.invalidateQueries({ queryKey: ["my-tasks", orgId] });
+    if (event.payload?.project_id) {
+      qc.invalidateQueries({ queryKey: ["project-dashboard", orgId, event.payload.project_id] });
+    }
+  }
+
   // Activity — only invalidate on actual mutations, not reads
   if (type.includes(".created") || type.includes(".updated") || type.includes(".deleted")) {
     qc.invalidateQueries({ queryKey: ["activity", orgId] });
@@ -334,8 +348,20 @@ function handleProjectBroadcast(
       break;
 
     // ─── Change request broadcasts ────
-    case "cr:approved":
-    case "cr:rejected":
-      break; // Components should re-fetch
+    case "cr:approved": {
+      // Task was updated by approval — upsert if we have the task data
+      const task = p.task ?? p;
+      if (task?.task_id) {
+        // CR payload has task_id; the task:updated broadcast will handle the actual task upsert
+      }
+      // Invalidate change request lists so components re-fetch
+      store.setChangeRequests(p.task_id, []);
+      break;
+    }
+    case "cr:rejected": {
+      // No task change, just invalidate CR lists
+      store.setChangeRequests(p.task_id, []);
+      break;
+    }
   }
 }

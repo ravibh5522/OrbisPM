@@ -1,5 +1,6 @@
 "use client";
 
+import { ChangeRequestToast, PendingReviewBadge } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask, g
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [pendingReviewResult, setPendingReviewResult] = useState<{ pending_review?: boolean; change_request?: any } | null>(null);
 
   // Fetch tree via WS
   const fetchTree = useCallback(async () => {
@@ -105,11 +107,15 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask, g
         return undefined;
       };
       const currentTask = findTask(taskTree);
-      await send("task:update", {
+      const result = await send("task:update", {
         task_id: taskId,
         base_version: currentTask?.version ?? 0,
         ...data,
       });
+      // Handle pending review
+      if (result?.pending_review) {
+        setPendingReviewResult(result);
+      }
       fetchTree();
     } catch (e) {
       console.error("[WS] task:update failed", e);
@@ -194,6 +200,9 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask, g
 
   return (
     <div className="space-y-2">
+      {/* Pending review toast */}
+      <ChangeRequestToast result={pendingReviewResult} onDismiss={() => setPendingReviewResult(null)} />
+
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex gap-2">
@@ -352,6 +361,9 @@ function TreeNode({
           priority={task.priority}
           onChange={(priority) => onUpdate(task.id, { priority })}
         />
+
+        {/* Pending review */}
+        {task.review_status === "pending" && <PendingReviewBadge count={1} />}
 
         {/* Due date */}
         {task.due_date && (

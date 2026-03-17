@@ -2,15 +2,15 @@ _format_version: "3.0"
 _transform: true
 
 services:
-  # Zitadel (external)
-  - name: zitadel
-    url: https://zitadel.animastuff.fun
+  # Mailpit web UI (local dev only — works when running with --profile local)
+  - name: mailpit
+    url: http://mailpit:8025
     routes:
-      - name: zitadel-console
+      - name: mailpit-ui
         paths:
-          - /zitadel
-        strip_path: true
-        preserve_host: false
+          - /mail
+        strip_path: false
+        preserve_host: true
 
   # SSE endpoint — long-lived streaming, must come BEFORE generic /api route
   - name: backend-sse
@@ -73,9 +73,6 @@ services:
           policy: local
           fault_tolerant: true
           hide_client_headers: false
-
-  # Storage proxy removed — MinIO is external (HTTPS)
-  # Access files directly via MINIO_SERVER_URL
 
   # NocoDB UI
   - name: nocodb

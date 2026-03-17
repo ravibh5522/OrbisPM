@@ -1,7 +1,16 @@
 import { JsonLd } from "@/components/marketing/json-ld";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { ArrowRight, BarChart3, CheckSquare, Layers, Shield, Sparkles, X, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  CheckSquare,
+  Layers,
+  Shield,
+  Sparkles,
+  X,
+  Zap,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -58,14 +67,30 @@ export default function TrelloAlternativePage() {
           "@context": "https://schema.org",
           "@type": "WebPage",
           name: "OrbisPM vs Trello – Best AI-Powered Trello Alternative",
-          description: "Feature comparison of OrbisPM and Trello project management platforms",
+          description:
+            "Feature comparison of OrbisPM and Trello project management platforms",
           url: "https://orbisom.live/alternatives/trello",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
-              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbisom.live/alternatives/jira" },
-              { "@type": "ListItem", position: 3, name: "OrbisPM vs Trello", item: "https://orbisom.live/alternatives/trello" },
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://orbisom.live",
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: "Alternatives",
+                item: "https://orbisom.live/alternatives/jira",
+              },
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: "OrbisPM vs Trello",
+                item: "https://orbisom.live/alternatives/trello",
+              },
             ],
           },
         }}
@@ -86,12 +111,16 @@ export default function TrelloAlternativePage() {
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
-            Trello is great for simple kanban boards, but growing teams quickly outgrow it. OrbisPM gives
-            you Trello&apos;s simplicity with AI-powered intelligence: sprint planning, task estimation,
-            RBAC, subtask hierarchies, real-time sync, and dashboards.
+            Trello is great for simple kanban boards, but growing teams quickly
+            outgrow it. OrbisPM gives you Trello&apos;s simplicity with
+            AI-powered intelligence: sprint planning, task estimation, RBAC,
+            subtask hierarchies, real-time sync, and dashboards.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/signup" className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25">
+            <Link
+              href="/signup"
+              className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
+            >
               Try OrbisPM Free <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/features" className="btn btn-ghost btn-lg">
@@ -104,7 +133,9 @@ export default function TrelloAlternativePage() {
       {/* Why Switch */}
       <section className="py-16 bg-base-100 border-y border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-          <h2 className="text-3xl font-bold text-center mb-12">When Teams Outgrow Trello, They Choose OrbisPM</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">
+            When Teams Outgrow Trello, They Choose OrbisPM
+          </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             {[
               {
@@ -133,7 +164,9 @@ export default function TrelloAlternativePage() {
                   <item.icon className="w-7 h-7 text-primary" />
                 </div>
                 <h3 className="text-lg font-bold mb-2">{item.title}</h3>
-                <p className="text-sm text-base-content/60 leading-relaxed">{item.desc}</p>
+                <p className="text-sm text-base-content/60 leading-relaxed">
+                  {item.desc}
+                </p>
               </article>
             ))}
           </div>
@@ -144,22 +177,30 @@ export default function TrelloAlternativePage() {
       <section className="py-20 md:py-28">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">Feature-by-Feature Comparison</h2>
+            <h2 className="text-3xl font-bold text-center mb-4">
+              Feature-by-Feature Comparison
+            </h2>
             <p className="text-center text-base-content/60 mb-12">
-              OrbisPM vs Trello — a comprehensive comparison for teams ready to level up.
+              OrbisPM vs Trello — a comprehensive comparison for teams ready to
+              level up.
             </p>
             <div className="overflow-x-auto">
               <table className="table w-full text-sm">
                 <thead>
                   <tr className="border-b-2 border-base-200">
                     <th className="text-left py-3 w-1/2">Feature</th>
-                    <th className="text-center py-3 text-primary font-bold">OrbisPM</th>
+                    <th className="text-center py-3 text-primary font-bold">
+                      OrbisPM
+                    </th>
                     <th className="text-center py-3">Trello</th>
                   </tr>
                 </thead>
                 <tbody>
                   {comparisonData.map((row) => (
-                    <tr key={row.feature} className="border-b border-base-200/50">
+                    <tr
+                      key={row.feature}
+                      className="border-b border-base-200/50"
+                    >
                       <td className="py-3 font-medium">{row.feature}</td>
                       <td className="text-center py-3">
                         {row.orbis ? (
@@ -187,9 +228,12 @@ export default function TrelloAlternativePage() {
       {/* CTA */}
       <section className="py-16 bg-base-100 border-t border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold">Ready to upgrade from Trello?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold">
+            Ready to upgrade from Trello?
+          </h2>
           <p className="mt-4 text-lg text-base-content/60">
-            Keep the simplicity you love, gain the AI-powered intelligence you need. Start free today.
+            Keep the simplicity you love, gain the AI-powered intelligence you
+            need. Start free today.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/signup" className="btn btn-primary btn-lg gap-2">

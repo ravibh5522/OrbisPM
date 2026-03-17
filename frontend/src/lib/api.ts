@@ -202,6 +202,7 @@ async function downloadBlob(path: string, filename: string): Promise<void> {
 // API namespaces
 import type {
     ActivityLog,
+    Announcement,
     APIKey,
     Attachment,
     AuthTokens,
@@ -300,6 +301,17 @@ export const api = {
     },
     sendOTPChallenge(sessionId: string, sessionToken: string, method: string): Promise<void> {
       return request(`${V1}/auth/mfa/send-otp-challenge`, { method: "POST", body: JSON.stringify({ session_id: sessionId, session_token: sessionToken, method }) }, true);
+    },
+
+    // Password management
+    changePassword(oldPassword: string, newPassword: string): Promise<{ status: string }> {
+      return post(`${V1}/auth/password/change`, { old_password: oldPassword, new_password: newPassword });
+    },
+    forgotPassword(email: string): Promise<{ status: string }> {
+      return request(`${V1}/auth/password/forgot`, { method: "POST", body: JSON.stringify({ email }) }, true);
+    },
+    resetPassword(email: string, code: string, newPassword: string): Promise<{ status: string }> {
+      return request(`${V1}/auth/password/reset`, { method: "POST", body: JSON.stringify({ email, code, new_password: newPassword }) }, true);
     },
 
     // Social / IDP (public — no auth required)
@@ -701,6 +713,40 @@ export const api = {
       get<UnlinkPreview>(`${V1}/orgs/${orgId}/projects/${projId}/teams/${teamId}/unlink-preview`),
     eligibleMembers: (orgId: string, projId: string) =>
       get<EffectiveMember[]>(`${V1}/orgs/${orgId}/projects/${projId}/teams/eligible-members`),
+  },
+
+  // --- Email Templates (via email service, proxied through backend) ---
+  emailTemplates: {
+    listDefaults: (orgId: string) =>
+      get<{ defaults: string[] }>(`${V1}/orgs/${orgId}/email-templates/defaults`),
+    listCustom: (orgId: string) =>
+      get<{ templates: string[] }>(`${V1}/orgs/${orgId}/email-templates`),
+    get: (orgId: string, templateName: string) =>
+      get<{ template_name: string; html: string; design?: Record<string, unknown> | null }>(`${V1}/orgs/${orgId}/email-templates/${templateName}`),
+    upsert: (orgId: string, templateName: string, html: string, design?: Record<string, unknown> | null) =>
+      put<{ status: string }>(`${V1}/orgs/${orgId}/email-templates/${templateName}`, { html, design }),
+    delete: (orgId: string, templateName: string) =>
+      del(`${V1}/orgs/${orgId}/email-templates/${templateName}`),
+    preview: (orgId: string, data: { template: string; context: Record<string, string> }) =>
+      post<{ html: string }>(`${V1}/orgs/${orgId}/email-templates/preview`, data),
+  },
+
+  // --- Announcements ---
+  announcements: {
+    list: (orgId: string, params?: string) =>
+      get<ListResponse<Announcement>>(`${V1}/orgs/${orgId}/announcements${params ? `?${params}` : ""}`),
+    get: (orgId: string, id: string) =>
+      get<Announcement>(`${V1}/orgs/${orgId}/announcements/${id}`),
+    create: (orgId: string, data: { title: string; body: string; priority: string; pinned?: boolean; project_id?: string; published_at?: string; expires_at?: string }) =>
+      post<Announcement>(`${V1}/orgs/${orgId}/announcements`, data),
+    update: (orgId: string, id: string, data: Partial<{ title: string; body: string; priority: string; pinned: boolean; published_at: string; expires_at: string }>) =>
+      patch<Announcement>(`${V1}/orgs/${orgId}/announcements/${id}`, data),
+    delete: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/announcements/${id}`),
+    markRead: (orgId: string, id: string) =>
+      post<void>(`${V1}/orgs/${orgId}/announcements/${id}/read`, {}),
+    unreadCount: (orgId: string) =>
+      get<{ unread_count: number }>(`${V1}/orgs/${orgId}/announcements/unread-count`),
   },
 
   // --- Change Requests ---

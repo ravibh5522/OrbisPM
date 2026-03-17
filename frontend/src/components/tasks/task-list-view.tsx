@@ -1,5 +1,6 @@
 "use client";
 
+import { ChangeRequestToast, PendingReviewBadge } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
@@ -93,6 +94,7 @@ export function TaskListView({ orgId, orgSlug, projectId, members, globalFilter 
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [bulkPending, setBulkPending] = useState(false);
+  const [pendingReviewResult, setPendingReviewResult] = useState<{ pending_review?: boolean; change_request?: any } | null>(null);
 
   /* Fetch via WS */
   const fetchList = useCallback(async () => {
@@ -136,11 +138,16 @@ export function TaskListView({ orgId, orgSlug, projectId, members, globalFilter 
     // Optimistic
     setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...changes } : t)));
     try {
-      await send("task:update", {
+      const result = await send("task:update", {
         task_id: id,
         base_version: currentTask?.version ?? 0,
         ...changes,
       });
+      // Handle pending review — rollback optimistic update
+      if (result?.pending_review) {
+        fetchList();
+        setPendingReviewResult(result);
+      }
     } catch {
       fetchList(); // rollback by re-fetching
     }
@@ -281,6 +288,9 @@ export function TaskListView({ orgId, orgSlug, projectId, members, globalFilter 
 
   return (
     <div className="space-y-3">
+      {/* Pending review toast */}
+      <ChangeRequestToast result={pendingReviewResult} onDismiss={() => setPendingReviewResult(null)} />
+
       {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-lg">
@@ -631,6 +641,7 @@ function TaskRow({
           >
             {task.title}
           </button>
+          {task.review_status === "pending" && <PendingReviewBadge count={1} />}
           <button
             className="opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={onNavigate}

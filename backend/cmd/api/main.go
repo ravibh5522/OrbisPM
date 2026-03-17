@@ -245,6 +245,9 @@ func main() {
 	projectTeamRepo := repository.NewProjectTeamRepo(pool)
 	changeReqRepo := repository.NewChangeRequestRepo(pool)
 
+	// --- Repositories (Announcements) ---
+	announcementRepo := repository.NewAnnouncementRepo(pool)
+
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
@@ -269,11 +272,14 @@ func main() {
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
 
+	// --- Services (Announcements) ---
+	announcementSvc := service.NewAnnouncementService(announcementRepo, orgMemberRepo, txm, workerSrv, publisher)
+
 	// --- Services (RBAC / Review) ---
 	permSvc := service.NewPermissionService(permRepo, roleRepo, orgRepo, txm)
 	permResolver := service.NewPermissionResolver(orgMemberRepo, teamMemberRepo, projectMemberRepo, projectTeamRepo, roleRepo, orgRepo)
 	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, teamMemberRepo, taskRepo, txm, workerSrv, publisher)
-	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, txm, workerSrv, publisher)
+	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, projectRepo, txm, workerSrv, publisher)
 
 	// Inject review deps into task service + project service
 	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
@@ -332,6 +338,12 @@ func main() {
 	// --- Contact (public) ---
 	contactRepo := repository.NewContactRepo(pool)
 	contactHandler := handler.NewContactHandler(contactRepo)
+
+	// --- Handlers (Announcements) ---
+	announcementHandler := handler.NewAnnouncementHandler(announcementSvc)
+
+	// --- Handlers (Email Templates) ---
+	emailTemplateHandler := handler.NewEmailTemplateHandler()
 
 	// --- Handlers (RBAC / Review) ---
 	permHandler := handler.NewPermissionHandler(permSvc)
@@ -477,6 +489,24 @@ func main() {
 					// Org-level WebSocket (replaces SSE + per-project WS)
 					r.Get("/ws", wsHandler.ServeWS)
 
+					// Announcements
+					r.Route("/announcements", func(r chi.Router) {
+						r.With(prm("org", "", "announcements", "create")).Post("/", announcementHandler.Create)
+						r.With(prm("org", "", "announcements", "read")).Get("/", announcementHandler.List)
+						r.With(prm("org", "", "announcements", "read")).Get("/unread-count", announcementHandler.UnreadCount)
+						r.Route("/{announcementId}", func(r chi.Router) {
+							r.With(prm("org", "", "announcements", "read")).Get("/", announcementHandler.Get)
+							r.With(prm("org", "", "announcements", "update")).Patch("/", announcementHandler.Update)
+							r.With(prm("org", "", "announcements", "delete")).Delete("/", announcementHandler.Delete)
+							r.Post("/read", announcementHandler.MarkRead)
+						})
+					})
+
+					// Email templates (proxy to email service)
+					r.Route("/email-templates", func(r chi.Router) {
+						r.With(prm("org", "", "settings", "read")).Mount("/", emailTemplateHandler.Routes())
+					})
+
 					// Change request review actions (org-level)
 					r.Mount("/change-requests", changeReqHandler.ReviewRoutes())
 
@@ -569,12 +599,24 @@ func main() {
 		From:     cfg.SMTPFrom,
 		Enabled:  cfg.SMTPEnabled,
 	})
+	emailServiceURL := os.Getenv("EMAIL_SERVICE_URL")
+	if emailServiceURL == "" {
+		emailServiceURL = "http://email-service:8050"
+	}
+	emailServiceAPIKey := os.Getenv("EMAIL_SERVICE_API_KEY")
+	if emailServiceAPIKey == "" {
+		emailServiceAPIKey = "email-service-dev-key"
+	}
 	workerHandlers := &worker.Handlers{
-		Pool:        pool,
-		EmailSender: emailSender,
-		FrontendURL: cfg.FrontendURL,
-		Cache:       cacheManager,
-		TxManager:   txm,
+		Pool:               pool,
+		EmailSender:        emailSender,
+		FrontendURL:        cfg.FrontendURL,
+		Cache:              cacheManager,
+		TxManager:          txm,
+		MeiliURL:           cfg.MeiliURL,
+		MeiliMasterKey:     cfg.MeiliMasterKey,
+		EmailServiceURL:    emailServiceURL,
+		EmailServiceAPIKey: emailServiceAPIKey,
 	}
 	workerMux := asynq.NewServeMux()
 	workerHandlers.RegisterAll(workerMux)

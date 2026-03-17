@@ -288,6 +288,18 @@ type ProjectTeamRepository interface {
 	Count(ctx context.Context, projectID uuid.UUID) (int, error)
 }
 
+// --- Announcement ---
+
+type AnnouncementRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, a *domain.Announcement) (*domain.Announcement, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Announcement, error)
+	Update(ctx context.Context, tx pgx.Tx, a *domain.Announcement) (*domain.Announcement, error)
+	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
+	List(ctx context.Context, orgID uuid.UUID, projectID *uuid.UUID, userID uuid.UUID, limit, offset int) ([]*domain.Announcement, int, error)
+	MarkRead(ctx context.Context, announcementID, userID uuid.UUID) error
+	CountUnread(ctx context.Context, orgID, userID uuid.UUID) (int, error)
+}
+
 // --- Task Change Request ---
 
 type TaskChangeRequestRepository interface {

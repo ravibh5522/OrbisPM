@@ -122,6 +122,14 @@ func (m *mockProjectMemberRepo) ListEffectiveMembers(_ context.Context, _ uuid.U
 	return nil, nil
 }
 
+func (m *mockProjectMemberRepo) RemoveBySourceTeam(_ context.Context, _ pgx.Tx, _, _ uuid.UUID) error {
+	return nil
+}
+
+func (m *mockProjectMemberRepo) RemoveBySourceTeamAndUser(_ context.Context, _ pgx.Tx, _, _, _ uuid.UUID) error {
+	return nil
+}
+
 // --- ProjectTeamRepo ---
 
 type mockProjectTeamRepo struct {
@@ -636,5 +644,5 @@ func TestEffectiveRole_FallsBackToOrgRole(t *testing.T) {
 
 	role, err := r.GetEffectiveRole(ctx, userID, orgID, domain.ScopeProject, &projectID)
 	require.NoError(t, err)
-	assert.Equal(t, "member", role) // falls back to org role
+	assert.Equal(t, "", role) // no direct/team membership → no project role (owner/admin only get org fallback)
 }

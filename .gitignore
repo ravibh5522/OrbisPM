@@ -1,8 +1,24 @@
+# ── Environment files (NEVER commit secrets) ─────────────────
+.env
+.env.production
+.env.staging
+.env.local
+
+# ── Frontend ──────────────────────────────────────────────────
 orbispm/frontend/node_modules/
 orbispm/frontend/.next/
 frontend/.next/
 frontend/.next/cache/
 frontend/.next/trace
-frontend/.next/
-frontend/.next/trace
 node_modules/
+
+# ── Backend ───────────────────────────────────────────────────
+backend/bin/
+
+# ── OS / Editor ───────────────────────────────────────────────
+.DS_Store
+.idea/
+*.swp
+
+# ── Playwright logs ───────────────────────────────────────────
+.playwright-mcp/

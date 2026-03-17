@@ -30,7 +30,8 @@ export const metadata: Metadata = {
 const articles = [
   {
     slug: "ai-sprint-planning-complete-guide",
-    title: "AI Sprint Planning: The Complete Guide for Engineering Teams in 2026",
+    title:
+      "AI Sprint Planning: The Complete Guide for Engineering Teams in 2026",
     excerpt:
       "How AI is revolutionizing sprint planning — from velocity prediction and capacity analysis to automatic task allocation. Learn how modern teams plan sprints that actually deliver on time.",
     date: "2026-03-10",
@@ -39,7 +40,8 @@ const articles = [
   },
   {
     slug: "real-time-collaboration-engineering-teams",
-    title: "Why Real-Time Collaboration is Non-Negotiable for Engineering Teams",
+    title:
+      "Why Real-Time Collaboration is Non-Negotiable for Engineering Teams",
     excerpt:
       "Async communication has limits. Learn why top engineering teams are switching to real-time project management with WebSocket sync, live cursors, and instant updates — and how it boosts productivity by 35%.",
     date: "2026-02-28",
@@ -65,7 +67,8 @@ export default function BlogPage() {
           "@context": "https://schema.org",
           "@type": "Blog",
           name: "OrbisPM Blog",
-          description: "Expert articles on AI-powered project management, agile practices, and engineering productivity",
+          description:
+            "Expert articles on AI-powered project management, agile practices, and engineering productivity",
           url: "https://orbisom.live/blog",
           publisher: {
             "@type": "Organization",
@@ -86,8 +89,8 @@ export default function BlogPage() {
             Project Management Insights
           </h1>
           <p className="mt-4 text-lg text-base-content/60 max-w-2xl mx-auto">
-            Deep dives into AI-powered project management, team collaboration strategies,
-            agile best practices, and engineering productivity.
+            Deep dives into AI-powered project management, team collaboration
+            strategies, agile best practices, and engineering productivity.
           </p>
         </div>
       </section>
@@ -102,7 +105,9 @@ export default function BlogPage() {
               >
                 <div className="card-body">
                   <div className="flex items-center gap-3 text-xs text-base-content/50 mb-2">
-                    <span className="badge badge-sm badge-ghost">{article.category}</span>
+                    <span className="badge badge-sm badge-ghost">
+                      {article.category}
+                    </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
                       {new Date(article.date).toLocaleDateString("en-US", {
@@ -114,11 +119,16 @@ export default function BlogPage() {
                     <span>{article.readTime} read</span>
                   </div>
                   <h2 className="text-lg font-bold leading-snug">
-                    <Link href={`/blog/${article.slug}`} className="hover:text-primary transition-colors">
+                    <Link
+                      href={`/blog/${article.slug}`}
+                      className="hover:text-primary transition-colors"
+                    >
                       {article.title}
                     </Link>
                   </h2>
-                  <p className="text-base-content/60 text-sm leading-relaxed mt-2">{article.excerpt}</p>
+                  <p className="text-base-content/60 text-sm leading-relaxed mt-2">
+                    {article.excerpt}
+                  </p>
                   <div className="card-actions mt-4">
                     <Link
                       href={`/blog/${article.slug}`}

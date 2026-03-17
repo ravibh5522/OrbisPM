@@ -18,6 +18,7 @@ import {
     Download,
     Globe,
     Key,
+    Lock,
     Mail,
     Moon,
     Palette,
@@ -322,6 +323,10 @@ export default function ProfilePage() {
   const [totpSetup, setTotpSetup] = useState<TOTPRegistration | null>(null);
   const [totpCode, setTotpCode] = useState("");
 
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+
   const clearSecMessages = useCallback(() => { setSecError(""); setSecSuccess(""); }, []);
 
   const totpEnabled = user?.totp_enabled ?? false;
@@ -380,6 +385,24 @@ export default function ProfilePage() {
     onSuccess: () => { setSecSuccess("Backup codes removed"); },
     onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to remove backup codes"); },
   });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => api.auth.changePassword(oldPassword, newPassword),
+    onSuccess: () => {
+      setSecSuccess("Password changed successfully!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    },
+    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to change password"); },
+  });
+
+  const handleChangePassword = () => {
+    clearSecMessages();
+    if (newPassword.length < 8) { setSecError("New password must be at least 8 characters."); return; }
+    if (newPassword !== confirmNewPassword) { setSecError("Passwords do not match."); return; }
+    changePasswordMutation.mutate();
+  };
 
   const handleCopyAll = () => {
     if (!backupCodes) return;
@@ -570,6 +593,51 @@ export default function ProfilePage() {
               <CheckCircle className="w-4 h-4" /><span>{secSuccess}</span>
             </div>
           )}
+
+          {/* Change Password Card */}
+          <Card className="mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Lock className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-base">Change Password</h3>
+            </div>
+            <p className="text-sm text-base-content/60 mb-4">
+              Update your account password. You&apos;ll need to enter your current password for verification.
+            </p>
+            <div className="space-y-3 max-w-sm">
+              <Input
+                label="Current Password"
+                type="password"
+                placeholder="Enter current password"
+                autoComplete="current-password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+              />
+              <Input
+                label="New Password"
+                type="password"
+                placeholder="Enter new password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <Input
+                label="Confirm New Password"
+                type="password"
+                placeholder="Confirm new password"
+                autoComplete="new-password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+              />
+              <Button
+                size="sm"
+                onClick={handleChangePassword}
+                loading={changePasswordMutation.isPending}
+                disabled={!oldPassword || !newPassword || !confirmNewPassword}
+              >
+                <Lock className="w-4 h-4" /> Update Password
+              </Button>
+            </div>
+          </Card>
 
           {/* MFA Card */}
           <Card>

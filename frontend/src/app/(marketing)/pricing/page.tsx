@@ -105,30 +105,135 @@ const plans = [
 ];
 
 const comparisonRows = [
-  { feature: "Team members", starter: "Up to 5", pro: "Unlimited", enterprise: "Unlimited" },
-  { feature: "Active projects", starter: "3", pro: "Unlimited", enterprise: "Unlimited" },
-  { feature: "Task views (Kanban, List, Tree)", starter: true, pro: true, enterprise: true },
-  { feature: "Real-time collaboration", starter: true, pro: true, enterprise: true },
+  {
+    feature: "Team members",
+    starter: "Up to 5",
+    pro: "Unlimited",
+    enterprise: "Unlimited",
+  },
+  {
+    feature: "Active projects",
+    starter: "3",
+    pro: "Unlimited",
+    enterprise: "Unlimited",
+  },
+  {
+    feature: "Task views (Kanban, List, Tree)",
+    starter: true,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Real-time collaboration",
+    starter: true,
+    pro: true,
+    enterprise: true,
+  },
   { feature: "Full-text search", starter: true, pro: true, enterprise: true },
-  { feature: "REST API & webhooks", starter: true, pro: true, enterprise: true },
-  { feature: "AI sprint planning", starter: false, pro: true, enterprise: true },
-  { feature: "AI task estimation", starter: false, pro: true, enterprise: true },
-  { feature: "Predictive burndown", starter: false, pro: true, enterprise: true },
-  { feature: "Natural language task creation", starter: false, pro: true, enterprise: true },
-  { feature: "Change request workflows", starter: false, pro: true, enterprise: true },
-  { feature: "Custom roles & RBAC", starter: false, pro: true, enterprise: true },
-  { feature: "Workflow automation", starter: false, pro: true, enterprise: true },
+  {
+    feature: "REST API & webhooks",
+    starter: true,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "AI sprint planning",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "AI task estimation",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Predictive burndown",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Natural language task creation",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Change request workflows",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Custom roles & RBAC",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Workflow automation",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
   { feature: "Time tracking", starter: false, pro: true, enterprise: true },
-  { feature: "Advanced analytics", starter: false, pro: true, enterprise: true },
-  { feature: "Activity audit logs", starter: false, pro: true, enterprise: true },
-  { feature: "AI automated retrospectives", starter: false, pro: false, enterprise: true },
-  { feature: "Cross-project dependencies", starter: false, pro: false, enterprise: true },
-  { feature: "Workload balancing AI", starter: false, pro: false, enterprise: true },
-  { feature: "Intelligent backlog grooming", starter: false, pro: false, enterprise: true },
+  {
+    feature: "Advanced analytics",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "Activity audit logs",
+    starter: false,
+    pro: true,
+    enterprise: true,
+  },
+  {
+    feature: "AI automated retrospectives",
+    starter: false,
+    pro: false,
+    enterprise: true,
+  },
+  {
+    feature: "Cross-project dependencies",
+    starter: false,
+    pro: false,
+    enterprise: true,
+  },
+  {
+    feature: "Workload balancing AI",
+    starter: false,
+    pro: false,
+    enterprise: true,
+  },
+  {
+    feature: "Intelligent backlog grooming",
+    starter: false,
+    pro: false,
+    enterprise: true,
+  },
   { feature: "SSO / SAML", starter: false, pro: false, enterprise: true },
-  { feature: "On-premise deployment", starter: false, pro: false, enterprise: true },
-  { feature: "SLA guarantee", starter: false, pro: false, enterprise: "99.99%" },
-  { feature: "Support", starter: "Community", pro: "Priority email", enterprise: "Dedicated + phone" },
+  {
+    feature: "On-premise deployment",
+    starter: false,
+    pro: false,
+    enterprise: true,
+  },
+  {
+    feature: "SLA guarantee",
+    starter: false,
+    pro: false,
+    enterprise: "99.99%",
+  },
+  {
+    feature: "Support",
+    starter: "Community",
+    pro: "Priority email",
+    enterprise: "Dedicated + phone",
+  },
 ];
 
 export default function PricingPage() {
@@ -148,12 +253,25 @@ export default function PricingPage() {
           "@context": "https://schema.org",
           "@type": "Product",
           name: "OrbisPM",
-          description: "AI-powered project management platform for engineering teams",
+          description:
+            "AI-powered project management platform for engineering teams",
           url: "https://orbisom.live",
           brand: { "@type": "Brand", name: "OrbisPM" },
           offers: [
-            { "@type": "Offer", price: "0", priceCurrency: "USD", name: "Starter", description: "Free plan for small teams" },
-            { "@type": "Offer", price: "12", priceCurrency: "USD", name: "Professional", description: "Per user per month with AI features" },
+            {
+              "@type": "Offer",
+              price: "0",
+              priceCurrency: "USD",
+              name: "Starter",
+              description: "Free plan for small teams",
+            },
+            {
+              "@type": "Offer",
+              price: "12",
+              priceCurrency: "USD",
+              name: "Professional",
+              description: "Per user per month with AI features",
+            },
           ],
         }}
       />
@@ -173,8 +291,9 @@ export default function PricingPage() {
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-2xl mx-auto">
-            Transparent pricing with no hidden fees. Every plan includes real-time collaboration
-            and core project management features. Upgrade when you need AI and advanced workflows.
+            Transparent pricing with no hidden fees. Every plan includes
+            real-time collaboration and core project management features.
+            Upgrade when you need AI and advanced workflows.
           </p>
         </div>
       </section>
@@ -187,7 +306,9 @@ export default function PricingPage() {
               <div
                 key={plan.name}
                 className={`card bg-base-100 border-2 transition-all duration-300 hover:-translate-y-1 ${
-                  plan.popular ? "border-primary shadow-xl shadow-primary/10 relative" : "border-base-200 shadow-lg"
+                  plan.popular
+                    ? "border-primary shadow-xl shadow-primary/10 relative"
+                    : "border-base-200 shadow-lg"
                 }`}
               >
                 {plan.popular && (
@@ -197,10 +318,16 @@ export default function PricingPage() {
                 )}
                 <div className="card-body">
                   <h2 className="text-lg font-semibold">{plan.name}</h2>
-                  <p className="text-base-content/50 text-sm">{plan.description}</p>
+                  <p className="text-base-content/50 text-sm">
+                    {plan.description}
+                  </p>
                   <div className="mt-4 mb-6">
                     <span className="text-4xl font-bold">{plan.price}</span>
-                    {plan.period && <span className="text-base-content/50 text-sm">{plan.period}</span>}
+                    {plan.period && (
+                      <span className="text-base-content/50 text-sm">
+                        {plan.period}
+                      </span>
+                    )}
                   </div>
                   <ul className="space-y-2.5 flex-1">
                     {plan.features.map((f) => (
@@ -210,7 +337,10 @@ export default function PricingPage() {
                       </li>
                     ))}
                     {plan.notIncluded.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-sm text-base-content/30">
+                      <li
+                        key={f}
+                        className="flex items-start gap-2 text-sm text-base-content/30"
+                      >
                         <X className="w-4 h-4 flex-shrink-0 mt-0.5" />
                         <span>{f}</span>
                       </li>
@@ -221,7 +351,8 @@ export default function PricingPage() {
                       href={plan.name === "Enterprise" ? "/contact" : "/signup"}
                       className={`btn w-full ${plan.popular ? "btn-primary" : "btn-outline"}`}
                     >
-                      {plan.cta} {plan.popular && <ArrowRight className="w-4 h-4" />}
+                      {plan.cta}{" "}
+                      {plan.popular && <ArrowRight className="w-4 h-4" />}
                     </Link>
                   </div>
                 </div>
@@ -236,7 +367,9 @@ export default function PricingPage() {
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold">Compare Plans Side by Side</h2>
-            <p className="text-base-content/50 mt-2">Every detail, no surprises</p>
+            <p className="text-base-content/50 mt-2">
+              Every detail, no surprises
+            </p>
           </div>
           <div className="overflow-x-auto max-w-5xl mx-auto">
             <table className="table w-full">
@@ -253,7 +386,10 @@ export default function PricingPage() {
                   <tr key={row.feature} className="border-b border-base-200">
                     <td className="font-medium text-sm">{row.feature}</td>
                     {[row.starter, row.pro, row.enterprise].map((val, i) => (
-                      <td key={i} className={`text-center text-sm ${i === 1 ? "bg-primary/5" : ""}`}>
+                      <td
+                        key={i}
+                        className={`text-center text-sm ${i === 1 ? "bg-primary/5" : ""}`}
+                      >
                         {val === true ? (
                           <span className="text-success font-bold">✓</span>
                         ) : val === false ? (
@@ -280,8 +416,10 @@ export default function PricingPage() {
               <span className="font-semibold">Need On-Premise Deployment?</span>
             </div>
             <p className="text-base-content/60 text-sm leading-relaxed">
-              Enterprise customers can deploy OrbisPM on their own infrastructure with Docker Compose.
-              The entire stack runs in containers for maximum control and data sovereignty. Contact our sales team for pricing and deployment support.
+              Enterprise customers can deploy OrbisPM on their own
+              infrastructure with Docker Compose. The entire stack runs in
+              containers for maximum control and data sovereignty. Contact our
+              sales team for pricing and deployment support.
             </p>
             <Link href="/contact" className="btn btn-primary btn-sm mt-4">
               Talk to Sales

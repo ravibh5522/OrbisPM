@@ -1,5 +1,6 @@
 "use client";
 
+import { PendingReviewBadge } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
@@ -1766,6 +1767,7 @@ function TaskColumn({
                     >
                       {task.priority}
                     </span>
+                    {task.review_status === "pending" && <PendingReviewBadge count={1} />}
                     {(startStr || dueStr) && (
                       <span className="text-[11px] font-medium text-base-content/60 truncate">
                         {startStr && dueStr ? `${startStr} → ${dueStr}` : startStr || dueStr}

@@ -551,3 +551,23 @@ export interface OIDCAuthorizeResponse {
   code_verifier: string;
   state: string;
 }
+
+// Announcements
+export type AnnouncementPriority = "low" | "normal" | "high" | "urgent";
+
+export interface Announcement {
+  id: string;
+  org_id: string;
+  project_id?: string | null;
+  author_id: string;
+  title: string;
+  body: string;
+  priority: AnnouncementPriority;
+  pinned: boolean;
+  published_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  read_count: number;
+  unread: boolean;
+}

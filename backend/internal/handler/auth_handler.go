@@ -214,6 +214,11 @@ func (h *AuthHandler) Routes() chi.Router {
 	r.Post("/mfa/recovery-codes", h.GenerateRecoveryCodes)
 	r.Delete("/mfa/recovery-codes", h.RemoveRecoveryCodes)
 
+	// Password management
+	r.Post("/password/change", h.ChangePassword)
+	r.Post("/password/forgot", h.ForgotPassword)
+	r.Post("/password/reset", h.ResetPassword)
+
 	// Social / IDP
 	r.Get("/idps", h.ListIDPs)
 	r.Post("/idp/start", h.StartIDPLogin)
@@ -842,6 +847,110 @@ func (h *AuthHandler) verifyAndConsumeBackupCode(ctx context.Context, zitadelUse
 	return false, nil
 }
 
+// --- Password Management ---
+
+// ChangePassword allows an authenticated user to change their password.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	token := extractBearerToken(r)
+	if token == "" {
+		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "missing authorization header"})
+		return
+	}
+	claims, err := h.zitadel.ValidateToken(r.Context(), token)
+	if err != nil {
+		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "invalid token"})
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
+		return
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "old_password and new_password are required"})
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "new password must be at least 8 characters"})
+		return
+	}
+
+	if err := h.zitadel.ChangePassword(r.Context(), claims.Subject, req.OldPassword, req.NewPassword); err != nil {
+		handleAuthError(w, err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "password_changed"})
+}
+
+// ForgotPassword initiates a password reset flow (public — no auth required).
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
+		return
+	}
+	if req.Email == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "email is required"})
+		return
+	}
+
+	// Find user by email in Zitadel
+	userID, err := h.zitadel.FindUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		// Don't reveal whether the email exists — always return success
+		JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
+		return
+	}
+
+	// Request password reset code from Zitadel
+	_, err = h.zitadel.RequestPasswordReset(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Str("email", req.Email).Msg("password reset request failed")
+	}
+
+	// Always return success to prevent email enumeration
+	JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
+}
+
+// ResetPassword completes a password reset using a verification code (public — no auth required).
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email       string `json:"email"`
+		Code        string `json:"code"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
+		return
+	}
+	if req.Email == "" || req.Code == "" || req.NewPassword == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "email, code, and new_password are required"})
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "new password must be at least 8 characters"})
+		return
+	}
+
+	userID, err := h.zitadel.FindUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid reset request"})
+		return
+	}
+
+	if err := h.zitadel.ResetPasswordWithCode(r.Context(), userID, req.Code, req.NewPassword); err != nil {
+		handleAuthError(w, err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "password_reset"})
+}
+
 // --- Social / IDP Endpoints ---
 
 func (h *AuthHandler) ListIDPs(w http.ResponseWriter, r *http.Request) {
@@ -894,5 +1003,6 @@ func handleAuthError(w http.ResponseWriter, err error) {
 		JSON(w, code, ErrorResponse{Message: authErr.Error()})
 		return
 	}
-	JSON(w, http.StatusBadGateway, ErrorResponse{Message: "auth service error", Detail: err.Error()})
+	log.Error().Err(err).Msg("auth service error")
+	JSON(w, http.StatusBadGateway, ErrorResponse{Message: "auth service error"})
 }
