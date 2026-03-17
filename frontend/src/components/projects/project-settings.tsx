@@ -1,24 +1,14 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
-import { Avatar, Card } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
-import {
-  Plus,
-  Trash2,
-  GripVertical,
-  Check,
-  Shield,
-  X,
-} from "lucide-react";
+import { Avatar, Card } from "@/components/ui/shared";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Project, TaskStatusConfig } from "@/types/domain";
 import {
-  DndContext,
   closestCenter,
+  DndContext,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -33,6 +23,9 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Check, GripVertical, Plus, Shield, Trash2, X } from "lucide-react";
+import { useCallback, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Project Settings — Custom Task Statuses
@@ -74,7 +67,9 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const saveMutation = useMutation({
@@ -113,11 +108,11 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
   const updateStatus = useCallback(
     (id: string, updates: Partial<TaskStatusConfig>) => {
       setStatuses((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+        prev.map((s) => (s.id === id ? { ...s, ...updates } : s)),
       );
       setHasChanges(true);
     },
-    []
+    [],
   );
 
   const removeStatus = useCallback((id: string) => {
@@ -137,8 +132,9 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
           <div>
             <h3 className="text-lg font-semibold">Task Workflow Statuses</h3>
             <p className="text-sm text-base-content/60">
-              Configure the workflow statuses for tasks in this project.
-              Drag to reorder. Mark one status as &quot;Done&quot; for progress tracking.
+              Configure the workflow statuses for tasks in this project. Drag to
+              reorder. Mark one status as &quot;Done&quot; for progress
+              tracking.
             </p>
           </div>
           <div className="flex gap-2">
@@ -255,7 +251,7 @@ function SortableStatusRow({
       style={style}
       className={cn(
         "flex items-center gap-3 p-3 rounded-lg border border-base-300 bg-base-100",
-        isDragging && "opacity-50"
+        isDragging && "opacity-50",
       )}
     >
       {/* Drag handle */}
@@ -277,7 +273,7 @@ function SortableStatusRow({
         />
         <ul
           tabIndex={0}
-          className="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-36"
+          className="dropdown-content z-10 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-36"
         >
           {COLORS.map((c) => (
             <li key={c.id}>
@@ -490,8 +486,9 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
       <div className="mb-4">
         <h3 className="text-lg font-semibold">Review Required Fields</h3>
         <p className="text-sm text-base-content/60">
-          Changes to these fields will require approval from a reviewer before being applied.
-          If no fields are selected, all updates are applied immediately.
+          Changes to these fields will require approval from a reviewer before
+          being applied. If no fields are selected, all updates are applied
+          immediately.
         </p>
       </div>
 
@@ -503,7 +500,7 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
               "flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors",
               selected.has(field.id)
                 ? "border-primary bg-primary/5"
-                : "border-base-300 hover:bg-base-200"
+                : "border-base-300 hover:bg-base-200",
             )}
           >
             <input
@@ -594,8 +591,9 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
           <Shield className="w-5 h-5" /> Designated Approvers
         </h3>
         <p className="text-sm text-base-content/60">
-          Select one or more members who can approve change requests. If no approvers are
-          selected, any member with the review permission can approve.
+          Select one or more members who can approve change requests. If no
+          approvers are selected, any member with the review permission can
+          approve.
         </p>
       </div>
 
@@ -623,7 +621,9 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
                     </span>
                   )}
                 </div>
-                <span className="badge badge-sm badge-ghost">{member.role}</span>
+                <span className="badge badge-sm badge-ghost">
+                  {member.role}
+                </span>
                 <button
                   className="btn btn-ghost btn-xs btn-square text-error"
                   onClick={() => removeApprover(member.user_id)}
@@ -632,7 +632,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
                   <X className="w-4 h-4" />
                 </button>
               </div>
-            ) : null
+            ) : null,
           )}
         </div>
       )}
@@ -649,7 +649,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
           </div>
           <ul
             tabIndex={0}
-            className="dropdown-content z-10 menu p-2 shadow bg-base-100 rounded-box w-full max-h-48 overflow-y-auto"
+            className="dropdown-content z-10 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-full max-h-48 overflow-y-auto"
           >
             {available.map((m) => (
               <li key={m.user_id}>
@@ -662,9 +662,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
                     src={m.avatar_url}
                     size="xs"
                   />
-                  <span className="truncate">
-                    {m.display_name || m.email}
-                  </span>
+                  <span className="truncate">{m.display_name || m.email}</span>
                   <span className="badge badge-xs badge-ghost ml-auto">
                     {m.role}
                   </span>

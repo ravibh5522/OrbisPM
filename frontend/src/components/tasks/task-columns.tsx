@@ -12,23 +12,30 @@ import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
-import type { DeadlineConflict, OrgMember, ProjectMember, Task, TaskPriority, TaskStatus } from "@/types/domain";
+import type {
+  DeadlineConflict,
+  OrgMember,
+  ProjectMember,
+  Task,
+  TaskPriority,
+  TaskStatus,
+} from "@/types/domain";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-    Check,
-    ChevronRight,
-    Filter,
-    GripVertical,
-    ListPlus,
-    Loader2,
-    Pencil,
-    Plus,
-    Redo2,
-    Tags,
-    Trash2,
-    Undo2,
-    UserPlus,
-    X,
+  Check,
+  ChevronRight,
+  Filter,
+  GripVertical,
+  ListPlus,
+  Loader2,
+  Pencil,
+  Plus,
+  Redo2,
+  Tags,
+  Trash2,
+  Undo2,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -75,25 +82,39 @@ function isFilterActive(f: ColumnFilterState | undefined): boolean {
   );
 }
 
-function applyFilter(tasks: Task[], f: ColumnFilterState | undefined, gf?: GlobalFilterState): Task[] {
+function applyFilter(
+  tasks: Task[],
+  f: ColumnFilterState | undefined,
+  gf?: GlobalFilterState,
+): Task[] {
   let result = tasks;
   // Apply global filter first
   if (gf) {
     result = result.filter((t) => {
       if (gf.assigneeIds.length > 0) {
-        const ids = t.assignee_ids?.length ? t.assignee_ids : t.assignee_id ? [t.assignee_id] : [];
+        const ids = t.assignee_ids?.length
+          ? t.assignee_ids
+          : t.assignee_id
+            ? [t.assignee_id]
+            : [];
         // "" means unassigned
-        const matchesUnassigned = gf.assigneeIds.includes("") && ids.length === 0;
+        const matchesUnassigned =
+          gf.assigneeIds.includes("") && ids.length === 0;
         const matchesAny = ids.some((id) => gf.assigneeIds.includes(id));
         if (!matchesUnassigned && !matchesAny) return false;
       }
-      if (gf.statuses.length > 0 && !gf.statuses.includes(t.status)) return false;
-      if (gf.priorities.length > 0 && !gf.priorities.includes(t.priority)) return false;
+      if (gf.statuses.length > 0 && !gf.statuses.includes(t.status))
+        return false;
+      if (gf.priorities.length > 0 && !gf.priorities.includes(t.priority))
+        return false;
       if (gf.labels.length > 0) {
-        if (!t.labels || !t.labels.some((l) => gf.labels.includes(l))) return false;
+        if (!t.labels || !t.labels.some((l) => gf.labels.includes(l)))
+          return false;
       }
-      if (gf.dueDateFrom && (!t.due_date || t.due_date < gf.dueDateFrom)) return false;
-      if (gf.dueDateTo && (!t.due_date || t.due_date > gf.dueDateTo)) return false;
+      if (gf.dueDateFrom && (!t.due_date || t.due_date < gf.dueDateFrom))
+        return false;
+      if (gf.dueDateTo && (!t.due_date || t.due_date > gf.dueDateTo))
+        return false;
       if (gf.search) {
         const q = gf.search.toLowerCase();
         if (!t.title.toLowerCase().includes(q)) return false;
@@ -104,15 +125,18 @@ function applyFilter(tasks: Task[], f: ColumnFilterState | undefined, gf?: Globa
   if (!f || !isFilterActive(f)) return result;
   return result.filter((t) => {
     if (f.statuses.length > 0 && !f.statuses.includes(t.status)) return false;
-    if (f.priorities.length > 0 && !f.priorities.includes(t.priority)) return false;
+    if (f.priorities.length > 0 && !f.priorities.includes(t.priority))
+      return false;
     if (f.assigneeIds.length > 0) {
       const aid = t.assignee_id || "";
       if (!f.assigneeIds.includes(aid)) return false;
     }
     if (f.labels.length > 0) {
-      if (!t.labels || !t.labels.some((l) => f.labels.includes(l))) return false;
+      if (!t.labels || !t.labels.some((l) => f.labels.includes(l)))
+        return false;
     }
-    if (f.dueDateFrom && (!t.due_date || t.due_date < f.dueDateFrom)) return false;
+    if (f.dueDateFrom && (!t.due_date || t.due_date < f.dueDateFrom))
+      return false;
     if (f.dueDateTo && (!t.due_date || t.due_date > f.dueDateTo)) return false;
     if (f.search) {
       const q = f.search.toLowerCase();
@@ -140,17 +164,33 @@ interface TaskColumnsProps {
   globalFilter?: GlobalFilterState;
 }
 
-export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, focusTaskId, toolbarPortal, globalFilter }: TaskColumnsProps) {
+export function TaskColumns({
+  orgId,
+  orgSlug,
+  projectId,
+  members,
+  orgMembers,
+  focusTaskId,
+  toolbarPortal,
+  globalFilter,
+}: TaskColumnsProps) {
   const send = useProjectTaskStore((s) => s.send);
   const user = useAuthStore((s) => s.user);
   const orgMembership = useAuthStore((s) => s.currentMembership);
   const currentUserId = user?.id || "";
-  const [selected, setSelected] = useState<(string | null)[]>([null, null, null, null]);
+  const [selected, setSelected] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   const [createDepth, setCreateDepth] = useState<number | null>(null);
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
   const [bulkCreateDepth, setBulkCreateDepth] = useState<number | null>(null);
-  const [bulkCreateParentId, setBulkCreateParentId] = useState<string | null>(null);
+  const [bulkCreateParentId, setBulkCreateParentId] = useState<string | null>(
+    null,
+  );
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
   const [prevFocusTaskId, setPrevFocusTaskId] = useState(focusTaskId);
@@ -161,7 +201,10 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
-    x: number; y: number; task: Task; depth: number;
+    x: number;
+    y: number;
+    task: Task;
+    depth: number;
   } | null>(null);
 
   // Drag-and-drop reparenting state
@@ -170,16 +213,38 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
 
   // Split view state
   const [splitView, setSplitView] = useState(false);
-  const [splitSelected, setSplitSelected] = useState<(string | null)[]>([null, null, null, null]);
-  const [splitColumnData, setSplitColumnData] = useState<Task[][]>([[], [], [], []]);
-  const [splitColumnLoading, setSplitColumnLoading] = useState<boolean[]>([false, false, false, false]);
+  const [splitSelected, setSplitSelected] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
+  const [splitColumnData, setSplitColumnData] = useState<Task[][]>([
+    [],
+    [],
+    [],
+    [],
+  ]);
+  const [splitColumnLoading, setSplitColumnLoading] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+  ]);
 
   // Track which pane was last focused (for preview panel)
-  const [lastFocusedPane, setLastFocusedPane] = useState<"top" | "bottom">("top");
+  const [lastFocusedPane, setLastFocusedPane] = useState<"top" | "bottom">(
+    "top",
+  );
 
   // Column data state (one per depth)
   const [columnData, setColumnData] = useState<Task[][]>([[], [], [], []]);
-  const [columnLoading, setColumnLoading] = useState<boolean[]>([false, false, false, false]);
+  const [columnLoading, setColumnLoading] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+  ]);
 
   // Track previous selection to detect which depth actually changed
   const prevSelectedRef = useRef<(string | null)[]>([null, null, null, null]);
@@ -189,8 +254,14 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   const [deletePending, setDeletePending] = useState(false);
 
   // Deadline conflict state for updates
-  const [updateDeadlineConflicts, setUpdateDeadlineConflicts] = useState<DeadlineConflict[]>([]);
-  const pendingUpdateRef = useRef<{ taskId: string; data: Partial<Task>; baseVersion: number } | null>(null);
+  const [updateDeadlineConflicts, setUpdateDeadlineConflicts] = useState<
+    DeadlineConflict[]
+  >([]);
+  const pendingUpdateRef = useRef<{
+    taskId: string;
+    data: Partial<Task>;
+    baseVersion: number;
+  } | null>(null);
 
   // Reset deep-link state when focusTaskId changes
   if (focusTaskId !== prevFocusTaskId) {
@@ -199,65 +270,120 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   }
 
   // Fetch column tasks via WS (soft: don't show loading if we already have cached data)
-  const fetchColumn = useCallback(async (depth: number, parentId: string | null, soft = false) => {
-    if (!send) return;
-    const param = parentId ?? "root";
-    // Check store for cached data first — show it instantly (no loading state)
-    const cached = useProjectTaskStore.getState().tasks.get(param);
-    if (cached && cached.length > 0) {
-      setColumnData((prev) => { const n = [...prev]; n[depth] = cached; return n; });
-    }
-    // Only show loading spinner if we have NO cached data and soft mode is off
-    if (!soft && (!cached || cached.length === 0)) {
-      setColumnLoading((prev) => { const n = [...prev]; n[depth] = true; return n; });
-    }
-    try {
-      const res = await send("task:list", { parent_id: param });
-      const data = res?.data || [];
-      setColumnData((prev) => { const n = [...prev]; n[depth] = data; return n; });
-      useProjectTaskStore.getState().setTasks(param, data, res?.total ?? data.length);
-    } catch {
-      // Only clear if we had no cached fallback
-      if (!cached || cached.length === 0) {
-        setColumnData((prev) => { const n = [...prev]; n[depth] = []; return n; });
+  const fetchColumn = useCallback(
+    async (depth: number, parentId: string | null, soft = false) => {
+      if (!send) return;
+      const param = parentId ?? "root";
+      // Check store for cached data first — show it instantly (no loading state)
+      const cached = useProjectTaskStore.getState().tasks.get(param);
+      if (cached && cached.length > 0) {
+        setColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = cached;
+          return n;
+        });
       }
-    } finally {
-      setColumnLoading((prev) => { const n = [...prev]; n[depth] = false; return n; });
-    }
-  }, [send]);
+      // Only show loading spinner if we have NO cached data and soft mode is off
+      if (!soft && (!cached || cached.length === 0)) {
+        setColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = true;
+          return n;
+        });
+      }
+      try {
+        const res = await send("task:list", { parent_id: param });
+        const data = res?.data || [];
+        setColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = data;
+          return n;
+        });
+        useProjectTaskStore
+          .getState()
+          .setTasks(param, data, res?.total ?? data.length);
+      } catch {
+        // Only clear if we had no cached fallback
+        if (!cached || cached.length === 0) {
+          setColumnData((prev) => {
+            const n = [...prev];
+            n[depth] = [];
+            return n;
+          });
+        }
+      } finally {
+        setColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = false;
+          return n;
+        });
+      }
+    },
+    [send],
+  );
 
   // Refetch a single column silently (no loading state)
-  const softRefetch = useCallback((depth: number, parentId: string | null) => {
-    fetchColumn(depth, parentId, true);
-  }, [fetchColumn]);
+  const softRefetch = useCallback(
+    (depth: number, parentId: string | null) => {
+      fetchColumn(depth, parentId, true);
+    },
+    [fetchColumn],
+  );
 
   // Fetch for split view pane
-  const fetchSplitColumn = useCallback(async (depth: number, parentId: string | null) => {
-    if (!send) return;
-    const param = parentId ?? "root";
-    const cached = useProjectTaskStore.getState().tasks.get(param);
-    if (cached && cached.length > 0) {
-      setSplitColumnData((prev) => { const n = [...prev]; n[depth] = cached; return n; });
-    }
-    if (!cached || cached.length === 0) {
-      setSplitColumnLoading((prev) => { const n = [...prev]; n[depth] = true; return n; });
-    }
-    try {
-      const res = await send("task:list", { parent_id: param });
-      const data = res?.data || [];
-      setSplitColumnData((prev) => { const n = [...prev]; n[depth] = data; return n; });
-      useProjectTaskStore.getState().setTasks(param, data, res?.total ?? data.length);
-    } catch {
-      if (!cached || cached.length === 0) {
-        setSplitColumnData((prev) => { const n = [...prev]; n[depth] = []; return n; });
+  const fetchSplitColumn = useCallback(
+    async (depth: number, parentId: string | null) => {
+      if (!send) return;
+      const param = parentId ?? "root";
+      const cached = useProjectTaskStore.getState().tasks.get(param);
+      if (cached && cached.length > 0) {
+        setSplitColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = cached;
+          return n;
+        });
       }
-    } finally {
-      setSplitColumnLoading((prev) => { const n = [...prev]; n[depth] = false; return n; });
-    }
-  }, [send]);
+      if (!cached || cached.length === 0) {
+        setSplitColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = true;
+          return n;
+        });
+      }
+      try {
+        const res = await send("task:list", { parent_id: param });
+        const data = res?.data || [];
+        setSplitColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = data;
+          return n;
+        });
+        useProjectTaskStore
+          .getState()
+          .setTasks(param, data, res?.total ?? data.length);
+      } catch {
+        if (!cached || cached.length === 0) {
+          setSplitColumnData((prev) => {
+            const n = [...prev];
+            n[depth] = [];
+            return n;
+          });
+        }
+      } finally {
+        setSplitColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = false;
+          return n;
+        });
+      }
+    },
+    [send],
+  );
 
   // Load root column on connect
-  useEffect(() => { if (send) fetchColumn(0, null); }, [send, fetchColumn]);
+  useEffect(() => {
+    if (send) fetchColumn(0, null);
+  }, [send, fetchColumn]);
 
   // Load split view root when split is activated
   useEffect(() => {
@@ -267,7 +393,12 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   }, [splitView, send, fetchSplitColumn]);
 
   // Split view selection changes
-  const prevSplitSelectedRef = useRef<(string | null)[]>([null, null, null, null]);
+  const prevSplitSelectedRef = useRef<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   useEffect(() => {
     if (!splitView) return;
     const prev = prevSplitSelectedRef.current;
@@ -278,7 +409,11 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         }
         for (let j = i + 1; j < 4; j++) {
           if (!splitSelected[j - 1]) {
-            setSplitColumnData((p) => { const n = [...p]; n[j] = []; return n; });
+            setSplitColumnData((p) => {
+              const n = [...p];
+              n[j] = [];
+              return n;
+            });
           }
         }
         break;
@@ -287,15 +422,18 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     prevSplitSelectedRef.current = [...splitSelected];
   }, [splitSelected, splitView, fetchSplitColumn]);
 
-  const splitSelectTask = useCallback((depth: number, taskId: string | null) => {
-    setLastFocusedPane("bottom");
-    setSplitSelected((prev) => {
-      const next = [...prev];
-      next[depth] = taskId;
-      for (let i = depth + 1; i < next.length; i++) next[i] = null;
-      return next;
-    });
-  }, []);
+  const splitSelectTask = useCallback(
+    (depth: number, taskId: string | null) => {
+      setLastFocusedPane("bottom");
+      setSplitSelected((prev) => {
+        const next = [...prev];
+        next[depth] = taskId;
+        for (let i = depth + 1; i < next.length; i++) next[i] = null;
+        return next;
+      });
+    },
+    [],
+  );
 
   // Load ONLY the changed child column when selection changes (not all)
   useEffect(() => {
@@ -308,7 +446,11 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         // Clear all deeper columns when a selection changes
         for (let j = i + 1; j < 4; j++) {
           if (!selected[j - 1]) {
-            setColumnData((p) => { const n = [...p]; n[j] = []; return n; });
+            setColumnData((p) => {
+              const n = [...p];
+              n[j] = [];
+              return n;
+            });
           }
         }
         break; // Only one depth changes per selection click
@@ -331,7 +473,9 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         setSelected(newSelected);
         setDeepLinkProcessed(true);
         setAutoExpanded(true);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     })();
   }, [focusTaskId, send, deepLinkProcessed]);
 
@@ -350,32 +494,46 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     try {
       const stored = localStorage.getItem(`${LS_WIDTHS_KEY}-${projectId}`);
       return stored ? JSON.parse(stored) : DEFAULT_COL_WIDTHS;
-    } catch { return DEFAULT_COL_WIDTHS; }
+    } catch {
+      return DEFAULT_COL_WIDTHS;
+    }
   });
   const [columnNames, setColumnNames] = useState<string[]>(() => {
     if (typeof window === "undefined") return DEFAULT_COL_NAMES;
     try {
       const stored = localStorage.getItem(`${LS_NAMES_KEY}-${projectId}`);
       return stored ? JSON.parse(stored) : DEFAULT_COL_NAMES;
-    } catch { return DEFAULT_COL_NAMES; }
+    } catch {
+      return DEFAULT_COL_NAMES;
+    }
   });
 
   // Get user's project role, fall back to org role for owners/admins not explicitly added as project members
-  const projectMemberRole = members.find((m) => m.user_id === currentUserId)?.role;
-  const userProjectRole = projectMemberRole
-    ?? (orgMembership?.role === "owner" || orgMembership?.role === "admin" ? orgMembership.role : undefined);
-  const canEditColumns = userProjectRole === "lead" || userProjectRole === "admin" || userProjectRole === "owner";
+  const projectMemberRole = members.find(
+    (m) => m.user_id === currentUserId,
+  )?.role;
+  const userProjectRole =
+    projectMemberRole ??
+    (orgMembership?.role === "owner" || orgMembership?.role === "admin"
+      ? orgMembership.role
+      : undefined);
+  const canEditColumns =
+    userProjectRole === "lead" ||
+    userProjectRole === "admin" ||
+    userProjectRole === "owner";
 
   // Convert ProjectMember to OrgMember format if orgMembers not provided
-  const effectiveMembers: OrgMember[] = orgMembers || members.map((m) => ({
-    org_id: orgId,
-    user_id: m.user_id,
-    email: m.email || "",
-    display_name: m.display_name || m.email || "",
-    avatar_url: m.avatar_url,
-    role: "member" as const, // ProjectMember role is different from OrgRole, default to member
-    joined_at: m.joined_at,
-  }));
+  const effectiveMembers: OrgMember[] =
+    orgMembers ||
+    members.map((m) => ({
+      org_id: orgId,
+      user_id: m.user_id,
+      email: m.email || "",
+      display_name: m.display_name || m.email || "",
+      avatar_url: m.avatar_url,
+      role: "member" as const, // ProjectMember role is different from OrgRole, default to member
+      joined_at: m.joined_at,
+    }));
 
   const selectTask = useCallback((depth: number, taskId: string | null) => {
     setLastFocusedPane("top");
@@ -446,9 +604,16 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     const handler = (e: KeyboardEvent) => {
       const isMeta = e.ctrlKey || e.metaKey;
       if (!isMeta) return;
-      if (e.key === "z" && !e.shiftKey) { e.preventDefault(); void undo(); }
-      else if (e.key === "z" && e.shiftKey) { e.preventDefault(); void redo(); }
-      else if (e.key === "y") { e.preventDefault(); void redo(); }
+      if (e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        void undo();
+      } else if (e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        void redo();
+      } else if (e.key === "y") {
+        e.preventDefault();
+        void redo();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -469,150 +634,180 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   const getSend = () => useProjectTaskStore.getState().send;
 
   /* ── Mutations via WS ── */
-  const handleDelete = useCallback(async (id: string) => {
-    if (!send) return;
-    // Capture snapshot for undo
-    const deletedTask = columnData.flat().find((t) => t.id === id);
-    setDeletePending(true);
-    // Optimistic: remove immediately from BOTH local state AND store
-    setColumnData((prev) =>
-      prev.map((col) => col.filter((t) => t.id !== id))
-    );
-    useProjectTaskStore.getState().removeTask(id);
-    setSelected((prev) => {
-      const idx = prev.indexOf(id);
-      if (idx >= 0) {
-        const next = [...prev];
-        for (let i = idx; i < next.length; i++) next[i] = null;
-        return next;
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!send) return;
+      // Capture snapshot for undo
+      const deletedTask = columnData.flat().find((t) => t.id === id);
+      setDeletePending(true);
+      // Optimistic: remove immediately from BOTH local state AND store
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => t.id !== id)),
+      );
+      useProjectTaskStore.getState().removeTask(id);
+      setSelected((prev) => {
+        const idx = prev.indexOf(id);
+        if (idx >= 0) {
+          const next = [...prev];
+          for (let i = idx; i < next.length; i++) next[i] = null;
+          return next;
+        }
+        return prev;
+      });
+      setDeleteTarget(null);
+      try {
+        await send("task:delete", { task_id: id });
+        // Push undo command — re-create the task to "undo" a delete
+        if (deletedTask) {
+          pushCommand({
+            type: "delete",
+            description: `Delete "${deletedTask.title}"`,
+            undo: async () => {
+              const s = getSend();
+              if (!s) return;
+              const payload: Record<string, unknown> = {
+                title: deletedTask.title,
+                status: deletedTask.status,
+                priority: deletedTask.priority,
+              };
+              if (deletedTask.assignee_id)
+                payload.assignee_id = deletedTask.assignee_id;
+              if (deletedTask.parent_task_id)
+                payload.parent_task_id = deletedTask.parent_task_id;
+              if (deletedTask.labels) payload.labels = deletedTask.labels;
+              if (deletedTask.description)
+                payload.description = deletedTask.description;
+              const recreated = await s("task:create", payload);
+              if (recreated?.id) {
+                const store = useProjectTaskStore.getState();
+                const parentKey = recreated.parent_task_id || "root";
+                const existing = store.tasks.get(parentKey) || [];
+                store.setTasks(
+                  parentKey,
+                  [...existing, recreated],
+                  (store.totals.get(parentKey) ?? 0) + 1,
+                );
+              }
+              refetchAllRef.current();
+            },
+            redo: async () => {
+              const s = getSend();
+              if (!s) return;
+              await s("task:delete", { task_id: id });
+              useProjectTaskStore.getState().removeTask(id);
+              refetchAllRef.current();
+            },
+          });
+        }
+      } catch {
+        refetchAll();
+      } finally {
+        setDeletePending(false);
       }
-      return prev;
-    });
-    setDeleteTarget(null);
-    try {
-      await send("task:delete", { task_id: id });
-      // Push undo command — re-create the task to "undo" a delete
-      if (deletedTask) {
+    },
+    [send, refetchAll, columnData, pushCommand],
+  );
+
+  const handleUpdate = useCallback(
+    async (taskId: string, data: Partial<Task>) => {
+      if (!send) return;
+      // Find current task to get version for optimistic concurrency
+      const currentTask = columnData.flat().find((t) => t.id === taskId);
+      // Snapshot old values for undo
+      const oldValues: Partial<Task> = {};
+      if (currentTask) {
+        for (const key of Object.keys(data) as (keyof Task)[]) {
+          (oldValues as Record<string, unknown>)[key] = currentTask[key];
+        }
+      }
+      // Optimistic update in column data — instant, no loading
+      setColumnData((prev) =>
+        prev.map((col) =>
+          col.map((t) => (t.id === taskId ? { ...t, ...data } : t)),
+        ),
+      );
+      // Also update Zustand store optimistically
+      if (currentTask) {
+        useProjectTaskStore
+          .getState()
+          .upsertTask({ ...currentTask, ...data } as Task);
+      }
+      setUpdatePending(true);
+      try {
+        const payload = {
+          task_id: taskId,
+          base_version: currentTask?.version ?? 0,
+          ...data,
+        };
+        const updated = await send("task:update", payload);
+        // Check for deadline warning (no applied_changes, only conflicts)
+        if (
+          updated?.deadline_conflicts?.length &&
+          !updated?.applied_changes?.length
+        ) {
+          // Revert optimistic update
+          if (currentTask) {
+            useProjectTaskStore.getState().upsertTask(currentTask);
+            setColumnData((prev) =>
+              prev.map((col) =>
+                col.map((t) => (t.id === taskId ? currentTask : t)),
+              ),
+            );
+          }
+          pendingUpdateRef.current = {
+            taskId,
+            data,
+            baseVersion: currentTask?.version ?? 0,
+          };
+          setUpdateDeadlineConflicts(updated.deadline_conflicts);
+          return;
+        }
+        // Reconcile with server response — handle both direct task and wrapped result
+        const task = updated?.task ?? updated;
+        if (task?.id) {
+          useProjectTaskStore.getState().upsertTask(task);
+          setColumnData((prev) =>
+            prev.map((col) => col.map((t) => (t.id === taskId ? task : t))),
+          );
+        }
+        // Handle ancestor updates from deadline cascade
+        if (updated?.ancestors_updated?.length) {
+          for (const anc of updated.ancestors_updated) {
+            useProjectTaskStore.getState().upsertTask(anc);
+          }
+        }
+        // Push undo command
         pushCommand({
-          type: "delete",
-          description: `Delete "${deletedTask.title}"`,
+          type: "update",
+          description: `Update "${currentTask?.title || "task"}"`,
           undo: async () => {
             const s = getSend();
             if (!s) return;
-            const payload: Record<string, unknown> = {
-              title: deletedTask.title,
-              status: deletedTask.status,
-              priority: deletedTask.priority,
-            };
-            if (deletedTask.assignee_id) payload.assignee_id = deletedTask.assignee_id;
-            if (deletedTask.parent_task_id) payload.parent_task_id = deletedTask.parent_task_id;
-            if (deletedTask.labels) payload.labels = deletedTask.labels;
-            if (deletedTask.description) payload.description = deletedTask.description;
-            const recreated = await s("task:create", payload);
-            if (recreated?.id) {
-              const store = useProjectTaskStore.getState();
-              const parentKey = recreated.parent_task_id || "root";
-              const existing = store.tasks.get(parentKey) || [];
-              store.setTasks(parentKey, [...existing, recreated], (store.totals.get(parentKey) ?? 0) + 1);
-            }
+            await s("task:update", {
+              task_id: taskId,
+              base_version: task?.version ?? updated?.version ?? 0,
+              ...oldValues,
+            });
             refetchAllRef.current();
           },
           redo: async () => {
             const s = getSend();
             if (!s) return;
-            await s("task:delete", { task_id: id });
-            useProjectTaskStore.getState().removeTask(id);
+            await s("task:update", {
+              task_id: taskId,
+              ...data,
+            });
             refetchAllRef.current();
           },
         });
+      } catch {
+        refetchAll();
+      } finally {
+        setUpdatePending(false);
       }
-    } catch {
-      refetchAll();
-    } finally { setDeletePending(false); }
-  }, [send, refetchAll, columnData, pushCommand]);
-
-  const handleUpdate = useCallback(async (taskId: string, data: Partial<Task>) => {
-    if (!send) return;
-    // Find current task to get version for optimistic concurrency
-    const currentTask = columnData.flat().find((t) => t.id === taskId);
-    // Snapshot old values for undo
-    const oldValues: Partial<Task> = {};
-    if (currentTask) {
-      for (const key of Object.keys(data) as (keyof Task)[]) {
-        (oldValues as Record<string, unknown>)[key] = currentTask[key];
-      }
-    }
-    // Optimistic update in column data — instant, no loading
-    setColumnData((prev) =>
-      prev.map((col) => col.map((t) => (t.id === taskId ? { ...t, ...data } : t)))
-    );
-    // Also update Zustand store optimistically
-    if (currentTask) {
-      useProjectTaskStore.getState().upsertTask({ ...currentTask, ...data } as Task);
-    }
-    setUpdatePending(true);
-    try {
-      const payload = {
-        task_id: taskId,
-        base_version: currentTask?.version ?? 0,
-        ...data,
-      };
-      const updated = await send("task:update", payload);
-      // Check for deadline warning (no applied_changes, only conflicts)
-      if (updated?.deadline_conflicts?.length && !updated?.applied_changes?.length) {
-        // Revert optimistic update
-        if (currentTask) {
-          useProjectTaskStore.getState().upsertTask(currentTask);
-          setColumnData((prev) =>
-            prev.map((col) => col.map((t) => (t.id === taskId ? currentTask : t)))
-          );
-        }
-        pendingUpdateRef.current = { taskId, data, baseVersion: currentTask?.version ?? 0 };
-        setUpdateDeadlineConflicts(updated.deadline_conflicts);
-        return;
-      }
-      // Reconcile with server response — handle both direct task and wrapped result
-      const task = updated?.task ?? updated;
-      if (task?.id) {
-        useProjectTaskStore.getState().upsertTask(task);
-        setColumnData((prev) =>
-          prev.map((col) => col.map((t) => (t.id === taskId ? task : t)))
-        );
-      }
-      // Handle ancestor updates from deadline cascade
-      if (updated?.ancestors_updated?.length) {
-        for (const anc of updated.ancestors_updated) {
-          useProjectTaskStore.getState().upsertTask(anc);
-        }
-      }
-      // Push undo command
-      pushCommand({
-        type: "update",
-        description: `Update "${currentTask?.title || "task"}"`,
-        undo: async () => {
-          const s = getSend();
-          if (!s) return;
-          await s("task:update", {
-            task_id: taskId,
-            base_version: task?.version ?? updated?.version ?? 0,
-            ...oldValues,
-          });
-          refetchAllRef.current();
-        },
-        redo: async () => {
-          const s = getSend();
-          if (!s) return;
-          await s("task:update", {
-            task_id: taskId,
-            ...data,
-          });
-          refetchAllRef.current();
-        },
-      });
-    } catch {
-      refetchAll();
-    } finally { setUpdatePending(false); }
-  }, [send, refetchAll, columnData, pushCommand]);
+    },
+    [send, refetchAll, columnData, pushCommand],
+  );
 
   const confirmExtendDeadlinesOnUpdate = useCallback(async () => {
     const pending = pendingUpdateRef.current;
@@ -635,7 +830,9 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
       if (task?.id) {
         useProjectTaskStore.getState().upsertTask(task);
         setColumnData((prev) =>
-          prev.map((col) => col.map((t) => (t.id === pending.taskId ? task : t)))
+          prev.map((col) =>
+            col.map((t) => (t.id === pending.taskId ? task : t)),
+          ),
         );
       }
       if (updated?.ancestors_updated?.length) {
@@ -646,24 +843,35 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
       }
     } catch {
       refetchAll();
-    } finally { setUpdatePending(false); }
+    } finally {
+      setUpdatePending(false);
+    }
   }, [send, refetchAll, updateDeadlineConflicts]);
 
-  const handleDuplicate = useCallback(async (id: string) => {
-    if (!send) return;
-    try {
-      const task = await send("task:duplicate", { task_id: id });
-      // Broadcast excludes sender, so add duplicate to store directly
-      if (task?.id) {
-        const store = useProjectTaskStore.getState();
-        const parentKey = task.parent_task_id || "root";
-        const existing = store.tasks.get(parentKey) || [];
-        if (!existing.find((t: Task) => t.id === task.id)) {
-          store.setTasks(parentKey, [...existing, task], (store.totals.get(parentKey) ?? 0) + 1);
+  const handleDuplicate = useCallback(
+    async (id: string) => {
+      if (!send) return;
+      try {
+        const task = await send("task:duplicate", { task_id: id });
+        // Broadcast excludes sender, so add duplicate to store directly
+        if (task?.id) {
+          const store = useProjectTaskStore.getState();
+          const parentKey = task.parent_task_id || "root";
+          const existing = store.tasks.get(parentKey) || [];
+          if (!existing.find((t: Task) => t.id === task.id)) {
+            store.setTasks(
+              parentKey,
+              [...existing, task],
+              (store.totals.get(parentKey) ?? 0) + 1,
+            );
+          }
         }
+      } catch {
+        /* ignore */
       }
-    } catch { /* ignore */ }
-  }, [send]);
+    },
+    [send],
+  );
 
   // Multi-select handlers (must be before drop handlers that reference them)
   const toggleMultiSelect = useCallback((taskId: string) => {
@@ -696,141 +904,200 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     });
   }, []);
 
-  const handleDropOnTask = useCallback(async (targetTask: Task) => {
-    if (!send || !draggedTask || draggedTask.id === targetTask.id) return;
-    if (targetTask.depth >= MAX_DEPTH) return;
-    if (draggedTask.parent_task_id === targetTask.id) return;
+  const handleDropOnTask = useCallback(
+    async (targetTask: Task) => {
+      if (!send || !draggedTask || draggedTask.id === targetTask.id) return;
+      if (targetTask.depth >= MAX_DEPTH) return;
+      if (draggedTask.parent_task_id === targetTask.id) return;
 
-    // Determine tasks to move (multi-select support)
-    const tasksToMove: Task[] = bulkActionMode && multiSelected.has(draggedTask.id)
-      ? columnData.flat().filter((t) => multiSelected.has(t.id) && t.id !== targetTask.id)
-      : [draggedTask];
-    if (tasksToMove.length === 0) return;
+      // Determine tasks to move (multi-select support)
+      const tasksToMove: Task[] =
+        bulkActionMode && multiSelected.has(draggedTask.id)
+          ? columnData
+              .flat()
+              .filter((t) => multiSelected.has(t.id) && t.id !== targetTask.id)
+          : [draggedTask];
+      if (tasksToMove.length === 0) return;
 
-    // Snapshot old parents for undo
-    const oldParents = tasksToMove.map((t) => ({ id: t.id, parentId: t.parent_task_id }));
-
-    // Optimistic: remove moved tasks from BOTH local state AND store BEFORE await
-    const movedIds = new Set(tasksToMove.map((t) => t.id));
-    setColumnData((prev) => prev.map((col) => col.filter((t) => !movedIds.has(t.id))));
-    for (const tid of movedIds) useProjectTaskStore.getState().removeTask(tid);
-
-    try {
-      const reorderItems = tasksToMove.map((t, i) => ({
+      // Snapshot old parents for undo
+      const oldParents = tasksToMove.map((t) => ({
         id: t.id,
-        parent_id: targetTask.id,
-        position: i,
+        parentId: t.parent_task_id,
       }));
-      await send("task:reorder", { items: reorderItems });
 
-      // Refetch all columns to get fresh data from server
-      refetchAll();
+      // Optimistic: remove moved tasks from BOTH local state AND store BEFORE await
+      const movedIds = new Set(tasksToMove.map((t) => t.id));
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => !movedIds.has(t.id))),
+      );
+      for (const tid of movedIds)
+        useProjectTaskStore.getState().removeTask(tid);
 
-      // Push undo command
-      pushCommand({
-        type: "reparent",
-        description: `Move ${tasksToMove.length} task(s) to "${targetTask.title}"`,
-        undo: async () => {
-          const s = getSend();
-          if (!s) return;
-          const undoItems = oldParents.map((op, i) => ({
-            id: op.id,
-            parent_id: op.parentId ?? null,
-            position: i,
-          }));
-          await s("task:reorder", { items: undoItems });
-          for (const tid of movedIds) useProjectTaskStore.getState().removeTask(tid);
-          refetchAllRef.current();
-        },
-        redo: async () => {
-          const s = getSend();
-          if (!s) return;
-          await s("task:reorder", { items: reorderItems });
-          for (const tid of movedIds) useProjectTaskStore.getState().removeTask(tid);
-          refetchAllRef.current();
-        },
-      });
+      try {
+        const reorderItems = tasksToMove.map((t, i) => ({
+          id: t.id,
+          parent_id: targetTask.id,
+          position: i,
+        }));
+        await send("task:reorder", { items: reorderItems });
 
-      if (bulkActionMode) clearMultiSelection();
-    } catch {
-      refetchAll();
-    }
-    setDraggedTask(null);
-    setDragOverTaskId(null);
-  }, [send, draggedTask, columnData, refetchAll, pushCommand, bulkActionMode, multiSelected, clearMultiSelection]);
+        // Refetch all columns to get fresh data from server
+        refetchAll();
+
+        // Push undo command
+        pushCommand({
+          type: "reparent",
+          description: `Move ${tasksToMove.length} task(s) to "${targetTask.title}"`,
+          undo: async () => {
+            const s = getSend();
+            if (!s) return;
+            const undoItems = oldParents.map((op, i) => ({
+              id: op.id,
+              parent_id: op.parentId ?? null,
+              position: i,
+            }));
+            await s("task:reorder", { items: undoItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+          redo: async () => {
+            const s = getSend();
+            if (!s) return;
+            await s("task:reorder", { items: reorderItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+        });
+
+        if (bulkActionMode) clearMultiSelection();
+      } catch {
+        refetchAll();
+      }
+      setDraggedTask(null);
+      setDragOverTaskId(null);
+    },
+    [
+      send,
+      draggedTask,
+      columnData,
+      refetchAll,
+      pushCommand,
+      bulkActionMode,
+      multiSelected,
+      clearMultiSelection,
+    ],
+  );
 
   // Drop on blank column space → reparent to that column's parent
-  const handleDropOnColumn = useCallback(async (depth: number) => {
-    if (!send || !draggedTask) return;
-    // Column at depth N shows children of selected[depth-1]. Dropping here means reparent to selected[depth-1].
-    const newParentId = depth > 0 ? (selected[depth - 1] ?? null) : null;
-    // Don't reparent to same parent
-    if ((draggedTask.parent_task_id || null) === newParentId) return;
+  const handleDropOnColumn = useCallback(
+    async (depth: number) => {
+      if (!send || !draggedTask) return;
+      // Column at depth N shows children of selected[depth-1]. Dropping here means reparent to selected[depth-1].
+      const newParentId = depth > 0 ? (selected[depth - 1] ?? null) : null;
+      // Don't reparent to same parent
+      if ((draggedTask.parent_task_id || null) === newParentId) return;
 
-    const tasksToMove: Task[] = bulkActionMode && multiSelected.has(draggedTask.id)
-      ? columnData.flat().filter((t) => multiSelected.has(t.id))
-      : [draggedTask];
-    if (tasksToMove.length === 0) return;
+      const tasksToMove: Task[] =
+        bulkActionMode && multiSelected.has(draggedTask.id)
+          ? columnData.flat().filter((t) => multiSelected.has(t.id))
+          : [draggedTask];
+      if (tasksToMove.length === 0) return;
 
-    const oldParents = tasksToMove.map((t) => ({ id: t.id, parentId: t.parent_task_id }));
-    // Optimistic: remove from BOTH local state AND store BEFORE await
-    const movedIds = new Set(tasksToMove.map((t) => t.id));
-    setColumnData((prev) => prev.map((col) => col.filter((t) => !movedIds.has(t.id))));
-    for (const tid of movedIds) useProjectTaskStore.getState().removeTask(tid);
-
-    try {
-      const reorderItems = tasksToMove.map((t, i) => ({
+      const oldParents = tasksToMove.map((t) => ({
         id: t.id,
-        parent_id: newParentId,
-        position: i,
+        parentId: t.parent_task_id,
       }));
-      await send("task:reorder", { items: reorderItems });
-      refetchAll();
+      // Optimistic: remove from BOTH local state AND store BEFORE await
+      const movedIds = new Set(tasksToMove.map((t) => t.id));
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => !movedIds.has(t.id))),
+      );
+      for (const tid of movedIds)
+        useProjectTaskStore.getState().removeTask(tid);
 
-      pushCommand({
-        type: "reparent",
-        description: `Move ${tasksToMove.length} task(s) to column`,
-        undo: async () => {
-          const s = getSend();
-          if (!s) return;
-          const undoItems = oldParents.map((op, i) => ({
-            id: op.id, parent_id: op.parentId ?? null, position: i,
-          }));
-          await s("task:reorder", { items: undoItems });
-          for (const tid of movedIds) useProjectTaskStore.getState().removeTask(tid);
-          refetchAllRef.current();
-        },
-        redo: async () => {
-          const s = getSend();
-          if (!s) return;
-          await s("task:reorder", { items: reorderItems });
-          for (const tid of movedIds) useProjectTaskStore.getState().removeTask(tid);
-          refetchAllRef.current();
-        },
-      });
+      try {
+        const reorderItems = tasksToMove.map((t, i) => ({
+          id: t.id,
+          parent_id: newParentId,
+          position: i,
+        }));
+        await send("task:reorder", { items: reorderItems });
+        refetchAll();
 
-      if (bulkActionMode) clearMultiSelection();
-    } catch {
-      refetchAll();
-    }
-    setDraggedTask(null);
-    setDragOverTaskId(null);
-  }, [send, draggedTask, selected, columnData, refetchAll, pushCommand, bulkActionMode, multiSelected, clearMultiSelection]);
+        pushCommand({
+          type: "reparent",
+          description: `Move ${tasksToMove.length} task(s) to column`,
+          undo: async () => {
+            const s = getSend();
+            if (!s) return;
+            const undoItems = oldParents.map((op, i) => ({
+              id: op.id,
+              parent_id: op.parentId ?? null,
+              position: i,
+            }));
+            await s("task:reorder", { items: undoItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+          redo: async () => {
+            const s = getSend();
+            if (!s) return;
+            await s("task:reorder", { items: reorderItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+        });
+
+        if (bulkActionMode) clearMultiSelection();
+      } catch {
+        refetchAll();
+      }
+      setDraggedTask(null);
+      setDragOverTaskId(null);
+    },
+    [
+      send,
+      draggedTask,
+      selected,
+      columnData,
+      refetchAll,
+      pushCommand,
+      bulkActionMode,
+      multiSelected,
+      clearMultiSelection,
+    ],
+  );
 
   const focusedTask = useMemo(() => {
     if (splitView && lastFocusedPane === "bottom") {
       // Find focused in split pane
       for (let i = splitSelected.length - 1; i >= 0; i--) {
         if (splitSelected[i]) {
-          return splitColumnData[i]?.find((t) => t.id === splitSelected[i]) ?? null;
+          return (
+            splitColumnData[i]?.find((t) => t.id === splitSelected[i]) ?? null
+          );
         }
       }
       return null;
     }
     return focusedDepth >= 0
-      ? columnData[focusedDepth]?.find((t) => t.id === selected[focusedDepth]) ?? null
+      ? (columnData[focusedDepth]?.find(
+          (t) => t.id === selected[focusedDepth],
+        ) ?? null)
       : null;
-  }, [splitView, lastFocusedPane, splitSelected, splitColumnData, focusedDepth, columnData, selected]);
+  }, [
+    splitView,
+    lastFocusedPane,
+    splitSelected,
+    splitColumnData,
+    focusedDepth,
+    columnData,
+    selected,
+  ]);
 
   const openCreate = (depth: number) => {
     setCreateDepth(depth);
@@ -864,23 +1131,28 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   }, [multiSelected, columnData]);
 
   // Bulk update selected tasks
-  const handleBulkUpdate = useCallback(async (changes: Record<string, unknown>) => {
-    if (!send || multiSelected.size === 0) return;
-    try {
-      const taskIds = Array.from(multiSelected);
-      const result = await send("task:bulk-update", {
-        task_ids: taskIds,
-        changes,
-      });
-      // Broadcast excludes sender, update store directly
-      const tasks: Task[] = Array.isArray(result) ? result : [];
-      if (tasks.length > 0) {
-        const store = useProjectTaskStore.getState();
-        store.bulkUpsertTasks(tasks);
+  const handleBulkUpdate = useCallback(
+    async (changes: Record<string, unknown>) => {
+      if (!send || multiSelected.size === 0) return;
+      try {
+        const taskIds = Array.from(multiSelected);
+        const result = await send("task:bulk-update", {
+          task_ids: taskIds,
+          changes,
+        });
+        // Broadcast excludes sender, update store directly
+        const tasks: Task[] = Array.isArray(result) ? result : [];
+        if (tasks.length > 0) {
+          const store = useProjectTaskStore.getState();
+          store.bulkUpsertTasks(tasks);
+        }
+        clearMultiSelection();
+      } catch {
+        /* ignore */
       }
-      clearMultiSelection();
-    } catch { /* ignore */ }
-  }, [send, multiSelected, clearMultiSelection]);
+    },
+    [send, multiSelected, clearMultiSelection],
+  );
 
   // Bulk delete selected tasks
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
@@ -892,64 +1164,81 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         useProjectTaskStore.getState().removeTask(id);
       }
       setColumnData((prev) =>
-        prev.map((col) => col.filter((t) => !multiSelected.has(t.id)))
+        prev.map((col) => col.filter((t) => !multiSelected.has(t.id))),
       );
       clearMultiSelection();
       setBulkDeleteConfirm(false);
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }, [send, multiSelected, clearMultiSelection]);
 
   /* ── Column resize handlers ── */
-  const handleResizeStart = useCallback((colIndex: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = columnWidths[colIndex];
-    let currentWidths = [...columnWidths];
+  const handleResizeStart = useCallback(
+    (colIndex: number, e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = columnWidths[colIndex];
+      let currentWidths = [...columnWidths];
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX;
-      const newWidth = Math.max(80, Math.min(600, startWidth + delta));
-      currentWidths = [...currentWidths];
-      currentWidths[colIndex] = newWidth;
-      setColumnWidths(currentWidths);
-    };
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.max(80, Math.min(600, startWidth + delta));
+        currentWidths = [...currentWidths];
+        currentWidths[colIndex] = newWidth;
+        setColumnWidths(currentWidths);
+      };
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      // Save directly to localStorage with current widths
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`${LS_WIDTHS_KEY}-${projectId}`, JSON.stringify(currentWidths));
-      }
-    };
+      const handleMouseUp = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        // Save directly to localStorage with current widths
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `${LS_WIDTHS_KEY}-${projectId}`,
+            JSON.stringify(currentWidths),
+          );
+        }
+      };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [columnWidths, projectId]);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [columnWidths, projectId],
+  );
 
   /* ── Column rename handlers ── */
   const [editingColumn, setEditingColumn] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
 
-  const startEditingName = useCallback((colIndex: number) => {
-    if (!canEditColumns) return;
-    setEditingColumn(colIndex);
-    setEditingName(columnNames[colIndex]);
-  }, [canEditColumns, columnNames]);
+  const startEditingName = useCallback(
+    (colIndex: number) => {
+      if (!canEditColumns) return;
+      setEditingColumn(colIndex);
+      setEditingName(columnNames[colIndex]);
+    },
+    [canEditColumns, columnNames],
+  );
 
-  const confirmEditName = useCallback((colIndex: number) => {
-    if (editingName.trim()) {
-      const updatedNames = [...columnNames];
-      updatedNames[colIndex] = editingName.trim();
-      setColumnNames(updatedNames);
-      // Save directly to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`${LS_NAMES_KEY}-${projectId}`, JSON.stringify(updatedNames));
+  const confirmEditName = useCallback(
+    (colIndex: number) => {
+      if (editingName.trim()) {
+        const updatedNames = [...columnNames];
+        updatedNames[colIndex] = editingName.trim();
+        setColumnNames(updatedNames);
+        // Save directly to localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `${LS_NAMES_KEY}-${projectId}`,
+            JSON.stringify(updatedNames),
+          );
+        }
       }
-    }
-    setEditingColumn(null);
-    setEditingName("");
-  }, [editingName, columnNames, projectId]);
+      setEditingColumn(null);
+      setEditingName("");
+    },
+    [editingName, columnNames, projectId],
+  );
 
   const cancelEditName = useCallback(() => {
     setEditingColumn(null);
@@ -957,43 +1246,102 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   }, []);
 
   /* ── Column Filters ── */
-  const [columnFilters, setColumnFilters] = useState<Map<number, ColumnFilterState>>(new Map());
+  const [columnFilters, setColumnFilters] = useState<
+    Map<number, ColumnFilterState>
+  >(new Map());
 
-  const setFilterForColumn = useCallback((depth: number, filter: ColumnFilterState) => {
-    setColumnFilters((prev) => {
-      const next = new Map(prev);
-      if (isFilterActive(filter)) {
-        next.set(depth, filter);
-      } else {
-        next.delete(depth);
-      }
-      return next;
-    });
-  }, []);
-
-  const filteredColumnData = useMemo(() =>
-    columnData.map((tasks, depth) => applyFilter(tasks, columnFilters.get(depth), globalFilter)),
-    [columnData, columnFilters, globalFilter]
+  const setFilterForColumn = useCallback(
+    (depth: number, filter: ColumnFilterState) => {
+      setColumnFilters((prev) => {
+        const next = new Map(prev);
+        if (isFilterActive(filter)) {
+          next.set(depth, filter);
+        } else {
+          next.delete(depth);
+        }
+        return next;
+      });
+    },
+    [],
   );
 
-  const filteredSplitColumnData = useMemo(() =>
-    splitColumnData.map((tasks, depth) => applyFilter(tasks, columnFilters.get(depth), globalFilter)),
-    [splitColumnData, columnFilters, globalFilter]
+  const filteredColumnData = useMemo(
+    () =>
+      columnData.map((tasks, depth) =>
+        applyFilter(tasks, columnFilters.get(depth), globalFilter),
+      ),
+    [columnData, columnFilters, globalFilter],
+  );
+
+  const filteredSplitColumnData = useMemo(
+    () =>
+      splitColumnData.map((tasks, depth) =>
+        applyFilter(tasks, columnFilters.get(depth), globalFilter),
+      ),
+    [splitColumnData, columnFilters, globalFilter],
   );
 
   /* ── Render ── */
   const columnMeta = [
-    { depth: 0, label: columnNames[0], tasks: filteredColumnData[0], loading: columnLoading[0], show: true },
-    { depth: 1, label: columnNames[1], tasks: filteredColumnData[1], loading: columnLoading[1], show: !!selected[0] },
-    { depth: 2, label: columnNames[2], tasks: filteredColumnData[2], loading: columnLoading[2], show: !!selected[1] },
-    { depth: 3, label: columnNames[3], tasks: filteredColumnData[3], loading: columnLoading[3], show: !!selected[2] },
+    {
+      depth: 0,
+      label: columnNames[0],
+      tasks: filteredColumnData[0],
+      loading: columnLoading[0],
+      show: true,
+    },
+    {
+      depth: 1,
+      label: columnNames[1],
+      tasks: filteredColumnData[1],
+      loading: columnLoading[1],
+      show: !!selected[0],
+    },
+    {
+      depth: 2,
+      label: columnNames[2],
+      tasks: filteredColumnData[2],
+      loading: columnLoading[2],
+      show: !!selected[1],
+    },
+    {
+      depth: 3,
+      label: columnNames[3],
+      tasks: filteredColumnData[3],
+      loading: columnLoading[3],
+      show: !!selected[2],
+    },
   ];
 
   const splitColumnMeta = [
-    { depth: 0, label: columnNames[0], tasks: filteredSplitColumnData[0], loading: splitColumnLoading[0], show: true },
-    { depth: 1, label: columnNames[1], tasks: filteredSplitColumnData[1], loading: splitColumnLoading[1], show: !!splitSelected[0] },
-    { depth: 2, label: columnNames[2], tasks: filteredSplitColumnData[2], loading: splitColumnLoading[2], show: !!splitSelected[1] },
-    { depth: 3, label: columnNames[3], tasks: filteredSplitColumnData[3], loading: splitColumnLoading[3], show: !!splitSelected[2] },
+    {
+      depth: 0,
+      label: columnNames[0],
+      tasks: filteredSplitColumnData[0],
+      loading: splitColumnLoading[0],
+      show: true,
+    },
+    {
+      depth: 1,
+      label: columnNames[1],
+      tasks: filteredSplitColumnData[1],
+      loading: splitColumnLoading[1],
+      show: !!splitSelected[0],
+    },
+    {
+      depth: 2,
+      label: columnNames[2],
+      tasks: filteredSplitColumnData[2],
+      loading: splitColumnLoading[2],
+      show: !!splitSelected[1],
+    },
+    {
+      depth: 3,
+      label: columnNames[3],
+      tasks: filteredSplitColumnData[3],
+      loading: splitColumnLoading[3],
+      show: !!splitSelected[2],
+    },
   ];
 
   /* Toolbar buttons (rendered inline or portaled) */
@@ -1003,7 +1351,7 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         <button
           className={cn(
             "btn btn-xs gap-1",
-            bulkActionMode ? "btn-primary" : "btn-ghost"
+            bulkActionMode ? "btn-primary" : "btn-ghost",
           )}
           onClick={toggleBulkActionMode}
         >
@@ -1011,14 +1359,20 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
           {bulkActionMode ? `Select (${multiSelected.size})` : "Select"}
         </button>
         {bulkActionMode && multiSelected.size > 0 && (
-          <button className="btn btn-ghost btn-xs" onClick={clearMultiSelection}>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={clearMultiSelection}
+          >
             Clear
           </button>
         )}
       </div>
       <div className="flex items-center gap-0.5">
         <button
-          className={cn("btn btn-xs gap-1", splitView ? "btn-secondary" : "btn-ghost")}
+          className={cn(
+            "btn btn-xs gap-1",
+            splitView ? "btn-secondary" : "btn-ghost",
+          )}
           onClick={() => setSplitView((p) => !p)}
           title="Toggle split view"
         >
@@ -1047,89 +1401,52 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
   return (
     <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-100 relative">
       {/* Toolbar: portal to parent row if available, otherwise render inline */}
-      {toolbarPortal
-        ? createPortal(toolbarContent, toolbarPortal)
-        : (
-          <div className="flex items-center justify-between px-3 py-1 border-b border-base-200 bg-base-200/20">
-            {toolbarContent}
-          </div>
-        )
-      }
+      {toolbarPortal ? (
+        createPortal(toolbarContent, toolbarPortal)
+      ) : (
+        <div className="flex items-center justify-between px-3 py-1 border-b border-base-200 bg-base-200/20">
+          {toolbarContent}
+        </div>
+      )}
 
       {/* Main content */}
       <div className="flex flex-col lg:flex-row flex-1 min-h-0">
-      {/* Columns area — scrollable, fills space beside preview panel */}
-      <div className={cn("flex flex-col flex-1 min-w-0", splitView && "divide-y divide-base-300")}>
-        {/* Top row — always shown */}
-        <div className={cn("flex flex-row min-w-0 overflow-hidden", splitView ? "flex-1 min-h-0" : "flex-1")}>
-        {columnMeta.map(
-          (col) =>
-            col.show && (
-              <TaskColumn
-                key={col.depth}
-                depth={col.depth}
-                label={col.label}
-                tasks={col.tasks}
-                loading={col.loading}
-                selectedId={selected[col.depth]}
-                onSelect={(id) => selectTask(col.depth, id)}
-                onAdd={() => openCreate(col.depth)}
-                onBulkAdd={() => openBulkCreate(col.depth)}
-                members={members}
-                width={columnWidths[col.depth]}
-                canEdit={canEditColumns}
-                isEditing={editingColumn === col.depth}
-                editingName={editingName}
-                onEditingNameChange={setEditingName}
-                onStartEdit={() => startEditingName(col.depth)}
-                onConfirmEdit={() => confirmEditName(col.depth)}
-                onCancelEdit={cancelEditName}
-                onResizeStart={(e) => handleResizeStart(col.depth, e)}
-                bulkMode={bulkActionMode}
-                multiSelected={multiSelected}
-                onToggleSelect={toggleMultiSelect}
-                onSelectAll={selectAllInColumn}
-                filter={columnFilters.get(col.depth)}
-                onFilterChange={(f) => setFilterForColumn(col.depth, f)}
-                onTaskContextMenu={(e, task) => {
-                  e.preventDefault();
-                  setContextMenu({ x: e.clientX, y: e.clientY, task, depth: col.depth });
-                }}
-                onDragStart={(task) => setDraggedTask(task)}
-                onDragEnd={() => { setDraggedTask(null); setDragOverTaskId(null); }}
-                onDropOnTask={handleDropOnTask}
-                onDropOnColumn={() => handleDropOnColumn(col.depth)}
-                dragOverTaskId={dragOverTaskId}
-                onDragOverTask={setDragOverTaskId}
-              />
-            ),
-        )}
-        </div>
-        {/* Bottom row — split view only */}
-        {splitView && (
-          <div className="flex flex-row flex-1 min-w-0 min-h-0 overflow-hidden">
-            {splitColumnMeta.map(
+        {/* Columns area — scrollable, fills space beside preview panel */}
+        <div
+          className={cn(
+            "flex flex-col flex-1 min-w-0",
+            splitView && "divide-y divide-base-300",
+          )}
+        >
+          {/* Top row — always shown */}
+          <div
+            className={cn(
+              "flex flex-row min-w-0 overflow-hidden",
+              splitView ? "flex-1 min-h-0" : "flex-1",
+            )}
+          >
+            {columnMeta.map(
               (col) =>
                 col.show && (
                   <TaskColumn
-                    key={`split-${col.depth}`}
+                    key={col.depth}
                     depth={col.depth}
                     label={col.label}
                     tasks={col.tasks}
                     loading={col.loading}
-                    selectedId={splitSelected[col.depth]}
-                    onSelect={(id) => splitSelectTask(col.depth, id)}
+                    selectedId={selected[col.depth]}
+                    onSelect={(id) => selectTask(col.depth, id)}
                     onAdd={() => openCreate(col.depth)}
                     onBulkAdd={() => openBulkCreate(col.depth)}
                     members={members}
                     width={columnWidths[col.depth]}
                     canEdit={canEditColumns}
-                    isEditing={false}
-                    editingName=""
-                    onEditingNameChange={() => {}}
-                    onStartEdit={() => {}}
-                    onConfirmEdit={() => {}}
-                    onCancelEdit={() => {}}
+                    isEditing={editingColumn === col.depth}
+                    editingName={editingName}
+                    onEditingNameChange={setEditingName}
+                    onStartEdit={() => startEditingName(col.depth)}
+                    onConfirmEdit={() => confirmEditName(col.depth)}
+                    onCancelEdit={cancelEditName}
                     onResizeStart={(e) => handleResizeStart(col.depth, e)}
                     bulkMode={bulkActionMode}
                     multiSelected={multiSelected}
@@ -1139,10 +1456,18 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
                     onFilterChange={(f) => setFilterForColumn(col.depth, f)}
                     onTaskContextMenu={(e, task) => {
                       e.preventDefault();
-                      setContextMenu({ x: e.clientX, y: e.clientY, task, depth: col.depth });
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        task,
+                        depth: col.depth,
+                      });
                     }}
                     onDragStart={(task) => setDraggedTask(task)}
-                    onDragEnd={() => { setDraggedTask(null); setDragOverTaskId(null); }}
+                    onDragEnd={() => {
+                      setDraggedTask(null);
+                      setDragOverTaskId(null);
+                    }}
                     onDropOnTask={handleDropOnTask}
                     onDropOnColumn={() => handleDropOnColumn(col.depth)}
                     dragOverTaskId={dragOverTaskId}
@@ -1151,152 +1476,259 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
                 ),
             )}
           </div>
-        )}
-      </div>
+          {/* Bottom row — split view only */}
+          {splitView && (
+            <div className="flex flex-row flex-1 min-w-0 min-h-0 overflow-hidden">
+              {splitColumnMeta.map(
+                (col) =>
+                  col.show && (
+                    <TaskColumn
+                      key={`split-${col.depth}`}
+                      depth={col.depth}
+                      label={col.label}
+                      tasks={col.tasks}
+                      loading={col.loading}
+                      selectedId={splitSelected[col.depth]}
+                      onSelect={(id) => splitSelectTask(col.depth, id)}
+                      onAdd={() => openCreate(col.depth)}
+                      onBulkAdd={() => openBulkCreate(col.depth)}
+                      members={members}
+                      width={columnWidths[col.depth]}
+                      canEdit={canEditColumns}
+                      isEditing={false}
+                      editingName=""
+                      onEditingNameChange={() => {}}
+                      onStartEdit={() => {}}
+                      onConfirmEdit={() => {}}
+                      onCancelEdit={() => {}}
+                      onResizeStart={(e) => handleResizeStart(col.depth, e)}
+                      bulkMode={bulkActionMode}
+                      multiSelected={multiSelected}
+                      onToggleSelect={toggleMultiSelect}
+                      onSelectAll={selectAllInColumn}
+                      filter={columnFilters.get(col.depth)}
+                      onFilterChange={(f) => setFilterForColumn(col.depth, f)}
+                      onTaskContextMenu={(e, task) => {
+                        e.preventDefault();
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          task,
+                          depth: col.depth,
+                        });
+                      }}
+                      onDragStart={(task) => setDraggedTask(task)}
+                      onDragEnd={() => {
+                        setDraggedTask(null);
+                        setDragOverTaskId(null);
+                      }}
+                      onDropOnTask={handleDropOnTask}
+                      onDropOnColumn={() => handleDropOnColumn(col.depth)}
+                      dragOverTaskId={dragOverTaskId}
+                      onDragOverTask={setDragOverTaskId}
+                    />
+                  ),
+              )}
+            </div>
+          )}
+        </div>
 
-      {/* Detail panel — flexible width, shrinks with viewport */}
-      <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
-        {focusedTask ? (
-          <TaskPreviewPanel
-            task={focusedTask}
+        {/* Detail panel — flexible width, shrinks with viewport */}
+        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
+          {focusedTask ? (
+            <TaskPreviewPanel
+              task={focusedTask}
+              orgId={orgId}
+              orgSlug={orgSlug}
+              projectId={projectId}
+              members={effectiveMembers}
+              projectMembers={members}
+              currentUserId={currentUserId}
+              userProjectRole={userProjectRole}
+              updating={updatePending}
+              onUpdate={(data) => handleUpdate(focusedTask.id, data)}
+              onDelete={() => setDeleteTarget(focusedTask)}
+              onDuplicate={() => handleDuplicate(focusedTask.id)}
+              onAddSubtask={() => {
+                if (focusedTask.depth < MAX_DEPTH) {
+                  setCreateParentId(focusedTask.id);
+                  setCreateDepth(focusedTask.depth + 1);
+                }
+              }}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-base-content/30 p-6">
+              <p className="text-sm text-center">
+                Select a task to view details
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Create modal */}
+        {createDepth !== null && (
+          <CreateTaskModal
             orgId={orgId}
-            orgSlug={orgSlug}
             projectId={projectId}
-            members={effectiveMembers}
-            projectMembers={members}
-            currentUserId={currentUserId}
-            userProjectRole={userProjectRole}
-            updating={updatePending}
-            onUpdate={(data) => handleUpdate(focusedTask.id, data)}
-            onDelete={() => setDeleteTarget(focusedTask)}
-            onDuplicate={() => handleDuplicate(focusedTask.id)}
-            onAddSubtask={() => {
-              if (focusedTask.depth < MAX_DEPTH) {
-                setCreateParentId(focusedTask.id);
-                setCreateDepth(focusedTask.depth + 1);
-              }
+            parentId={createParentId}
+            parentTask={createParentTask}
+            members={members}
+            onClose={() => {
+              setCreateDepth(null);
+              setCreateParentId(null);
+            }}
+            onCreated={() => {
+              // WS broadcast task:created will add to store → synced via useEffect
+              setCreateDepth(null);
+              setCreateParentId(null);
             }}
           />
-        ) : (
-          <div className="h-full flex items-center justify-center text-base-content/30 p-6">
-            <p className="text-sm text-center">Select a task to view details</p>
-          </div>
         )}
+
+        {/* Bulk create modal */}
+        {bulkCreateDepth !== null && (
+          <BulkCreateTaskModal
+            projectId={projectId}
+            parentId={bulkCreateParentId}
+            members={members}
+            onClose={() => {
+              setBulkCreateDepth(null);
+              setBulkCreateParentId(null);
+            }}
+          />
+        )}
+
+        {/* Delete confirmation */}
+        <ConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+          title="Delete Task"
+          message={`Delete "${deleteTarget?.title}" and all its subtasks?`}
+          loading={deletePending}
+        />
+
+        {/* Bulk delete confirmation */}
+        <ConfirmDialog
+          open={bulkDeleteConfirm}
+          onClose={() => setBulkDeleteConfirm(false)}
+          onConfirm={handleBulkDelete}
+          title="Delete Selected Tasks"
+          message={`Delete ${multiSelected.size} selected task${multiSelected.size !== 1 ? "s" : ""} and all their subtasks?`}
+        />
+
+        {/* Update deadline conflict confirmation */}
+        {updateDeadlineConflicts.length > 0 &&
+          (() => {
+            const ancestorConflicts = updateDeadlineConflicts.filter(
+              (c) => c.direction === "ancestor",
+            );
+            const descendantConflicts = updateDeadlineConflicts.filter(
+              (c) => c.direction === "descendant" || !c.direction,
+            );
+            return (
+              <dialog
+                className="modal modal-open"
+                style={{ backgroundColor: "transparent" }}
+              >
+                <div className="modal-box shadow-2xl max-w-md">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <span className="text-warning">⚠</span> Date Range Conflict
+                  </h3>
+                  <div className="py-3 space-y-2 text-sm">
+                    {ancestorConflicts.length > 0 && (
+                      <div>
+                        <p className="text-base-content/70 mb-1">
+                          The new due date extends beyond{" "}
+                          {ancestorConflicts.length} parent task
+                          {ancestorConflicts.length !== 1 ? "s" : ""}:
+                        </p>
+                        <ul className="list-disc list-inside text-xs space-y-0.5">
+                          {ancestorConflicts.map((c) => (
+                            <li
+                              key={c.task_id}
+                              className="text-base-content/60"
+                            >
+                              {c.title}{" "}
+                              <span className="text-warning">
+                                (due{" "}
+                                {c.due_date
+                                  ? new Date(c.due_date).toLocaleDateString()
+                                  : "—"}
+                                )
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {descendantConflicts.length > 0 && (
+                      <div>
+                        <p className="text-base-content/70 mb-1">
+                          {descendantConflicts.length} subtask
+                          {descendantConflicts.length !== 1 ? "s" : ""} fall
+                          outside the new date range:
+                        </p>
+                        <ul className="list-disc list-inside text-xs space-y-0.5">
+                          {descendantConflicts.slice(0, 8).map((c) => (
+                            <li
+                              key={c.task_id}
+                              className="text-base-content/60"
+                            >
+                              {c.title}{" "}
+                              <span className="text-warning">
+                                (due{" "}
+                                {c.due_date
+                                  ? new Date(c.due_date).toLocaleDateString()
+                                  : "—"}
+                                )
+                              </span>
+                            </li>
+                          ))}
+                          {descendantConflicts.length > 8 && (
+                            <li className="text-base-content/40">
+                              …and {descendantConflicts.length - 8} more
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    <p className="text-base-content/50 text-xs pt-1">
+                      Apply to automatically adjust all affected tasks to fit
+                      within the new range.
+                    </p>
+                  </div>
+                  <div className="modal-action">
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => {
+                        setUpdateDeadlineConflicts([]);
+                        pendingUpdateRef.current = null;
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-sm btn-warning"
+                      onClick={confirmExtendDeadlinesOnUpdate}
+                    >
+                      Apply &amp; Adjust
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="modal-backdrop"
+                  style={{ background: "transparent" }}
+                  onClick={() => {
+                    setUpdateDeadlineConflicts([]);
+                    pendingUpdateRef.current = null;
+                  }}
+                />
+              </dialog>
+            );
+          })()}
       </div>
-
-      {/* Create modal */}
-      {createDepth !== null && (
-        <CreateTaskModal
-          orgId={orgId}
-          projectId={projectId}
-          parentId={createParentId}
-          parentTask={createParentTask}
-          members={members}
-          onClose={() => {
-            setCreateDepth(null);
-            setCreateParentId(null);
-          }}
-          onCreated={() => {
-            // WS broadcast task:created will add to store → synced via useEffect
-            setCreateDepth(null);
-            setCreateParentId(null);
-          }}
-        />
-      )}
-
-      {/* Bulk create modal */}
-      {bulkCreateDepth !== null && (
-        <BulkCreateTaskModal
-          projectId={projectId}
-          parentId={bulkCreateParentId}
-          members={members}
-          onClose={() => {
-            setBulkCreateDepth(null);
-            setBulkCreateParentId(null);
-          }}
-        />
-      )}
-
-      {/* Delete confirmation */}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
-        title="Delete Task"
-        message={`Delete "${deleteTarget?.title}" and all its subtasks?`}
-        loading={deletePending}
-      />
-
-      {/* Bulk delete confirmation */}
-      <ConfirmDialog
-        open={bulkDeleteConfirm}
-        onClose={() => setBulkDeleteConfirm(false)}
-        onConfirm={handleBulkDelete}
-        title="Delete Selected Tasks"
-        message={`Delete ${multiSelected.size} selected task${multiSelected.size !== 1 ? "s" : ""} and all their subtasks?`}
-      />
-
-      {/* Update deadline conflict confirmation */}
-      {updateDeadlineConflicts.length > 0 && (() => {
-        const ancestorConflicts = updateDeadlineConflicts.filter((c) => c.direction === "ancestor");
-        const descendantConflicts = updateDeadlineConflicts.filter((c) => c.direction === "descendant" || !c.direction);
-        return (
-          <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
-            <div className="modal-box shadow-2xl max-w-md">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <span className="text-warning">⚠</span> Date Range Conflict
-              </h3>
-              <div className="py-3 space-y-2 text-sm">
-                {ancestorConflicts.length > 0 && (
-                  <div>
-                    <p className="text-base-content/70 mb-1">
-                      The new due date extends beyond {ancestorConflicts.length} parent task{ancestorConflicts.length !== 1 ? "s" : ""}:
-                    </p>
-                    <ul className="list-disc list-inside text-xs space-y-0.5">
-                      {ancestorConflicts.map((c) => (
-                        <li key={c.task_id} className="text-base-content/60">
-                          {c.title} <span className="text-warning">(due {c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"})</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                {descendantConflicts.length > 0 && (
-                  <div>
-                    <p className="text-base-content/70 mb-1">
-                      {descendantConflicts.length} subtask{descendantConflicts.length !== 1 ? "s" : ""} fall outside the new date range:
-                    </p>
-                    <ul className="list-disc list-inside text-xs space-y-0.5">
-                      {descendantConflicts.slice(0, 8).map((c) => (
-                        <li key={c.task_id} className="text-base-content/60">
-                          {c.title} <span className="text-warning">(due {c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"})</span>
-                        </li>
-                      ))}
-                      {descendantConflicts.length > 8 && (
-                        <li className="text-base-content/40">…and {descendantConflicts.length - 8} more</li>
-                      )}
-                    </ul>
-                  </div>
-                )}
-                <p className="text-base-content/50 text-xs pt-1">
-                  Apply to automatically adjust all affected tasks to fit within the new range.
-                </p>
-              </div>
-              <div className="modal-action">
-                <button className="btn btn-sm" onClick={() => { setUpdateDeadlineConflicts([]); pendingUpdateRef.current = null; }}>
-                  Cancel
-                </button>
-                <button className="btn btn-sm btn-warning" onClick={confirmExtendDeadlinesOnUpdate}>
-                  Apply &amp; Adjust
-                </button>
-              </div>
-            </div>
-            <div className="modal-backdrop" style={{ background: "transparent" }} onClick={() => { setUpdateDeadlineConflicts([]); pendingUpdateRef.current = null; }} />
-          </dialog>
-        );
-      })()}
-
-      </div>{/* end main content */}
+      {/* end main content */}
 
       {/* Right-click context menu */}
       {contextMenu && (
@@ -1329,7 +1761,9 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         <BulkActionsBar
           selectedCount={multiSelected.size}
           members={members}
-          onAssign={(assigneeId) => handleBulkUpdate({ assignee_id: assigneeId || "" })}
+          onAssign={(assigneeId) =>
+            handleBulkUpdate({ assignee_id: assigneeId || "" })
+          }
           onSetPriority={(priority) => handleBulkUpdate({ priority })}
           onSetStatus={(status) => handleBulkUpdate({ status })}
           onSetLabels={(labels) => handleBulkUpdate({ labels })}
@@ -1380,9 +1814,18 @@ function BulkActionsBar({
         <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1">
           Status
         </div>
-        <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-36 p-1 mb-2">
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-36 p-1 mb-2"
+        >
           {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
-            <li key={s}><a onClick={() => onSetStatus(s)} className="text-xs">{s === "in_progress" ? "In Progress" : s.charAt(0).toUpperCase() + s.slice(1)}</a></li>
+            <li key={s}>
+              <a onClick={() => onSetStatus(s)} className="text-xs">
+                {s === "in_progress"
+                  ? "In Progress"
+                  : s.charAt(0).toUpperCase() + s.slice(1)}
+              </a>
+            </li>
           ))}
         </ul>
       </div>
@@ -1392,20 +1835,39 @@ function BulkActionsBar({
         <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1">
           Priority
         </div>
-        <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-32 p-1 mb-2">
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-32 p-1 mb-2"
+        >
           {(["critical", "high", "medium", "low"] as const).map((p) => (
-            <li key={p}><a onClick={() => onSetPriority(p)} className="text-xs">{p.charAt(0).toUpperCase() + p.slice(1)}</a></li>
+            <li key={p}>
+              <a onClick={() => onSetPriority(p)} className="text-xs">
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </a>
+            </li>
           ))}
         </ul>
       </div>
 
       {/* Assign dropdown */}
       <div className="dropdown dropdown-top">
-        <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1" onClick={() => setShowAssign(!showAssign)}>
+        <div
+          tabIndex={0}
+          role="button"
+          className="btn btn-ghost btn-xs gap-1"
+          onClick={() => setShowAssign(!showAssign)}
+        >
           <UserPlus className="w-3 h-3" /> Assign
         </div>
-        <ul tabIndex={0} className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-48 p-1 mb-2 max-h-48 overflow-y-auto">
-          <li><a onClick={() => onAssign("")} className="text-xs">Unassigned</a></li>
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-48 p-1 mb-2 max-h-48 overflow-y-auto"
+        >
+          <li>
+            <a onClick={() => onAssign("")} className="text-xs">
+              Unassigned
+            </a>
+          </li>
           {members.map((m) => (
             <li key={m.user_id}>
               <a onClick={() => onAssign(m.user_id)} className="text-xs">
@@ -1418,10 +1880,18 @@ function BulkActionsBar({
 
       {/* Labels */}
       <div className="dropdown dropdown-top">
-        <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1" onClick={() => setShowLabels(!showLabels)}>
+        <div
+          tabIndex={0}
+          role="button"
+          className="btn btn-ghost btn-xs gap-1"
+          onClick={() => setShowLabels(!showLabels)}
+        >
           <Tags className="w-3 h-3" /> Labels
         </div>
-        <div tabIndex={0} className="dropdown-content bg-base-200 rounded-box shadow-lg z-50 w-56 p-3 mb-2">
+        <div
+          tabIndex={0}
+          className="dropdown-content bg-base-200 rounded-box shadow-lg z-50 w-56 p-3 mb-2"
+        >
           <div className="flex gap-1.5">
             <input
               type="text"
@@ -1432,7 +1902,10 @@ function BulkActionsBar({
               onKeyDown={(e) => {
                 if (e.key === "Enter") {
                   e.preventDefault();
-                  const labels = labelInput.split(",").map((l) => l.trim()).filter(Boolean);
+                  const labels = labelInput
+                    .split(",")
+                    .map((l) => l.trim())
+                    .filter(Boolean);
                   if (labels.length > 0) {
                     onSetLabels(labels);
                     setLabelInput("");
@@ -1443,7 +1916,10 @@ function BulkActionsBar({
             <button
               className="btn btn-primary btn-xs"
               onClick={() => {
-                const labels = labelInput.split(",").map((l) => l.trim()).filter(Boolean);
+                const labels = labelInput
+                  .split(",")
+                  .map((l) => l.trim())
+                  .filter(Boolean);
                 if (labels.length > 0) {
                   onSetLabels(labels);
                   setLabelInput("");
@@ -1453,19 +1929,28 @@ function BulkActionsBar({
               Apply
             </button>
           </div>
-          <p className="text-[10px] text-base-content/50 mt-1">Comma-separated labels</p>
+          <p className="text-[10px] text-base-content/50 mt-1">
+            Comma-separated labels
+          </p>
         </div>
       </div>
 
       <div className="divider divider-horizontal mx-0 h-6" />
 
       {/* Delete */}
-      <button className="btn btn-ghost btn-xs text-error gap-1" onClick={onDelete}>
+      <button
+        className="btn btn-ghost btn-xs text-error gap-1"
+        onClick={onDelete}
+      >
         <Trash2 className="w-3 h-3" /> Delete
       </button>
 
       {/* Clear selection */}
-      <button className="btn btn-ghost btn-xs btn-square" onClick={onClear} title="Clear selection">
+      <button
+        className="btn btn-ghost btn-xs btn-square"
+        onClick={onClear}
+        title="Clear selection"
+      >
         <X className="w-3.5 h-3.5" />
       </button>
     </div>
@@ -1544,7 +2029,7 @@ function TaskColumn({
   const parentRef = useRef<HTMLDivElement>(null);
   const [showFilter, setShowFilter] = useState(false);
   const filterActive = isFilterActive(filter);
-  
+
   const virtualizer = useVirtualizer({
     count: tasks.length,
     getScrollElement: () => parentRef.current,
@@ -1553,7 +2038,7 @@ function TaskColumn({
   });
 
   return (
-    <div 
+    <div
       className="flex flex-col border-r border-base-200 relative flex-1 min-w-0"
       style={{ flex: `${width} 1 0%` }}
     >
@@ -1568,22 +2053,28 @@ function TaskColumn({
               className="input input-xs input-bordered flex-1 min-w-0 text-xs uppercase tracking-wide font-semibold"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter') onConfirmEdit();
-                if (e.key === 'Escape') onCancelEdit();
+                if (e.key === "Enter") onConfirmEdit();
+                if (e.key === "Escape") onCancelEdit();
               }}
             />
-            <button className="btn btn-ghost btn-xs btn-square text-success" onClick={onConfirmEdit}>
+            <button
+              className="btn btn-ghost btn-xs btn-square text-success"
+              onClick={onConfirmEdit}
+            >
               <Check className="w-3 h-3" />
             </button>
-            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={onCancelEdit}>
+            <button
+              className="btn btn-ghost btn-xs btn-square text-error"
+              onClick={onCancelEdit}
+            >
               <X className="w-3 h-3" />
             </button>
           </div>
         ) : (
-          <span 
+          <span
             className={cn(
               "text-xs font-semibold uppercase tracking-wide text-base-content/60",
-              canEdit && "cursor-pointer hover:text-base-content"
+              canEdit && "cursor-pointer hover:text-base-content",
             )}
             onDoubleClick={onStartEdit}
             title={canEdit ? "Double-click to rename" : undefined}
@@ -1609,13 +2100,16 @@ function TaskColumn({
               <input
                 type="checkbox"
                 className="checkbox checkbox-xs checkbox-primary"
-                checked={tasks.length > 0 && tasks.every((t) => multiSelected.has(t.id))}
+                checked={
+                  tasks.length > 0 &&
+                  tasks.every((t) => multiSelected.has(t.id))
+                }
                 readOnly
               />
             </button>
           )}
           {canEdit && !isEditing && (
-            <button 
+            <button
               className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 hover:opacity-100"
               onClick={onStartEdit}
               title="Rename column"
@@ -1625,16 +2119,27 @@ function TaskColumn({
           )}
           <span className="text-xs text-base-content/40">{tasks.length}</span>
           <button
-            className={cn("btn btn-ghost btn-xs btn-square", filterActive && "text-primary")}
+            className={cn(
+              "btn btn-ghost btn-xs btn-square",
+              filterActive && "text-primary",
+            )}
             onClick={() => setShowFilter((p) => !p)}
             title="Filter column"
           >
             <Filter className="w-3 h-3" />
           </button>
-          <button className="btn btn-ghost btn-xs btn-square" onClick={onBulkAdd} title={`Bulk add ${label.toLowerCase()}`}>
+          <button
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={onBulkAdd}
+            title={`Bulk add ${label.toLowerCase()}`}
+          >
             <ListPlus className="w-3.5 h-3.5" />
           </button>
-          <button className="btn btn-ghost btn-xs btn-square" onClick={onAdd} title={`Add ${label.toLowerCase()}`}>
+          <button
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={onAdd}
+            title={`Add ${label.toLowerCase()}`}
+          >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
@@ -1654,7 +2159,10 @@ function TaskColumn({
       <div
         ref={parentRef}
         className="flex-1 overflow-y-auto"
-        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; }}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
         onDrop={(e) => {
           // Only handle if not dropped on a specific task (bubbled up)
           if ((e.target as HTMLElement).closest("[data-task-drop]")) return;
@@ -1677,8 +2185,8 @@ function TaskColumn({
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
+              width: "100%",
+              position: "relative",
             }}
           >
             {virtualizer.getVirtualItems().map((virtualItem) => {
@@ -1686,10 +2194,22 @@ function TaskColumn({
               const isSelected = task.id === selectedId;
               const isMultiSelected = multiSelected.has(task.id);
               const isDragOver = dragOverTaskId === task.id;
-              const ids = task.assignee_ids || (task.assignee_id ? [task.assignee_id] : []);
+              const ids =
+                task.assignee_ids ||
+                (task.assignee_id ? [task.assignee_id] : []);
               const progress = task.progress ?? 0;
-              const startStr = task.start_date ? new Date(task.start_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
-              const dueStr = task.due_date ? new Date(task.due_date).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : null;
+              const startStr = task.start_date
+                ? new Date(task.start_date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : null;
+              const dueStr = task.due_date
+                ? new Date(task.due_date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : null;
               return (
                 <button
                   key={task.id}
@@ -1701,9 +2221,17 @@ function TaskColumn({
                     onDragStart(task);
                   }}
                   onDragEnd={onDragEnd}
-                  onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; onDragOverTask(task.id); }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    onDragOverTask(task.id);
+                  }}
                   onDragLeave={() => onDragOverTask(null)}
-                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); onDropOnTask(task); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDropOnTask(task);
+                  }}
                   onClick={() => {
                     if (bulkMode) {
                       onToggleSelect(task.id);
@@ -1713,19 +2241,24 @@ function TaskColumn({
                   }}
                   onContextMenu={(e) => onTaskContextMenu(e, task)}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 0,
                     left: 0,
-                    width: '100%',
+                    width: "100%",
                     height: `${virtualItem.size}px`,
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                   className={cn(
                     "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2",
                     "hover:bg-pink-50 dark:hover:bg-pink-950/20",
-                    isSelected && !bulkMode ? "bg-primary/20 border-l-primary shadow-sm" : "border-l-transparent",
-                    bulkMode && isMultiSelected && "bg-primary/20 border-l-primary shadow-sm",
-                    isDragOver && "bg-accent/20 border-l-accent scale-[1.02] shadow-md",
+                    isSelected && !bulkMode
+                      ? "bg-primary/20 border-l-primary shadow-sm"
+                      : "border-l-transparent",
+                    bulkMode &&
+                      isMultiSelected &&
+                      "bg-primary/20 border-l-primary shadow-sm",
+                    isDragOver &&
+                      "bg-accent/20 border-l-accent scale-[1.02] shadow-md",
                   )}
                 >
                   {/* Row 1: checkbox + status dot + title + avatars + chevron */}
@@ -1747,8 +2280,15 @@ function TaskColumn({
                         task.status === "todo" && "bg-base-content/20",
                       )}
                     />
-                    <span className="text-sm truncate leading-tight flex-1 min-w-0">{task.title}</span>
-                    <AvatarStack members={members} assigneeIds={ids} max={3} size="xs" />
+                    <span className="text-sm truncate leading-tight flex-1 min-w-0">
+                      {task.title}
+                    </span>
+                    <AvatarStack
+                      members={members}
+                      assigneeIds={ids}
+                      max={3}
+                      size="xs"
+                    />
                     {task.depth < MAX_DEPTH && (
                       <ChevronRight className="w-3.5 h-3.5 text-base-content/20 shrink-0" />
                     )}
@@ -1759,18 +2299,25 @@ function TaskColumn({
                     <span
                       className={cn(
                         "text-[10px] leading-none px-1 py-0.5 rounded",
-                        task.priority === "critical" && "bg-error/10 text-error",
-                        task.priority === "high" && "bg-warning/10 text-warning",
+                        task.priority === "critical" &&
+                          "bg-error/10 text-error",
+                        task.priority === "high" &&
+                          "bg-warning/10 text-warning",
                         task.priority === "medium" && "bg-info/10 text-info",
-                        task.priority === "low" && "bg-base-200 text-base-content/50",
+                        task.priority === "low" &&
+                          "bg-base-200 text-base-content/50",
                       )}
                     >
                       {task.priority}
                     </span>
-                    {task.review_status === "pending" && <PendingReviewBadge count={1} />}
+                    {task.review_status === "pending" && (
+                      <PendingReviewBadge count={1} />
+                    )}
                     {(startStr || dueStr) && (
                       <span className="text-[11px] font-medium text-base-content/60 truncate">
-                        {startStr && dueStr ? `${startStr} → ${dueStr}` : startStr || dueStr}
+                        {startStr && dueStr
+                          ? `${startStr} → ${dueStr}`
+                          : startStr || dueStr}
                       </span>
                     )}
                   </div>
@@ -1781,7 +2328,13 @@ function TaskColumn({
                       <div
                         className={cn(
                           "h-full rounded-full transition-all",
-                          progress >= 0.8 ? "bg-success" : progress >= 0.4 ? "bg-info" : progress > 0 ? "bg-warning" : "bg-base-200",
+                          progress >= 0.8
+                            ? "bg-success"
+                            : progress >= 0.4
+                              ? "bg-info"
+                              : progress > 0
+                                ? "bg-warning"
+                                : "bg-base-200",
                         )}
                         style={{ width: `${Math.round(progress * 100)}%` }}
                       />
@@ -1837,21 +2390,27 @@ function ColumnFilterDropdown({
   const toggleStatus = (s: TaskStatus) => {
     setLocal((p) => ({
       ...p,
-      statuses: p.statuses.includes(s) ? p.statuses.filter((x) => x !== s) : [...p.statuses, s],
+      statuses: p.statuses.includes(s)
+        ? p.statuses.filter((x) => x !== s)
+        : [...p.statuses, s],
     }));
   };
 
   const togglePriority = (pr: TaskPriority) => {
     setLocal((p) => ({
       ...p,
-      priorities: p.priorities.includes(pr) ? p.priorities.filter((x) => x !== pr) : [...p.priorities, pr],
+      priorities: p.priorities.includes(pr)
+        ? p.priorities.filter((x) => x !== pr)
+        : [...p.priorities, pr],
     }));
   };
 
   const toggleAssignee = (id: string) => {
     setLocal((p) => ({
       ...p,
-      assigneeIds: p.assigneeIds.includes(id) ? p.assigneeIds.filter((x) => x !== id) : [...p.assigneeIds, id],
+      assigneeIds: p.assigneeIds.includes(id)
+        ? p.assigneeIds.filter((x) => x !== id)
+        : [...p.assigneeIds, id],
     }));
   };
 
@@ -1868,35 +2427,43 @@ function ColumnFilterDropdown({
   return (
     <div
       ref={ref}
-      className="absolute top-[38px] left-0 right-0 z-50 bg-base-100 border border-base-200 rounded-b-lg shadow-xl max-h-[60vh] overflow-y-auto"
+      className="absolute top-[38px] left-0 right-0 z-50 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-b-lg shadow-xl max-h-[60vh] overflow-y-auto"
     >
       <div className="p-2 space-y-2.5">
         {/* Search */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Search</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Search
+          </label>
           <input
             type="text"
             className="input input-bordered input-xs w-full mt-0.5"
             placeholder="Filter by title..."
             value={local.search}
-            onChange={(e) => setLocal((p) => ({ ...p, search: e.target.value }))}
+            onChange={(e) =>
+              setLocal((p) => ({ ...p, search: e.target.value }))
+            }
           />
         </div>
 
         {/* Status */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Status</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Status
+          </label>
           <div className="flex flex-wrap gap-1 mt-0.5">
             {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
               <button
                 key={s}
                 className={cn(
                   "badge badge-sm cursor-pointer gap-1",
-                  local.statuses.includes(s) ? "badge-primary" : "badge-ghost"
+                  local.statuses.includes(s) ? "badge-primary" : "badge-ghost",
                 )}
                 onClick={() => toggleStatus(s)}
               >
-                {s === "in_progress" ? "In Progress" : s.charAt(0).toUpperCase() + s.slice(1)}
+                {s === "in_progress"
+                  ? "In Progress"
+                  : s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             ))}
           </div>
@@ -1904,14 +2471,18 @@ function ColumnFilterDropdown({
 
         {/* Priority */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Priority</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Priority
+          </label>
           <div className="flex flex-wrap gap-1 mt-0.5">
             {(["critical", "high", "medium", "low"] as const).map((p) => (
               <button
                 key={p}
                 className={cn(
                   "badge badge-sm cursor-pointer gap-1",
-                  local.priorities.includes(p) ? "badge-primary" : "badge-ghost"
+                  local.priorities.includes(p)
+                    ? "badge-primary"
+                    : "badge-ghost",
                 )}
                 onClick={() => togglePriority(p)}
               >
@@ -1923,7 +2494,9 @@ function ColumnFilterDropdown({
 
         {/* Assignee */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Assignee</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Assignee
+          </label>
           <div className="flex flex-col gap-0.5 mt-0.5 max-h-24 overflow-y-auto">
             <label className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
               <input
@@ -1935,14 +2508,19 @@ function ColumnFilterDropdown({
               <span className="text-xs text-base-content/60">Unassigned</span>
             </label>
             {members.map((m) => (
-              <label key={m.user_id} className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
+              <label
+                key={m.user_id}
+                className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200"
+              >
                 <input
                   type="checkbox"
                   className="checkbox checkbox-xs"
                   checked={local.assigneeIds.includes(m.user_id)}
                   onChange={() => toggleAssignee(m.user_id)}
                 />
-                <span className="text-xs truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
+                <span className="text-xs truncate">
+                  {m.display_name || m.email || m.user_id.slice(0, 8)}
+                </span>
               </label>
             ))}
           </div>
@@ -1950,7 +2528,9 @@ function ColumnFilterDropdown({
 
         {/* Labels */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Labels</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Labels
+          </label>
           <input
             type="text"
             className="input input-bordered input-xs w-full mt-0.5"
@@ -1971,28 +2551,39 @@ function ColumnFilterDropdown({
         {/* Due date range */}
         <div className="grid grid-cols-2 gap-1.5">
           <div>
-            <label className="text-[10px] font-semibold text-base-content/50 uppercase">Due From</label>
+            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+              Due From
+            </label>
             <input
               type="date"
               className="input input-bordered input-xs w-full mt-0.5"
               value={local.dueDateFrom}
-              onChange={(e) => setLocal((p) => ({ ...p, dueDateFrom: e.target.value }))}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, dueDateFrom: e.target.value }))
+              }
             />
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-base-content/50 uppercase">Due To</label>
+            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+              Due To
+            </label>
             <input
               type="date"
               className="input input-bordered input-xs w-full mt-0.5"
               value={local.dueDateTo}
-              onChange={(e) => setLocal((p) => ({ ...p, dueDateTo: e.target.value }))}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, dueDateTo: e.target.value }))
+              }
             />
           </div>
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-1 pt-1 border-t border-base-200">
-          <button className="btn btn-primary btn-xs flex-1" onClick={applyFilter}>
+          <button
+            className="btn btn-primary btn-xs flex-1"
+            onClick={applyFilter}
+          >
             Apply
           </button>
           <button className="btn btn-ghost btn-xs flex-1" onClick={clearFilter}>
@@ -2046,9 +2637,13 @@ function CreateTaskModal({
     defaultValues: {
       status: "todo",
       priority: parentTask?.priority || "medium",
-      assignee_ids: parentTask?.assignee_ids?.length ? [...parentTask.assignee_ids] : [],
+      assignee_ids: parentTask?.assignee_ids?.length
+        ? [...parentTask.assignee_ids]
+        : [],
       due_date: parentTask?.due_date ? parentTask.due_date.slice(0, 10) : "",
-      start_date: parentTask?.start_date ? parentTask.start_date.slice(0, 10) : "",
+      start_date: parentTask?.start_date
+        ? parentTask.start_date.slice(0, 10)
+        : "",
       reporter_id: parentTask?.reporter_id || "",
       labels: parentTask?.labels?.length ? [...parentTask.labels] : [],
     },
@@ -2056,8 +2651,13 @@ function CreateTaskModal({
   const send = useProjectTaskStore((s) => s.send);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
-  const [deadlineConflicts, setDeadlineConflicts] = useState<DeadlineConflict[]>([]);
-  const [pendingPayload, setPendingPayload] = useState<Record<string, unknown> | null>(null);
+  const [deadlineConflicts, setDeadlineConflicts] = useState<
+    DeadlineConflict[]
+  >([]);
+  const [pendingPayload, setPendingPayload] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
   const watchedAssignees = watch("assignee_ids");
 
   const toggleAssignee = (userId: string) => {
@@ -2087,7 +2687,11 @@ function CreateTaskModal({
         const parentKey = parentId || "root";
         const existing = store.tasks.get(parentKey) || [];
         if (!existing.find((t: Task) => t.id === task.id)) {
-          store.setTasks(parentKey, [...existing, task], (store.totals.get(parentKey) ?? 0) + 1);
+          store.setTasks(
+            parentKey,
+            [...existing, task],
+            (store.totals.get(parentKey) ?? 0) + 1,
+          );
         }
         // Update ancestors if they were changed
         if (result?.ancestors_updated) {
@@ -2138,7 +2742,12 @@ function CreateTaskModal({
 
   return (
     <>
-      <Modal open onClose={onClose} title={parentId ? "New Subtask" : "New Task"} className="max-w-md">
+      <Modal
+        open
+        onClose={onClose}
+        title={parentId ? "New Subtask" : "New Task"}
+        className="max-w-md"
+      >
         {error && (
           <div className="alert alert-error mb-3 text-sm">
             <span>{error}</span>
@@ -2175,7 +2784,9 @@ function CreateTaskModal({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-base-content/50 block mb-1">Start Date</label>
+              <label className="text-xs text-base-content/50 block mb-1">
+                Start Date
+              </label>
               <input
                 type="date"
                 className="input input-bordered input-sm w-full"
@@ -2183,7 +2794,9 @@ function CreateTaskModal({
               />
             </div>
             <div>
-              <label className="text-xs text-base-content/50 block mb-1">Due Date</label>
+              <label className="text-xs text-base-content/50 block mb-1">
+                Due Date
+              </label>
               <input
                 type="date"
                 className="input input-bordered input-sm w-full"
@@ -2193,8 +2806,13 @@ function CreateTaskModal({
           </div>
           {/* Reporter */}
           <div>
-            <label className="text-xs text-base-content/50 block mb-1">Reporter</label>
-            <select className="select select-bordered select-sm w-full" {...register("reporter_id")}>
+            <label className="text-xs text-base-content/50 block mb-1">
+              Reporter
+            </label>
+            <select
+              className="select select-bordered select-sm w-full"
+              {...register("reporter_id")}
+            >
               <option value="">None</option>
               {members.map((m) => (
                 <option key={m.user_id} value={m.user_id}>
@@ -2205,10 +2823,14 @@ function CreateTaskModal({
           </div>
           {/* Multi-assignee selector */}
           <div>
-            <label className="text-xs text-base-content/50 block mb-1">Assignees</label>
+            <label className="text-xs text-base-content/50 block mb-1">
+              Assignees
+            </label>
             <div className="border border-base-300 rounded-lg max-h-28 overflow-y-auto">
               {members.length === 0 && (
-                <div className="px-3 py-2 text-xs text-base-content/40">No members</div>
+                <div className="px-3 py-2 text-xs text-base-content/40">
+                  No members
+                </div>
               )}
               {members.map((m) => (
                 <label
@@ -2221,25 +2843,38 @@ function CreateTaskModal({
                     checked={watchedAssignees?.includes(m.user_id) || false}
                     onChange={() => toggleAssignee(m.user_id)}
                   />
-                  <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
+                  <span className="truncate">
+                    {m.display_name || m.email || m.user_id.slice(0, 12)}
+                  </span>
                 </label>
               ))}
             </div>
             {watchedAssignees?.length > 0 && (
               <div className="text-xs text-base-content/50 mt-1">
-                {watchedAssignees.length} assignee{watchedAssignees.length !== 1 ? "s" : ""} selected
+                {watchedAssignees.length} assignee
+                {watchedAssignees.length !== 1 ? "s" : ""} selected
               </div>
             )}
           </div>
           {/* Labels */}
           <div>
-            <label className="text-xs text-base-content/50 block mb-1">Labels</label>
+            <label className="text-xs text-base-content/50 block mb-1">
+              Labels
+            </label>
             <input
               type="text"
               className="input input-bordered input-sm w-full"
               placeholder="Comma-separated labels"
               {...register("labels", {
-                setValueAs: (v: string | string[]) => Array.isArray(v) ? v : (typeof v === "string" && v.trim() ? v.split(",").map((l) => l.trim()).filter(Boolean) : []),
+                setValueAs: (v: string | string[]) =>
+                  Array.isArray(v)
+                    ? v
+                    : typeof v === "string" && v.trim()
+                      ? v
+                          .split(",")
+                          .map((l) => l.trim())
+                          .filter(Boolean)
+                      : [],
               })}
               defaultValue={parentTask?.labels?.join(", ") || ""}
             />
@@ -2261,19 +2896,30 @@ function CreateTaskModal({
       </Modal>
 
       {deadlineConflicts.length > 0 && (
-        <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
+        <dialog
+          className="modal modal-open"
+          style={{ backgroundColor: "transparent" }}
+        >
           <div className="modal-box shadow-2xl max-w-md">
             <h3 className="font-bold text-lg flex items-center gap-2">
               <span className="text-warning">⚠</span> Date Range Conflict
             </h3>
             <div className="py-3 space-y-2 text-sm">
               <p className="text-base-content/70">
-                The due date extends beyond {deadlineConflicts.length} parent task{deadlineConflicts.length !== 1 ? "s" : ""}:
+                The due date extends beyond {deadlineConflicts.length} parent
+                task{deadlineConflicts.length !== 1 ? "s" : ""}:
               </p>
               <ul className="list-disc list-inside text-xs space-y-0.5">
                 {deadlineConflicts.map((c) => (
                   <li key={c.task_id} className="text-base-content/60">
-                    {c.title} <span className="text-warning">(due {c.due_date ? new Date(c.due_date).toLocaleDateString() : "—"})</span>
+                    {c.title}{" "}
+                    <span className="text-warning">
+                      (due{" "}
+                      {c.due_date
+                        ? new Date(c.due_date).toLocaleDateString()
+                        : "—"}
+                      )
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -2282,15 +2928,31 @@ function CreateTaskModal({
               </p>
             </div>
             <div className="modal-action">
-              <button className="btn btn-sm" onClick={() => { setDeadlineConflicts([]); setPendingPayload(null); }}>
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  setDeadlineConflicts([]);
+                  setPendingPayload(null);
+                }}
+              >
                 Cancel
               </button>
-              <button className="btn btn-sm btn-warning" onClick={confirmExtendDeadlines}>
+              <button
+                className="btn btn-sm btn-warning"
+                onClick={confirmExtendDeadlines}
+              >
                 Apply &amp; Extend
               </button>
             </div>
           </div>
-          <div className="modal-backdrop" style={{ background: "transparent" }} onClick={() => { setDeadlineConflicts([]); setPendingPayload(null); }} />
+          <div
+            className="modal-backdrop"
+            style={{ background: "transparent" }}
+            onClick={() => {
+              setDeadlineConflicts([]);
+              setPendingPayload(null);
+            }}
+          />
         </dialog>
       )}
     </>
@@ -2345,10 +3007,18 @@ function BulkCreateTaskModal({
     if (!rawText.trim()) return [];
     let sep: string;
     switch (separatorType) {
-      case "newline": sep = "\n"; break;
-      case "comma": sep = ","; break;
-      case "semicolon": sep = ";"; break;
-      case "custom": sep = customSeparator || "\n"; break;
+      case "newline":
+        sep = "\n";
+        break;
+      case "comma":
+        sep = ",";
+        break;
+      case "semicolon":
+        sep = ";";
+        break;
+      case "custom":
+        sep = customSeparator || "\n";
+        break;
     }
     const titles = rawText
       .split(sep)
@@ -2369,12 +3039,23 @@ function BulkCreateTaskModal({
     if (!rawText.trim()) return 0;
     let sep: string;
     switch (separatorType) {
-      case "newline": sep = "\n"; break;
-      case "comma": sep = ","; break;
-      case "semicolon": sep = ";"; break;
-      case "custom": sep = customSeparator || "\n"; break;
+      case "newline":
+        sep = "\n";
+        break;
+      case "comma":
+        sep = ",";
+        break;
+      case "semicolon":
+        sep = ";";
+        break;
+      case "custom":
+        sep = customSeparator || "\n";
+        break;
     }
-    return rawText.split(sep).map((t) => t.trim()).filter((t) => t.length > 0).length;
+    return rawText
+      .split(sep)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0).length;
   }, [rawText, separatorType, customSeparator]);
 
   const dupsRemoved = rawCount - parsedTitles.length;
@@ -2404,7 +3085,11 @@ function BulkCreateTaskModal({
       const existingIds = new Set(existing.map((t: Task) => t.id));
       const newTasks = tasks.filter((t: Task) => !existingIds.has(t.id));
       if (newTasks.length > 0) {
-        store.setTasks(parentKey, [...existing, ...newTasks], (store.totals.get(parentKey) ?? 0) + newTasks.length);
+        store.setTasks(
+          parentKey,
+          [...existing, ...newTasks],
+          (store.totals.get(parentKey) ?? 0) + newTasks.length,
+        );
       }
 
       setProgress({ done: parsedTitles.length, total: parsedTitles.length });
@@ -2430,9 +3115,13 @@ function BulkCreateTaskModal({
           <label className="label">
             <span className="label-text">Paste task titles</span>
             <span className="label-text-alt text-base-content/50">
-              {parsedTitles.length} task{parsedTitles.length !== 1 ? "s" : ""} detected
+              {parsedTitles.length} task{parsedTitles.length !== 1 ? "s" : ""}{" "}
+              detected
               {dupsRemoved > 0 && (
-                <span className="text-warning ml-1">({dupsRemoved} duplicate{dupsRemoved !== 1 ? "s" : ""} removed)</span>
+                <span className="text-warning ml-1">
+                  ({dupsRemoved} duplicate{dupsRemoved !== 1 ? "s" : ""}{" "}
+                  removed)
+                </span>
               )}
             </span>
           </label>
@@ -2449,21 +3138,29 @@ function BulkCreateTaskModal({
         {/* Separator */}
         <div className="flex gap-3 items-end">
           <div className="form-control flex-1">
-            <label className="label"><span className="label-text">Separator</span></label>
+            <label className="label">
+              <span className="label-text">Separator</span>
+            </label>
             <select
               className="select select-bordered select-sm w-full"
               value={separatorType}
-              onChange={(e) => setSeparatorType(e.target.value as SeparatorType)}
+              onChange={(e) =>
+                setSeparatorType(e.target.value as SeparatorType)
+              }
               disabled={creating}
             >
               {SEPARATOR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
               ))}
             </select>
           </div>
           {separatorType === "custom" && (
             <div className="form-control flex-1">
-              <label className="label"><span className="label-text">Custom separator</span></label>
+              <label className="label">
+                <span className="label-text">Custom separator</span>
+              </label>
               <input
                 type="text"
                 className="input input-bordered input-sm w-full"
@@ -2483,8 +3180,13 @@ function BulkCreateTaskModal({
               Preview ({parsedTitles.length})
             </div>
             {parsedTitles.map((t, i) => (
-              <div key={i} className="px-3 py-1 text-sm border-t border-base-200/50 flex items-center gap-2">
-                <span className="text-base-content/40 text-xs w-5 text-right shrink-0">{i + 1}.</span>
+              <div
+                key={i}
+                className="px-3 py-1 text-sm border-t border-base-200/50 flex items-center gap-2"
+              >
+                <span className="text-base-content/40 text-xs w-5 text-right shrink-0">
+                  {i + 1}.
+                </span>
                 <span className="truncate">{t}</span>
               </div>
             ))}
@@ -2499,7 +3201,9 @@ function BulkCreateTaskModal({
           <div className="collapse-content space-y-3 pb-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="form-control">
-                <label className="label py-0.5"><span className="label-text text-xs">Status</span></label>
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Status</span>
+                </label>
                 <select
                   className="select select-bordered select-sm w-full"
                   value={status}
@@ -2513,7 +3217,9 @@ function BulkCreateTaskModal({
                 </select>
               </div>
               <div className="form-control">
-                <label className="label py-0.5"><span className="label-text text-xs">Priority</span></label>
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Priority</span>
+                </label>
                 <select
                   className="select select-bordered select-sm w-full"
                   value={priority}
@@ -2528,7 +3234,9 @@ function BulkCreateTaskModal({
               </div>
             </div>
             <div className="form-control">
-              <label className="label py-0.5"><span className="label-text text-xs">Assignee</span></label>
+              <label className="label py-0.5">
+                <span className="label-text text-xs">Assignee</span>
+              </label>
               <select
                 className="select select-bordered select-sm w-full"
                 value={assigneeId}
@@ -2545,7 +3253,9 @@ function BulkCreateTaskModal({
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="form-control">
-                <label className="label py-0.5"><span className="label-text text-xs">Due Date</span></label>
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Due Date</span>
+                </label>
                 <input
                   type="date"
                   className="input input-bordered input-sm w-full"
@@ -2555,7 +3265,9 @@ function BulkCreateTaskModal({
                 />
               </div>
               <div className="form-control">
-                <label className="label py-0.5"><span className="label-text text-xs">Est. Hours</span></label>
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Est. Hours</span>
+                </label>
                 <input
                   type="number"
                   className="input input-bordered input-sm w-full"
@@ -2576,7 +3288,9 @@ function BulkCreateTaskModal({
           <div className="space-y-1">
             <div className="flex items-center justify-between text-xs text-base-content/60">
               <span>Creating tasks…</span>
-              <span>{progress.done}/{progress.total}</span>
+              <span>
+                {progress.done}/{progress.total}
+              </span>
             </div>
             <progress
               className="progress progress-primary w-full"
@@ -2590,9 +3304,14 @@ function BulkCreateTaskModal({
         {errors.length > 0 && (
           <div className="alert alert-error text-sm">
             <div>
-              <p className="font-medium">Failed to create {errors.length} task{errors.length !== 1 ? "s" : ""}:</p>
+              <p className="font-medium">
+                Failed to create {errors.length} task
+                {errors.length !== 1 ? "s" : ""}:
+              </p>
               <ul className="list-disc list-inside mt-1 text-xs">
-                {errors.map((e, i) => <li key={i}>{e}</li>)}
+                {errors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
               </ul>
             </div>
           </div>
@@ -2600,7 +3319,12 @@ function BulkCreateTaskModal({
 
         {/* Actions */}
         <div className="modal-action">
-          <Button type="button" variant="ghost" onClick={onClose} disabled={creating}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+            disabled={creating}
+          >
             Cancel
           </Button>
           <Button
@@ -2609,7 +3333,8 @@ function BulkCreateTaskModal({
             loading={creating}
           >
             <ListPlus className="w-4 h-4" />
-            Create {parsedTitles.length} Task{parsedTitles.length !== 1 ? "s" : ""}
+            Create {parsedTitles.length} Task
+            {parsedTitles.length !== 1 ? "s" : ""}
           </Button>
         </div>
       </div>

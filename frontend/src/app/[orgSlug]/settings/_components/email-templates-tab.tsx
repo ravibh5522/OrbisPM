@@ -1,27 +1,25 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { LoadingPage, Badge, ConfirmDialog } from "@/components/ui/shared";
+import { useEmailEditor } from "@/components/email-editor-wrapper";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { useEmailEditor } from "@/components/email-editor-wrapper";
+import { Badge, ConfirmDialog, LoadingPage } from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Mail,
-  Pencil,
+  Code2,
   Eye,
   KeyRound,
-  ShieldCheck,
+  LayoutTemplate,
+  Mail,
   Megaphone,
   PartyPopper,
+  Pencil,
   RotateCcw,
-  Code2,
-  LayoutTemplate,
+  ShieldCheck,
 } from "lucide-react";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { useCallback, useState } from "react";
 
 const DEFAULT_TEMPLATES = [
   {
@@ -87,7 +85,7 @@ export default function EmailTemplatesTab() {
   const [editTemplate, setEditTemplate] = useState<string | null>(null);
   const [editorMode, setEditorMode] = useState<EditorMode>("visual");
   const [editHtml, setEditHtml] = useState("");
-  const [initialDesign, setInitialDesign] = useState<Record<string, unknown> | null>(null);
+  const [visualHtml, setVisualHtml] = useState("");
 
   // Preview / delete
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
@@ -95,15 +93,9 @@ export default function EmailTemplatesTab() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [error, setError] = useState("");
 
-  // Auth token for image uploads
-  const authToken = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const uploadUrl = currentOrg ? `${API_BASE}/api/v1/orgs/${currentOrg.id}/uploads` : undefined;
-
-  // Unlayer editor hook
-  const { EditorComponent, exportTemplate } = useEmailEditor({
-    initialDesign,
-    uploadUrl,
-    authToken: authToken ?? undefined,
+  // TinyMCE editor hook
+  const { EditorComponent, exportTemplate, setContent } = useEmailEditor({
+    initialHtml: visualHtml,
     minHeight: 560,
   });
 
@@ -120,12 +112,20 @@ export default function EmailTemplatesTab() {
       if (!currentOrg || !editTemplate) throw new Error("Missing context");
 
       if (editorMode === "visual") {
-        // Export from Unlayer
-        const { html, design } = await exportTemplate();
-        return api.emailTemplates.upsert(currentOrg.id, editTemplate, html, design);
+        const { html } = await exportTemplate();
+        return api.emailTemplates.upsert(
+          currentOrg.id,
+          editTemplate,
+          html,
+          null,
+        );
       } else {
-        // Save raw HTML (no design JSON)
-        return api.emailTemplates.upsert(currentOrg.id, editTemplate, editHtml, null);
+        return api.emailTemplates.upsert(
+          currentOrg.id,
+          editTemplate,
+          editHtml,
+          null,
+        );
       }
     },
     onSuccess: () => {
@@ -137,7 +137,8 @@ export default function EmailTemplatesTab() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (name: string) => api.emailTemplates.delete(currentOrg!.id, name),
+    mutationFn: (name: string) =>
+      api.emailTemplates.delete(currentOrg!.id, name),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email-templates"] });
       setDeleteTarget(null);
@@ -147,7 +148,7 @@ export default function EmailTemplatesTab() {
   const closeEditor = useCallback(() => {
     setEditTemplate(null);
     setEditHtml("");
-    setInitialDesign(null);
+    setVisualHtml("");
     setError("");
   }, []);
 
@@ -155,22 +156,32 @@ export default function EmailTemplatesTab() {
     setEditorMode(mode);
     setError("");
 
+    let html: string;
     try {
       const data = await api.emailTemplates.get(currentOrg!.id, name);
-      setEditHtml(data.html);
-      setInitialDesign(data.design ?? null);
+      html = data.html;
     } catch {
-      setEditHtml(getStarterTemplate(name));
-      setInitialDesign(null);
+      html = getStarterTemplate(name);
+    }
+    setEditHtml(html);
+    if (mode === "visual") {
+      setVisualHtml(html);
     }
     setEditTemplate(name);
   };
 
   const handlePreview = (name: string) => {
-    const context = SAMPLE_CONTEXT[name] || { title: "Preview", body: "This is a preview." };
+    const context = SAMPLE_CONTEXT[name] || {
+      title: "Preview",
+      body: "This is a preview.",
+    };
     let html = editHtml || getStarterTemplate(name);
 
-    for (const [key, value] of Object.entries({ ...context, app_name: "OrbisPM", frontend_url: "#" })) {
+    for (const [key, value] of Object.entries({
+      ...context,
+      app_name: "OrbisPM",
+      frontend_url: "#",
+    })) {
       html = html.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g"), value);
     }
     html = html.replace(new RegExp("\\{%[\\s\\S]*?%\\}", "g"), "");
@@ -184,10 +195,20 @@ export default function EmailTemplatesTab() {
     if (!editTemplate) return;
     try {
       const { html } = await exportTemplate();
-      const context = SAMPLE_CONTEXT[editTemplate] || { title: "Preview", body: "This is a preview." };
+      const context = SAMPLE_CONTEXT[editTemplate] || {
+        title: "Preview",
+        body: "This is a preview.",
+      };
       let rendered = html;
-      for (const [key, value] of Object.entries({ ...context, app_name: "OrbisPM", frontend_url: "#" })) {
-        rendered = rendered.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g"), value);
+      for (const [key, value] of Object.entries({
+        ...context,
+        app_name: "OrbisPM",
+        frontend_url: "#",
+      })) {
+        rendered = rendered.replace(
+          new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "g"),
+          value,
+        );
       }
       rendered = rendered.replace(new RegExp("\\{%[\\s\\S]*?%\\}", "g"), "");
       rendered = rendered.replace(/\{\{.*?\}\}/g, "");
@@ -202,7 +223,9 @@ export default function EmailTemplatesTab() {
 
   const editingMeta = DEFAULT_TEMPLATES.find((t) => t.name === editTemplate);
   const previewMeta = DEFAULT_TEMPLATES.find((t) => t.name === previewTemplate);
-  const templateVars = Object.keys(SAMPLE_CONTEXT[editTemplate || "notification"] || {});
+  const templateVars = Object.keys(
+    SAMPLE_CONTEXT[editTemplate || "notification"] || {},
+  );
 
   return (
     <div>
@@ -210,7 +233,7 @@ export default function EmailTemplatesTab() {
       <div className="mb-5">
         <p className="text-sm text-base-content/60">
           Customize email templates sent to your organization members. Use the{" "}
-          <strong>Visual Editor</strong> for drag-and-drop design, or the{" "}
+          <strong>Visual Editor</strong> for rich-text design, or the{" "}
           <strong>Code Editor</strong> for direct HTML with{" "}
           <a
             href="https://jinja.palletsprojects.com/en/3.1.x/templates/"
@@ -243,14 +266,20 @@ export default function EmailTemplatesTab() {
                     </div>
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm">{tmpl.label}</span>
+                        <span className="font-semibold text-sm">
+                          {tmpl.label}
+                        </span>
                         {hasCustom ? (
-                          <Badge variant="badge-success badge-sm">Customized</Badge>
+                          <Badge variant="badge-success badge-sm">
+                            Customized
+                          </Badge>
                         ) : (
                           <Badge variant="badge-ghost badge-sm">Default</Badge>
                         )}
                       </div>
-                      <p className="text-xs text-base-content/50 mt-0.5 truncate">{tmpl.description}</p>
+                      <p className="text-xs text-base-content/50 mt-0.5 truncate">
+                        {tmpl.description}
+                      </p>
                     </div>
                   </div>
 
@@ -259,25 +288,17 @@ export default function EmailTemplatesTab() {
                     <button
                       className="btn btn-ghost btn-xs btn-square"
                       onClick={() => handlePreview(tmpl.name)}
-                      title="Preview default"
+                      title="Preview"
                     >
                       <Eye className="w-3.5 h-3.5" />
                     </button>
                     <button
                       className="btn btn-ghost btn-xs gap-1"
                       onClick={() => openEditor(tmpl.name, "visual")}
-                      title="Visual editor"
+                      title="Edit template"
                     >
-                      <LayoutTemplate className="w-3.5 h-3.5" />
-                      <span className="text-xs hidden sm:inline">Design</span>
-                    </button>
-                    <button
-                      className="btn btn-ghost btn-xs gap-1"
-                      onClick={() => openEditor(tmpl.name, "code")}
-                      title="Code editor"
-                    >
-                      <Code2 className="w-3.5 h-3.5" />
-                      <span className="text-xs hidden sm:inline">Code</span>
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span className="text-xs hidden sm:inline">Edit</span>
                     </button>
                     {hasCustom && (
                       <button
@@ -296,11 +317,11 @@ export default function EmailTemplatesTab() {
         })}
       </div>
 
-      {/* ── Visual Editor Modal (full-width) ── */}
+      {/* ── Template Editor Modal (unified visual + code) ── */}
       <Modal
-        open={!!editTemplate && editorMode === "visual"}
+        open={!!editTemplate}
         onClose={closeEditor}
-        title={`Design: ${editingMeta?.label || editTemplate}`}
+        title={`Edit: ${editingMeta?.label || editTemplate}`}
         className="max-w-6xl"
       >
         {error && (
@@ -309,90 +330,91 @@ export default function EmailTemplatesTab() {
           </div>
         )}
         <div className="space-y-4">
-          {/* Merge tags hint */}
+          {/* Mode tabs */}
+          <div className="tabs tabs-boxed w-fit">
+            <button
+              className={`tab tab-sm gap-1 ${editorMode === "visual" ? "tab-active" : ""}`}
+              onClick={() => setEditorMode("visual")}
+            >
+              <LayoutTemplate className="w-3.5 h-3.5" /> Visual
+            </button>
+            <button
+              className={`tab tab-sm gap-1 ${editorMode === "code" ? "tab-active" : ""}`}
+              onClick={async () => {
+                if (editorMode === "visual") {
+                  try {
+                    const { html } = await exportTemplate();
+                    setEditHtml(html);
+                  } catch {
+                    /* keep current editHtml */
+                  }
+                }
+                setEditorMode("code");
+              }}
+            >
+              <Code2 className="w-3.5 h-3.5" /> Code
+            </button>
+          </div>
+
+          {/* Variables hint */}
           <div className="rounded-xl bg-base-200/70 border border-base-300 px-4 py-3">
             <p className="text-xs font-semibold text-base-content/60 mb-1.5 uppercase tracking-wide">
-              Merge tags available in the editor
+              Available Variables
             </p>
-            <p className="text-xs text-base-content/50">
-              Use the <strong>Merge Tags</strong> dropdown in the editor toolbar to insert dynamic variables like{" "}
-              <code className="badge badge-xs badge-outline font-mono">{"{{title}}"}</code>,{" "}
-              <code className="badge badge-xs badge-outline font-mono">{"{{body}}"}</code>, etc.
-            </p>
-          </div>
-
-          {/* Unlayer editor */}
-          <div className="rounded-xl overflow-hidden">{EditorComponent}</div>
-
-          {/* Actions */}
-          <div className="flex items-center justify-between pt-1">
-            <Button variant="ghost" size="sm" onClick={handlePreviewFromVisual}>
-              <Eye className="w-4 h-4" /> Preview
-            </Button>
-            <div className="flex items-center gap-2">
-              <Button type="button" variant="ghost" onClick={closeEditor}>
-                Cancel
-              </Button>
-              <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending}>
-                Save Template
-              </Button>
-            </div>
-          </div>
-        </div>
-      </Modal>
-
-      {/* ── Code Editor Modal ── */}
-      <Modal
-        open={!!editTemplate && editorMode === "code"}
-        onClose={closeEditor}
-        title={`Code: ${editingMeta?.label || editTemplate}`}
-        className="max-w-4xl"
-      >
-        {error && (
-          <div role="alert" className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
-        )}
-        <div className="space-y-4">
-          {/* Available variables hint */}
-          <div className="rounded-xl bg-base-200/70 border border-base-300 px-4 py-3">
-            <p className="text-xs font-semibold text-base-content/60 mb-2 uppercase tracking-wide">
-              Available variables
-            </p>
+            {editorMode === "visual" && (
+              <p className="text-xs text-base-content/50 mb-2">
+                Use the <strong>Merge Tags</strong> button in the toolbar to
+                insert these variables.
+              </p>
+            )}
             <div className="flex flex-wrap gap-1.5">
               {[...templateVars, ...GLOBAL_VARS].map((v) => (
                 <code
                   key={v}
                   className="badge badge-xs badge-outline font-mono text-[10px] px-1.5"
                 >
-                  {"{{ " + v + " }}"}
+                  {editorMode === "code" ? `{{ ${v} }}` : v.replace(/_/g, " ")}
                 </code>
               ))}
             </div>
           </div>
 
-          {/* HTML editor */}
-          <div className="form-control">
-            <label className="label pb-1">
-              <span className="label-text font-semibold text-sm">HTML Template</span>
-              <span className="label-text-alt text-base-content/40 text-xs">Jinja2 syntax supported</span>
-            </label>
-            <textarea
-              className="textarea textarea-bordered w-full font-mono text-xs leading-relaxed resize-y"
-              rows={22}
-              value={editHtml}
-              onChange={(e) => setEditHtml(e.target.value)}
-              placeholder="Enter your HTML email template..."
-              spellCheck={false}
-            />
-          </div>
+          {/* Editor area */}
+          {editorMode === "visual" ? (
+            <div className="rounded-xl overflow-hidden border border-base-200">
+              {EditorComponent}
+            </div>
+          ) : (
+            <div className="form-control">
+              <label className="label pb-1">
+                <span className="label-text font-semibold text-sm">
+                  HTML Template
+                </span>
+                <span className="label-text-alt text-base-content/40 text-xs">
+                  Jinja2 syntax supported
+                </span>
+              </label>
+              <textarea
+                className="textarea textarea-bordered w-full font-mono text-xs leading-relaxed resize-y"
+                rows={22}
+                value={editHtml}
+                onChange={(e) => setEditHtml(e.target.value)}
+                placeholder="Enter your HTML email template..."
+                spellCheck={false}
+              />
+            </div>
+          )}
 
-          {/* Action row */}
+          {/* Actions */}
           <div className="flex items-center justify-between pt-1">
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => editTemplate && handlePreview(editTemplate)}
+              onClick={
+                editorMode === "visual"
+                  ? handlePreviewFromVisual
+                  : () => editTemplate && handlePreview(editTemplate)
+              }
             >
               <Eye className="w-4 h-4" /> Preview
             </Button>
@@ -400,7 +422,10 @@ export default function EmailTemplatesTab() {
               <Button type="button" variant="ghost" onClick={closeEditor}>
                 Cancel
               </Button>
-              <Button onClick={() => saveMutation.mutate()} loading={saveMutation.isPending}>
+              <Button
+                onClick={() => saveMutation.mutate()}
+                loading={saveMutation.isPending}
+              >
                 Save Template
               </Button>
             </div>

@@ -2,12 +2,12 @@
 
 import { cn } from "@/lib/utils";
 import type {
-    OrgMember,
-    Project,
-    Task,
-    TaskPriority,
-    TaskStatus,
-    Team,
+  OrgMember,
+  Project,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  Team,
 } from "@/types/domain";
 import { FolderTree, Tag, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -83,7 +83,11 @@ export function AppliedFilterChips({
     chips.push({
       key: `proj-${id}`,
       label: `Project: ${name}`,
-      remove: () => onChange({ ...filter, projectIds: filter.projectIds.filter((x) => x !== id) }),
+      remove: () =>
+        onChange({
+          ...filter,
+          projectIds: filter.projectIds.filter((x) => x !== id),
+        }),
     });
   }
   for (const id of filter.teamIds) {
@@ -91,7 +95,11 @@ export function AppliedFilterChips({
     chips.push({
       key: `team-${id}`,
       label: `Team: ${name}`,
-      remove: () => onChange({ ...filter, teamIds: filter.teamIds.filter((x) => x !== id) }),
+      remove: () =>
+        onChange({
+          ...filter,
+          teamIds: filter.teamIds.filter((x) => x !== id),
+        }),
     });
   }
   for (const id of filter.assigneeIds) {
@@ -100,28 +108,41 @@ export function AppliedFilterChips({
     chips.push({
       key: `assign-${id}`,
       label: `Assignee: ${name}`,
-      remove: () => onChange({ ...filter, assigneeIds: filter.assigneeIds.filter((x) => x !== id) }),
+      remove: () =>
+        onChange({
+          ...filter,
+          assigneeIds: filter.assigneeIds.filter((x) => x !== id),
+        }),
     });
   }
   for (const s of filter.statuses) {
     chips.push({
       key: `status-${s}`,
       label: `Status: ${s.replace(/_/g, " ")}`,
-      remove: () => onChange({ ...filter, statuses: filter.statuses.filter((x) => x !== s) }),
+      remove: () =>
+        onChange({
+          ...filter,
+          statuses: filter.statuses.filter((x) => x !== s),
+        }),
     });
   }
   for (const p of filter.priorities) {
     chips.push({
       key: `priority-${p}`,
       label: `Priority: ${p}`,
-      remove: () => onChange({ ...filter, priorities: filter.priorities.filter((x) => x !== p) }),
+      remove: () =>
+        onChange({
+          ...filter,
+          priorities: filter.priorities.filter((x) => x !== p),
+        }),
     });
   }
   for (const l of filter.labels) {
     chips.push({
       key: `label-${l}`,
       label: l,
-      remove: () => onChange({ ...filter, labels: filter.labels.filter((x) => x !== l) }),
+      remove: () =>
+        onChange({ ...filter, labels: filter.labels.filter((x) => x !== l) }),
     });
   }
   if (filter.parentTaskId) {
@@ -172,14 +193,17 @@ export function GroupBySelector({
 }) {
   return (
     <div className="join">
-      {([
+      {[
         { key: "none" as const, label: "All Tasks" },
         { key: "project" as const, label: "By Project" },
         { key: "team" as const, label: "By Team" },
-      ]).map((opt) => (
+      ].map((opt) => (
         <button
           key={opt.key}
-          className={cn("join-item btn btn-xs", value === opt.key && "btn-active")}
+          className={cn(
+            "join-item btn btn-xs",
+            value === opt.key && "btn-active",
+          )}
           onClick={() => onChange(opt.key)}
         >
           {opt.label}
@@ -212,15 +236,12 @@ export function CalendarFilterDropdown({
   const ref = useRef<HTMLDivElement>(null);
 
   // Auto-extract filter options from loaded tasks
-  const autoOptions = useMemo(
-    () => extractFilterOptions(tasks || []),
-    [tasks]
-  );
+  const autoOptions = useMemo(() => extractFilterOptions(tasks || []), [tasks]);
 
   // Get root-level tasks for parent task filter
   const rootTasks = useMemo(
     () => (tasks || []).filter((t) => !t.parent_task_id && t.depth === 0),
-    [tasks]
+    [tasks],
   );
 
   useEffect(() => {
@@ -231,7 +252,10 @@ export function CalendarFilterDropdown({
     return () => document.removeEventListener("mousedown", handler);
   }, [onClose]);
 
-  const toggle = <K extends keyof CalendarFilterState>(key: K, value: string) => {
+  const toggle = <K extends keyof CalendarFilterState>(
+    key: K,
+    value: string,
+  ) => {
     setLocal((prev) => {
       const arr = prev[key] as string[];
       const next = arr.includes(value)
@@ -255,7 +279,7 @@ export function CalendarFilterDropdown({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 z-50 w-80 bg-base-100 border border-base-200 rounded-xl shadow-xl p-4 max-h-[70vh] overflow-y-auto"
+      className="absolute right-0 top-full mt-1 z-50 w-80 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-xl shadow-xl p-4 max-h-[70vh] overflow-y-auto"
     >
       <div className="flex items-center justify-between mb-3">
         <span className="font-semibold text-sm">Filters</span>
@@ -268,7 +292,10 @@ export function CalendarFilterDropdown({
       {projects && projects.length > 0 && (
         <FilterSection title="Projects">
           {projects.map((p) => (
-            <label key={p.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+            <label
+              key={p.id}
+              className="flex items-center gap-2 cursor-pointer py-0.5"
+            >
               <input
                 type="checkbox"
                 className="checkbox checkbox-xs checkbox-primary"
@@ -285,7 +312,10 @@ export function CalendarFilterDropdown({
       {teams && teams.length > 0 && (
         <FilterSection title="Teams">
           {teams.map((t) => (
-            <label key={t.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+            <label
+              key={t.id}
+              className="flex items-center gap-2 cursor-pointer py-0.5"
+            >
               <input
                 type="checkbox"
                 className="checkbox checkbox-xs checkbox-primary"
@@ -302,7 +332,10 @@ export function CalendarFilterDropdown({
       {members && members.length > 0 && (
         <FilterSection title="Assignees">
           {members.map((m) => (
-            <label key={m.user_id} className="flex items-center gap-2 cursor-pointer py-0.5">
+            <label
+              key={m.user_id}
+              className="flex items-center gap-2 cursor-pointer py-0.5"
+            >
               <input
                 type="checkbox"
                 className="checkbox checkbox-xs checkbox-primary"
@@ -320,7 +353,10 @@ export function CalendarFilterDropdown({
       {/* Status */}
       <FilterSection title="Status">
         {ALL_STATUSES.map((s) => (
-          <label key={s} className="flex items-center gap-2 cursor-pointer py-0.5">
+          <label
+            key={s}
+            className="flex items-center gap-2 cursor-pointer py-0.5"
+          >
             <input
               type="checkbox"
               className="checkbox checkbox-xs checkbox-primary"
@@ -335,7 +371,10 @@ export function CalendarFilterDropdown({
       {/* Priority */}
       <FilterSection title="Priority">
         {ALL_PRIORITIES.map((p) => (
-          <label key={p} className="flex items-center gap-2 cursor-pointer py-0.5">
+          <label
+            key={p}
+            className="flex items-center gap-2 cursor-pointer py-0.5"
+          >
             <input
               type="checkbox"
               className="checkbox checkbox-xs checkbox-primary"
@@ -351,7 +390,10 @@ export function CalendarFilterDropdown({
       {autoOptions.labels.length > 0 && (
         <FilterSection title="Labels">
           {autoOptions.labels.map((l) => (
-            <label key={l} className="flex items-center gap-2 cursor-pointer py-0.5">
+            <label
+              key={l}
+              className="flex items-center gap-2 cursor-pointer py-0.5"
+            >
               <input
                 type="checkbox"
                 className="checkbox checkbox-xs checkbox-primary"
@@ -390,7 +432,10 @@ export function CalendarFilterDropdown({
             <span className="text-xs">Root tasks only</span>
           </label>
           {rootTasks.map((t) => (
-            <label key={t.id} className="flex items-center gap-2 cursor-pointer py-0.5">
+            <label
+              key={t.id}
+              className="flex items-center gap-2 cursor-pointer py-0.5"
+            >
               <input
                 type="radio"
                 name="parentTask"
@@ -406,8 +451,12 @@ export function CalendarFilterDropdown({
 
       {/* Actions */}
       <div className="flex gap-2 mt-3 pt-3 border-t border-base-200">
-        <button className="btn btn-ghost btn-xs flex-1" onClick={reset}>Reset</button>
-        <button className="btn btn-primary btn-xs flex-1" onClick={apply}>Apply</button>
+        <button className="btn btn-ghost btn-xs flex-1" onClick={reset}>
+          Reset
+        </button>
+        <button className="btn btn-primary btn-xs flex-1" onClick={apply}>
+          Apply
+        </button>
       </div>
     </div>
   );

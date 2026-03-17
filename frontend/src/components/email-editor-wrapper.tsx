@@ -1,130 +1,146 @@
 "use client";
 
-import { useRef, useCallback } from "react";
-import dynamic from "next/dynamic";
-import type { EditorRef, EmailEditorProps } from "react-email-editor";
-
-// Load Unlayer only on the client (it requires DOM / window)
-const EmailEditor = dynamic(() => import("react-email-editor"), { ssr: false });
+import { Editor } from "@tinymce/tinymce-react";
+import { useCallback, useRef, useState } from "react";
+import type { Editor as TinyMCEEditor } from "tinymce";
 
 /**
  * Merge tags available in every email template.
  * Maps directly to the Jinja2 `{{ variable }}` syntax used by the email-service.
  */
-const MERGE_TAGS: Record<string, Record<string, { name: string; value: string }>> = {
-  General: {
-    app_name: { name: "App Name", value: "{{app_name}}" },
-    frontend_url: { name: "App URL", value: "{{frontend_url}}" },
+const MERGE_TAGS = [
+  {
+    title: "General",
+    menu: [
+      { title: "App Name", value: "{{app_name}}" },
+      { title: "App URL", value: "{{frontend_url}}" },
+    ],
   },
-  Notification: {
-    title: { name: "Title", value: "{{title}}" },
-    body: { name: "Body", value: "{{body}}" },
+  {
+    title: "Notification",
+    menu: [
+      { title: "Title", value: "{{title}}" },
+      { title: "Body", value: "{{body}}" },
+    ],
   },
-  Announcement: {
-    author_name: { name: "Author Name", value: "{{author_name}}" },
-    priority: { name: "Priority", value: "{{priority}}" },
+  {
+    title: "Announcement",
+    menu: [
+      { title: "Author Name", value: "{{author_name}}" },
+      { title: "Priority", value: "{{priority}}" },
+    ],
   },
-  Authentication: {
-    otp_code: { name: "OTP Code", value: "{{otp_code}}" },
-    reset_url: { name: "Reset URL", value: "{{reset_url}}" },
-    reset_code: { name: "Reset Code", value: "{{reset_code}}" },
-    user_name: { name: "User Name", value: "{{user_name}}" },
+  {
+    title: "Authentication",
+    menu: [
+      { title: "OTP Code", value: "{{otp_code}}" },
+      { title: "Reset URL", value: "{{reset_url}}" },
+      { title: "Reset Code", value: "{{reset_code}}" },
+      { title: "User Name", value: "{{user_name}}" },
+    ],
   },
-};
+];
 
 export interface EmailEditorWrapperProps {
-  /** Initial Unlayer design JSON to load (for re-editing). */
-  initialDesign?: Record<string, unknown> | null;
-  /** Upload endpoint URL (e.g. /api/v1/orgs/{orgId}/uploads). */
-  uploadUrl?: string;
-  /** Bearer token for authenticated image uploads. */
-  authToken?: string;
+  /** Initial HTML to load into the editor. */
+  initialHtml?: string;
   /** Called when the editor is fully loaded and ready. */
   onReady?: () => void;
   minHeight?: number;
 }
 
-export interface EmailEditorWrapperRef {
-  /** Export the current design as { html, design }. */
-  exportTemplate: () => Promise<{ html: string; design: Record<string, unknown> }>;
-}
-
 /**
- * A thin wrapper around Unlayer's react-email-editor that:
- *  - pre-configures merge tags matching OrbisPM's Jinja2 variables
- *  - wires image uploads to the MinIO-backed /uploads endpoint
- *  - provides a simple `exportTemplate()` API
+ * TinyMCE-based email template editor hook.
+ * Returns the Editor component JSX and an exportTemplate function.
  */
 export function useEmailEditor(props: EmailEditorWrapperProps = {}) {
-  const editorRef = useRef<EditorRef>(null);
-  const readyRef = useRef(false);
+  const editorRef = useRef<TinyMCEEditor | null>(null);
+  const [isReady, setIsReady] = useState(false);
 
-  const onReady = useCallback(
-    (unlayer: any) => {
-      readyRef.current = true;
-
-      // Load initial design if provided
-      if (props.initialDesign) {
-        unlayer.loadDesign(props.initialDesign);
-      }
-
-      props.onReady?.();
-    },
-    [props.initialDesign, props.onReady],
-  );
-
-  const exportTemplate = useCallback((): Promise<{ html: string; design: Record<string, unknown> }> => {
+  const exportTemplate = useCallback((): Promise<{ html: string }> => {
     return new Promise((resolve, reject) => {
-      const editor = editorRef.current?.editor;
+      const editor = editorRef.current;
       if (!editor) {
         reject(new Error("Editor not ready"));
         return;
       }
-
-      editor.exportHtml((data: any) => {
-        const { html, design } = data;
-        resolve({ html, design });
-      });
+      resolve({ html: editor.getContent() });
     });
   }, []);
 
-  const editorOptions: EmailEditorProps["options"] = {
-    mergeTags: MERGE_TAGS,
-    features: {
-      stockImages: { enabled: false },
-      userUploads: { enabled: true },
-    },
-    appearance: {
-      theme: "modern_light",
-    },
-    tools: {
-      image: {
-        enabled: true,
-      },
-    },
-  };
-
-  // Wire image uploads to our backend if upload URL provided
-  if (props.uploadUrl && props.authToken) {
-    (editorOptions as any).imageUpload = {
-      url: props.uploadUrl,
-      headers: {
-        Authorization: `Bearer ${props.authToken}`,
-      },
-      // The backend expects a "file" form field
-      fieldName: "file",
-    };
-  }
+  const setContent = useCallback((html: string) => {
+    if (editorRef.current) {
+      editorRef.current.setContent(html);
+    }
+  }, []);
 
   const EditorComponent = (
-    <EmailEditor
-      ref={editorRef as any}
-      onReady={onReady}
-      minHeight={props.minHeight ?? 600}
-      options={editorOptions}
-      style={{ border: "1px solid hsl(var(--b3, 0 0% 86%))", borderRadius: "0.75rem", overflow: "hidden" }}
+    <Editor
+      tinymceScriptSrc="/tinymce/tinymce.min.js"
+      onInit={(_evt, editor) => {
+        editorRef.current = editor;
+        setIsReady(true);
+        if (props.initialHtml) {
+          editor.setContent(props.initialHtml);
+        }
+        props.onReady?.();
+      }}
+      licenseKey="gpl"
+      init={{
+        height: props.minHeight ?? 600,
+        menubar: "file edit view insert format table",
+        plugins: [
+          "advlist",
+          "autolink",
+          "lists",
+          "link",
+          "image",
+          "charmap",
+          "preview",
+          "anchor",
+          "searchreplace",
+          "visualblocks",
+          "code",
+          "fullscreen",
+          "insertdatetime",
+          "media",
+          "table",
+          "help",
+          "wordcount",
+        ],
+        toolbar:
+          "undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | " +
+          "forecolor backcolor | alignleft aligncenter alignright alignjustify | " +
+          "bullist numlist outdent indent | link image table | mergetags | " +
+          "removeformat | code fullscreen preview | help",
+        content_style:
+          "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; padding: 16px; } img { max-width: 100%; height: auto; }",
+        setup: (editor) => {
+          // Custom merge tags dropdown menu
+          editor.ui.registry.addMenuButton("mergetags", {
+            text: "Merge Tags",
+            fetch: (callback) => {
+              const items = MERGE_TAGS.map((group) => ({
+                type: "nestedmenuitem" as const,
+                text: group.title,
+                getSubmenuItems: () =>
+                  group.menu.map((tag) => ({
+                    type: "menuitem" as const,
+                    text: tag.title,
+                    onAction: () => editor.insertContent(tag.value),
+                  })),
+              }));
+              callback(items);
+            },
+          });
+        },
+        promotion: false,
+        branding: false,
+        convert_urls: false,
+        relative_urls: false,
+      }}
     />
   );
 
-  return { EditorComponent, exportTemplate, editorRef };
+  return { EditorComponent, exportTemplate, setContent, isReady };
 }

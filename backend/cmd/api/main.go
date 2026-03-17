@@ -294,7 +294,7 @@ func main() {
 	orgSvc.SetRoleRepo(roleRepo)
 
 	// --- Handlers (existing) ---
-	orgHandler := handler.NewOrgHandler(orgSvc)
+	orgHandler := handler.NewOrgHandler(orgSvc, zitadelClient)
 	teamHandler := handler.NewTeamHandler(teamSvc, dashboardSvc)
 	projectHandler := handler.NewProjectHandler(projectSvc, dashboardSvc)
 	taskHandler := handler.NewTaskHandler(taskSvc)

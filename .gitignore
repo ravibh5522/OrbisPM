@@ -22,3 +22,4 @@ backend/bin/
 
 # ── Playwright logs ───────────────────────────────────────────
 .playwright-mcp/
+frontend/public/tinymce/

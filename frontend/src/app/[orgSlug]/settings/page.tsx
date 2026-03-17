@@ -21,7 +21,6 @@ import EmailTemplatesTab from "./_components/email-templates-tab";
 import MembersTab from "./_components/members-tab";
 import OrganisationTab from "./_components/organisation-tab";
 import PermissionsTab from "./_components/permissions-tab";
-import RolesTab from "./_components/roles-tab";
 import WebhooksTab from "./_components/webhooks-tab";
 
 interface TabDef {
@@ -55,15 +54,8 @@ const TABS: TabDef[] = [
     component: BillingTab,
   },
   {
-    key: "roles",
-    label: "Roles",
-    icon: <Shield className="w-4 h-4" />,
-    roles: ["owner", "admin"],
-    component: RolesTab,
-  },
-  {
     key: "permissions",
-    label: "Permissions",
+    label: "Roles & Permissions",
     icon: <Shield className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: PermissionsTab,

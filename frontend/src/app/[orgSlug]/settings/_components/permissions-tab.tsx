@@ -426,7 +426,7 @@ export default function PermissionsTab() {
                           </div>
                           <ul
                             tabIndex={0}
-                            className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100 rounded-box w-44 border border-base-200"
+                            className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200"
                           >
                             <li>
                               <button

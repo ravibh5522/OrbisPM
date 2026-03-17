@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
@@ -167,7 +169,8 @@ func (s *CommentService) enqueueNotification(userID, orgID, ntype, title, body s
 		log.Error().Err(err).Msg("build notification task for mention")
 		return
 	}
-	if err := s.workerSrv.Enqueue(task); err != nil {
+	// Delay mention notifications by 5 minutes to batch with nearby task updates
+	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(5*time.Minute)); err != nil {
 		log.Error().Err(err).Msg("enqueue notification task for mention")
 	}
 }

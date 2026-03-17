@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
@@ -15,11 +17,11 @@ import (
 
 // AnnouncementService manages announcements.
 type AnnouncementService struct {
-	repo      repository.AnnouncementRepository
+	repo       repository.AnnouncementRepository
 	memberRepo repository.OrgMemberRepository
-	txm       *repository.TxManager
-	workerSrv *worker.Server
-	publisher EventPublisher
+	txm        *repository.TxManager
+	workerSrv  *worker.Server
+	publisher  EventPublisher
 }
 
 // NewAnnouncementService creates a new AnnouncementService.
@@ -250,7 +252,8 @@ func (s *AnnouncementService) enqueueNotification(userID, orgID, ntype, title, b
 		log.Error().Err(err).Msg("build announcement notification task")
 		return
 	}
-	if err := s.workerSrv.Enqueue(task); err != nil {
+	// Delay announcement email by 2 minutes to batch with nearby announcements
+	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(2*time.Minute)); err != nil {
 		log.Error().Err(err).Msg("enqueue announcement notification task")
 	}
 }

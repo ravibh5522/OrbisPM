@@ -10,12 +10,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-function getNotificationHref(notif: Notification, orgSlug: string): string | null {
+function getNotificationHref(
+  notif: Notification,
+  orgSlug: string,
+): string | null {
   const p = notif.payload;
   if (!p) return null;
   const projectId = p.project_id as string | undefined;
   const taskId = p.task_id as string | undefined;
-  if (projectId && taskId) return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
+  if (projectId && taskId)
+    return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
   if (projectId) return `/${orgSlug}/projects/${projectId}`;
   const teamId = p.team_id as string | undefined;
   if (teamId) return `/${orgSlug}/teams`;
@@ -39,7 +43,10 @@ export function NotificationBell() {
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
         setOpen(false);
       }
     }
@@ -56,12 +63,14 @@ export function NotificationBell() {
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => api.notifications.markRead(currentOrg!.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.notifications.markAllRead(currentOrg!.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
   });
 
   const items = notifications?.data || [];
@@ -88,7 +97,9 @@ export function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
         {unread > 0 && (
-          <span className="indicator-item badge badge-xs badge-primary">{unread}</span>
+          <span className="indicator-item badge badge-xs badge-primary">
+            {unread}
+          </span>
         )}
       </button>
 
@@ -97,7 +108,7 @@ export function NotificationBell() {
         <div
           className={cn(
             "absolute right-0 top-full mt-2 z-50",
-            "w-80 rounded-box border border-base-200 bg-base-100 shadow-lg"
+            "w-80 rounded-box border border-base-200 bg-base-100/95 backdrop-blur-[20px] shadow-lg",
           )}
         >
           {/* Header */}
@@ -117,14 +128,16 @@ export function NotificationBell() {
           {/* List */}
           <div className="max-h-80 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="p-4 text-center text-sm text-base-content/50">No notifications</p>
+              <p className="p-4 text-center text-sm text-base-content/50">
+                No notifications
+              </p>
             ) : (
               items.map((notif: Notification) => (
                 <div
                   key={notif.id}
                   className={cn(
                     "cursor-pointer border-b border-base-200 p-3 last:border-0 hover:bg-base-200",
-                    !notif.read_at && "bg-primary/5"
+                    !notif.read_at && "bg-primary/5",
                   )}
                   onClick={() => handleNotifClick(notif)}
                 >
@@ -138,9 +151,15 @@ export function NotificationBell() {
                       )}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium leading-snug">{notif.title}</p>
-                      <p className="line-clamp-2 text-xs text-base-content/60">{notif.body}</p>
-                      <p className="mt-1 text-xs text-base-content/40">{formatRelative(notif.created_at)}</p>
+                      <p className="text-sm font-medium leading-snug">
+                        {notif.title}
+                      </p>
+                      <p className="line-clamp-2 text-xs text-base-content/60">
+                        {notif.body}
+                      </p>
+                      <p className="mt-1 text-xs text-base-content/40">
+                        {formatRelative(notif.created_at)}
+                      </p>
                     </div>
                   </div>
                 </div>

@@ -1131,6 +1131,54 @@ func (c *ZitadelClient) FindUserByEmail(ctx context.Context, email string) (stri
 	return resp.GetResult()[0].GetUserId(), nil
 }
 
+// DeactivateUser deactivates a Zitadel user account.
+func (c *ZitadelClient) DeactivateUser(ctx context.Context, userID string) error {
+	_, err := c.grpc.ManagementService().DeactivateUser(ctx, &management.DeactivateUserRequest{
+		Id: userID,
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// ReactivateUser reactivates a previously deactivated Zitadel user account.
+func (c *ZitadelClient) ReactivateUser(ctx context.Context, userID string) error {
+	_, err := c.grpc.ManagementService().ReactivateUser(ctx, &management.ReactivateUserRequest{
+		Id: userID,
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// UpdateUserEmail updates a user's email address in Zitadel.
+func (c *ZitadelClient) UpdateUserEmail(ctx context.Context, userID, newEmail string) error {
+	_, err := c.grpc.UserServiceV2().SetEmail(ctx, &userv2.SetEmailRequest{
+		UserId: userID,
+		Email:  newEmail,
+		Verification: &userv2.SetEmailRequest_IsVerified{
+			IsVerified: true,
+		},
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// DeleteUser permanently deletes a Zitadel user account.
+func (c *ZitadelClient) DeleteUser(ctx context.Context, userID string) error {
+	_, err := c.grpc.ManagementService().RemoveUser(ctx, &management.RemoveUserRequest{
+		Id: userID,
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
 // --- Getters ---
 
 // Issuer returns the external Zitadel issuer URL.
