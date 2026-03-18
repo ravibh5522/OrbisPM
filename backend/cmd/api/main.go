@@ -168,7 +168,7 @@ func main() {
 
 	// --- MinIO Storage Client (best-effort) ---
 	var storageClient *storage.Client
-	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOUseSSL)
+	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to init MinIO storage (continuing without file storage)")
 	} else {
