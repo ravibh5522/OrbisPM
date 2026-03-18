@@ -64,39 +64,40 @@ func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, cl
 	c.jwks = NewJWKSCache(jwksURL, c.httpClient, c.externalHost)
 
 	// Connect gRPC via zitadel-go SDK
-	// Use the external domain so Zitadel recognizes the instance,
-	// but route actual gRPC traffic to the internal URL (may differ in Docker setups).
+	// Domain is always from the external issuer (so Zitadel recognises the instance),
+	// but TLS mode and TCP target are driven by the INTERNAL URL — Coolify terminates
+	// TLS externally; the internal Docker connection is always plain HTTP.
 	parsedIssuer, err := url.Parse(issuer)
 	if err != nil {
 		return nil, fmt.Errorf("parse issuer URL: %w", err)
 	}
 	domain := parsedIssuer.Hostname()
 
-	// Choose TLS vs insecure based on issuer scheme
-	var z *zitadel.Zitadel
-	if parsedIssuer.Scheme == "https" {
-		z = zitadel.New(domain) // TLS, port 443
-	} else {
-		port := parsedIssuer.Port()
-		if port == "" {
-			port = "8080"
-		}
-		z = zitadel.New(domain, zitadel.WithInsecure(port))
-	}
-
-	// Parse internal URL to get actual gRPC target (host:port)
+	// Parse internal URL first — this determines the actual gRPC transport security.
 	parsedInternal, err := url.Parse(internalURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse internal URL: %w", err)
 	}
-	grpcTarget := parsedInternal.Host // e.g. "zitadel:8080" or "zitadel.animastuff.fun:443"
-	// If no explicit port in URL (e.g. https://host or http://host), add default port
+	grpcTarget := parsedInternal.Host // e.g. "zitadel:8080"
 	if parsedInternal.Port() == "" {
 		if parsedInternal.Scheme == "https" {
 			grpcTarget = parsedInternal.Hostname() + ":443"
 		} else {
 			grpcTarget = parsedInternal.Hostname() + ":80"
 		}
+	}
+
+	// Use insecure gRPC when the internal URL is plain HTTP (even if external issuer is HTTPS).
+	// Using TLS here would fail because the internal Zitadel container does not terminate TLS.
+	var z *zitadel.Zitadel
+	if parsedInternal.Scheme == "http" {
+		internalPort := parsedInternal.Port()
+		if internalPort == "" {
+			internalPort = "80"
+		}
+		z = zitadel.New(domain, zitadel.WithInsecure(internalPort))
+	} else {
+		z = zitadel.New(domain) // TLS — internal URL is also HTTPS
 	}
 
 	grpcClient, err := zclient.New(ctx, z,
