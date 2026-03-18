@@ -79,7 +79,7 @@ services:
     user: "0"
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}" --config /zitadel-config.yaml
     ports:
-      - "${ZITADEL_EXTERNAL_PORT:-8081}:8080" # local dev — admin console & setup script
+      - "8081:8080" # always bind 8081; in prod Coolify proxies 443→8081
     environment:
       ZITADEL_PORT: 8080
       ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN:-localhost}
