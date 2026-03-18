@@ -24,6 +24,21 @@ export const metadata: Metadata = {
     description:
       "Everything Trello does, plus AI automation, enterprise RBAC, real-time sync, and subtasks. The best Trello alternative for growing teams.",
     url: "/alternatives/trello",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM vs Trello Comparison",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM vs Trello – Best AI-Powered Trello Alternative in 2026",
+    description:
+      "Everything Trello does, plus AI automation, enterprise RBAC, real-time sync, and subtasks.",
+    images: ["/og-image.png"],
   },
   keywords: [
     "Trello alternative",
@@ -83,7 +98,7 @@ export default function TrelloAlternativePage() {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives/jira",
+                item: "https://orbisom.live/alternatives",
               },
               {
                 "@type": "ListItem",

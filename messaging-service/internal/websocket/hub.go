@@ -107,7 +107,15 @@ func (h *ChatHub) HandleEvent(event domain.DomainEvent) {
 	}
 	channelID, _ := uuid.Parse(event.ChannelID)
 
-	data, err := json.Marshal(event)
+	// Extract the actual data from the event payload (unwrap {"data": ...} wrapper)
+	var payloadData any = event.Payload
+	if event.Payload != nil {
+		if d, ok := event.Payload["data"]; ok {
+			payloadData = d
+		}
+	}
+
+	data, err := json.Marshal(payloadData)
 	if err != nil {
 		return
 	}

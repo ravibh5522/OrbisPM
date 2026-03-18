@@ -26,6 +26,21 @@ export const metadata: Metadata = {
     description:
       "Free starter plan with core features. Professional at $12/user/mo with AI sprint planning and unlimited projects. Enterprise with SSO and on-premise deployment.",
     url: "/pricing",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM Pricing – Start Free, Scale as You Grow",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM Pricing – Start Free, Scale as You Grow",
+    description:
+      "Free starter plan, Professional at $12/user/mo with AI features, Enterprise with SSO and on-premise.",
+    images: ["/og-image.png"],
   },
 };
 

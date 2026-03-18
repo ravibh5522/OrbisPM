@@ -11,12 +11,37 @@ export const metadata: Metadata = {
   description:
     "Learn how WebSocket-based real-time collaboration in project management eliminates delays, reduces context switching, and keeps distributed engineering teams in sync. Compare polling vs WebSocket architectures.",
   alternates: { canonical: "/blog/real-time-collaboration-engineering-teams" },
+  keywords: [
+    "real-time collaboration project management",
+    "WebSocket project management",
+    "real-time team collaboration",
+    "distributed engineering teams",
+    "live project updates",
+    "polling vs WebSocket",
+    "project management sync",
+    "engineering team collaboration tools",
+  ],
   openGraph: {
     title: "Real-Time Collaboration: Why WebSocket-Based PM Changes Everything",
     description:
       "How WebSocket-based real-time sync eliminates delays and keeps teams in sync instantly.",
     url: "/blog/real-time-collaboration-engineering-teams",
     type: "article",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Real-Time Collaboration in Project Management",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Real-Time Collaboration: Why WebSocket-Based PM Changes Everything",
+    description:
+      "How WebSocket-based real-time sync eliminates delays and keeps distributed engineering teams in perfect sync.",
+    images: ["/og-image.png"],
   },
 };
 
@@ -32,14 +57,26 @@ export default function RealTimeCollabArticle() {
           description:
             "How WebSocket-based real-time collaboration keeps distributed engineering teams in sync",
           url: "https://orbisom.live/blog/real-time-collaboration-engineering-teams",
-          datePublished: "2025-10-28",
-          dateModified: "2025-10-28",
-          author: { "@type": "Organization", name: "OrbisPM" },
+          datePublished: "2026-02-28",
+          dateModified: "2026-02-28",
+          image: {
+            "@type": "ImageObject",
+            url: "https://orbisom.live/og-image.png",
+            width: 1200,
+            height: 630,
+          },
+          author: {
+            "@type": "Organization",
+            name: "OrbisPM",
+            url: "https://orbisom.live",
+          },
           publisher: {
             "@type": "Organization",
             name: "OrbisPM",
             url: "https://orbisom.live",
           },
+          mainEntityOfPage:
+            "https://orbisom.live/blog/real-time-collaboration-engineering-teams",
         }}
       />
       <MarketingHeader />

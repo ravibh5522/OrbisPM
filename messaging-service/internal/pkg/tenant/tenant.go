@@ -11,6 +11,7 @@ type contextKey string
 const orgIDKey contextKey = "tenant_org_id"
 const userIDKey contextKey = "tenant_user_id"
 const emailKey contextKey = "tenant_email"
+const displayNameKey contextKey = "tenant_display_name"
 
 // SetOrgID stores the org ID in context.
 func SetOrgID(ctx context.Context, orgID uuid.UUID) context.Context {
@@ -46,6 +47,19 @@ func SetEmail(ctx context.Context, email string) context.Context {
 // Email extracts the email from context.
 func Email(ctx context.Context) string {
 	if v, ok := ctx.Value(emailKey).(string); ok {
+		return v
+	}
+	return ""
+}
+
+// SetDisplayName stores the display name in context.
+func SetDisplayName(ctx context.Context, name string) context.Context {
+	return context.WithValue(ctx, displayNameKey, name)
+}
+
+// DisplayName extracts the display name from context.
+func DisplayName(ctx context.Context) string {
+	if v, ok := ctx.Value(displayNameKey).(string); ok {
 		return v
 	}
 	return ""

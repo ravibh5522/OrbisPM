@@ -24,6 +24,21 @@ export const metadata: Metadata = {
     description:
       "AI-powered project management with real-time collaboration and enterprise RBAC. The best Asana alternative for engineering teams.",
     url: "/alternatives/asana",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM vs Asana Comparison",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM vs Asana – Best AI-Powered Asana Alternative in 2026",
+    description:
+      "AI-powered project management with real-time collaboration and enterprise RBAC. The best Asana alternative for engineering teams.",
+    images: ["/og-image.png"],
   },
   keywords: [
     "Asana alternative",
@@ -82,7 +97,7 @@ export default function AsanaAlternativePage() {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives/jira",
+                item: "https://orbisom.live/alternatives",
               },
               {
                 "@type": "ListItem",

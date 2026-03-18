@@ -7,6 +7,27 @@ export const metadata: Metadata = {
   description:
     "OrbisPM privacy policy. Learn how we collect, use, and protect your data. GDPR compliant, enterprise-grade data protection.",
   alternates: { canonical: "/privacy" },
+  robots: { index: true, follow: false },
+  openGraph: {
+    title: "Privacy Policy – OrbisPM",
+    description:
+      "OrbisPM privacy policy. GDPR compliant, enterprise-grade data protection.",
+    url: "/privacy",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM Privacy Policy",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "Privacy Policy – OrbisPM",
+    description:
+      "OrbisPM privacy policy. GDPR compliant, enterprise-grade data protection.",
+  },
 };
 
 export default function PrivacyPage() {

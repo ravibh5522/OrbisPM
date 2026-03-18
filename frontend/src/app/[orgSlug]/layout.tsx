@@ -22,6 +22,7 @@ import {
   ListTodo,
   LogOut,
   Menu,
+  MessageSquare,
   Palette,
   Search,
   UserCircle,
@@ -56,6 +57,11 @@ function getSidebarItems(orgSlug: string): NavItem[] {
       href: `/${orgSlug}/calendar`,
       label: "Calendar",
       icon: <CalendarDays className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/messages`,
+      label: "Messages",
+      icon: <MessageSquare className="w-5 h-5" />,
     },
     {
       href: `/${orgSlug}/projects`,
@@ -519,6 +525,11 @@ function MobileSidebar() {
       href: `/${orgSlug}/calendar`,
       label: "Calendar",
       icon: <CalendarDays className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/messages`,
+      label: "Messages",
+      icon: <MessageSquare className="w-5 h-5" />,
     },
     {
       href: `/${orgSlug}/teams`,

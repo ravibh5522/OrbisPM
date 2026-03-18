@@ -26,6 +26,21 @@ export const metadata: Metadata = {
       "How change request workflows prevent accountability gaps and keep projects on track.",
     url: "/blog/change-request-workflows-compliance",
     type: "article",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Change Request Workflows for Engineering Teams",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Change Request Workflows: How Engineering Teams Stay in Control",
+    description:
+      "How change request workflows prevent accountability gaps and keep engineering projects on track.",
+    images: ["/og-image.png"],
   },
 };
 
@@ -43,7 +58,17 @@ export default function ChangeRequestWorkflowsArticle() {
           url: "https://orbisom.live/blog/change-request-workflows-compliance",
           datePublished: "2026-02-15",
           dateModified: "2026-02-15",
-          author: { "@type": "Organization", name: "OrbisPM" },
+          image: {
+            "@type": "ImageObject",
+            url: "https://orbisom.live/og-image.png",
+            width: 1200,
+            height: 630,
+          },
+          author: {
+            "@type": "Organization",
+            name: "OrbisPM",
+            url: "https://orbisom.live",
+          },
           publisher: {
             "@type": "Organization",
             name: "OrbisPM",

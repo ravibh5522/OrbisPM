@@ -24,9 +24,10 @@ type Config struct {
 	NatsURL string
 
 	// Zitadel / Auth
-	ZitadelIssuer      string
-	ZitadelInternalURL string
-	ZitadelClientID    string
+	ZitadelIssuer       string
+	ZitadelInternalURL  string
+	ZitadelClientID     string
+	ZitadelServiceToken string
 
 	// MinIO / S3
 	MinIOEndpoint  string
@@ -61,9 +62,10 @@ func Load() (*Config, error) {
 		DatabaseURL:        getEnv("DATABASE_URL", "postgres://orbispm:orbispm@localhost:5432/orbispm?sslmode=disable"),
 		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6380/0"),
 		NatsURL:            getEnv("NATS_URL", "nats://localhost:4222"),
-		ZitadelIssuer:      getEnv("ZITADEL_ISSUER", "http://localhost:8081"),
-		ZitadelInternalURL: getEnv("ZITADEL_INTERNAL_URL", "http://zitadel:8080"),
-		ZitadelClientID:    getEnv("ZITADEL_CLIENT_ID", ""),
+		ZitadelIssuer:       getEnv("ZITADEL_ISSUER", "http://localhost:8081"),
+		ZitadelInternalURL:  getEnv("ZITADEL_INTERNAL_URL", "http://zitadel:8080"),
+		ZitadelClientID:     getEnv("ZITADEL_CLIENT_ID", ""),
+		ZitadelServiceToken: getEnv("ZITADEL_SERVICE_TOKEN", ""),
 		MinIOEndpoint:      getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:     getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:     getEnv("MINIO_SECRET_KEY", "minioadmin"),

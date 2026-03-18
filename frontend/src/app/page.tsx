@@ -14,9 +14,24 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
       description:
-      "Ship faster with AI-native project management. Real-time collaboration, enterprise RBAC, AI sprint planning, smart estimation, and workflow automation. The #1 Jira alternative.",
+        "Ship faster with AI-native project management. Real-time collaboration, enterprise RBAC, AI sprint planning, smart estimation, and workflow automation. The #1 Jira alternative.",
       url: siteUrl,
       type: "website",
+      images: [
+        {
+          url: `${siteUrl}/og-image.png`,
+          width: 1200,
+          height: 630,
+          alt: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "OrbisPM – AI-Powered Project Management",
+      description:
+        "Ship faster with AI-native project management. Real-time collaboration, enterprise RBAC, AI sprint planning, and workflow automation.",
+      images: [`${siteUrl}/og-image.png`],
     },
   };
 }
@@ -77,11 +92,6 @@ export default async function Home() {
         description: "Per user per month for unlimited teams",
       },
     ],
-    aggregateRating: {
-      "@type": "AggregateRating",
-      ratingValue: "4.9",
-      ratingCount: "247",
-    },
   };
 
   const faqSchema = {

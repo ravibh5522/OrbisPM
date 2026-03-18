@@ -57,7 +57,9 @@ type Channel struct {
 
 	// Aggregated fields (not stored in channels table).
 	MemberCount  int        `json:"member_count,omitempty"`
-	UnreadCount  int        `json:"unread_count,omitempty"`
+	UnreadCount  int        `json:"unread_count"`
+	IsMuted      bool       `json:"is_muted"`
+	IsPinned     bool       `json:"is_pinned"`
 	LastMessage  string     `json:"last_message,omitempty"`
 	LastActivity *time.Time `json:"last_activity,omitempty"`
 }

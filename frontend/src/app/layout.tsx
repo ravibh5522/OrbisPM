@@ -52,6 +52,14 @@ export async function generateMetadata(): Promise<Metadata> {
       title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
       description:
         "AI-native project management with real-time collaboration, enterprise RBAC, change request workflows, AI sprint planning, and powerful automation. The #1 Jira alternative for modern teams.",
+      images: [
+        {
+          url: "/og-image.png",
+          width: 1200,
+          height: 630,
+          alt: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
@@ -59,6 +67,7 @@ export async function generateMetadata(): Promise<Metadata> {
       description:
         "AI-native project management with real-time collaboration, enterprise RBAC, AI sprint planning, and workflow automation. Built for engineering teams.",
       creator: "@orbispm",
+      images: ["/og-image.png"],
     },
     robots: {
       index: true,
@@ -80,15 +89,17 @@ export async function generateMetadata(): Promise<Metadata> {
         { url: "/icon.svg", type: "image/svg+xml" },
         { url: "/icon.png", type: "image/png", sizes: "32x32" },
       ],
-      apple: [
-        { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
-      ],
+      apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
       shortcut: "/favicon.ico",
     },
   };
 }
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
     <html lang="en" data-theme="orbis-light" suppressHydrationWarning>
       <body className="min-h-screen bg-base-200">

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -77,8 +78,10 @@ func (r *channelRepo) ListByUser(ctx context.Context, tx pgx.Tx, userID uuid.UUI
 		       c.is_archived, COALESCE(c.dm_pair, ''), c.avatar_url, c.created_by, c.created_at, c.updated_at,
 		       (SELECT count(*) FROM channel_members WHERE channel_id = c.id) AS member_count,
 		       cm.is_muted, cm.is_pinned, cm.last_read_at,
-		       (SELECT body FROM messages WHERE channel_id = c.id AND NOT is_deleted ORDER BY created_at DESC LIMIT 1) AS last_message,
-		       (SELECT created_at FROM messages WHERE channel_id = c.id AND NOT is_deleted ORDER BY created_at DESC LIMIT 1) AS last_activity
+		       COALESCE((SELECT body FROM messages WHERE channel_id = c.id AND NOT is_deleted ORDER BY created_at DESC LIMIT 1), '') AS last_message,
+		       (SELECT created_at FROM messages WHERE channel_id = c.id AND NOT is_deleted ORDER BY created_at DESC LIMIT 1) AS last_activity,
+		       (SELECT count(*) FROM messages WHERE channel_id = c.id AND NOT is_deleted
+		        AND (cm.last_read_at IS NULL OR created_at > cm.last_read_at)) AS unread_count
 		FROM channels c
 		INNER JOIN channel_members cm ON cm.channel_id = c.id
 		WHERE cm.user_id = $1
@@ -96,13 +99,13 @@ func (r *channelRepo) ListByUser(ctx context.Context, tx pgx.Tx, userID uuid.UUI
 	var channels []domain.Channel
 	for rows.Next() {
 		var ch domain.Channel
-		var isMuted, isPinned bool
+		var lastReadAt *time.Time
 		err := rows.Scan(
 			&ch.ID, &ch.OrgID, &ch.Name, &ch.Description, &ch.Type,
 			&ch.TeamID, &ch.ProjectID, &ch.IsArchived, &ch.DMPair,
 			&ch.AvatarURL, &ch.CreatedBy, &ch.CreatedAt, &ch.UpdatedAt,
-			&ch.MemberCount, &isMuted, &isPinned, nil,
-			&ch.LastMessage, &ch.LastActivity,
+			&ch.MemberCount, &ch.IsMuted, &ch.IsPinned, &lastReadAt,
+			&ch.LastMessage, &ch.LastActivity, &ch.UnreadCount,
 		)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan channel: %w", err)

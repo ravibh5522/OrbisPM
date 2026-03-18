@@ -134,7 +134,6 @@ func main() {
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Timeout(30 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -156,17 +155,24 @@ func main() {
 	jwksURL := cfg.ZitadelInternalURL + "/oauth/v2/keys"
 	hostHeader := parsedIssuer.Host
 
-	// Authenticated routes
+	authMiddleware := mw.Auth(jwksURL, cfg.ZitadelIssuer, hostHeader, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken)
+
+	// REST API routes (with timeout)
 	r.Group(func(r chi.Router) {
-		r.Use(mw.Auth(jwksURL, cfg.ZitadelIssuer, hostHeader))
+		r.Use(chimw.Timeout(30 * time.Second))
+		r.Use(authMiddleware)
 		r.Use(mw.SetOrgFromHeader)
 
-		// REST API
 		r.Route("/api/v1/chat", func(r chi.Router) {
 			restHandler.Routes(r)
 		})
+	})
 
-		// WebSocket
+	// WebSocket route (NO timeout — long-lived connections)
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware)
+		r.Use(mw.SetOrgFromHeader)
+
 		r.Get("/ws/chat", wsHandler.ServeWS)
 	})
 

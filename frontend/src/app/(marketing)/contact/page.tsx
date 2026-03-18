@@ -22,6 +22,21 @@ export const metadata: Metadata = {
     description:
       "Get in touch with the OrbisPM team. We respond within 24 hours.",
     url: "/contact",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Contact OrbisPM",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contact OrbisPM – Sales, Support & Partnerships",
+    description:
+      "Get in touch with the OrbisPM team for demos, enterprise inquiries, or support. We respond within 24 hours.",
+    images: ["/og-image.png"],
   },
 };
 

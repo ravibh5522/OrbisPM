@@ -31,6 +31,21 @@ export const metadata: Metadata = {
     description:
       "Building the most intelligent project management platform for modern engineering teams. Enterprise-ready with AI-powered features.",
     url: "/about",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "About OrbisPM – Our Mission",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "About OrbisPM – Reinventing Project Management with AI",
+    description:
+      "Building the most intelligent project management platform for modern engineering teams. Enterprise-ready with AI-powered features.",
+    images: ["/og-image.png"],
   },
 };
 

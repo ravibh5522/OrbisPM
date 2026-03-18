@@ -107,6 +107,12 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
+  // Include org context for chat API calls
+  const orgId = localStorage.getItem("current_org_id");
+  if (orgId && path.startsWith(`${V1}/chat`)) {
+    headers["X-Org-ID"] = orgId;
+  }
+
   // Remove Content-Type for FormData
   if (options.body instanceof FormData) {
     delete headers["Content-Type"];
@@ -216,6 +222,11 @@ import type {
   AuthTokens,
   BackupCodesResponse,
   BillingPlan,
+  ChatBookmark,
+  ChatChannel,
+  ChatChannelMember,
+  ChatMessage,
+  ChatPinnedMessage,
   Checklist,
   Comment,
   CustomRole,
@@ -1260,6 +1271,110 @@ export const api = {
         del(
           `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}`,
         ),
+    },
+  },
+
+  // --- Chat / Messaging (via messaging-service through Kong) ---
+  chat: {
+    channels: {
+      list: (limit = 50, offset = 0) =>
+        get<ListResponse<ChatChannel>>(
+          `${V1}/chat/channels?limit=${limit}&offset=${offset}`,
+        ),
+      get: (channelId: string) =>
+        get<ChatChannel>(`${V1}/chat/channels/${channelId}`),
+      create: (data: {
+        name: string;
+        description?: string;
+        type: string;
+        team_id?: string;
+        project_id?: string;
+      }) => post<ChatChannel>(`${V1}/chat/channels`, data),
+      update: (
+        channelId: string,
+        data: { name?: string; description?: string; avatar_url?: string },
+      ) => put<ChatChannel>(`${V1}/chat/channels/${channelId}`, data),
+      delete: (channelId: string) => del(`${V1}/chat/channels/${channelId}`),
+      archive: (channelId: string) =>
+        post<void>(`${V1}/chat/channels/${channelId}/archive`, {}),
+      getOrCreateDM: (userId: string) =>
+        post<ChatChannel>(`${V1}/chat/channels/dm`, { user_id: userId }),
+      markRead: (channelId: string) =>
+        post<void>(`${V1}/chat/channels/${channelId}/read`, {}),
+      updateSettings: (
+        channelId: string,
+        data: { is_muted?: boolean; is_pinned?: boolean },
+      ) => put<void>(`${V1}/chat/channels/${channelId}/settings`, data),
+    },
+    members: {
+      list: (channelId: string) =>
+        get<ChatChannelMember[]>(`${V1}/chat/channels/${channelId}/members`),
+      add: (channelId: string, userId: string) =>
+        post<void>(`${V1}/chat/channels/${channelId}/members`, {
+          user_id: userId,
+        }),
+      remove: (channelId: string, userId: string) =>
+        del(`${V1}/chat/channels/${channelId}/members/${userId}`),
+      updateRole: (channelId: string, userId: string, role: string) =>
+        put<void>(`${V1}/chat/channels/${channelId}/members/${userId}/role`, {
+          role,
+        }),
+    },
+    messages: {
+      list: (channelId: string, limit = 50, before?: string) =>
+        get<ChatMessage[]>(
+          `${V1}/chat/channels/${channelId}/messages?limit=${limit}${before ? `&before=${before}` : ""}`,
+        ),
+      send: (
+        channelId: string,
+        data: {
+          body: string;
+          body_format?: string;
+          parent_message_id?: string;
+          mentions?: string[];
+        },
+      ) => post<ChatMessage>(`${V1}/chat/channels/${channelId}/messages`, data),
+      edit: (messageId: string, data: { body: string; body_format?: string }) =>
+        put<ChatMessage>(`${V1}/chat/messages/${messageId}`, data),
+      delete: (messageId: string) => del(`${V1}/chat/messages/${messageId}`),
+      search: (channelId: string, query: string, limit = 20, offset = 0) =>
+        get<ListResponse<ChatMessage>>(
+          `${V1}/chat/channels/${channelId}/messages/search?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`,
+        ),
+      thread: (messageId: string, limit = 50, offset = 0) =>
+        get<ListResponse<ChatMessage>>(
+          `${V1}/chat/messages/${messageId}/thread?limit=${limit}&offset=${offset}`,
+        ),
+      forward: (messageId: string, targetChannelId: string) =>
+        post<ChatMessage>(`${V1}/chat/messages/${messageId}/forward`, {
+          target_channel_id: targetChannelId,
+        }),
+    },
+    reactions: {
+      toggle: (messageId: string, emoji: string) =>
+        post<{ added: boolean }>(`${V1}/chat/messages/${messageId}/reactions`, {
+          emoji,
+        }),
+    },
+    pins: {
+      list: (channelId: string) =>
+        get<ChatPinnedMessage[]>(`${V1}/chat/channels/${channelId}/pins`),
+      pin: (channelId: string, messageId: string) =>
+        post<void>(`${V1}/chat/channels/${channelId}/pins/${messageId}`, {}),
+      unpin: (channelId: string, messageId: string) =>
+        del(`${V1}/chat/channels/${channelId}/pins/${messageId}`),
+    },
+    bookmarks: {
+      list: (limit = 50, offset = 0) =>
+        get<ListResponse<ChatBookmark>>(
+          `${V1}/chat/bookmarks?limit=${limit}&offset=${offset}`,
+        ),
+      add: (messageId: string, note?: string) =>
+        post<void>(`${V1}/chat/messages/${messageId}/bookmark`, {
+          note: note || "",
+        }),
+      remove: (messageId: string) =>
+        del(`${V1}/chat/messages/${messageId}/bookmark`),
     },
   },
 };

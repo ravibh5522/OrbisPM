@@ -23,6 +23,21 @@ export const metadata: Metadata = {
     description:
       "AI-powered sprint planning, real-time collaboration, granular RBAC. See why teams are switching from Jira to OrbisPM.",
     url: "/alternatives/jira",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM vs Jira Comparison",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM vs Jira – Best AI-Powered Jira Alternative in 2026",
+    description:
+      "AI-powered sprint planning, real-time collaboration, granular RBAC. See why engineering teams are switching from Jira.",
+    images: ["/og-image.png"],
   },
   keywords: [
     "Jira alternative",
@@ -83,7 +98,7 @@ export default function JiraAlternativePage() {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives/jira",
+                item: "https://orbisom.live/alternatives",
               },
               {
                 "@type": "ListItem",

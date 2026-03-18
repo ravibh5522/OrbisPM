@@ -60,10 +60,10 @@ export type ProjectStatus = "active" | "archived" | "completed";
 
 // Custom task status configuration (stored in project.settings.task_statuses)
 export interface TaskStatusConfig {
-  id: string;        // e.g. "todo", "in_progress", "review", "done"
-  label: string;     // Display name
-  color: string;     // DaisyUI color: primary, secondary, accent, info, success, warning, error
-  done?: boolean;    // Marks task as completed (for burndown/progress calculations)
+  id: string; // e.g. "todo", "in_progress", "review", "done"
+  label: string; // Display name
+  color: string; // DaisyUI color: primary, secondary, accent, info, success, warning, error
+  done?: boolean; // Marks task as completed (for burndown/progress calculations)
 }
 
 // Default statuses used when project has none configured
@@ -550,6 +550,103 @@ export interface OIDCAuthorizeResponse {
   auth_url: string;
   code_verifier: string;
   state: string;
+}
+
+// ─── Chat / Messaging Types ───────────────────────────
+
+export type ChatChannelType = "dm" | "group" | "team" | "project";
+export type ChatMemberRole = "owner" | "admin" | "member";
+export type ChatMessageFormat = "text" | "markdown";
+
+export interface ChatChannel {
+  id: string;
+  org_id: string;
+  name: string;
+  description: string;
+  type: ChatChannelType;
+  team_id?: string | null;
+  project_id?: string | null;
+  is_archived: boolean;
+  dm_pair?: string;
+  avatar_url?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  member_count?: number;
+  unread_count?: number;
+  last_message?: string;
+  last_activity?: string | null;
+}
+
+export interface ChatChannelMember {
+  channel_id: string;
+  user_id: string;
+  role: ChatMemberRole;
+  last_read_at?: string | null;
+  is_muted: boolean;
+  is_pinned: boolean;
+  joined_at: string;
+  display_name?: string;
+  email?: string;
+  avatar_url?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  org_id: string;
+  channel_id: string;
+  user_id: string;
+  body: string;
+  body_format: ChatMessageFormat;
+  parent_message_id?: string | null;
+  thread_count: number;
+  forwarded_from_id?: string | null;
+  mentions?: string[];
+  is_deleted: boolean;
+  deleted_at?: string | null;
+  is_edited: boolean;
+  edited_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  sender_name?: string;
+  sender_avatar?: string;
+  reactions?: ChatReaction[];
+  attachments?: ChatMessageAttachment[];
+}
+
+export interface ChatReaction {
+  message_id: string;
+  user_id: string;
+  emoji: string;
+  created_at: string;
+}
+
+export interface ChatMessageAttachment {
+  id: string;
+  org_id: string;
+  message_id: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  url?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ChatPinnedMessage {
+  channel_id: string;
+  message_id: string;
+  pinned_by: string;
+  pinned_at: string;
+  message?: ChatMessage;
+}
+
+export interface ChatBookmark {
+  user_id: string;
+  message_id: string;
+  note: string;
+  created_at: string;
+  message?: ChatMessage;
 }
 
 // Announcements

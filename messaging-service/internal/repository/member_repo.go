@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -123,8 +122,7 @@ func (r *memberRepo) UpdateMutePin(ctx context.Context, tx pgx.Tx, channelID, us
 
 func (r *memberRepo) MarkRead(ctx context.Context, tx pgx.Tx, channelID, userID uuid.UUID) error {
 	db := conn(r.pool, tx)
-	now := time.Now()
-	tag, err := db.Exec(ctx, `UPDATE channel_members SET last_read_at = $1 WHERE channel_id = $2 AND user_id = $3`, now, channelID, userID)
+	tag, err := db.Exec(ctx, `UPDATE channel_members SET last_read_at = now() WHERE channel_id = $1 AND user_id = $2`, channelID, userID)
 	if err != nil {
 		return fmt.Errorf("mark read: %w", err)
 	}

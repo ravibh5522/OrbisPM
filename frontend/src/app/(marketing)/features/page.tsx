@@ -64,6 +64,21 @@ export const metadata: Metadata = {
     description:
       "AI sprint planning, smart estimation, real-time collaboration, enterprise RBAC, change requests, webhooks & API. The most feature-rich project management platform for engineering teams.",
     url: "/features",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM Features – 30+ AI-Powered Tools",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM Features – 30+ AI-Powered Tools to Ship Faster",
+    description:
+      "AI sprint planning, smart estimation, real-time collaboration, enterprise RBAC, and change request workflows.",
+    images: ["/og-image.png"],
   },
 };
 

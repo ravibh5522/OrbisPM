@@ -23,11 +23,11 @@ func NewMessageRepository(pool *pgxpool.Pool) MessageRepository {
 func (r *messageRepo) Create(ctx context.Context, tx pgx.Tx, msg *domain.Message) error {
 	db := conn(r.pool, tx)
 	err := db.QueryRow(ctx, `
-		INSERT INTO messages (org_id, channel_id, user_id, body, body_format, parent_message_id, forwarded_from_id, mentions)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO messages (org_id, channel_id, user_id, body, body_format, parent_message_id, forwarded_from_id, mentions, sender_name)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING id, created_at, updated_at`,
 		msg.OrgID, msg.ChannelID, msg.UserID, msg.Body, msg.BodyFormat,
-		msg.ParentMessageID, msg.ForwardedFromID, msg.Mentions,
+		msg.ParentMessageID, msg.ForwardedFromID, msg.Mentions, msg.SenderName,
 	).Scan(&msg.ID, &msg.CreatedAt, &msg.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
@@ -41,12 +41,13 @@ func (r *messageRepo) GetByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*do
 	err := db.QueryRow(ctx, `
 		SELECT id, org_id, channel_id, user_id, body, body_format, parent_message_id,
 		       thread_count, forwarded_from_id, mentions, is_deleted, deleted_at,
-		       is_edited, edited_at, created_at, updated_at
+		       is_edited, edited_at, created_at, updated_at, sender_name
 		FROM messages WHERE id = $1`, id,
 	).Scan(
 		&msg.ID, &msg.OrgID, &msg.ChannelID, &msg.UserID, &msg.Body, &msg.BodyFormat,
 		&msg.ParentMessageID, &msg.ThreadCount, &msg.ForwardedFromID, &msg.Mentions,
 		&msg.IsDeleted, &msg.DeletedAt, &msg.IsEdited, &msg.EditedAt, &msg.CreatedAt, &msg.UpdatedAt,
+		&msg.SenderName,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -66,7 +67,7 @@ func (r *messageRepo) ListByChannel(ctx context.Context, tx pgx.Tx, channelID uu
 		rows, err = db.Query(ctx, `
 			SELECT id, org_id, channel_id, user_id, body, body_format, parent_message_id,
 			       thread_count, forwarded_from_id, mentions, is_deleted, deleted_at,
-			       is_edited, edited_at, created_at, updated_at
+			       is_edited, edited_at, created_at, updated_at, sender_name
 			FROM messages
 			WHERE channel_id = $1 AND parent_message_id IS NULL AND created_at < (SELECT created_at FROM messages WHERE id = $2)
 			ORDER BY created_at DESC LIMIT $3`, channelID, *before, limit,
@@ -75,7 +76,7 @@ func (r *messageRepo) ListByChannel(ctx context.Context, tx pgx.Tx, channelID uu
 		rows, err = db.Query(ctx, `
 			SELECT id, org_id, channel_id, user_id, body, body_format, parent_message_id,
 			       thread_count, forwarded_from_id, mentions, is_deleted, deleted_at,
-			       is_edited, edited_at, created_at, updated_at
+			       is_edited, edited_at, created_at, updated_at, sender_name
 			FROM messages
 			WHERE channel_id = $1 AND parent_message_id IS NULL
 			ORDER BY created_at DESC LIMIT $2`, channelID, limit,
@@ -93,6 +94,7 @@ func (r *messageRepo) ListByChannel(ctx context.Context, tx pgx.Tx, channelID uu
 			&m.ID, &m.OrgID, &m.ChannelID, &m.UserID, &m.Body, &m.BodyFormat,
 			&m.ParentMessageID, &m.ThreadCount, &m.ForwardedFromID, &m.Mentions,
 			&m.IsDeleted, &m.DeletedAt, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.SenderName,
 		); err != nil {
 			return nil, fmt.Errorf("scan message: %w", err)
 		}
@@ -112,7 +114,7 @@ func (r *messageRepo) ListThread(ctx context.Context, tx pgx.Tx, parentID uuid.U
 	rows, err := db.Query(ctx, `
 		SELECT id, org_id, channel_id, user_id, body, body_format, parent_message_id,
 		       thread_count, forwarded_from_id, mentions, is_deleted, deleted_at,
-		       is_edited, edited_at, created_at, updated_at
+		       is_edited, edited_at, created_at, updated_at, sender_name
 		FROM messages WHERE parent_message_id = $1
 		ORDER BY created_at ASC LIMIT $2 OFFSET $3`, parentID, limit, offset,
 	)
@@ -128,6 +130,7 @@ func (r *messageRepo) ListThread(ctx context.Context, tx pgx.Tx, parentID uuid.U
 			&m.ID, &m.OrgID, &m.ChannelID, &m.UserID, &m.Body, &m.BodyFormat,
 			&m.ParentMessageID, &m.ThreadCount, &m.ForwardedFromID, &m.Mentions,
 			&m.IsDeleted, &m.DeletedAt, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.SenderName,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan thread message: %w", err)
 		}
@@ -182,7 +185,7 @@ func (r *messageRepo) Search(ctx context.Context, tx pgx.Tx, channelID uuid.UUID
 	rows, err := db.Query(ctx, `
 		SELECT id, org_id, channel_id, user_id, body, body_format, parent_message_id,
 		       thread_count, forwarded_from_id, mentions, is_deleted, deleted_at,
-		       is_edited, edited_at, created_at, updated_at
+		       is_edited, edited_at, created_at, updated_at, sender_name
 		FROM messages WHERE channel_id = $1 AND NOT is_deleted AND body ILIKE $2
 		ORDER BY created_at DESC LIMIT $3 OFFSET $4`, channelID, searchPattern, limit, offset,
 	)
@@ -198,6 +201,7 @@ func (r *messageRepo) Search(ctx context.Context, tx pgx.Tx, channelID uuid.UUID
 			&m.ID, &m.OrgID, &m.ChannelID, &m.UserID, &m.Body, &m.BodyFormat,
 			&m.ParentMessageID, &m.ThreadCount, &m.ForwardedFromID, &m.Mentions,
 			&m.IsDeleted, &m.DeletedAt, &m.IsEdited, &m.EditedAt, &m.CreatedAt, &m.UpdatedAt,
+			&m.SenderName,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan search result: %w", err)
 		}

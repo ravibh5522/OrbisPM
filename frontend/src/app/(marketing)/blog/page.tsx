@@ -24,6 +24,21 @@ export const metadata: Metadata = {
     description:
       "Expert articles on AI-powered project management, agile practices, team collaboration, and engineering productivity.",
     url: "/blog",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM Blog – Project Management Insights",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM Blog – Project Management Insights",
+    description:
+      "Expert articles on AI-powered project management, agile practices, team collaboration, and engineering productivity.",
+    images: ["/og-image.png"],
   },
 };
 

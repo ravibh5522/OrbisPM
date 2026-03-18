@@ -27,6 +27,22 @@ export const metadata: Metadata = {
       "How AI is revolutionizing sprint planning with velocity prediction, capacity analysis, and automatic task allocation.",
     url: "/blog/ai-sprint-planning-complete-guide",
     type: "article",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "AI Sprint Planning: The Complete Guide 2026",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title:
+      "AI Sprint Planning: The Complete Guide for Engineering Teams in 2026",
+    description:
+      "How AI is revolutionizing sprint planning with velocity prediction, capacity analysis, and automatic task allocation.",
+    images: ["/og-image.png"],
   },
 };
 
@@ -44,7 +60,17 @@ export default function AISprintPlanningGuide() {
           url: "https://orbisom.live/blog/ai-sprint-planning-complete-guide",
           datePublished: "2026-03-10",
           dateModified: "2026-03-10",
-          author: { "@type": "Organization", name: "OrbisPM" },
+          image: {
+            "@type": "ImageObject",
+            url: "https://orbisom.live/og-image.png",
+            width: 1200,
+            height: 630,
+          },
+          author: {
+            "@type": "Organization",
+            name: "OrbisPM",
+            url: "https://orbisom.live",
+          },
           publisher: {
             "@type": "Organization",
             name: "OrbisPM",

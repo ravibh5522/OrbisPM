@@ -59,6 +59,15 @@ func (s *MessageService) SendMessage(ctx context.Context, msg *domain.Message) e
 	msg.UserID = userID
 	msg.OrgID = orgID
 
+	// Populate sender info from auth context
+	displayName := tenant.DisplayName(ctx)
+	email := tenant.Email(ctx)
+	if displayName != "" {
+		msg.SenderName = displayName
+	} else if email != "" {
+		msg.SenderName = email
+	}
+
 	if len(msg.Body) > domain.MaxMessageLength {
 		return domain.ErrMessageTooLong
 	}

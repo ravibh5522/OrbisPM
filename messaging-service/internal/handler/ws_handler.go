@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -174,6 +175,11 @@ func (h *WSHandler) handleMessageSend(ctx context.Context, conn *websocket.ChatC
 	channelID, err := uuid.Parse(payload.ChannelID)
 	if err != nil {
 		h.reply(conn, msg.ID, "error", nil, "invalid channel_id")
+		return
+	}
+
+	if strings.TrimSpace(payload.Body) == "" {
+		h.reply(conn, msg.ID, "error", nil, "message body is required")
 		return
 	}
 
