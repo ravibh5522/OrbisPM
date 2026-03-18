@@ -41,16 +41,16 @@ logs:
 # ════════════════════════════════════════════════════════════
 
 up-prod:
-	docker compose --env-file .env.production up --build -d
+	docker compose --env-file .env.production --profile prod up --build -d
 
 down-prod:
-	docker compose --env-file .env.production down
+	docker compose --env-file .env.production --profile prod down
 
 build-prod:
-	docker compose --env-file .env.production build
+	docker compose --env-file .env.production --profile prod build
 
 scale-prod:
-	docker compose --env-file .env.production up -d --scale api=$(API_REPLICAS)
+	docker compose --env-file .env.production --profile prod up -d --scale api=$(API_REPLICAS)
 
 # ════════════════════════════════════════════════════════════
 # DEVELOPMENT (backend runs locally, infra in Docker)

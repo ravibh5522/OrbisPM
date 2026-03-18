@@ -41,7 +41,7 @@ services:
       retries: 10
 
   redis:
-    profiles: [local]
+    profiles: [local, prod]
     image: redis:7-alpine
     restart: unless-stopped
     volumes:
@@ -73,7 +73,7 @@ services:
       retries: 5
 
   zitadel:
-    profiles: [local]
+    profiles: [local, prod]
     image: ghcr.io/zitadel/zitadel:v4.12.1
     restart: unless-stopped
     user: "0"
@@ -121,6 +121,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+        required: false
       redis:
         condition: service_healthy
     volumes:
@@ -131,6 +132,22 @@ services:
       timeout: 30s
       retries: 30
       start_period: 120s
+
+  nats:
+    profiles: [local, prod]
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    command: ["--jetstream", "--store_dir=/data", "-m", "8222"]
+    expose:
+      - "4222"
+      - "8222"
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   mailpit:
     profiles: [local]
@@ -242,6 +259,7 @@ services:
     depends_on:
       - api
       - nocodb
+      - messaging-service
 
   nocodb:
     image: nocodb/nocodb:latest
@@ -312,6 +330,44 @@ services:
         condition: service_healthy
         required: false
 
+  messaging-service:
+    build:
+      context: ./messaging-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8082"
+    environment:
+      PORT: ${MSG_PORT:-8082}
+      ENV: ${APP_ENV:-development}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL required}
+      REDIS_URL: ${REDIS_URL:?REDIS_URL required}
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
+      ZITADEL_INTERNAL_URL: ${ZITADEL_INTERNAL_URL:?ZITADEL_INTERNAL_URL required}
+      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:?ZITADEL_CLIENT_ID required}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:?MINIO_ENDPOINT required}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY required}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-orbispm}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL required}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      zitadel:
+        condition: service_healthy
+        required: false
+
   frontend:
     build:
       context: ./frontend
@@ -332,3 +388,4 @@ volumes:
   miniodata:
   meilidata:
   nocodbdata:
+  natsdata:
