@@ -310,8 +310,18 @@ func main() {
 	projectHandler.SetPermResolver(permResolver)
 	teamHandler.SetPermResolver(permResolver)
 
+	// --- Email service config (used by auth handler and worker) ---
+	emailServiceURL := os.Getenv("EMAIL_SERVICE_URL")
+	if emailServiceURL == "" {
+		emailServiceURL = "http://email-service:8050"
+	}
+	emailServiceAPIKey := os.Getenv("EMAIL_SERVICE_API_KEY")
+	if emailServiceAPIKey == "" {
+		emailServiceAPIKey = "email-service-dev-key"
+	}
+
 	// --- Handlers (new) ---
-	authHandler := handler.NewAuthHandler(zitadelClient, pool)
+	authHandler := handler.NewAuthHandler(zitadelClient, pool, emailServiceURL, emailServiceAPIKey, cfg.FrontendURL)
 	// Backfill public.users cache from Zitadel so member/project queries show names/emails
 	go authHandler.BackfillUserProfiles(ctx)
 
@@ -599,14 +609,6 @@ func main() {
 		From:     cfg.SMTPFrom,
 		Enabled:  cfg.SMTPEnabled,
 	})
-	emailServiceURL := os.Getenv("EMAIL_SERVICE_URL")
-	if emailServiceURL == "" {
-		emailServiceURL = "http://email-service:8050"
-	}
-	emailServiceAPIKey := os.Getenv("EMAIL_SERVICE_API_KEY")
-	if emailServiceAPIKey == "" {
-		emailServiceAPIKey = "email-service-dev-key"
-	}
 	workerHandlers := &worker.Handlers{
 		Pool:               pool,
 		EmailSender:        emailSender,

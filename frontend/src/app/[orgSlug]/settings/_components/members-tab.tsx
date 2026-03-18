@@ -31,7 +31,14 @@ import {
   Users,
   UserX,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 
 const ROLE_OPTIONS = [
@@ -83,16 +90,19 @@ export default function MembersTab() {
   const [actionSuccess, setActionSuccess] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const [menuPos, setMenuPos] = useState<{ top: number; left: number }>({
-    top: 0,
-    left: 0,
-  });
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 
   useEffect(() => {
     if (!openMenuId) return;
     const handleClick = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
         setOpenMenuId(null);
       }
     };
@@ -100,15 +110,36 @@ export default function MembersTab() {
     return () => document.removeEventListener("mousedown", handleClick);
   }, [openMenuId]);
 
-  function openMenu(e: React.MouseEvent<HTMLButtonElement>, memberId: string) {
-    if (openMenuId === memberId) {
-      setOpenMenuId(null);
-      return;
-    }
-    const rect = e.currentTarget.getBoundingClientRect();
-    setMenuPos({ top: rect.bottom + 4, left: rect.right - 192 });
-    setOpenMenuId(memberId);
-  }
+  // Position the portal-rendered menu relative to the trigger button
+  useLayoutEffect(() => {
+    if (!openMenuId || !triggerRef.current || !menuRef.current) return;
+    const btn = triggerRef.current.getBoundingClientRect();
+    const menu = menuRef.current.getBoundingClientRect();
+    const cvw = document.documentElement.clientWidth;
+    const cvh = document.documentElement.clientHeight;
+
+    // Default: right-aligned below button
+    let left = btn.right - menu.width;
+    let top = btn.bottom + 4;
+
+    // Flip left if overflows right
+    if (left + menu.width > cvw - 8) left = cvw - menu.width - 8;
+    if (left < 8) left = 8;
+
+    // Flip above if overflows bottom
+    if (top + menu.height > cvh - 8) top = btn.top - menu.height - 4;
+    if (top < 8) top = 8;
+
+    setMenuStyle({ position: "fixed", top, left, zIndex: 9999 });
+  }, [openMenuId]);
+
+  const toggleMenu = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>, memberId: string) => {
+      triggerRef.current = e.currentTarget;
+      setOpenMenuId((prev) => (prev === memberId ? null : memberId));
+    },
+    [],
+  );
 
   const { data: members, isLoading } = useQuery({
     queryKey: ["org-members", currentOrg?.id],
@@ -392,128 +423,128 @@ export default function MembersTab() {
                       <div className="flex gap-1 justify-end">
                         <button
                           className="btn btn-ghost btn-xs btn-square"
-                          onClick={(e) => openMenu(e, m.user_id)}
+                          onClick={(e) => toggleMenu(e, m.user_id)}
                         >
                           <MoreHorizontal className="w-4 h-4" />
                         </button>
-                        {openMenuId === m.user_id && (
-                          <div
-                            ref={menuRef}
-                            style={{
-                              position: "fixed",
-                              top: menuPos.top,
-                              left: menuPos.left,
-                              zIndex: 9999,
-                            }}
-                            className="menu p-1 shadow-xl bg-base-100/95 backdrop-blur-[20px] rounded-box w-48 border border-base-200"
-                          >
-                            <ul>
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    setEditTarget(m);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm"
-                                >
-                                  <Shield className="w-3.5 h-3.5" /> Change Role
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    setPasswordTarget(m);
-                                    setError("");
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm"
-                                >
-                                  <Key className="w-3.5 h-3.5" /> Reset Password
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    setEmailTarget(m);
-                                    setError("");
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm"
-                                >
-                                  <Mail className="w-3.5 h-3.5" /> Update Email
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    forceMfaMutation.mutate(m.user_id);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm"
-                                >
-                                  <ShieldCheck className="w-3.5 h-3.5" /> Force
-                                  MFA
-                                </button>
-                              </li>
-                              <div className="divider my-0.5" />
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    setDeactivateTarget(m);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm text-warning"
-                                >
-                                  <Ban className="w-3.5 h-3.5" /> Deactivate
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    reactivateMutation.mutate(m.user_id);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm text-success"
-                                >
-                                  <RefreshCw className="w-3.5 h-3.5" />{" "}
-                                  Reactivate
-                                </button>
-                              </li>
-                              <div className="divider my-0.5" />
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    setRemoveTarget(m);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm text-error"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" /> Remove
-                                </button>
-                              </li>
-                              <li>
-                                <button
-                                  onClick={() => {
-                                    setDeleteAccountTarget(m);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={m.user_id === currentUser?.id}
-                                  className="text-sm text-error"
-                                >
-                                  <UserX className="w-3.5 h-3.5" /> Delete
-                                  Account
-                                </button>
-                              </li>
-                            </ul>
-                          </div>
-                        )}
+                        {openMenuId === m.user_id &&
+                          createPortal(
+                            <div
+                              ref={menuRef}
+                              style={menuStyle}
+                              className="menu p-1 shadow-xl bg-base-100/95 backdrop-blur-[20px] rounded-box w-48 border border-base-200"
+                            >
+                              <ul>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setEditTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <Shield className="w-3.5 h-3.5" /> Change
+                                    Role
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setPasswordTarget(m);
+                                      setError("");
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <Key className="w-3.5 h-3.5" /> Reset
+                                    Password
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setEmailTarget(m);
+                                      setError("");
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" /> Update
+                                    Email
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      forceMfaMutation.mutate(m.user_id);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5" />{" "}
+                                    Force MFA
+                                  </button>
+                                </li>
+                                <div className="divider my-0.5" />
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setDeactivateTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-warning"
+                                  >
+                                    <Ban className="w-3.5 h-3.5" /> Deactivate
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      reactivateMutation.mutate(m.user_id);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-success"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" />{" "}
+                                    Reactivate
+                                  </button>
+                                </li>
+                                <div className="divider my-0.5" />
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setRemoveTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-error"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Remove
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setDeleteAccountTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-error"
+                                  >
+                                    <UserX className="w-3.5 h-3.5" /> Delete
+                                    Account
+                                  </button>
+                                </li>
+                              </ul>
+                            </div>,
+                            document.body,
+                          )}
                       </div>
                     </td>
                   </tr>

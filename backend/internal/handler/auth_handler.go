@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,13 +22,70 @@ import (
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
-	zitadel *auth.ZitadelClient
-	pool    *pgxpool.Pool
+	zitadel            *auth.ZitadelClient
+	pool               *pgxpool.Pool
+	emailServiceURL    string
+	emailServiceAPIKey string
+	frontendURL        string
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(zitadel *auth.ZitadelClient, pool *pgxpool.Pool) *AuthHandler {
-	return &AuthHandler{zitadel: zitadel, pool: pool}
+func NewAuthHandler(zitadel *auth.ZitadelClient, pool *pgxpool.Pool, emailServiceURL, emailServiceAPIKey, frontendURL string) *AuthHandler {
+	return &AuthHandler{
+		zitadel:            zitadel,
+		pool:               pool,
+		emailServiceURL:    emailServiceURL,
+		emailServiceAPIKey: emailServiceAPIKey,
+		frontendURL:        frontendURL,
+	}
+}
+
+// sendPasswordResetEmail sends the reset code to the user via the email service.
+func (h *AuthHandler) sendPasswordResetEmail(ctx context.Context, toEmail, code string) error {
+	svcURL := h.emailServiceURL
+	if svcURL == "" {
+		svcURL = "http://email-service:8050"
+	}
+	frontendURL := h.frontendURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	resetURL := frontendURL + "/reset-password?email=" + toEmail + "&code=" + code
+	payload := map[string]any{
+		"to":       toEmail,
+		"subject":  "Reset your OrbisPM password",
+		"template": "password_reset",
+		"context": map[string]string{
+			"reset_code":     code,
+			"reset_url":      resetURL,
+			"app_name":       "OrbisPM",
+			"frontend_url":   frontendURL,
+			"expiry_minutes": "60",
+		},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal email payload: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, svcURL+"/api/v1/email/send", bytes.NewReader(encoded))
+	if err != nil {
+		return fmt.Errorf("build email request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	apiKey := h.emailServiceAPIKey
+	if apiKey == "" {
+		apiKey = "email-service-dev-key"
+	}
+	req.Header.Set("X-API-Key", apiKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("email service request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("email service returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // zitadelIDToUUID converts a Zitadel user ID string to the UUID stored in the DB.
@@ -908,13 +967,20 @@ func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Request password reset code from Zitadel
-	_, err = h.zitadel.RequestPasswordReset(r.Context(), userID)
+	// Request password reset code from Zitadel (returns the code via ReturnCode medium)
+	code, err := h.zitadel.RequestPasswordReset(r.Context(), userID)
 	if err != nil {
 		log.Error().Err(err).Str("email", req.Email).Msg("password reset request failed")
+		// Still return success to prevent email enumeration
+		JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
+		return
 	}
 
-	// Always return success to prevent email enumeration
+	// Send the reset code to the user via the email service
+	if sendErr := h.sendPasswordResetEmail(r.Context(), req.Email, code); sendErr != nil {
+		log.Error().Err(sendErr).Str("email", req.Email).Msg("failed to send password reset email")
+	}
+
 	JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
 }
 
