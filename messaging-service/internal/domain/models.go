@@ -166,3 +166,90 @@ type TypingIndicator struct {
 	UserID    uuid.UUID `json:"user_id"`
 	IsTyping  bool      `json:"is_typing"`
 }
+
+// ─── Sidebar Models ───────────────────────────
+
+// SidebarTeam represents a team with its channels (for sidebar).
+type SidebarTeam struct {
+	ID        uuid.UUID  `json:"id"`
+	Name      string     `json:"name"`
+	ManagerID *uuid.UUID `json:"manager_id,omitempty"`
+	Channels  []Channel  `json:"channels"`
+}
+
+// SidebarCategory represents a channel category for Discord-style sidebar.
+type SidebarCategory struct {
+	ID           uuid.UUID `json:"id"`
+	Name         string    `json:"name"`
+	Position     int       `json:"position"`
+	IsCollapsed  bool      `json:"is_collapsed"`
+	AutoSource   string    `json:"auto_source,omitempty"`
+	AutoSourceID string    `json:"auto_source_id,omitempty"`
+	Channels     []Channel `json:"channels"`
+}
+
+// SidebarData is the hierarchical sidebar response.
+type SidebarData struct {
+	Categories      []SidebarCategory `json:"categories"`
+	Teams           []SidebarTeam     `json:"teams"`
+	ProjectChannels []Channel         `json:"project_channels"`
+	DMChannels      []Channel         `json:"dm_channels"`
+	GroupChannels   []Channel         `json:"group_channels"`
+}
+
+// ─── Entity Mention Models ────────────────────
+
+// EntityMention represents a rich mention in a message (@user, #project, etc.)
+type EntityMention struct {
+	Type string    `json:"type"` // user, task, project, team
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+}
+
+// ─── OrgMember (read from main backend) ───────
+
+// OrgMemberInfo is a lightweight user representation.
+type OrgMemberInfo struct {
+	UserID      uuid.UUID `json:"user_id"`
+	DisplayName string    `json:"display_name"`
+	Email       string    `json:"email"`
+	AvatarURL   string    `json:"avatar_url,omitempty"`
+}
+
+// ─── Channel Categories ───────────────────────
+
+// ChannelCategory represents a Discord-style grouping for channels.
+type ChannelCategory struct {
+	ID           uuid.UUID  `json:"id"`
+	OrgID        uuid.UUID  `json:"org_id"`
+	Name         string     `json:"name"`
+	Position     int        `json:"position"`
+	AutoSource   string     `json:"auto_source,omitempty"`
+	AutoSourceID *uuid.UUID `json:"auto_source_id,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+}
+
+// SystemMessage represents automatic messages posted by the system.
+type SystemMessage struct {
+	Type     string         `json:"type"`     // member_added, member_removed, channel_created, task_assigned, etc.
+	Body     string         `json:"body"`     // Human-readable text
+	Metadata map[string]any `json:"metadata"` // Machine-readable context
+}
+
+// ─── Backend Event Types ──────────────────────
+
+// BackendEvent types that the messaging service listens for.
+const (
+	BackendEventTeamCreated          = "team.created"
+	BackendEventTeamUpdated          = "team.updated"
+	BackendEventTeamDeleted          = "team.deleted"
+	BackendEventTeamManagerChanged   = "team.manager_changed"
+	BackendEventTeamMemberAdded      = "team.member_added"
+	BackendEventTeamMemberRemoved    = "team.member_removed"
+	BackendEventProjectCreated       = "project.created"
+	BackendEventProjectUpdated       = "project.updated"
+	BackendEventProjectDeleted       = "project.deleted"
+	BackendEventProjectMemberAdded   = "project.member_added"
+	BackendEventProjectMemberRemoved = "project.member_removed"
+)

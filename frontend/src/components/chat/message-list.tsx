@@ -178,7 +178,7 @@ export function MessageList() {
               <MessageBubble
                 key={msg.id}
                 message={msg}
-                isOwn={msg.user_id === user?.id}
+                isOwn={msg.user_id === user?.internal_id}
                 isGrouped={false}
                 onOpenThread={() => openThread(msg.id)}
               />
@@ -195,7 +195,7 @@ export function MessageList() {
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-4 py-3"
+      className="flex-1 overflow-y-auto px-4 py-3 bg-base-100"
     >
       {isLoadingMore && (
         <div className="flex justify-center py-2">
@@ -232,7 +232,7 @@ export function MessageList() {
                 {showDateSep && <DateSeparator date={msg.created_at} />}
                 <MessageBubble
                   message={msg}
-                  isOwn={msg.user_id === user?.id}
+                  isOwn={msg.user_id === user?.internal_id}
                   isGrouped={!!isGrouped}
                   onOpenThread={() => openThread(msg.id)}
                 />
@@ -308,7 +308,9 @@ function MessageBubble({
 
   if (message.is_deleted) {
     return (
-      <div className={cn("px-2 py-1", !isGrouped && "mt-3")}>
+      <div
+        className={cn("px-2 py-1", !isGrouped && "mt-3", isOwn && "text-right")}
+      >
         <span className="text-xs text-base-content/30 italic">
           This message was deleted
         </span>
@@ -316,11 +318,21 @@ function MessageBubble({
     );
   }
 
+  // Check if message has images
+  const imageAttachments =
+    message.attachments?.filter((a) => a.content_type?.startsWith("image/")) ||
+    [];
+  const otherAttachments =
+    message.attachments?.filter((a) => !a.content_type?.startsWith("image/")) ||
+    [];
+
   return (
     <div
       className={cn(
-        "group relative flex gap-3 px-2 py-1 rounded-lg transition-colors hover:bg-base-200/40",
+        "group relative flex gap-3 px-2 py-1 rounded-lg transition-colors",
         !isGrouped && "mt-3",
+        isOwn ? "flex-row-reverse" : "flex-row",
+        !isOwn && "hover:bg-base-200/40",
       )}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => {
@@ -328,8 +340,8 @@ function MessageBubble({
         setShowEmoji(false);
       }}
     >
-      {/* Avatar */}
-      {!isGrouped ? (
+      {/* Avatar - only show for others' messages */}
+      {!isOwn && !isGrouped ? (
         <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0 mt-0.5">
           {message.sender_avatar ? (
             <img
@@ -341,16 +353,26 @@ function MessageBubble({
             (senderName?.[0] || "?").toUpperCase()
           )}
         </div>
-      ) : (
+      ) : !isOwn ? (
         <div className="w-9 flex-shrink-0" />
-      )}
+      ) : null}
 
-      <div className="flex-1 min-w-0">
+      <div
+        className={cn(
+          "flex-1 min-w-0 max-w-[75%]",
+          isOwn && "flex flex-col items-end",
+        )}
+      >
         {/* Header (name + time) */}
         {!isGrouped && (
-          <div className="flex items-center gap-2 mb-0.5">
+          <div
+            className={cn(
+              "flex items-center gap-2 mb-0.5",
+              isOwn && "flex-row-reverse",
+            )}
+          >
             <span className="text-sm font-semibold text-base-content">
-              {senderName}
+              {isOwn ? "You" : senderName}
             </span>
             <span className="text-xs text-base-content/40">
               {format(new Date(message.created_at), "h:mm a")}
@@ -361,14 +383,71 @@ function MessageBubble({
           </div>
         )}
 
-        {/* Message body */}
-        <div className="text-sm text-base-content/90 whitespace-pre-wrap break-words">
+        {/* Message bubble */}
+        <div
+          className={cn(
+            "inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words",
+            isOwn
+              ? "bg-primary text-primary-content rounded-tr-sm"
+              : "bg-base-200 text-base-content rounded-tl-sm",
+          )}
+        >
           {message.body}
         </div>
 
+        {/* Image attachments */}
+        {imageAttachments.length > 0 && (
+          <div
+            className={cn("flex flex-wrap gap-2 mt-2", isOwn && "justify-end")}
+          >
+            {imageAttachments.map((att) => (
+              <a
+                key={att.id}
+                href={att.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block max-w-[200px] rounded-lg overflow-hidden border border-base-200"
+              >
+                <img
+                  src={att.url}
+                  alt={att.file_name}
+                  className="max-w-full h-auto"
+                  loading="lazy"
+                />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {/* Other attachments */}
+        {otherAttachments.length > 0 && (
+          <div className={cn("flex flex-col gap-1 mt-2", isOwn && "items-end")}>
+            {otherAttachments.map((att) => (
+              <a
+                key={att.id}
+                href={att.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-lg text-sm hover:bg-base-300 transition-colors"
+              >
+                <span className="text-base">📎</span>
+                <span className="truncate max-w-[150px]">{att.file_name}</span>
+                <span className="text-xs text-base-content/50">
+                  {(att.file_size / 1024).toFixed(0)} KB
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
-          <div className="flex flex-wrap gap-1 mt-1.5">
+          <div
+            className={cn(
+              "flex flex-wrap gap-1 mt-1.5",
+              isOwn && "justify-end",
+            )}
+          >
             {message.reactions.map((rg) => (
               <button
                 key={rg.emoji}
@@ -391,7 +470,10 @@ function MessageBubble({
         {message.thread_count > 0 && (
           <button
             onClick={onOpenThread}
-            className="flex items-center gap-1.5 mt-1.5 text-primary text-xs hover:underline"
+            className={cn(
+              "flex items-center gap-1.5 mt-1.5 text-primary text-xs hover:underline",
+              isOwn && "justify-end",
+            )}
           >
             <MessageSquare className="w-3.5 h-3.5" />
             {message.thread_count}{" "}

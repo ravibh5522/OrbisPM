@@ -400,3 +400,44 @@ func (h *TeamHandler) GetMyPermissions(w http.ResponseWriter, r *http.Request) {
 		"permissions": items,
 	})
 }
+
+type setManagerRequest struct {
+	ManagerID string `json:"manager_id" validate:"required"`
+}
+
+// SetManager godoc
+// @Summary Set team manager
+// @Description Assign a manager to the team (auto-promotes to team_lead if not already)
+// @Tags Teams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param body body setManagerRequest true "Manager assignment"
+// @Success 200 {object} swaggerTeam
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId}/manager [put]
+func (h *TeamHandler) SetManager(w http.ResponseWriter, r *http.Request) {
+	teamID, err := uuidParam(r, "teamId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
+		return
+	}
+	var req setManagerRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	managerID, err := uuid.Parse(req.ManagerID)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid manager_id"})
+		return
+	}
+	team, err := h.teamSvc.SetManager(r.Context(), teamID, &managerID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, team)
+}

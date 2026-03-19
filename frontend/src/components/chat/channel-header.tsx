@@ -2,10 +2,23 @@
 
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
-import type { ChatChannelMember } from "@/types/domain";
-import { useQuery } from "@tanstack/react-query";
-import { Hash, Info, MessageCircle, Pin, Search, Users, X } from "lucide-react";
+import type { ChatChannelMember, OrgMemberInfo } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Hash,
+  Info,
+  MessageCircle,
+  Pin,
+  Search,
+  Shield,
+  UserMinus,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 const EMPTY_MEMBERS: ChatChannelMember[] = [];
 
@@ -25,6 +38,10 @@ export function ChannelHeader() {
   if (!channel) return null;
 
   const isChannel = channel.type !== "dm";
+  const displayName =
+    channel.type === "dm"
+      ? channel.name || channel.description || "Direct Message"
+      : channel.name || "Unnamed Channel";
 
   return (
     <div className="flex items-center justify-between h-14 px-4 border-b border-base-200 bg-base-100/80 backdrop-blur-sm flex-shrink-0">
@@ -38,7 +55,7 @@ export function ChannelHeader() {
         </span>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-bold truncate">{channel.name}</h3>
+            <h3 className="text-sm font-bold truncate">{displayName}</h3>
             {/* Connection status */}
             <span
               className={cn(
@@ -123,8 +140,10 @@ export function ChannelDetails() {
   const channelMembers = useChatStore(
     (s) => s.channelMembers.get(activeChannelId || "") ?? EMPTY_MEMBERS,
   );
+  const [showAddMember, setShowAddMember] = useState(false);
 
   const channel = channels.find((c) => c.id === activeChannelId);
+  const qc = useQueryClient();
 
   const { isLoading } = useQuery({
     queryKey: ["chat-channel-members", activeChannelId],
@@ -145,7 +164,21 @@ export function ChannelDetails() {
     enabled: !!activeChannelId && detailsOpen,
   });
 
+  const removeMember = useMutation({
+    mutationFn: async (userId: string) => {
+      if (!activeChannelId) return;
+      await api.chat.members.remove(activeChannelId, userId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["chat-channel-members", activeChannelId],
+      });
+    },
+  });
+
   if (!detailsOpen || !channel) return null;
+
+  const isChannel = channel.type !== "dm";
 
   return (
     <div className="w-72 border-l border-base-200 bg-base-100 flex flex-col flex-shrink-0 h-full">
@@ -163,7 +196,11 @@ export function ChannelDetails() {
       <div className="flex-1 overflow-y-auto">
         {/* Channel info */}
         <div className="px-4 py-3 border-b border-base-200">
-          <h4 className="text-sm font-semibold mb-1">{channel.name}</h4>
+          <h4 className="text-sm font-semibold mb-1">
+            {channel.type === "dm"
+              ? channel.name || channel.description || "Direct Message"
+              : channel.name}
+          </h4>
           {channel.description && (
             <p className="text-xs text-base-content/60">
               {channel.description}
@@ -211,9 +248,29 @@ export function ChannelDetails() {
 
         {/* Members */}
         <div className="px-4 py-3">
-          <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-2">
-            Members
-          </h4>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider">
+              Members
+            </h4>
+            {isChannel && (
+              <button
+                className="btn btn-ghost btn-xs btn-square"
+                title="Add member"
+                onClick={() => setShowAddMember((p) => !p)}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {showAddMember && activeChannelId && (
+            <DetailsAddMemberSearch
+              channelId={activeChannelId}
+              existingMembers={channelMembers}
+              onClose={() => setShowAddMember(false)}
+            />
+          )}
+
           {isLoading ? (
             <div className="flex flex-col gap-2">
               {[1, 2, 3].map((i) => (
@@ -223,7 +280,12 @@ export function ChannelDetails() {
           ) : (
             <div className="flex flex-col gap-1">
               {channelMembers.map((member) => (
-                <MemberItem key={member.user_id} member={member} />
+                <MemberItem
+                  key={member.user_id}
+                  member={member}
+                  channelId={activeChannelId!}
+                  onRemove={() => removeMember.mutate(member.user_id)}
+                />
               ))}
             </div>
           )}
@@ -233,9 +295,32 @@ export function ChannelDetails() {
   );
 }
 
-function MemberItem({ member }: { member: ChatChannelMember }) {
+function MemberItem({
+  member,
+  channelId,
+  onRemove,
+}: {
+  member: ChatChannelMember;
+  channelId: string;
+  onRemove: () => void;
+}) {
+  const currentUser = useAuthStore((s) => s.user);
+  const isCurrentUser = currentUser?.internal_id === member.user_id;
+  const qc = useQueryClient();
+
+  const updateRole = useMutation({
+    mutationFn: async (newRole: string) => {
+      await api.chat.members.updateRole(channelId, member.user_id, newRole);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["chat-channel-members", channelId],
+      });
+    },
+  });
+
   return (
-    <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200/50">
+    <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200/50 group/member">
       <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
         {member.avatar_url ? (
           <img
@@ -256,6 +341,127 @@ function MemberItem({ member }: { member: ChatChannelMember }) {
             {member.role}
           </span>
         )}
+      </div>
+      {!isCurrentUser && (
+        <div className="opacity-0 group-hover/member:opacity-100 flex items-center gap-0.5 transition-opacity">
+          {member.role === "member" && (
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              title="Make admin"
+              onClick={() => updateRole.mutate("admin")}
+            >
+              <Shield className="w-3 h-3" />
+            </button>
+          )}
+          <button
+            className="btn btn-ghost btn-xs btn-square text-error"
+            title="Remove member"
+            onClick={onRemove}
+          >
+            <UserMinus className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailsAddMemberSearch({
+  channelId,
+  existingMembers,
+  onClose,
+}: {
+  channelId: string;
+  existingMembers: ChatChannelMember[];
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const timer = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const { data: results, isLoading } = useQuery<OrgMemberInfo[]>({
+    queryKey: ["chat-user-search", debouncedQuery],
+    queryFn: async () => {
+      if (!debouncedQuery.trim()) return [];
+      return (await api.chat.users.search(debouncedQuery.trim(), 10)) ?? [];
+    },
+    enabled: !!debouncedQuery.trim(),
+  });
+
+  const addMember = useMutation({
+    mutationFn: async (userId: string) => {
+      await api.chat.members.add(channelId, userId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["chat-channel-members", channelId],
+      });
+    },
+  });
+
+  const existingIds = new Set(existingMembers.map((m) => m.user_id));
+  const filteredResults = results?.filter((u) => !existingIds.has(u.user_id));
+
+  return (
+    <div className="mb-2 border border-base-300 rounded-lg bg-base-200/50 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300/50">
+        <UserPlus className="w-3.5 h-3.5 text-base-content/40" />
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Search users..."
+          className="flex-1 bg-transparent text-xs outline-none"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && onClose()}
+        />
+        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="max-h-36 overflow-y-auto">
+        {isLoading && (
+          <div className="flex justify-center py-2">
+            <span className="loading loading-spinner loading-xs" />
+          </div>
+        )}
+        {!isLoading &&
+          debouncedQuery &&
+          (!filteredResults || filteredResults.length === 0) && (
+            <p className="text-[10px] text-center text-base-content/40 py-2">
+              No users found
+            </p>
+          )}
+        {!debouncedQuery && (
+          <p className="text-[10px] text-center text-base-content/40 py-2">
+            Type to search
+          </p>
+        )}
+        {filteredResults?.map((u) => (
+          <button
+            key={u.user_id}
+            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-base-200 transition-colors text-left"
+            onClick={() => addMember.mutate(u.user_id)}
+            disabled={addMember.isPending}
+          >
+            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[9px]">
+              {(u.display_name?.[0] || u.email?.[0] || "?").toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-medium truncate block">
+                {u.display_name || u.email}
+              </span>
+            </div>
+            <UserPlus className="w-3 h-3 text-success" />
+          </button>
+        ))}
       </div>
     </div>
   );

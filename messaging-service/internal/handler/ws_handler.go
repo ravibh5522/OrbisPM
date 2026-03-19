@@ -19,9 +19,10 @@ import (
 
 // WSHandler handles WebSocket connections for real-time chat.
 type WSHandler struct {
-	hub        *websocket.ChatHub
-	channelSvc *service.ChannelService
-	messageSvc *service.MessageService
+	hub         *websocket.ChatHub
+	channelSvc  *service.ChannelService
+	messageSvc  *service.MessageService
+	presenceSvc *service.PresenceService
 }
 
 // NewWSHandler creates a new WSHandler.
@@ -29,11 +30,13 @@ func NewWSHandler(
 	hub *websocket.ChatHub,
 	channelSvc *service.ChannelService,
 	messageSvc *service.MessageService,
+	presenceSvc *service.PresenceService,
 ) *WSHandler {
 	return &WSHandler{
-		hub:        hub,
-		channelSvc: channelSvc,
-		messageSvc: messageSvc,
+		hub:         hub,
+		channelSvc:  channelSvc,
+		messageSvc:  messageSvc,
+		presenceSvc: presenceSvc,
 	}
 }
 
@@ -65,10 +68,47 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	h.hub.Join(conn)
 	defer h.hub.Leave(conn)
 
+	// Mark user online
+	if h.presenceSvc != nil {
+		_ = h.presenceSvc.SetOnline(r.Context(), orgID, userID)
+	}
+	defer func() {
+		if h.presenceSvc != nil {
+			_ = h.presenceSvc.SetOffline(context.Background(), orgID, userID)
+		}
+		// Broadcast offline event to org
+		h.hub.BroadcastOrg(orgID, websocket.WSMessage{
+			Action:  "presence:offline",
+			Payload: mustMarshal(map[string]any{"user_id": userID}),
+		}, nil)
+	}()
+
+	// Broadcast online event to org
+	h.hub.BroadcastOrg(orgID, websocket.WSMessage{
+		Action:  "presence:online",
+		Payload: mustMarshal(map[string]any{"user_id": userID}),
+	}, nil)
+
 	ctx, cancel := context.WithCancel(r.Context())
 	defer cancel()
 
 	go websocket.WritePump(ctx, conn)
+
+	// Start heartbeat for presence TTL
+	if h.presenceSvc != nil {
+		go func() {
+			ticker := time.NewTicker(20 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					_ = h.presenceSvc.Heartbeat(ctx, orgID, userID)
+				}
+			}
+		}()
+	}
 
 	// Send initial connection info
 	h.hub.SendTo(conn, websocket.WSMessage{

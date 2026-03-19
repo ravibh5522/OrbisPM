@@ -57,9 +57,9 @@ export default function MessagesPage() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] bg-base-100 rounded-2xl border border-base-200 shadow-sm overflow-hidden -mt-1">
-      {/* Left: Channel List */}
-      <div className="w-72 border-r border-base-200 flex-shrink-0 bg-base-100/50 overflow-hidden">
+    <div className="flex h-[calc(100vh-5rem)] bg-base-100 rounded-2xl border border-base-200 shadow-sm overflow-hidden">
+      {/* Left: Conversation List + Channel Panel */}
+      <div className="w-96 border-r border-base-300/50 flex-shrink-0 overflow-hidden">
         <ChannelList onCreateChannel={() => setCreateModalOpen(true)} />
       </div>
 

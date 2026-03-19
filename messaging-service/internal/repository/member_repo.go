@@ -74,8 +74,11 @@ func (r *memberRepo) IsMember(ctx context.Context, tx pgx.Tx, channelID, userID 
 func (r *memberRepo) ListByChannel(ctx context.Context, tx pgx.Tx, channelID uuid.UUID) ([]domain.ChannelMember, error) {
 	db := conn(r.pool, tx)
 	rows, err := db.Query(ctx, `
-		SELECT channel_id, user_id, role, last_read_at, is_muted, is_pinned, joined_at
-		FROM channel_members WHERE channel_id = $1 ORDER BY joined_at`, channelID,
+		SELECT cm.channel_id, cm.user_id, cm.role, cm.last_read_at, cm.is_muted, cm.is_pinned, cm.joined_at,
+		       COALESCE(u.display_name, ''), COALESCE(u.email, ''), COALESCE(u.avatar_url, '')
+		FROM channel_members cm
+		LEFT JOIN users u ON u.id = cm.user_id
+		WHERE cm.channel_id = $1 ORDER BY cm.joined_at`, channelID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list members: %w", err)
@@ -85,7 +88,8 @@ func (r *memberRepo) ListByChannel(ctx context.Context, tx pgx.Tx, channelID uui
 	var members []domain.ChannelMember
 	for rows.Next() {
 		var m domain.ChannelMember
-		if err := rows.Scan(&m.ChannelID, &m.UserID, &m.Role, &m.LastReadAt, &m.IsMuted, &m.IsPinned, &m.JoinedAt); err != nil {
+		if err := rows.Scan(&m.ChannelID, &m.UserID, &m.Role, &m.LastReadAt, &m.IsMuted, &m.IsPinned, &m.JoinedAt,
+			&m.DisplayName, &m.Email, &m.AvatarURL); err != nil {
 			return nil, fmt.Errorf("scan member: %w", err)
 		}
 		members = append(members, m)

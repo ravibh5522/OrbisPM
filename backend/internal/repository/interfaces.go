@@ -61,6 +61,7 @@ type TeamRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, team *domain.Team) (*domain.Team, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error)
+	SetManager(ctx context.Context, tx pgx.Tx, teamID uuid.UUID, managerID *uuid.UUID) error
 }
 
 type TeamMemberRepository interface {

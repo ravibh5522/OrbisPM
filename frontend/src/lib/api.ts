@@ -41,6 +41,23 @@ function getToken(): string | null {
   return localStorage.getItem("access_token");
 }
 
+/** Get auth headers for direct fetch calls */
+function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {};
+  const token = getToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  const orgId =
+    typeof localStorage !== "undefined"
+      ? localStorage.getItem("current_org_id")
+      : null;
+  if (orgId) {
+    headers["X-Org-ID"] = orgId;
+  }
+  return headers;
+}
+
 // Pages that should never trigger an auto-redirect to /login
 const AUTH_PATHS = ["/login", "/signup", "/auth"];
 
@@ -1375,6 +1392,85 @@ export const api = {
         }),
       remove: (messageId: string) =>
         del(`${V1}/chat/messages/${messageId}/bookmark`),
+    },
+    // Sidebar (hierarchical channels view)
+    sidebar: {
+      get: () =>
+        get<import("@/types/domain").SidebarData>(`${V1}/chat/sidebar`),
+    },
+    // Categories
+    categories: {
+      list: () =>
+        get<import("@/types/domain").ChannelCategory[]>(
+          `${V1}/chat/categories`,
+        ),
+      create: (data: { name: string; position?: number }) =>
+        post<import("@/types/domain").ChannelCategory>(
+          `${V1}/chat/categories`,
+          data,
+        ),
+      update: (categoryId: string, data: { name: string; position: number }) =>
+        put<void>(`${V1}/chat/categories/${categoryId}`, data),
+      delete: (categoryId: string) =>
+        del(`${V1}/chat/categories/${categoryId}`),
+      toggleCollapsed: (categoryId: string, collapsed: boolean) =>
+        put<void>(`${V1}/chat/categories/${categoryId}/collapsed`, {
+          collapsed,
+        }),
+      setChannelCategory: (
+        channelId: string,
+        categoryId: string | null,
+        position?: number,
+      ) =>
+        put<void>(`${V1}/chat/categories/channel/${channelId}`, {
+          category_id: categoryId,
+          position: position ?? 0,
+        }),
+    },
+    // User search for DMs and mentions
+    users: {
+      search: (query: string, limit = 20) =>
+        get<import("@/types/domain").OrgMemberInfo[]>(
+          `${V1}/chat/users?q=${encodeURIComponent(query)}&limit=${limit}`,
+        ),
+    },
+    // Presence
+    presence: {
+      get: () => get<{ online_users: string[] }>(`${V1}/chat/presence`),
+    },
+    // File upload
+    upload: {
+      file: async (
+        channelId: string,
+        file: File,
+        body?: string,
+      ): Promise<import("@/types/domain").ChatMessageAttachment> => {
+        const formData = new FormData();
+        formData.append("file", file);
+        if (body) formData.append("body", body);
+        const response = await fetch(
+          `${API_BASE}${V1}/chat/channels/${channelId}/upload`,
+          {
+            method: "POST",
+            headers: getAuthHeaders(),
+            body: formData,
+          },
+        );
+        if (!response.ok) {
+          const errData = await response.json().catch(() => ({}));
+          throw new Error(
+            errData.message || `Upload failed: ${response.status}`,
+          );
+        }
+        return response.json();
+      },
+    },
+    // Attachment URL
+    attachments: {
+      getUrl: (attachmentId: string) =>
+        get<import("@/types/domain").ChatMessageAttachment>(
+          `${V1}/chat/attachments/${attachmentId}/url`,
+        ),
     },
   },
 };

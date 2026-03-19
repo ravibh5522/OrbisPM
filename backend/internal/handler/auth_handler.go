@@ -361,6 +361,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.User != nil {
+		// Set internal UUID that matches what messaging service uses
+		result.User.InternalID = zitadelIDToUUID(result.User.ID).String()
 		h.upsertUserProfile(r.Context(), result.User)
 	}
 	JSON(w, http.StatusOK, result)
@@ -457,6 +459,8 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		handleAuthError(w, err)
 		return
 	}
+	// Set internal UUID that matches what messaging service uses
+	user.InternalID = zitadelIDToUUID(user.ID).String()
 	// Merge extended profile fields (avatar_url, bio, etc.) from our DB.
 	h.enrichUserFromDB(r.Context(), user)
 	h.upsertUserProfile(r.Context(), user)
@@ -495,6 +499,8 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		handleAuthError(w, err)
 		return
 	}
+	// Set internal UUID that matches what messaging service uses
+	user.InternalID = zitadelIDToUUID(user.ID).String()
 	// Save extended profile fields (avatar_url, bio, job_title, etc.) to our DB.
 	h.upsertUserProfilePartial(r.Context(), user, req.Data)
 	// Re-enrich so the returned user includes the fields we just saved.

@@ -71,3 +71,15 @@ type BookmarkRepository interface {
 	Remove(ctx context.Context, tx pgx.Tx, userID, messageID uuid.UUID) error
 	ListByUser(ctx context.Context, tx pgx.Tx, userID uuid.UUID, limit, offset int) ([]domain.Bookmark, int, error)
 }
+
+// CategoryRepository handles channel category persistence.
+type CategoryRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, cat *domain.ChannelCategory) error
+	GetByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.ChannelCategory, error)
+	ListByOrg(ctx context.Context, tx pgx.Tx) ([]domain.ChannelCategory, error)
+	Update(ctx context.Context, tx pgx.Tx, cat *domain.ChannelCategory) error
+	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
+	SetChannelCategory(ctx context.Context, tx pgx.Tx, channelID uuid.UUID, categoryID *uuid.UUID, position int) error
+	GetUserCategoryStates(ctx context.Context, tx pgx.Tx, userID uuid.UUID) (map[uuid.UUID]bool, error)
+	SetUserCategoryCollapsed(ctx context.Context, tx pgx.Tx, userID, categoryID uuid.UUID, collapsed bool) error
+}

@@ -147,6 +147,10 @@ func (s *ChannelService) DeleteChannel(ctx context.Context, channelID uuid.UUID)
 func (s *ChannelService) GetOrCreateDM(ctx context.Context, otherUserID uuid.UUID) (*domain.Channel, error) {
 	userID := tenant.UserID(ctx)
 	orgID := tenant.OrgID(ctx)
+	// Prevent self-DM
+	if userID == otherUserID {
+		return nil, domain.ErrDMSelf
+	}
 	var ch *domain.Channel
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		channelID, err := s.channelR.GetOrCreateDM(ctx, tx, orgID, userID, otherUserID)

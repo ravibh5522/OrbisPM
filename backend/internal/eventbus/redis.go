@@ -35,11 +35,6 @@ func (p *RedisPublisher) Publish(ctx context.Context, event domain.DomainEvent) 
 		return fmt.Errorf("publish to %s: %w", channel, err)
 	}
 
-	// Also publish to a wildcard channel for subscribers that want all events
-	if err := p.rdb.Publish(ctx, channelPrefix+"*", data).Err(); err != nil {
-		log.Warn().Err(err).Msg("failed to publish to wildcard channel")
-	}
-
 	log.Debug().Str("type", event.Type).Str("entity_id", event.EntityID).Msg("event published")
 	return nil
 }

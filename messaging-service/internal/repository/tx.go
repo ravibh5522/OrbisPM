@@ -54,6 +54,27 @@ func (tm *TxManager) WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
 	return tx.Commit(ctx)
 }
 
+// WithOrgTx executes fn inside a transaction with an explicit org_id for RLS.
+// Used by the sync service where org context isn't from HTTP middleware.
+func (tm *TxManager) WithOrgTx(ctx context.Context, orgID uuid.UUID, fn func(tx pgx.Tx) error) error {
+	tx, err := tm.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	if _, err := tx.Exec(ctx, "SELECT set_config('app.current_org_id', $1, true)", orgID.String()); err != nil {
+		return fmt.Errorf("set rls context: %w", err)
+	}
+
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 // Pool returns the underlying connection pool.
 func (tm *TxManager) Pool() *pgxpool.Pool {
 	return tm.pool

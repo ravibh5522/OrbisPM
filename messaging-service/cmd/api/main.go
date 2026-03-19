@@ -14,7 +14,10 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/jackc/pgx/v5/pgxpool"
+	minio "github.com/minio/minio-go/v7"
+	miniocreds "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/nats-io/nats.go"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
@@ -112,17 +115,90 @@ func main() {
 	attachmentRepo := repository.NewAttachmentRepository(pool)
 	pinRepo := repository.NewPinRepository(pool)
 	bookmarkRepo := repository.NewBookmarkRepository(pool)
+	categoryRepo := repository.NewCategoryRepository(pool)
 
 	// ─── Services ─────────────────────────────
 	channelSvc := service.NewChannelService(txManager, channelRepo, memberRepo, publisher)
+
+	// ─── Redis ────────────────────────────────
+	redisOpts, err := redis.ParseURL(cfg.RedisURL)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to parse redis URL")
+	}
+	rdb := redis.NewClient(redisOpts)
+	defer rdb.Close()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Warn().Err(err).Msg("redis not available — presence disabled")
+	} else {
+		log.Info().Msg("redis connected for presence")
+	}
+
+	// ─── Presence Service ─────────────────────
+	presenceSvc := service.NewPresenceService(rdb, 60*time.Second)
+
+	// ─── MinIO ────────────────────────────────
+	mc, err := minio.New(cfg.MinIOEndpoint, &minio.Options{
+		Creds:  miniocreds.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""),
+		Secure: cfg.MinIOUseSSL,
+	})
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create MinIO client")
+	}
+	log.Info().Str("endpoint", cfg.MinIOEndpoint).Msg("MinIO client created")
+
+	// Create a second MinIO client using the public URL for presigning.
+	// Presigned URL signatures include the Host header, so we need a client
+	// whose endpoint matches what the browser will use.
+	// We set Region to avoid a GetBucketLocation call (unreachable from within Docker).
+	var presignMC *minio.Client
+	if cfg.MinIOPublicURL != "" {
+		pubURL, err := url.Parse(cfg.MinIOPublicURL)
+		if err == nil && pubURL.Host != "" {
+			presignMC, err = minio.New(pubURL.Host, &minio.Options{
+				Creds:  miniocreds.NewStaticV4(cfg.MinIOAccessKey, cfg.MinIOSecretKey, ""),
+				Secure: pubURL.Scheme == "https",
+				Region: "us-east-1",
+			})
+			if err != nil {
+				log.Warn().Err(err).Msg("failed to create presign MinIO client — falling back to internal")
+			} else {
+				log.Info().Str("endpoint", pubURL.Host).Msg("MinIO presign client created (public)")
+			}
+		}
+	}
+
+	// ─── Upload Service ───────────────────────
+	uploadSvc := service.NewUploadService(mc, presignMC, cfg.MinioBucket, cfg.MaxFileSizeMB, txManager, attachmentRepo)
+	if err := uploadSvc.EnsureBucket(ctx); err != nil {
+		log.Warn().Err(err).Msg("failed to ensure MinIO bucket — uploads may fail")
+	}
+
+	// ─── Message Service (needs uploadSvc as presigner) ──
 	messageSvc := service.NewMessageService(
 		txManager, messageRepo, memberRepo, channelRepo,
 		reactionRepo, attachmentRepo, pinRepo, bookmarkRepo, publisher, cfg.EditWindowMinutes,
+		uploadSvc,
 	)
 
+	// ─── Sidebar Service ──────────────────────
+	sidebarSvc := service.NewSidebarService(pool, txManager, channelRepo, memberRepo, categoryRepo)
+
+	// ─── Category Service ─────────────────────
+	categorySvc := service.NewCategoryService(txManager, categoryRepo)
+
+	// ─── Sync Service ─────────────────────────
+	syncSvc := service.NewSyncService(pool, txManager, channelRepo, memberRepo)
+	go syncSvc.Start(ctx, 30*time.Second)
+
+	// ─── Backend Event Handler ────────────────
+	backendEventHandler := service.NewBackendEventHandler(rdb, txManager, channelRepo, memberRepo)
+	if err := backendEventHandler.Start(ctx); err != nil {
+		log.Warn().Err(err).Msg("failed to start backend event handler — falling back to sync polling")
+	}
+
 	// ─── Handlers ─────────────────────────────
-	restHandler := handler.NewRESTHandler(channelSvc, messageSvc)
-	wsHandler := handler.NewWSHandler(hub, channelSvc, messageSvc)
+	restHandler := handler.NewRESTHandler(channelSvc, messageSvc, uploadSvc, presenceSvc, sidebarSvc, categorySvc)
+	wsHandler := handler.NewWSHandler(hub, channelSvc, messageSvc, presenceSvc)
 
 	// ─── Router ───────────────────────────────
 	r := chi.NewRouter()

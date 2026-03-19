@@ -483,6 +483,7 @@ export interface DomainEvent {
 // Auth types from Zitadel
 export interface AuthUser {
   id: string;
+  internal_id?: string; // UUID derived from Zitadel ID for internal use (matches message user_id)
   email: string;
   email_confirmed_at?: string;
   phone?: string;
@@ -648,6 +649,51 @@ export interface ChatBookmark {
   note: string;
   created_at: string;
   message?: ChatMessage;
+}
+
+// ─── Sidebar Types ────────────────────────────────────
+
+export interface SidebarTeam {
+  id: string;
+  name: string;
+  manager_id?: string | null;
+  channels: ChatChannel[];
+}
+
+export interface SidebarCategory {
+  id: string;
+  name: string;
+  position: number;
+  is_collapsed: boolean;
+  auto_source?: string;
+  auto_source_id?: string;
+  channels: ChatChannel[];
+}
+
+export interface ChannelCategory {
+  id: string;
+  org_id: string;
+  name: string;
+  position: number;
+  auto_source?: string;
+  auto_source_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SidebarData {
+  categories: SidebarCategory[];
+  teams: SidebarTeam[];
+  project_channels: ChatChannel[];
+  dm_channels: ChatChannel[];
+  group_channels: ChatChannel[];
+}
+
+export interface OrgMemberInfo {
+  user_id: string;
+  display_name: string;
+  email: string;
+  avatar_url?: string;
 }
 
 // Announcements

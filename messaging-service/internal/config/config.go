@@ -35,6 +35,7 @@ type Config struct {
 	MinIOSecretKey string
 	MinioBucket    string
 	MinIOUseSSL    bool
+	MinIOPublicURL string // browser-accessible base URL, e.g. http://localhost:9000
 
 	// CORS
 	FrontendURL    string
@@ -57,29 +58,30 @@ type Config struct {
 // Load reads configuration from environment variables with sensible defaults.
 func Load() (*Config, error) {
 	cfg := &Config{
-		Port:               getEnv("PORT", "8082"),
-		Env:                getEnv("ENV", "development"),
-		DatabaseURL:        getEnv("DATABASE_URL", "postgres://orbispm:orbispm@localhost:5432/orbispm?sslmode=disable"),
-		RedisURL:           getEnv("REDIS_URL", "redis://localhost:6380/0"),
-		NatsURL:            getEnv("NATS_URL", "nats://localhost:4222"),
+		Port:                getEnv("PORT", "8082"),
+		Env:                 getEnv("ENV", "development"),
+		DatabaseURL:         getEnv("DATABASE_URL", "postgres://orbispm:orbispm@localhost:5432/orbispm?sslmode=disable"),
+		RedisURL:            getEnv("REDIS_URL", "redis://localhost:6380/0"),
+		NatsURL:             getEnv("NATS_URL", "nats://localhost:4222"),
 		ZitadelIssuer:       getEnv("ZITADEL_ISSUER", "http://localhost:8081"),
 		ZitadelInternalURL:  getEnv("ZITADEL_INTERNAL_URL", "http://zitadel:8080"),
 		ZitadelClientID:     getEnv("ZITADEL_CLIENT_ID", ""),
 		ZitadelServiceToken: getEnv("ZITADEL_SERVICE_TOKEN", ""),
-		MinIOEndpoint:      getEnv("MINIO_ENDPOINT", "localhost:9000"),
-		MinIOAccessKey:     getEnv("MINIO_ACCESS_KEY", "minioadmin"),
-		MinIOSecretKey:     getEnv("MINIO_SECRET_KEY", "minioadmin"),
-		MinioBucket:        getEnv("MINIO_BUCKET", "orbispm-chat"),
-		MinIOUseSSL:        getEnvBool("MINIO_USE_SSL", false),
-		FrontendURL:        getEnv("FRONTEND_URL", "http://localhost:3000"),
-		AllowedOrigins:     parseOrigins(getEnv("ALLOWED_ORIGINS", ""), getEnv("FRONTEND_URL", "http://localhost:3000")),
-		EditWindowMinutes:  getEnvInt("EDIT_WINDOW_MINUTES", 15),
-		MaxFileSizeMB:      getEnvInt("MAX_FILE_SIZE_MB", 25),
-		RateLimitPerMinute: getEnvInt("RATE_LIMIT_PER_MINUTE", 300),
-		RateLimitBurst:     getEnvInt("RATE_LIMIT_BURST", 30),
-		ReadTimeout:        time.Duration(getEnvInt("READ_TIMEOUT_SECONDS", 15)) * time.Second,
-		WriteTimeout:       time.Duration(getEnvInt("WRITE_TIMEOUT_SECONDS", 15)) * time.Second,
-		IdleTimeout:        time.Duration(getEnvInt("IDLE_TIMEOUT_SECONDS", 60)) * time.Second,
+		MinIOEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
+		MinIOAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
+		MinIOSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
+		MinioBucket:         getEnv("MINIO_BUCKET", "orbispm-chat"),
+		MinIOUseSSL:         getEnvBool("MINIO_USE_SSL", false),
+		MinIOPublicURL:      getEnv("MINIO_PUBLIC_URL", "http://localhost:9000"),
+		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),
+		AllowedOrigins:      parseOrigins(getEnv("ALLOWED_ORIGINS", ""), getEnv("FRONTEND_URL", "http://localhost:3000")),
+		EditWindowMinutes:   getEnvInt("EDIT_WINDOW_MINUTES", 15),
+		MaxFileSizeMB:       getEnvInt("MAX_FILE_SIZE_MB", 50),
+		RateLimitPerMinute:  getEnvInt("RATE_LIMIT_PER_MINUTE", 300),
+		RateLimitBurst:      getEnvInt("RATE_LIMIT_BURST", 30),
+		ReadTimeout:         time.Duration(getEnvInt("READ_TIMEOUT_SECONDS", 15)) * time.Second,
+		WriteTimeout:        time.Duration(getEnvInt("WRITE_TIMEOUT_SECONDS", 15)) * time.Second,
+		IdleTimeout:         time.Duration(getEnvInt("IDLE_TIMEOUT_SECONDS", 60)) * time.Second,
 	}
 
 	if cfg.Env == "production" && cfg.NatsURL == "" {

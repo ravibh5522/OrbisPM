@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
 )
@@ -165,7 +166,7 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "project", created.ID.String(), "created", "")
 
-	s.publishEvent(ctx, domain.EventProjectCreated, created.OrgID.String(), created.ID.String(), nil)
+	s.publishEvent(ctx, domain.EventProjectCreated, created.OrgID.String(), created.ID.String(), map[string]any{"name": created.Name})
 
 	return created, nil
 }
@@ -228,7 +229,7 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 
 	s.enqueueActivity(project.OrgID.String(), "project", id.String(), "deleted", "")
 
-	s.publishEvent(ctx, "project.deleted", project.OrgID.String(), id.String(), nil)
+	s.publishEvent(ctx, domain.EventProjectDeleted, project.OrgID.String(), id.String(), map[string]any{"name": project.Name})
 
 	return nil
 }
@@ -248,6 +249,11 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.U
 		role = domain.RoleProjectContributor
 	}
 	if err := s.validateRole(ctx, projectID, role); err != nil {
+		return err
+	}
+	// Fetch project for orgID (needed for event publishing)
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
 		return err
 	}
 	source := "direct"
@@ -289,13 +295,13 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.U
 		}
 	}
 	m := &domain.ProjectMember{ProjectID: projectID, UserID: userID, Role: role, Source: source, SourceTeamID: sourceTeamID}
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.Add(ctx, tx, m)
 	})
 	if err != nil {
 		return err
 	}
-	s.publishEvent(ctx, domain.EventMemberInvited, "", projectID.String(), map[string]any{"user_id": userID.String(), "scope": "project"})
+	s.publishEvent(ctx, domain.EventProjectMemberAdded, project.OrgID.String(), projectID.String(), map[string]any{"user_id": userID.String(), "role": role})
 	return nil
 }
 
@@ -310,7 +316,13 @@ func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID
 		return err
 	}
 
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	// Fetch project for orgID (needed for event publishing)
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		// Reassign/unassign tasks
 		if s.taskRepo != nil {
 			affected, err := s.taskRepo.ReassignOrUnassignTasks(ctx, tx, projectID, []uuid.UUID{userID}, reassignTo)
@@ -329,7 +341,7 @@ func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID
 	if err != nil {
 		return err
 	}
-	s.publishEvent(ctx, "member.removed", "", projectID.String(), map[string]any{"user_id": userID.String(), "scope": "project"})
+	s.publishEvent(ctx, domain.EventProjectMemberRemoved, project.OrgID.String(), projectID.String(), map[string]any{"user_id": userID.String()})
 	return nil
 }
 
@@ -420,6 +432,7 @@ func (s *ProjectService) publishEvent(ctx context.Context, eventType, orgID, ent
 	event := domain.DomainEvent{
 		Type:     eventType,
 		OrgID:    orgID,
+		ActorID:  tenant.UserID(ctx).String(),
 		EntityID: entityID,
 		Payload:  payload,
 	}

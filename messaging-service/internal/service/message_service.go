@@ -14,6 +14,11 @@ import (
 	"github.com/orbispm/messaging-service/internal/repository"
 )
 
+// Presigner generates presigned download URLs for storage objects.
+type Presigner interface {
+	PresignURL(ctx context.Context, storageKey string) (string, error)
+}
+
 // MessageService handles message business logic.
 type MessageService struct {
 	txMgr       *repository.TxManager
@@ -26,6 +31,7 @@ type MessageService struct {
 	bookmarkR   repository.BookmarkRepository
 	publisher   *natspkg.Publisher
 	editWindow  time.Duration
+	presigner   Presigner
 }
 
 // NewMessageService creates a new MessageService.
@@ -40,6 +46,7 @@ func NewMessageService(
 	bookmarkR repository.BookmarkRepository,
 	publisher *natspkg.Publisher,
 	editWindowMinutes int,
+	presigner Presigner,
 ) *MessageService {
 	return &MessageService{
 		txMgr:       txMgr,
@@ -52,6 +59,7 @@ func NewMessageService(
 		bookmarkR:   bookmarkR,
 		publisher:   publisher,
 		editWindow:  time.Duration(editWindowMinutes) * time.Minute,
+		presigner:   presigner,
 	}
 }
 
@@ -441,6 +449,19 @@ func (s *MessageService) enrichMessages(ctx context.Context, tx pgx.Tx, messages
 		}
 		if attachments == nil {
 			attachments = []domain.Attachment{}
+		}
+		// Generate presigned URLs for each attachment
+		if s.presigner != nil {
+			for j := range attachments {
+				if attachments[j].StorageKey != "" {
+					u, err := s.presigner.PresignURL(ctx, attachments[j].StorageKey)
+					if err != nil {
+						log.Warn().Err(err).Str("key", attachments[j].StorageKey).Msg("failed to presign attachment url")
+						continue
+					}
+					attachments[j].URL = u
+				}
+			}
 		}
 		messages[i].Attachments = attachments
 	}

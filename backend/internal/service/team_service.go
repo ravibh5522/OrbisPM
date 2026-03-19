@@ -10,13 +10,15 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 )
 
 type CreateTeamParams struct {
-	OrgID       uuid.UUID `json:"-"`
-	Name        string    `json:"name" validate:"required,min=2,max=100"`
-	Description string    `json:"description,omitempty"`
+	OrgID       uuid.UUID  `json:"-"`
+	Name        string     `json:"name" validate:"required,min=2,max=100"`
+	Description string     `json:"description,omitempty"`
+	ManagerID   *uuid.UUID `json:"manager_id,omitempty"`
 }
 
 type UpdateTeamParams struct {
@@ -58,6 +60,7 @@ func (s *TeamService) Create(ctx context.Context, params CreateTeamParams) (*dom
 		OrgID:       params.OrgID,
 		Name:        strings.TrimSpace(params.Name),
 		Description: strings.TrimSpace(params.Description),
+		ManagerID:   params.ManagerID,
 	}
 
 	var created *domain.Team
@@ -69,7 +72,13 @@ func (s *TeamService) Create(ctx context.Context, params CreateTeamParams) (*dom
 	if err != nil {
 		return nil, fmt.Errorf("create team: %w", err)
 	}
-	s.publishEvent(ctx, domain.EventTeamCreated, created.OrgID.String(), created.ID.String(), nil)
+	payload := map[string]any{
+		"name": created.Name,
+	}
+	if created.ManagerID != nil {
+		payload["manager_id"] = created.ManagerID.String()
+	}
+	s.publishEvent(ctx, domain.EventTeamCreated, created.OrgID.String(), created.ID.String(), payload)
 	return created, nil
 }
 
@@ -109,9 +118,70 @@ func (s *TeamService) Delete(ctx context.Context, id uuid.UUID) error {
 		return s.teamRepo.Delete(ctx, tx, id)
 	})
 	if err == nil {
-		s.publishEvent(ctx, "team.deleted", team.OrgID.String(), id.String(), nil)
+		s.publishEvent(ctx, domain.EventTeamDeleted, team.OrgID.String(), id.String(), map[string]any{"name": team.Name})
 	}
 	return err
+}
+
+// SetManager assigns or changes the manager for a team.
+func (s *TeamService) SetManager(ctx context.Context, teamID uuid.UUID, managerID *uuid.UUID) (*domain.Team, error) {
+	team, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	oldManagerID := team.ManagerID
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.teamRepo.SetManager(ctx, tx, teamID, managerID); err != nil {
+			return err
+		}
+		// If setting a new manager, ensure they are a team member with team_lead role
+		if managerID != nil && *managerID != uuid.Nil {
+			members, err := s.teamMemberRepo.ListByTeam(ctx, teamID)
+			if err != nil {
+				return err
+			}
+			found := false
+			for _, m := range members {
+				if m.UserID == *managerID {
+					found = true
+					if m.Role != domain.RoleTeamLead {
+						if err := s.teamMemberRepo.UpdateRole(ctx, tx, teamID, *managerID, domain.RoleTeamLead); err != nil {
+							return err
+						}
+					}
+					break
+				}
+			}
+			if !found {
+				m := &domain.TeamMember{TeamID: teamID, UserID: *managerID, Role: domain.RoleTeamLead}
+				if err := s.teamMemberRepo.Add(ctx, tx, m); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("set manager: %w", err)
+	}
+
+	updated, err := s.teamRepo.GetByID(ctx, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	payload := map[string]any{}
+	if managerID != nil {
+		payload["new_manager_id"] = managerID.String()
+	}
+	if oldManagerID != nil {
+		payload["old_manager_id"] = oldManagerID.String()
+	}
+	s.publishEvent(ctx, domain.EventTeamManagerChanged, updated.OrgID.String(), teamID.String(), payload)
+
+	return updated, nil
 }
 
 func (s *TeamService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error) {
@@ -161,7 +231,7 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 		return nil
 	})
 	if err == nil {
-		s.publishEvent(ctx, domain.EventMemberInvited, "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
+		s.publishEvent(ctx, domain.EventTeamMemberAdded, "", teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
 	}
 	return err
 }
@@ -212,7 +282,7 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID uuid.UUID
 		return nil
 	})
 	if err == nil {
-		s.publishEvent(ctx, "member.removed", "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
+		s.publishEvent(ctx, domain.EventTeamMemberRemoved, "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
 	}
 	return err
 }
@@ -261,6 +331,7 @@ func (s *TeamService) publishEvent(ctx context.Context, eventType, orgID, entity
 	event := domain.DomainEvent{
 		Type:     eventType,
 		OrgID:    orgID,
+		ActorID:  tenant.UserID(ctx).String(),
 		EntityID: entityID,
 		Payload:  payload,
 	}

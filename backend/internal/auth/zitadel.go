@@ -137,6 +137,7 @@ type TokenResponse struct {
 // UserInfo holds user information.
 type UserInfo struct {
 	ID               string         `json:"id"`
+	InternalID       string         `json:"internal_id,omitempty"` // UUID derived from Zitadel ID for internal use
 	Email            string         `json:"email"`
 	EmailConfirmedAt *string        `json:"email_confirmed_at,omitempty"`
 	Phone            string         `json:"phone,omitempty"`

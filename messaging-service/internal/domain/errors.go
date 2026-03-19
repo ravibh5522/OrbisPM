@@ -6,6 +6,9 @@ import (
 	"net/http"
 )
 
+// ErrCodeValidation is used for file validation errors.
+const ErrCodeValidation = http.StatusBadRequest
+
 // Sentinel errors for common domain cases.
 var (
 	ErrNotFound         = &AppError{Code: http.StatusNotFound, Message: "resource not found"}
@@ -19,6 +22,7 @@ var (
 	ErrMessageTooLong   = &AppError{Code: http.StatusBadRequest, Message: "message exceeds maximum length"}
 	ErrChannelArchived  = &AppError{Code: http.StatusUnprocessableEntity, Message: "channel is archived"}
 	ErrDMCannotAddMore  = &AppError{Code: http.StatusUnprocessableEntity, Message: "cannot add members to a DM channel"}
+	ErrDMSelf           = &AppError{Code: http.StatusBadRequest, Message: "cannot create DM with yourself"}
 	ErrRateLimited      = &AppError{Code: http.StatusTooManyRequests, Message: "rate limit exceeded"}
 )
 

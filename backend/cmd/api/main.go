@@ -472,6 +472,7 @@ func main() {
 							r.With(prm("team", "teamId", "team", "delete")).Delete("/", teamHandler.Delete)
 							r.With(prm("team", "teamId", "team", "read")).Get("/dashboard", teamHandler.Dashboard)
 							r.With(prm("team", "teamId", "team", "read")).Get("/my-permissions", teamHandler.GetMyPermissions)
+							r.With(prm("team", "teamId", "team", "update")).Put("/manager", teamHandler.SetManager)
 							r.With(prm("team", "teamId", "team", "read")).Get("/members", teamHandler.ListMembers)
 							r.With(prm("team", "teamId", "members", "manage")).Post("/members", teamHandler.AddMember)
 							r.With(prm("team", "teamId", "members", "manage")).Patch("/members/{userId}", teamHandler.UpdateMemberRole)
