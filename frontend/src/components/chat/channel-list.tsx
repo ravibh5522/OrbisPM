@@ -6,7 +6,15 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { ChatChannel } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
-import { Hash, MessageCircle, Plus, Search, Users } from "lucide-react";
+import {
+  Hash,
+  MessageCircle,
+  Pin,
+  Plus,
+  Search,
+  Users,
+  VolumeX,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 
 interface ChannelListProps {
@@ -42,14 +50,19 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
     );
   }, [channels, filter]);
 
-  const pinnedChannels = useMemo(
+  const dmChannels = useMemo(
     () => filteredChannels.filter((c) => c.type === "dm"),
     [filteredChannels],
   );
-  const groupChannels = useMemo(
-    () => filteredChannels.filter((c) => c.type !== "dm"),
-    [filteredChannels],
-  );
+  const groupChannels = useMemo(() => {
+    const channels = filteredChannels.filter((c) => c.type !== "dm");
+    // Sort pinned channels to the top
+    return channels.sort((a, b) => {
+      if (a.is_pinned && !b.is_pinned) return -1;
+      if (!a.is_pinned && b.is_pinned) return 1;
+      return 0;
+    });
+  }, [filteredChannels]);
 
   const getChannelDisplayName = (channel: ChatChannel) => {
     if (channel.type === "dm" && channel.name === "DM") {
@@ -120,14 +133,14 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
         ) : (
           <>
             {/* Direct Messages */}
-            {pinnedChannels.length > 0 && (
+            {dmChannels.length > 0 && (
               <div className="mb-2">
                 <div className="px-2 py-1.5">
                   <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
                     Direct Messages
                   </span>
                 </div>
-                {pinnedChannels.map((channel) => (
+                {dmChannels.map((channel) => (
                   <ChannelItem
                     key={channel.id}
                     channel={channel}
@@ -209,11 +222,29 @@ function ChannelItem({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium truncate">{displayName}</span>
-          {(channel.unread_count ?? 0) > 0 && !isActive && (
-            <span className="badge badge-primary badge-xs ml-1">
-              {channel.unread_count}
-            </span>
-          )}
+          <div className="flex items-center gap-1 flex-shrink-0 ml-1">
+            {channel.is_pinned && (
+              <Pin
+                className={cn(
+                  "w-3 h-3",
+                  isActive ? "text-primary-content/60" : "text-warning/60",
+                )}
+              />
+            )}
+            {channel.is_muted && (
+              <VolumeX
+                className={cn(
+                  "w-3 h-3",
+                  isActive ? "text-primary-content/60" : "text-base-content/30",
+                )}
+              />
+            )}
+            {(channel.unread_count ?? 0) > 0 && !isActive && (
+              <span className="badge badge-primary badge-xs">
+                {channel.unread_count}
+              </span>
+            )}
+          </div>
         </div>
         {channel.last_message && (
           <p

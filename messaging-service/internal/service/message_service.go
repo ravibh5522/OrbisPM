@@ -16,15 +16,16 @@ import (
 
 // MessageService handles message business logic.
 type MessageService struct {
-	txMgr      *repository.TxManager
-	messageR   repository.MessageRepository
-	memberR    repository.ChannelMemberRepository
-	channelR   repository.ChannelRepository
-	reactionR  repository.ReactionRepository
-	pinR       repository.PinRepository
-	bookmarkR  repository.BookmarkRepository
-	publisher  *natspkg.Publisher
-	editWindow time.Duration
+	txMgr       *repository.TxManager
+	messageR    repository.MessageRepository
+	memberR     repository.ChannelMemberRepository
+	channelR    repository.ChannelRepository
+	reactionR   repository.ReactionRepository
+	attachmentR repository.AttachmentRepository
+	pinR        repository.PinRepository
+	bookmarkR   repository.BookmarkRepository
+	publisher   *natspkg.Publisher
+	editWindow  time.Duration
 }
 
 // NewMessageService creates a new MessageService.
@@ -34,21 +35,23 @@ func NewMessageService(
 	memberR repository.ChannelMemberRepository,
 	channelR repository.ChannelRepository,
 	reactionR repository.ReactionRepository,
+	attachmentR repository.AttachmentRepository,
 	pinR repository.PinRepository,
 	bookmarkR repository.BookmarkRepository,
 	publisher *natspkg.Publisher,
 	editWindowMinutes int,
 ) *MessageService {
 	return &MessageService{
-		txMgr:      txMgr,
-		messageR:   messageR,
-		memberR:    memberR,
-		channelR:   channelR,
-		reactionR:  reactionR,
-		pinR:       pinR,
-		bookmarkR:  bookmarkR,
-		publisher:  publisher,
-		editWindow: time.Duration(editWindowMinutes) * time.Minute,
+		txMgr:       txMgr,
+		messageR:    messageR,
+		memberR:     memberR,
+		channelR:    channelR,
+		reactionR:   reactionR,
+		attachmentR: attachmentR,
+		pinR:        pinR,
+		bookmarkR:   bookmarkR,
+		publisher:   publisher,
+		editWindow:  time.Duration(editWindowMinutes) * time.Minute,
 	}
 }
 
@@ -196,7 +199,10 @@ func (s *MessageService) ListMessages(ctx context.Context, channelID uuid.UUID, 
 			return domain.ErrNotChannelMember
 		}
 		messages, err = s.messageR.ListByChannel(ctx, tx, channelID, before, limit)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.enrichMessages(ctx, tx, messages)
 	})
 	return messages, err
 }
@@ -211,7 +217,10 @@ func (s *MessageService) ListThread(ctx context.Context, parentID uuid.UUID, lim
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		messages, total, err = s.messageR.ListThread(ctx, tx, parentID, limit, offset)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.enrichMessages(ctx, tx, messages)
 	})
 	return messages, total, err
 }
@@ -266,7 +275,10 @@ func (s *MessageService) SearchMessages(ctx context.Context, channelID uuid.UUID
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		messages, total, err = s.messageR.Search(ctx, tx, channelID, query, limit, offset)
-		return err
+		if err != nil {
+			return err
+		}
+		return s.enrichMessages(ctx, tx, messages)
 	})
 	return messages, total, err
 }
@@ -284,10 +296,19 @@ func (s *MessageService) ToggleReaction(ctx context.Context, messageID uuid.UUID
 		}
 		channelID = msg.ChannelID
 
+		// Use savepoint so a unique-violation doesn't abort the whole transaction.
+		if _, err := tx.Exec(ctx, "SAVEPOINT reaction_toggle"); err != nil {
+			return err
+		}
+
 		reaction := &domain.Reaction{MessageID: messageID, UserID: userID, Emoji: emoji}
 		err = s.reactionR.Add(ctx, tx, reaction)
 		if err != nil {
 			if appErr, ok := domain.IsAppError(err); ok && appErr.Code == 409 {
+				// Rollback to savepoint to clear the aborted transaction state.
+				if _, err := tx.Exec(ctx, "ROLLBACK TO SAVEPOINT reaction_toggle"); err != nil {
+					return err
+				}
 				// Already exists — remove it (toggle)
 				if err := s.reactionR.Remove(ctx, tx, messageID, userID, emoji); err != nil {
 					return err
@@ -400,6 +421,30 @@ func (s *MessageService) ListBookmarks(ctx context.Context, limit, offset int) (
 		return err
 	})
 	return bookmarks, total, err
+}
+
+// enrichMessages populates reactions and attachments for a slice of messages.
+func (s *MessageService) enrichMessages(ctx context.Context, tx pgx.Tx, messages []domain.Message) error {
+	for i := range messages {
+		reactions, err := s.reactionR.ListByMessage(ctx, tx, messages[i].ID)
+		if err != nil {
+			return err
+		}
+		if reactions == nil {
+			reactions = []domain.ReactionGroup{}
+		}
+		messages[i].Reactions = reactions
+
+		attachments, err := s.attachmentR.ListByMessage(ctx, tx, messages[i].ID)
+		if err != nil {
+			return err
+		}
+		if attachments == nil {
+			attachments = []domain.Attachment{}
+		}
+		messages[i].Attachments = attachments
+	}
+	return nil
 }
 
 func (s *MessageService) publishEvent(ctx context.Context, eventType, channelID, entityID string, payload any) {

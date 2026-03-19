@@ -117,11 +117,8 @@ func main() {
 	channelSvc := service.NewChannelService(txManager, channelRepo, memberRepo, publisher)
 	messageSvc := service.NewMessageService(
 		txManager, messageRepo, memberRepo, channelRepo,
-		reactionRepo, pinRepo, bookmarkRepo, publisher, cfg.EditWindowMinutes,
+		reactionRepo, attachmentRepo, pinRepo, bookmarkRepo, publisher, cfg.EditWindowMinutes,
 	)
-
-	// suppress unused variable warning
-	_ = attachmentRepo
 
 	// ─── Handlers ─────────────────────────────
 	restHandler := handler.NewRESTHandler(channelSvc, messageSvc)

@@ -100,10 +100,10 @@ type Message struct {
 	UpdatedAt       time.Time     `json:"updated_at"`
 
 	// Joined fields.
-	SenderName   string       `json:"sender_name,omitempty"`
-	SenderAvatar string       `json:"sender_avatar,omitempty"`
-	Reactions    []Reaction   `json:"reactions,omitempty"`
-	Attachments  []Attachment `json:"attachments,omitempty"`
+	SenderName   string          `json:"sender_name,omitempty"`
+	SenderAvatar string          `json:"sender_avatar,omitempty"`
+	Reactions    []ReactionGroup `json:"reactions"`
+	Attachments  []Attachment    `json:"attachments"`
 }
 
 // Reaction represents an emoji reaction on a message.

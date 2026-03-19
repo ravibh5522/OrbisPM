@@ -574,6 +574,8 @@ export interface ChatChannel {
   updated_at: string;
   member_count?: number;
   unread_count?: number;
+  is_muted?: boolean;
+  is_pinned?: boolean;
   last_message?: string;
   last_activity?: string | null;
 }
@@ -615,10 +617,9 @@ export interface ChatMessage {
 }
 
 export interface ChatReaction {
-  message_id: string;
-  user_id: string;
   emoji: string;
-  created_at: string;
+  count: number;
+  users: string[];
 }
 
 export interface ChatMessageAttachment {

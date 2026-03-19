@@ -32,7 +32,7 @@ func Error(w http.ResponseWriter, r *http.Request, err error) {
 		JSON(w, appErr.Code, ErrorResponse{Message: appErr.Message, Detail: appErr.Detail})
 		return
 	}
-	log.Ctx(r.Context()).Error().Err(err).Msg("unhandled error")
+	log.Error().Err(err).Str("method", r.Method).Str("path", r.URL.Path).Msg("unhandled error")
 	JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "internal server error"})
 }
 

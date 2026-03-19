@@ -7,7 +7,7 @@ import { useChatStore } from "@/stores/chat-store";
 import type { ChatMessage } from "@/types/domain";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, isSameDay, isToday, isYesterday } from "date-fns";
-import { Bookmark, MessageSquare, SmilePlus } from "lucide-react";
+import { Bookmark, MessageSquare, Search, SmilePlus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const EMOJI_LIST = ["👍", "❤️", "😂", "🎉", "😮", "😢", "🔥", "👀"];
@@ -30,12 +30,36 @@ export function MessageList() {
   const typingUsers = useChatStore(
     (s) => s.typingUsers.get(activeChannelId || "") ?? EMPTY_TYPING,
   );
+  const searchQuery = useChatStore((s) => s.searchQuery);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [autoScroll, setAutoScroll] = useState(true);
   const prevMessagesLenRef = useRef(0);
+
+  // Debounce search query
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Search messages query
+  const { data: searchResults, isLoading: isSearchLoading } = useQuery({
+    queryKey: ["chat-search", activeChannelId, debouncedSearch],
+    queryFn: async () => {
+      if (!activeChannelId || !debouncedSearch.trim()) return [];
+      const res = await api.chat.messages.search(
+        activeChannelId,
+        debouncedSearch.trim(),
+      );
+      return res.data ?? [];
+    },
+    enabled: !!activeChannelId && !!debouncedSearch.trim(),
+  });
+
+  const isSearching = !!debouncedSearch.trim();
 
   // Fetch initial messages
   const { isLoading } = useQuery({
@@ -128,6 +152,44 @@ export function MessageList() {
       </div>
     );
   }
+
+  // ─── Search Results Mode ────────────────────
+  if (isSearching) {
+    return (
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="mb-3">
+          <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
+            Search Results{searchResults ? ` (${searchResults.length})` : ""}
+          </span>
+        </div>
+        {isSearchLoading ? (
+          <div className="flex justify-center py-8">
+            <span className="loading loading-spinner loading-md text-primary" />
+          </div>
+        ) : !searchResults || searchResults.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-base-content/40">
+            <Search className="w-10 h-10 mb-2 opacity-30" />
+            <p className="text-sm font-medium">No messages found</p>
+            <p className="text-xs mt-1">Try a different search term</p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            {searchResults.map((msg) => (
+              <MessageBubble
+                key={msg.id}
+                message={msg}
+                isOwn={msg.user_id === user?.id}
+                isGrouped={false}
+                onOpenThread={() => openThread(msg.id)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Normal Message List ────────────────────
 
   return (
     <div
@@ -225,6 +287,7 @@ function MessageBubble({
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [bookmarked, setBookmarked] = useState(false);
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
 
@@ -306,13 +369,13 @@ function MessageBubble({
         {/* Reactions */}
         {message.reactions && message.reactions.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-1.5">
-            {groupReactions(message.reactions).map((rg) => (
+            {message.reactions.map((rg) => (
               <button
                 key={rg.emoji}
                 onClick={() => handleReaction(rg.emoji)}
                 className={cn(
                   "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors",
-                  rg.userIds.includes(useAuthStore.getState().user?.id || "")
+                  rg.users?.includes(useAuthStore.getState().user?.id || "")
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-base-200 bg-base-100 hover:bg-base-200",
                 )}
@@ -355,17 +418,28 @@ function MessageBubble({
             <SmilePlus className="w-3.5 h-3.5" />
           </button>
           <button
-            className="btn btn-ghost btn-xs btn-square"
-            title="Bookmark"
+            className={cn(
+              "btn btn-ghost btn-xs btn-square",
+              bookmarked && "text-warning",
+            )}
+            title={bookmarked ? "Bookmarked!" : "Bookmark"}
             onClick={async () => {
               try {
-                await api.chat.bookmarks.add(message.id);
+                if (bookmarked) {
+                  await api.chat.bookmarks.remove(message.id);
+                  setBookmarked(false);
+                } else {
+                  await api.chat.bookmarks.add(message.id);
+                  setBookmarked(true);
+                }
               } catch {
-                /* already bookmarked */
+                // toggle failed silently
               }
             }}
           >
-            <Bookmark className="w-3.5 h-3.5" />
+            <Bookmark
+              className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
+            />
           </button>
         </div>
       )}
@@ -386,20 +460,4 @@ function MessageBubble({
       )}
     </div>
   );
-}
-
-function groupReactions(
-  reactions: { emoji: string; user_id: string }[],
-): { emoji: string; count: number; userIds: string[] }[] {
-  const map = new Map<string, string[]>();
-  for (const r of reactions) {
-    const arr = map.get(r.emoji) || [];
-    arr.push(r.user_id);
-    map.set(r.emoji, arr);
-  }
-  return Array.from(map.entries()).map(([emoji, userIds]) => ({
-    emoji,
-    count: userIds.length,
-    userIds,
-  }));
 }
