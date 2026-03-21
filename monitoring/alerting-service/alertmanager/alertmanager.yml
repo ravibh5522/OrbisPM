@@ -1,0 +1,121 @@
+# =======================================================
+# Alertmanager Configuration — OrbisPM Monitoring
+# =======================================================
+
+global:
+  # How long to wait before sending a notification
+  resolve_timeout: 5m
+  
+  # SMTP configuration (configure via environment)
+  smtp_smarthost: 'mailpit:1025'
+  smtp_from: 'alertmanager@orbispm.local'
+  smtp_require_tls: false
+  
+  # Slack configuration (optional)
+  # slack_api_url: '${SLACK_WEBHOOK_URL}'
+
+# Route tree
+route:
+  # Default receiver
+  receiver: 'default'
+  
+  # Group alerts by these labels
+  group_by: ['alertname', 'severity', 'org_id']
+  
+  # Wait before sending first notification
+  group_wait: 30s
+  
+  # Wait before sending subsequent notifications for new alerts in same group
+  group_interval: 5m
+  
+  # Wait before re-sending a notification for same alert
+  repeat_interval: 4h
+  
+  # Child routes
+  routes:
+    # Critical alerts — immediate notification
+    - match:
+        severity: critical
+      receiver: 'critical'
+      group_wait: 10s
+      repeat_interval: 1h
+      continue: true
+    
+    # Warning alerts — standard timing
+    - match:
+        severity: warning
+      receiver: 'warning'
+      group_wait: 1m
+      repeat_interval: 4h
+    
+    # Business alerts — special handling
+    - match:
+        type: business
+      receiver: 'business'
+      group_by: ['alertname', 'org_id']
+      group_wait: 2m
+      repeat_interval: 6h
+    
+    # Infrastructure alerts
+    - match_re:
+        alertname: '(HighCPU|HighMemory|DiskSpace|NodeDown).*'
+      receiver: 'infrastructure'
+      group_wait: 30s
+      repeat_interval: 2h
+
+# Receivers
+receivers:
+  # Default receiver — logs only (no external notification)
+  - name: 'default'
+    webhook_configs:
+      - url: 'http://alert-engine:8090/webhook/log'
+        send_resolved: true
+
+  # Critical alerts — high priority
+  - name: 'critical'
+    webhook_configs:
+      - url: 'http://alert-engine:8090/webhook/critical'
+        send_resolved: true
+    # Email notifications for critical
+    email_configs:
+      - to: '${ALERT_EMAIL:-admin@orbispm.local}'
+        send_resolved: true
+        headers:
+          Subject: '[CRITICAL] OrbisPM Alert: {{ .GroupLabels.alertname }}'
+
+  # Warning alerts
+  - name: 'warning'
+    webhook_configs:
+      - url: 'http://alert-engine:8090/webhook/warning'
+        send_resolved: true
+
+  # Business rule alerts
+  - name: 'business'
+    webhook_configs:
+      - url: 'http://alert-engine:8090/webhook/business'
+        send_resolved: true
+
+  # Infrastructure alerts
+  - name: 'infrastructure'
+    webhook_configs:
+      - url: 'http://alert-engine:8090/webhook/infrastructure'
+        send_resolved: true
+
+# Inhibition rules — suppress alerts when others are firing
+inhibit_rules:
+  # If critical alert firing, suppress warnings for same alertname
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'org_id']
+  
+  # Node down suppresses all other node alerts
+  - source_match:
+      alertname: 'NodeDown'
+    target_match_re:
+      alertname: '(HighCPU|HighMemory|DiskSpace).*'
+    equal: ['instance']
+
+# Templates (optional custom templates)
+templates: []

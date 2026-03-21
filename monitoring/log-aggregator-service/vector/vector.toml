@@ -1,0 +1,187 @@
+# =======================================================
+# Vector Configuration — Log Collection & Transformation
+# =======================================================
+# Collects logs from Docker containers, transforms, and ships to Loki
+
+# -------------------------------------------------------
+# Data Directory
+# -------------------------------------------------------
+data_dir = "/var/lib/vector"
+
+# -------------------------------------------------------
+# Sources — Collect Docker container logs
+# -------------------------------------------------------
+[sources.docker_logs]
+type = "docker_logs"
+include_containers = [
+  "orbispm-api",
+  "orbispm-kong",
+  "orbispm-frontend",
+  "orbispm-worker",
+  "orbispm-ws",
+  "orbispm-mcp",
+  "orbispm-postgres",
+  "orbispm-redis",
+  "orbispm-meilisearch",
+  "orbispm-zitadel"
+]
+exclude_containers = [
+  "orbispm-vector",
+  "orbispm-prometheus",
+  "orbispm-loki",
+  "orbispm-tempo",
+  "orbispm-grafana"
+]
+
+# -------------------------------------------------------
+# Transforms — Parse and enrich logs
+# -------------------------------------------------------
+
+# Parse JSON logs (zerolog format)
+[transforms.parse_json]
+type = "remap"
+inputs = ["docker_logs"]
+source = '''
+# Try to parse message as JSON (zerolog format)
+parsed, err = parse_json(.message)
+if err == null {
+  . = merge(., parsed)
+  del(.message)
+}
+
+# Extract trace ID if present
+if exists(.trace_id) {
+  .trace_id = string!(.trace_id)
+}
+
+# Normalize log level
+if exists(.level) {
+  .level = downcase(string!(.level))
+} else if exists(.severity) {
+  .level = downcase(string!(.severity))
+  del(.severity)
+} else {
+  .level = "info"
+}
+
+# Add timestamp if missing
+if !exists(.timestamp) {
+  .timestamp = now()
+}
+
+# Add container info
+.service = get!(.container_name) ?? "unknown"
+.container_id = get!(.container_id) ?? ""
+
+# Add environment
+.environment = get_env_var("ENV") ?? "development"
+'''
+
+# SECURITY: Strip sensitive fields
+[transforms.sanitize]
+type = "remap"
+inputs = ["parse_json"]
+source = '''
+# Remove sensitive fields
+del(.password)
+del(.passwd)
+del(.token)
+del(.access_token)
+del(.refresh_token)
+del(.authorization)
+del(.Authorization)
+del(.cookie)
+del(.Cookie)
+del(.secret)
+del(.api_key)
+del(.apiKey)
+del(.private_key)
+del(.privateKey)
+
+# Mask email addresses in message (keep domain for debugging)
+if is_string(.msg) {
+  .msg = replace(.msg, r'[a-zA-Z0-9._%+-]+@', "***@")
+}
+
+# Mask potential JWT tokens
+if is_string(.msg) {
+  .msg = replace(.msg, r'eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*', "[JWT_REDACTED]")
+}
+'''
+
+# Filter out noisy logs
+[transforms.filter_noise]
+type = "filter"
+inputs = ["sanitize"]
+condition = '''
+# In production, filter debug logs unless LOG_DEBUG is true
+level != "debug" || get_env_var("LOG_DEBUG") == "true"
+'''
+
+# Add structured labels for Loki
+[transforms.add_labels]
+type = "remap"
+inputs = ["filter_noise"]
+source = '''
+# Add Loki labels
+._loki_labels = {
+  "service": .service,
+  "level": .level,
+  "environment": .environment,
+  "container": .container_name
+}
+'''
+
+# -------------------------------------------------------
+# Sinks — Send logs to Loki
+# -------------------------------------------------------
+
+[sinks.loki]
+type = "loki"
+inputs = ["add_labels"]
+endpoint = "http://loki:3100"
+encoding.codec = "json"
+
+# Labels extracted from log data
+labels.service = "{{ service }}"
+labels.level = "{{ level }}"
+labels.environment = "{{ environment }}"
+labels.container = "{{ container_name }}"
+
+# Batch settings
+batch.max_bytes = 1048576  # 1MB
+batch.timeout_secs = 1
+
+# Buffer settings
+buffer.type = "disk"
+buffer.max_size = 268435488  # 256MB
+buffer.when_full = "block"
+
+# Healthcheck
+healthcheck.enabled = true
+
+# -------------------------------------------------------
+# ClickHouse Sink (Commented - enable when ready)
+# -------------------------------------------------------
+# [sinks.clickhouse]
+# type = "clickhouse"
+# inputs = ["add_labels"]
+# endpoint = "http://clickhouse:8123"
+# database = "monitoring"
+# table = "logs"
+# 
+# encoding.codec = "json"
+# 
+# auth.strategy = "basic"
+# auth.user = "${CH_USER:-monitoring}"
+# auth.password = "${CH_PASSWORD:-changeme}"
+# 
+# batch.max_bytes = 10485760  # 10MB
+# batch.timeout_secs = 5
+
+# -------------------------------------------------------
+# Health Check API
+# -------------------------------------------------------
+[api]
+enabled = true
+address = "0.0.0.0:9080"

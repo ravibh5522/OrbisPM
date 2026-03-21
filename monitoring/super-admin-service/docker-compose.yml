@@ -1,0 +1,64 @@
+# =======================================================
+# Super Admin Service — Unified Dashboard API + Web UI
+# =======================================================
+
+services:
+  # Super Admin API
+  super-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: orbispm-super-admin
+    environment:
+      # Server config
+      PORT: "8080"
+      ENV: "${ENV:-development}"
+      LOG_LEVEL: "${LOG_LEVEL:-info}"
+      
+      # Database connections
+      DATABASE_URL: "postgres://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=disable"
+      CLICKHOUSE_URL: "http://clickhouse:8123"
+      CLICKHOUSE_DB: "${CLICKHOUSE_DB:-monitoring}"
+      REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+      
+      # Monitoring endpoints
+      PROMETHEUS_URL: "http://prometheus:9090"
+      LOKI_URL: "http://loki:3100"
+      ALERTMANAGER_URL: "http://alertmanager:9093"
+      GRAFANA_URL: "http://grafana:3000"
+      
+      # Auth - Zitadel
+      ZITADEL_DOMAIN: "${ZITADEL_DOMAIN:-localhost:8080}"
+      ZITADEL_ISSUER: "${ZITADEL_ISSUER:-http://localhost:8080}"
+      
+      # Super admin users (comma-separated emails)
+      SUPER_ADMIN_EMAILS: "${SUPER_ADMIN_EMAILS:-admin@orbispm.local}"
+    ports:
+      - "${SUPER_ADMIN_PORT:-8090}:8080"
+    networks:
+      - monitoring
+      - orbispm_default
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - alertmanager
+      - clickhouse
+
+networks:
+  monitoring:
+    external: false
+    name: orbispm-monitoring_monitoring
+  orbispm_default:
+    external: false
+
+# Note: Super Admin service has external port mapping
+# as it provides the unified admin dashboard access

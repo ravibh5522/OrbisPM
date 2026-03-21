@@ -1,0 +1,64 @@
+# =======================================================
+# Log Aggregator Service — Vector + Loki
+# =======================================================
+
+services:
+  # Vector — Log collection and transformation
+  vector:
+    image: timberio/vector:0.37.0-alpine
+    container_name: orbispm-vector
+    volumes:
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro  # SECURITY: read-only
+    environment:
+      - ENV=${ENV:-development}
+      - LOG_DEBUG=${LOG_DEBUG:-false}
+    # Internal only — no host port mapping
+    expose:
+      - "9080"  # Health check
+    networks:
+      - monitoring
+      - orbispm_default
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+    restart: unless-stopped
+    depends_on:
+      - loki
+
+  # Grafana Loki — Log aggregation
+  loki:
+    image: grafana/loki:2.9.5
+    container_name: orbispm-loki
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    # Internal only — no host port mapping
+    expose:
+      - "3100"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  monitoring:
+    external: false
+    name: orbispm-monitoring_monitoring
+  orbispm_default:
+    external: false
+
+volumes:
+  loki-data:
+    external: false
+    name: orbispm-monitoring_loki-data

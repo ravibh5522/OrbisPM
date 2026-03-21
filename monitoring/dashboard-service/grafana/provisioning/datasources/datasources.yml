@@ -1,0 +1,110 @@
+# =======================================================
+# Grafana Datasources Provisioning
+# =======================================================
+
+apiVersion: 1
+
+datasources:
+  # Prometheus — Primary metrics datasource
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      httpMethod: POST
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
+          urlDisplayLabel: View Trace
+
+  # Loki — Log aggregation
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - name: TraceID
+          matcherRegex: '"trace_id":"([a-f0-9]+)"'
+          datasourceUid: tempo
+          url: "$${__value.raw}"
+        - name: TraceID
+          matcherRegex: 'trace_id=([a-f0-9]+)'
+          datasourceUid: tempo
+          url: "$${__value.raw}"
+
+  # Tempo — Distributed tracing
+  - name: Tempo
+    type: tempo
+    uid: tempo
+    access: proxy
+    url: http://tempo:3200
+    editable: false
+    jsonData:
+      httpMethod: GET
+      tracesToLogsV2:
+        datasourceUid: loki
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+        filterByTraceID: true
+        filterBySpanID: false
+        tags:
+          - key: service
+            value: service
+      tracesToMetrics:
+        datasourceUid: prometheus
+        spanStartTimeShift: "-1h"
+        spanEndTimeShift: "1h"
+        tags:
+          - key: service.name
+            value: service
+        queries:
+          - name: Request Rate
+            query: sum(rate(http_requests_total{service="$${__tags.service}"}[5m]))
+          - name: Error Rate
+            query: sum(rate(http_requests_total{service="$${__tags.service}",status_code=~"5.."}[5m]))
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        hide: false
+      lokiSearch:
+        datasourceUid: loki
+
+  # ClickHouse — Long-term analytics (optional)
+  - name: ClickHouse
+    type: grafana-clickhouse-datasource
+    access: proxy
+    url: http://clickhouse:8123
+    editable: false
+    jsonData:
+      defaultDatabase: monitoring
+      port: 9000
+      protocol: native
+      secure: false
+      username: ${CH_USER:-monitoring}
+    secureJsonData:
+      password: ${CH_PASSWORD:-changeme}
+
+  # PostgreSQL — Application database (read-only queries)
+  - name: PostgreSQL
+    type: postgres
+    access: proxy
+    url: ${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}
+    editable: false
+    jsonData:
+      database: ${POSTGRES_DB:-orbispm}
+      sslmode: disable
+      maxOpenConns: 5
+      maxIdleConns: 2
+      connMaxLifetime: 14400
+      postgresVersion: 1600
+      timescaledb: false
+    secureJsonData:
+      user: ${POSTGRES_USER:-orbispm}
+      password: ${POSTGRES_PASSWORD:-changeme}
