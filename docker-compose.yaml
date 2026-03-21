@@ -374,5 +374,4 @@ volumes:
   redisdata:
   miniodata:
   meilidata:
-  nocodbdata:
   natsdata:

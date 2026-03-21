@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mc --version)",
+      "Bash(curl -s -o /tmp/mc https://dl.min.io/client/mc/release/linux-amd64/mc)",
+      "Bash(chmod +x /tmp/mc)",
+      "Bash(/tmp/mc --version)"
+    ]
+  }
+}
