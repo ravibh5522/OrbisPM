@@ -12,20 +12,20 @@ services:
     environment:
       # Database
       DATABASE_URL: "postgres://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=disable"
-      
+
       # Redis
       REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
       REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
-      
+
       # Monitoring endpoints
       PROMETHEUS_URL: "http://prometheus:9090"
       LOKI_URL: "http://loki:3100"
       ALERTMANAGER_URL: "http://alertmanager:9093"
-      
+
       # Evaluation settings
       EVAL_INTERVAL: "30s"
       ALERT_COOLDOWN: "15m"
-      
+
       # Logging
       LOG_LEVEL: "info"
       ENV: "${ENV:-development}"
@@ -41,7 +41,11 @@ services:
           memory: 128m
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "wget -q -O /dev/null http://localhost:8090/health || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O /dev/null http://localhost:8090/health || exit 1",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

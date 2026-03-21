@@ -13,9 +13,9 @@ services:
       - tempo-data:/var/tempo
     # Internal only — no host port mapping
     expose:
-      - "3200"   # HTTP
-      - "4317"   # OTLP gRPC
-      - "4318"   # OTLP HTTP
+      - "3200" # HTTP
+      - "4317" # OTLP gRPC
+      - "4318" # OTLP HTTP
     networks:
       - monitoring
     deploy:

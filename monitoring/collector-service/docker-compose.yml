@@ -14,9 +14,9 @@ services:
       - ENV=${ENV:-development}
     # Internal only — no host port mapping
     expose:
-      - "4317"  # gRPC
-      - "4318"  # HTTP
-      - "8888"  # Metrics
+      - "4317" # gRPC
+      - "4318" # HTTP
+      - "8888" # Metrics
     networks:
       - monitoring
       - orbispm_default
@@ -26,7 +26,13 @@ services:
           memory: 512m
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "/otelcol-contrib", "validate", "--config=/etc/otelcol-contrib/config.yaml"]
+      test:
+        [
+          "CMD",
+          "/otelcol-contrib",
+          "validate",
+          "--config=/etc/otelcol-contrib/config.yaml",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3

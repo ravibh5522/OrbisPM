@@ -9,13 +9,13 @@ services:
     container_name: orbispm-vector
     volumes:
       - ./vector/vector.toml:/etc/vector/vector.toml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # SECURITY: read-only
+      - /var/run/docker.sock:/var/run/docker.sock:ro # SECURITY: read-only
     environment:
       - ENV=${ENV:-development}
       - LOG_DEBUG=${LOG_DEBUG:-false}
     # Internal only — no host port mapping
     expose:
-      - "9080"  # Health check
+      - "9080" # Health check
     networks:
       - monitoring
       - orbispm_default
