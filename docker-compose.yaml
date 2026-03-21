@@ -258,7 +258,6 @@ services:
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
     depends_on:
       - api
-      - nocodb
       - messaging-service
 
   email-service:
