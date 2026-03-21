@@ -261,22 +261,6 @@ services:
       - nocodb
       - messaging-service
 
-  nocodb:
-    image: nocodb/nocodb:latest
-    restart: unless-stopped
-    expose:
-      - "8080"
-    environment:
-      NC_DB: ${NOCODB_DB_URL:?NOCODB_DB_URL required}
-      NC_PUBLIC_URL: "${BASE_URL:-http://localhost:8000}/db"
-      NC_DISABLE_TELE: "true"
-    volumes:
-      - nocodbdata:/usr/app/data
-    depends_on:
-      postgres:
-        condition: service_healthy
-        required: false
-
   email-service:
     build:
       context: ./email-service
