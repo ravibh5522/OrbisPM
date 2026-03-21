@@ -6,15 +6,20 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { Notification } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, CheckCheck } from "lucide-react";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
-function getNotificationHref(notif: Notification, orgSlug: string): string | null {
+function getNotificationHref(
+  notif: Notification,
+  orgSlug: string,
+): string | null {
   const p = notif.payload;
   if (!p) return null;
   const projectId = p.project_id as string | undefined;
   const taskId = p.task_id as string | undefined;
-  if (projectId && taskId) return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
+  if (projectId && taskId)
+    return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
   if (projectId) return `/${orgSlug}/projects/${projectId}`;
   const teamId = p.team_id as string | undefined;
   if (teamId) return `/${orgSlug}/teams`;
@@ -25,7 +30,29 @@ export function NotificationBell() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const router = useRouter();
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when navigating to a new page
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e: MouseEvent) {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
 
   const { data: notifications } = useQuery({
     queryKey: ["notifications", currentOrg?.id],
@@ -36,12 +63,14 @@ export function NotificationBell() {
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => api.notifications.markRead(currentOrg!.id, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.notifications.markAllRead(currentOrg!.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["notifications", currentOrg?.id] }),
   });
 
   const items = notifications?.data || [];
@@ -58,52 +87,95 @@ export function NotificationBell() {
   };
 
   return (
-    <div className="dropdown dropdown-end">
-      <label tabIndex={0} className="btn btn-ghost btn-sm btn-square indicator" onClick={() => setOpen(!open)}>
+    <div ref={containerRef} className="relative">
+      {/* Bell button */}
+      <button
+        className="btn btn-ghost btn-sm btn-square indicator"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-label="Notifications"
+        aria-expanded={open}
+      >
         <Bell className="w-5 h-5" />
         {unread > 0 && (
-          <span className="indicator-item badge badge-xs badge-primary">{unread}</span>
+          <span className="indicator-item badge badge-xs badge-primary">
+            {unread}
+          </span>
         )}
-      </label>
+      </button>
+
+      {/* Dropdown card */}
       {open && (
-        <div tabIndex={0} className="dropdown-content z-50 shadow-lg bg-base-100 rounded-box w-80 border border-base-200">
-          <div className="p-3 border-b border-base-200 flex items-center justify-between">
-            <h3 className="font-semibold text-sm">Notifications</h3>
+        <div
+          className={cn(
+            "absolute right-0 top-full mt-2 z-50",
+            "w-80 rounded-box border border-base-200 bg-base-100/95 backdrop-blur-[20px] shadow-lg",
+          )}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-base-200 p-3">
+            <h3 className="text-sm font-semibold">Notifications</h3>
             {unread > 0 && (
               <button
                 className="btn btn-ghost btn-xs"
                 onClick={() => markAllReadMutation.mutate()}
+                disabled={markAllReadMutation.isPending}
               >
                 <CheckCheck className="w-3 h-3" /> Mark all read
               </button>
             )}
           </div>
+
+          {/* List */}
           <div className="max-h-80 overflow-y-auto">
             {items.length === 0 ? (
-              <p className="p-4 text-sm text-base-content/50 text-center">No notifications</p>
+              <p className="p-4 text-center text-sm text-base-content/50">
+                No notifications
+              </p>
             ) : (
               items.map((notif: Notification) => (
                 <div
                   key={notif.id}
                   className={cn(
-                    "p-3 border-b border-base-200 last:border-0 hover:bg-base-200 cursor-pointer",
-                    !notif.read_at && "bg-primary/5"
+                    "cursor-pointer border-b border-base-200 p-3 last:border-0 hover:bg-base-200",
+                    !notif.read_at && "bg-primary/5",
                   )}
                   onClick={() => handleNotifClick(notif)}
                 >
                   <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{notif.title}</p>
-                      <p className="text-xs text-base-content/60 line-clamp-2">{notif.body}</p>
-                      <p className="text-xs text-base-content/40 mt-1">{formatRelative(notif.created_at)}</p>
+                    {/* Unread dot */}
+                    <div className="mt-1.5 flex-shrink-0">
+                      {!notif.read_at ? (
+                        <div className="h-2 w-2 rounded-full bg-primary" />
+                      ) : (
+                        <div className="h-2 w-2" />
+                      )}
                     </div>
-                    {!notif.read_at && (
-                      <div className="w-2 h-2 bg-primary rounded-full flex-shrink-0 mt-1.5" />
-                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium leading-snug">
+                        {notif.title}
+                      </p>
+                      <p className="line-clamp-2 text-xs text-base-content/60">
+                        {notif.body}
+                      </p>
+                      <p className="mt-1 text-xs text-base-content/40">
+                        {formatRelative(notif.created_at)}
+                      </p>
+                    </div>
                   </div>
                 </div>
               ))
             )}
+          </div>
+
+          {/* Footer */}
+          <div className="border-t border-base-200 p-2">
+            <Link
+              href={`/${orgSlug}/notifications`}
+              className="btn btn-ghost btn-sm w-full"
+              onClick={() => setOpen(false)}
+            >
+              View all notifications
+            </Link>
           </div>
         </div>
       )}

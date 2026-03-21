@@ -1,0 +1,54 @@
+.environ) print(result.stdout) print(result.stderr) " 2>&1
+ exit
+ reset && echo "terminal reset done"
+ cd /home/ravi/Desktop/Project && python3 -c "
+import psycopg2
+conn = psycopg2.connect(host='35.207.246.183', port=9000, user='postgres', password='YESVeW48YWdzHq3DYlJRG80DjMgIE', dbname='postgres')
+cur = conn.cursor()
+cur.execute(\"\"\"SELECT r.slug, p.resource, p.action, p.scope FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id WHERE r.slug IN ('qa_tester','intern') ORDER BY 1,2,3\"\"\")
+for row in cur.fetchall():
+    print('|'.join(str(x) for x in row))
+conn.close()
+"
+ cd /home/ravi/Desktop/Project && python3 << 'PYEOF'
+import psycopg2
+conn = psycopg2.connect(host='35.207.246.183', port=9000, user='postgres', password='YESVeW48YWdzHq3DYlJRG80DjMgIE', dbname='postgres')
+cur = conn.cursor()
+
+# Current permissions for qa_tester and intern
+cur.execute("""SELECT r.slug, p.resource, p.action, p.scope FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id WHERE r.slug IN ('qa_tester','intern') ORDER BY 1,2,3""")
+print("=== Current permissions ===")
+for row in cur.fetchall():
+    print(f"{row[0]}: {row[1]}.{row[2]} (scope={row[3]})")
+
+# Get the role IDs
+cur.execute("SELECT id, slug FROM roles WHERE slug IN ('qa_tester','intern')")
+roles = {row[1]: row[0] for row in cur.fetchall()}
+print(f"\nRole IDs: {roles}")
+
+# Get the project-scope tasks.update permission ID
+cur.execute("SELECT id FROM permissions WHERE resource='tasks' AND action='update' AND scope='project'")
+perm = cur.fetchone()
+print(f"tasks.update (project) ID: {perm[0]}")
+
+# Add tasks.update to both roles
+for slug, role_id in roles.items():
+    try:
+        cur.execute("INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)", (role_id, perm[0]))
+        print(f"Added tasks.update to {slug}")
+    except Exception as e:
+        print(f"Failed to add tasks.update to {slug}: {e}")
+        conn.rollback()
+        continue
+
+conn.commit()
+
+# Verify
+cur.execute("""SELECT r.slug, p.resource, p.action, p.scope FROM role_permissions rp JOIN roles r ON r.id = rp.role_id JOIN permissions p ON p.id = rp.permission_id WHERE r.slug IN ('qa_tester','intern') ORDER BY 1,2,3""")
+print("\n=== Updated permissions ===")
+for row in cur.fetchall():
+    print(f"{row[0]}: {row[1]}.{row[2]} (scope={row[3]})")
+
+conn.close()
+PYEOF
+

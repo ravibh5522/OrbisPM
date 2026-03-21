@@ -16,25 +16,28 @@ import (
 
 // TaskChangeRequestService manages the review pipeline for task changes.
 type TaskChangeRequestService struct {
-	crRepo    repository.TaskChangeRequestRepository
-	taskRepo  repository.TaskRepository
-	txm       *repository.TxManager
-	workerSrv *worker.Server
-	publisher EventPublisher
+	crRepo      repository.TaskChangeRequestRepository
+	taskRepo    repository.TaskRepository
+	projectRepo repository.ProjectRepository
+	txm         *repository.TxManager
+	workerSrv   *worker.Server
+	publisher   EventPublisher
 }
 
 func NewTaskChangeRequestService(
 	crRepo repository.TaskChangeRequestRepository,
 	taskRepo repository.TaskRepository,
+	projectRepo repository.ProjectRepository,
 	txm *repository.TxManager,
 	workerSrv *worker.Server,
 	publisher ...EventPublisher,
 ) *TaskChangeRequestService {
 	s := &TaskChangeRequestService{
-		crRepo:    crRepo,
-		taskRepo:  taskRepo,
-		txm:       txm,
-		workerSrv: workerSrv,
+		crRepo:      crRepo,
+		taskRepo:    taskRepo,
+		projectRepo: projectRepo,
+		txm:         txm,
+		workerSrv:   workerSrv,
 	}
 	if len(publisher) > 0 {
 		s.publisher = publisher[0]
@@ -88,6 +91,27 @@ func (s *TaskChangeRequestService) Approve(ctx context.Context, crID, reviewerID
 		return nil, domain.ErrBadRequest.WithDetail("change request is not pending")
 	}
 
+	// Validate designated approvers if configured
+	if s.projectRepo != nil {
+		task, tErr := s.taskRepo.GetByID(ctx, cr.TaskID)
+		if tErr == nil {
+			if proj, pErr := s.projectRepo.GetByID(ctx, task.ProjectID); pErr == nil {
+				if approverIDs, ok := proj.Settings["approver_ids"].([]any); ok && len(approverIDs) > 0 {
+					allowed := false
+					for _, aid := range approverIDs {
+						if aidStr, ok := aid.(string); ok && aidStr == reviewerID.String() {
+							allowed = true
+							break
+						}
+					}
+					if !allowed {
+						return nil, domain.ErrForbidden.WithDetail("you are not a designated approver for this project")
+					}
+				}
+			}
+		}
+	}
+
 	now := time.Now()
 	cr.ReviewerID = &reviewerID
 	cr.Status = domain.CRApproved
@@ -123,7 +147,16 @@ func (s *TaskChangeRequestService) Approve(ctx context.Context, crID, reviewerID
 		"reviewer_id": reviewerID.String(),
 	})
 
+	// Also publish task.updated so real-time clients see the approved changes
+	s.publishEvent(ctx, domain.EventTaskUpdated, cr.OrgID.String(), cr.TaskID.String(), cr.Changes)
+
 	s.enqueueActivity(cr.OrgID.String(), "change_request", cr.ID.String(), "approved", reviewerID.String(), cr.Changes)
+
+	// Notify the proposer that their change request was approved
+	s.enqueueNotification(cr.ProposerID.String(), cr.OrgID.String(), "change_request_approved",
+		"Change request approved",
+		"Your change request has been approved",
+		map[string]any{"task_id": cr.TaskID.String(), "change_request_id": cr.ID.String()})
 
 	return updated, nil
 }
@@ -160,6 +193,12 @@ func (s *TaskChangeRequestService) Reject(ctx context.Context, crID, reviewerID 
 	})
 
 	s.enqueueActivity(cr.OrgID.String(), "change_request", cr.ID.String(), "rejected", reviewerID.String(), nil)
+
+	// Notify the proposer that their change request was rejected
+	s.enqueueNotification(cr.ProposerID.String(), cr.OrgID.String(), "change_request_rejected",
+		"Change request rejected",
+		fmt.Sprintf("Your change request was rejected: %s", note),
+		map[string]any{"task_id": cr.TaskID.String(), "change_request_id": cr.ID.String()})
 
 	return updated, nil
 }
@@ -247,6 +286,27 @@ func (s *TaskChangeRequestService) publishEvent(ctx context.Context, eventType, 
 	}
 	if err := s.publisher.Publish(ctx, event); err != nil {
 		log.Warn().Err(err).Str("type", eventType).Msg("failed to publish event")
+	}
+}
+
+func (s *TaskChangeRequestService) enqueueNotification(userID, orgID, ntype, title, body string, payload map[string]any) {
+	if s.workerSrv == nil {
+		return
+	}
+	task, err := worker.NewNotificationTask(worker.NotificationPayload{
+		UserID:  userID,
+		OrgID:   orgID,
+		Type:    ntype,
+		Title:   title,
+		Body:    body,
+		Payload: payload,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("build change request notification task")
+		return
+	}
+	if err := s.workerSrv.Enqueue(task); err != nil {
+		log.Error().Err(err).Msg("enqueue change request notification task")
 	}
 }
 

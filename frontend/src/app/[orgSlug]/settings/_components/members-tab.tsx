@@ -1,17 +1,45 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { Card, LoadingPage, Avatar, ConfirmDialog, EmptyState } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input, Select } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { UserPlus, Trash2, Shield, Users, MoreHorizontal, Mail, Phone, Calendar, Search } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import {
+  Avatar,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+} from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { OrgMember } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Ban,
+  Calendar,
+  Key,
+  Mail,
+  MoreHorizontal,
+  Phone,
+  RefreshCw,
+  Search,
+  Shield,
+  ShieldCheck,
+  Trash2,
+  UserPlus,
+  Users,
+  UserX,
+} from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
+import { useForm } from "react-hook-form";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -51,8 +79,67 @@ export default function MembersTab() {
   const [inviteMode, setInviteMode] = useState<InviteMode>("email");
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
   const [editTarget, setEditTarget] = useState<OrgMember | null>(null);
+  const [passwordTarget, setPasswordTarget] = useState<OrgMember | null>(null);
+  const [emailTarget, setEmailTarget] = useState<OrgMember | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<OrgMember | null>(
+    null,
+  );
+  const [deleteAccountTarget, setDeleteAccountTarget] =
+    useState<OrgMember | null>(null);
   const [error, setError] = useState("");
+  const [actionSuccess, setActionSuccess] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const handleClick = (e: MouseEvent) => {
+      if (
+        menuRef.current &&
+        !menuRef.current.contains(e.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(e.target as Node)
+      ) {
+        setOpenMenuId(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [openMenuId]);
+
+  // Position the portal-rendered menu relative to the trigger button
+  useLayoutEffect(() => {
+    if (!openMenuId || !triggerRef.current || !menuRef.current) return;
+    const btn = triggerRef.current.getBoundingClientRect();
+    const menu = menuRef.current.getBoundingClientRect();
+    const cvw = document.documentElement.clientWidth;
+    const cvh = document.documentElement.clientHeight;
+
+    // Default: right-aligned below button
+    let left = btn.right - menu.width;
+    let top = btn.bottom + 4;
+
+    // Flip left if overflows right
+    if (left + menu.width > cvw - 8) left = cvw - menu.width - 8;
+    if (left < 8) left = 8;
+
+    // Flip above if overflows bottom
+    if (top + menu.height > cvh - 8) top = btn.top - menu.height - 4;
+    if (top < 8) top = 8;
+
+    setMenuStyle({ position: "fixed", top, left, zIndex: 9999 });
+  }, [openMenuId]);
+
+  const toggleMenu = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>, memberId: string) => {
+      triggerRef.current = e.currentTarget;
+      setOpenMenuId((prev) => (prev === memberId ? null : memberId));
+    },
+    [],
+  );
 
   const { data: members, isLoading } = useQuery({
     queryKey: ["org-members", currentOrg?.id],
@@ -62,21 +149,28 @@ export default function MembersTab() {
 
   const inviteForm = useForm<InviteForm>({ defaultValues: { role: "member" } });
   const inviteMutation = useMutation({
-    mutationFn: (data: InviteForm) => api.members.add(currentOrg!.id, { email: data.email, role: data.role }),
+    mutationFn: (data: InviteForm) =>
+      api.members.add(currentOrg!.id, { email: data.email, role: data.role }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setShowInvite(false);
       inviteForm.reset();
       setError("");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to invite member"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to invite member"),
   });
 
-  const createForm = useForm<CreateAccountForm>({ defaultValues: { role: "member" } });
+  const createForm = useForm<CreateAccountForm>({
+    defaultValues: { role: "member" },
+  });
   const createAccountMutation = useMutation({
     mutationFn: async (data: CreateAccountForm) => {
       await api.auth.signup(data.email, data.password, data.name);
-      return api.members.add(currentOrg!.id, { email: data.email, role: data.role });
+      return api.members.add(currentOrg!.id, {
+        email: data.email,
+        role: data.role,
+      });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
@@ -84,7 +178,8 @@ export default function MembersTab() {
       createForm.reset();
       setError("");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create account"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create account"),
   });
 
   const updateRoleMutation = useMutation({
@@ -94,7 +189,8 @@ export default function MembersTab() {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setEditTarget(null);
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to update role"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to update role"),
   });
 
   const removeMutation = useMutation({
@@ -105,19 +201,112 @@ export default function MembersTab() {
     },
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({
+      userId,
+      new_password,
+    }: {
+      userId: string;
+      new_password: string;
+    }) => api.members.resetPassword(currentOrg!.id, userId, { new_password }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-members"] });
+      setPasswordTarget(null);
+      setActionSuccess("Password reset successfully");
+      setTimeout(() => setActionSuccess(""), 3000);
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to reset password"),
+  });
+
+  const updateEmailMutation = useMutation({
+    mutationFn: ({
+      userId,
+      new_email,
+    }: {
+      userId: string;
+      new_email: string;
+    }) => api.members.updateEmail(currentOrg!.id, userId, { new_email }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-members"] });
+      setEmailTarget(null);
+      setActionSuccess("Email updated successfully");
+      setTimeout(() => setActionSuccess(""), 3000);
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to update email"),
+  });
+
+  const deactivateMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.members.deactivate(currentOrg!.id, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-members"] });
+      setDeactivateTarget(null);
+      setActionSuccess("Member deactivated");
+      setTimeout(() => setActionSuccess(""), 3000);
+    },
+    onError: (e: Error) =>
+      setError(
+        e instanceof ApiError ? e.message : "Failed to deactivate member",
+      ),
+  });
+
+  const reactivateMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.members.reactivate(currentOrg!.id, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-members"] });
+      setActionSuccess("Member reactivated");
+      setTimeout(() => setActionSuccess(""), 3000);
+    },
+    onError: (e: Error) =>
+      setError(
+        e instanceof ApiError ? e.message : "Failed to reactivate member",
+      ),
+  });
+
+  const forceMfaMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.members.forceMfa(currentOrg!.id, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-members"] });
+      setActionSuccess("MFA enforcement enabled");
+      setTimeout(() => setActionSuccess(""), 3000);
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to enforce MFA"),
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.members.deleteAccount(currentOrg!.id, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["org-members"] });
+      setDeleteAccountTarget(null);
+      setActionSuccess("Account deleted permanently");
+      setTimeout(() => setActionSuccess(""), 3000);
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to delete account"),
+  });
+
   if (isLoading) return <LoadingPage />;
 
   const memberList = members?.data || [];
   const filteredMembers = searchQuery
     ? memberList.filter(
         (m: OrgMember) =>
-          (m.display_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (m.display_name || "")
+            .toLowerCase()
+            .includes(searchQuery.toLowerCase()) ||
           (m.email || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          m.role.toLowerCase().includes(searchQuery.toLowerCase())
+          m.role.toLowerCase().includes(searchQuery.toLowerCase()),
       )
     : memberList;
 
-  const getMemberName = (m: OrgMember) => m.display_name || m.email || m.user_id.slice(0, 12);
+  const getMemberName = (m: OrgMember) =>
+    m.display_name || m.email || m.user_id.slice(0, 12);
 
   return (
     <div className="flex flex-col">
@@ -126,7 +315,13 @@ export default function MembersTab() {
         <p className="text-sm text-base-content/60">
           {memberList.length} member{memberList.length !== 1 ? "s" : ""}
         </p>
-        <Button size="sm" onClick={() => { setShowInvite(true); setError(""); }}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setShowInvite(true);
+            setError("");
+          }}
+        >
           <UserPlus className="w-4 h-4" /> Add Member
         </Button>
       </div>
@@ -158,15 +353,27 @@ export default function MembersTab() {
         />
       ) : (
         <Card>
-          <div className="w-full overflow-x-auto">
+          <div className="w-full overflow-x-auto overflow-y-visible">
             <table className="table w-full">
               <thead>
                 <tr>
                   <th>Member</th>
-                  <th><Mail className="w-3.5 h-3.5 inline mr-1" />Email</th>
-                  <th><Phone className="w-3.5 h-3.5 inline mr-1" />Phone</th>
-                  <th><Shield className="w-3.5 h-3.5 inline mr-1" />Role</th>
-                  <th><Calendar className="w-3.5 h-3.5 inline mr-1" />Joined</th>
+                  <th>
+                    <Mail className="w-3.5 h-3.5 inline mr-1" />
+                    Email
+                  </th>
+                  <th>
+                    <Phone className="w-3.5 h-3.5 inline mr-1" />
+                    Phone
+                  </th>
+                  <th>
+                    <Shield className="w-3.5 h-3.5 inline mr-1" />
+                    Role
+                  </th>
+                  <th>
+                    <Calendar className="w-3.5 h-3.5 inline mr-1" />
+                    Joined
+                  </th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
@@ -175,42 +382,169 @@ export default function MembersTab() {
                   <tr key={m.user_id} className="hover">
                     <td>
                       <div className="flex items-center gap-3">
-                        <Avatar name={getMemberName(m)} src={m.avatar_url} size="sm" />
+                        <Avatar
+                          name={getMemberName(m)}
+                          src={m.avatar_url}
+                          size="sm"
+                        />
                         <div>
-                          <span className="font-medium text-sm">{m.display_name || "—"}</span>
+                          <span className="font-medium text-sm">
+                            {m.display_name || "—"}
+                          </span>
                           {m.user_id === currentUser?.id && (
-                            <span className="badge badge-xs badge-primary ml-2">You</span>
+                            <span className="badge badge-xs badge-primary ml-2">
+                              You
+                            </span>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td><span className="text-sm">{m.email || "—"}</span></td>
-                    <td><span className="text-sm text-base-content/60">{m.phone || "—"}</span></td>
                     <td>
-                      <span className={`badge badge-sm ${ROLE_COLORS[m.role] || "badge-ghost"}`}>
+                      <span className="text-sm">{m.email || "—"}</span>
+                    </td>
+                    <td>
+                      <span className="text-sm text-base-content/60">
+                        {m.phone || "—"}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={`badge badge-sm ${ROLE_COLORS[m.role] || "badge-ghost"}`}
+                      >
                         {m.role.replace("_", " ")}
                       </span>
                     </td>
-                    <td><span className="text-sm text-base-content/60">{formatDate(m.joined_at)}</span></td>
+                    <td>
+                      <span className="text-sm text-base-content/60">
+                        {formatDate(m.joined_at)}
+                      </span>
+                    </td>
                     <td>
                       <div className="flex gap-1 justify-end">
-                        <div className="dropdown dropdown-end">
-                          <label tabIndex={0} className="btn btn-ghost btn-xs btn-square">
-                            <MoreHorizontal className="w-4 h-4" />
-                          </label>
-                          <ul tabIndex={0} className="dropdown-content z-50 menu p-1 shadow-lg bg-base-100 rounded-box w-44 border border-base-200">
-                            <li>
-                              <button onClick={() => setEditTarget(m)} disabled={m.user_id === currentUser?.id} className="text-sm">
-                                <Shield className="w-3.5 h-3.5" /> Change Role
-                              </button>
-                            </li>
-                            <li>
-                              <button onClick={() => setRemoveTarget(m)} disabled={m.user_id === currentUser?.id} className="text-sm text-error">
-                                <Trash2 className="w-3.5 h-3.5" /> Remove
-                              </button>
-                            </li>
-                          </ul>
-                        </div>
+                        <button
+                          className="btn btn-ghost btn-xs btn-square"
+                          onClick={(e) => toggleMenu(e, m.user_id)}
+                        >
+                          <MoreHorizontal className="w-4 h-4" />
+                        </button>
+                        {openMenuId === m.user_id &&
+                          createPortal(
+                            <div
+                              ref={menuRef}
+                              style={menuStyle}
+                              className="menu p-1 shadow-xl bg-base-100/95 backdrop-blur-[20px] rounded-box w-48 border border-base-200"
+                            >
+                              <ul>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setEditTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <Shield className="w-3.5 h-3.5" /> Change
+                                    Role
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setPasswordTarget(m);
+                                      setError("");
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <Key className="w-3.5 h-3.5" /> Reset
+                                    Password
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setEmailTarget(m);
+                                      setError("");
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <Mail className="w-3.5 h-3.5" /> Update
+                                    Email
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      forceMfaMutation.mutate(m.user_id);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm"
+                                  >
+                                    <ShieldCheck className="w-3.5 h-3.5" />{" "}
+                                    Force MFA
+                                  </button>
+                                </li>
+                                <div className="divider my-0.5" />
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setDeactivateTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-warning"
+                                  >
+                                    <Ban className="w-3.5 h-3.5" /> Deactivate
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      reactivateMutation.mutate(m.user_id);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-success"
+                                  >
+                                    <RefreshCw className="w-3.5 h-3.5" />{" "}
+                                    Reactivate
+                                  </button>
+                                </li>
+                                <div className="divider my-0.5" />
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setRemoveTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-error"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" /> Remove
+                                  </button>
+                                </li>
+                                <li>
+                                  <button
+                                    onClick={() => {
+                                      setDeleteAccountTarget(m);
+                                      setOpenMenuId(null);
+                                    }}
+                                    disabled={m.user_id === currentUser?.id}
+                                    className="text-sm text-error"
+                                  >
+                                    <UserX className="w-3.5 h-3.5" /> Delete
+                                    Account
+                                  </button>
+                                </li>
+                              </ul>
+                            </div>,
+                            document.body,
+                          )}
                       </div>
                     </td>
                   </tr>
@@ -229,51 +563,146 @@ export default function MembersTab() {
       {/* Add Member Modal */}
       <Modal
         open={showInvite}
-        onClose={() => { setShowInvite(false); inviteForm.reset(); createForm.reset(); setError(""); }}
+        onClose={() => {
+          setShowInvite(false);
+          inviteForm.reset();
+          createForm.reset();
+          setError("");
+        }}
         title="Add Member"
       >
-        {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
+        {error && (
+          <div className="alert alert-error mb-4 text-sm">
+            <span>{error}</span>
+          </div>
+        )}
         <div className="tabs tabs-boxed mb-4">
-          <button className={`tab tab-sm ${inviteMode === "email" ? "tab-active" : ""}`} onClick={() => { setInviteMode("email"); setError(""); }}>
+          <button
+            className={`tab tab-sm ${inviteMode === "email" ? "tab-active" : ""}`}
+            onClick={() => {
+              setInviteMode("email");
+              setError("");
+            }}
+          >
             <Mail className="w-3.5 h-3.5 mr-1" /> Invite Existing User
           </button>
-          <button className={`tab tab-sm ${inviteMode === "create" ? "tab-active" : ""}`} onClick={() => { setInviteMode("create"); setError(""); }}>
+          <button
+            className={`tab tab-sm ${inviteMode === "create" ? "tab-active" : ""}`}
+            onClick={() => {
+              setInviteMode("create");
+              setError("");
+            }}
+          >
             <UserPlus className="w-3.5 h-3.5 mr-1" /> Create New Account
           </button>
         </div>
 
         {inviteMode === "email" ? (
-          <form onSubmit={inviteForm.handleSubmit((data) => inviteMutation.mutate(data))} className="space-y-4">
-            <Input label="Email Address" type="email" placeholder="user@example.com"
-              {...inviteForm.register("email", { required: "Email is required", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" } })}
+          <form
+            onSubmit={inviteForm.handleSubmit((data) =>
+              inviteMutation.mutate(data),
+            )}
+            className="space-y-4"
+          >
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="user@example.com"
+              {...inviteForm.register("email", {
+                required: "Email is required",
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: "Invalid email",
+                },
+              })}
               error={inviteForm.formState.errors.email?.message}
             />
-            <Select label="Role" options={ROLE_OPTIONS} {...inviteForm.register("role")} />
-            <p className="text-xs text-base-content/50">The user must already have an OrbisPM account.</p>
+            <Select
+              label="Role"
+              options={ROLE_OPTIONS}
+              {...inviteForm.register("role")}
+            />
+            <p className="text-xs text-base-content/50">
+              The user must already have an OrbisPM account.
+            </p>
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={() => { setShowInvite(false); inviteForm.reset(); }}>Cancel</Button>
-              <Button type="submit" loading={inviteMutation.isPending}><Mail className="w-4 h-4" /> Invite</Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowInvite(false);
+                  inviteForm.reset();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={inviteMutation.isPending}>
+                <Mail className="w-4 h-4" /> Invite
+              </Button>
             </div>
           </form>
         ) : (
-          <form onSubmit={createForm.handleSubmit((data) => createAccountMutation.mutate(data))} className="space-y-4">
-            <Input label="Full Name" placeholder="John Doe"
+          <form
+            onSubmit={createForm.handleSubmit((data) =>
+              createAccountMutation.mutate(data),
+            )}
+            className="space-y-4"
+          >
+            <Input
+              label="Full Name"
+              placeholder="John Doe"
               {...createForm.register("name", { required: "Name is required" })}
               error={createForm.formState.errors.name?.message}
             />
-            <Input label="Email Address" type="email" placeholder="user@example.com"
-              {...createForm.register("email", { required: "Email is required", pattern: { value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/, message: "Invalid email" } })}
+            <Input
+              label="Email Address"
+              type="email"
+              placeholder="user@example.com"
+              {...createForm.register("email", {
+                required: "Email is required",
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: "Invalid email",
+                },
+              })}
               error={createForm.formState.errors.email?.message}
             />
-            <Input label="Password" type="password" placeholder="Min 8 characters"
-              {...createForm.register("password", { required: "Password is required", minLength: { value: 8, message: "Password must be at least 8 characters" } })}
+            <Input
+              label="Password"
+              type="password"
+              placeholder="Min 8 characters"
+              {...createForm.register("password", {
+                required: "Password is required",
+                minLength: {
+                  value: 8,
+                  message: "Password must be at least 8 characters",
+                },
+              })}
               error={createForm.formState.errors.password?.message}
             />
-            <Select label="Role" options={ROLE_OPTIONS} {...createForm.register("role")} />
-            <p className="text-xs text-base-content/50">This creates a new OrbisPM account and adds them to the organization.</p>
+            <Select
+              label="Role"
+              options={ROLE_OPTIONS}
+              {...createForm.register("role")}
+            />
+            <p className="text-xs text-base-content/50">
+              This creates a new OrbisPM account and adds them to the
+              organization.
+            </p>
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={() => { setShowInvite(false); createForm.reset(); }}>Cancel</Button>
-              <Button type="submit" loading={createAccountMutation.isPending}><UserPlus className="w-4 h-4" /> Create & Add</Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setShowInvite(false);
+                  createForm.reset();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={createAccountMutation.isPending}>
+                <UserPlus className="w-4 h-4" /> Create & Add
+              </Button>
             </div>
           </form>
         )}
@@ -284,10 +713,20 @@ export default function MembersTab() {
         <Modal open onClose={() => setEditTarget(null)} title="Change Role">
           <div className="space-y-4">
             <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-              <Avatar name={getMemberName(editTarget)} src={editTarget.avatar_url} size="sm" />
+              <Avatar
+                name={getMemberName(editTarget)}
+                src={editTarget.avatar_url}
+                size="sm"
+              />
               <div>
-                <div className="font-medium text-sm">{getMemberName(editTarget)}</div>
-                {editTarget.email && <div className="text-xs text-base-content/50">{editTarget.email}</div>}
+                <div className="font-medium text-sm">
+                  {getMemberName(editTarget)}
+                </div>
+                {editTarget.email && (
+                  <div className="text-xs text-base-content/50">
+                    {editTarget.email}
+                  </div>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -295,7 +734,12 @@ export default function MembersTab() {
                 <button
                   key={r.value}
                   className={`btn btn-sm ${editTarget.role === r.value ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => updateRoleMutation.mutate({ userId: editTarget.user_id, role: r.value })}
+                  onClick={() =>
+                    updateRoleMutation.mutate({
+                      userId: editTarget.user_id,
+                      role: r.value,
+                    })
+                  }
                   disabled={updateRoleMutation.isPending}
                 >
                   {r.label}
@@ -304,7 +748,9 @@ export default function MembersTab() {
             </div>
           </div>
           <div className="modal-action">
-            <Button variant="ghost" onClick={() => setEditTarget(null)}>Close</Button>
+            <Button variant="ghost" onClick={() => setEditTarget(null)}>
+              Close
+            </Button>
           </div>
         </Modal>
       )}
@@ -313,12 +759,183 @@ export default function MembersTab() {
       <ConfirmDialog
         open={!!removeTarget}
         onClose={() => setRemoveTarget(null)}
-        onConfirm={() => removeTarget && removeMutation.mutate(removeTarget.user_id)}
+        onConfirm={() =>
+          removeTarget && removeMutation.mutate(removeTarget.user_id)
+        }
         title="Remove Member"
         message={`Remove ${removeTarget ? getMemberName(removeTarget) : ""} from the organization? They will lose access to all projects and resources.`}
         confirmLabel="Remove"
         loading={removeMutation.isPending}
       />
+
+      {/* Reset Password Modal */}
+      {passwordTarget && (
+        <Modal
+          open
+          onClose={() => setPasswordTarget(null)}
+          title="Reset Password"
+        >
+          {error && (
+            <div className="alert alert-error mb-4 text-sm">
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg mb-4">
+            <Avatar
+              name={getMemberName(passwordTarget)}
+              src={passwordTarget.avatar_url}
+              size="sm"
+            />
+            <div>
+              <div className="font-medium text-sm">
+                {getMemberName(passwordTarget)}
+              </div>
+              {passwordTarget.email && (
+                <div className="text-xs text-base-content/50">
+                  {passwordTarget.email}
+                </div>
+              )}
+            </div>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const pw = formData.get("new_password") as string;
+              if (pw.length < 8) {
+                setError("Password must be at least 8 characters");
+                return;
+              }
+              resetPasswordMutation.mutate({
+                userId: passwordTarget.user_id,
+                new_password: pw,
+              });
+            }}
+            className="space-y-4"
+          >
+            <Input
+              label="New Password"
+              name="new_password"
+              type="password"
+              placeholder="Min 8 characters"
+              required
+            />
+            <div className="modal-action">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setPasswordTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={resetPasswordMutation.isPending}>
+                <Key className="w-4 h-4" /> Reset
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Update Email Modal */}
+      {emailTarget && (
+        <Modal open onClose={() => setEmailTarget(null)} title="Update Email">
+          {error && (
+            <div className="alert alert-error mb-4 text-sm">
+              <span>{error}</span>
+            </div>
+          )}
+          <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg mb-4">
+            <Avatar
+              name={getMemberName(emailTarget)}
+              src={emailTarget.avatar_url}
+              size="sm"
+            />
+            <div>
+              <div className="font-medium text-sm">
+                {getMemberName(emailTarget)}
+              </div>
+              {emailTarget.email && (
+                <div className="text-xs text-base-content/50">
+                  Current: {emailTarget.email}
+                </div>
+              )}
+            </div>
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.currentTarget);
+              const email = formData.get("new_email") as string;
+              if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                setError("Invalid email address");
+                return;
+              }
+              updateEmailMutation.mutate({
+                userId: emailTarget.user_id,
+                new_email: email,
+              });
+            }}
+            className="space-y-4"
+          >
+            <Input
+              label="New Email"
+              name="new_email"
+              type="email"
+              placeholder="user@example.com"
+              required
+            />
+            <div className="modal-action">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEmailTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={updateEmailMutation.isPending}>
+                <Mail className="w-4 h-4" /> Update
+              </Button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Deactivate Confirm */}
+      <ConfirmDialog
+        open={!!deactivateTarget}
+        onClose={() => setDeactivateTarget(null)}
+        onConfirm={() =>
+          deactivateTarget &&
+          deactivateMutation.mutate(deactivateTarget.user_id)
+        }
+        title="Deactivate Member"
+        message={`Deactivate ${deactivateTarget ? getMemberName(deactivateTarget) : ""}? They will not be able to log in until reactivated.`}
+        confirmLabel="Deactivate"
+        loading={deactivateMutation.isPending}
+      />
+
+      {/* Delete Account Confirm */}
+      <ConfirmDialog
+        open={!!deleteAccountTarget}
+        onClose={() => setDeleteAccountTarget(null)}
+        onConfirm={() =>
+          deleteAccountTarget &&
+          deleteAccountMutation.mutate(deleteAccountTarget.user_id)
+        }
+        title="Delete Account Permanently"
+        message={`Permanently delete the account for ${deleteAccountTarget ? getMemberName(deleteAccountTarget) : ""}? This action cannot be undone. The user will be removed from all organizations and their data will be lost.`}
+        confirmLabel="Delete Permanently"
+        loading={deleteAccountMutation.isPending}
+      />
+
+      {/* Success Toast */}
+      {actionSuccess && (
+        <div className="toast toast-end toast-bottom z-50">
+          <div className="alert alert-success text-sm">
+            <span>{actionSuccess}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

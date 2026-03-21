@@ -1,6 +1,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,16 +17,74 @@ import (
 
 	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/email"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 )
 
 // Handlers holds dependencies for task handler functions.
 type Handlers struct {
-	Pool        *pgxpool.Pool
-	EmailSender *email.Sender
-	FrontendURL string
-	Cache       *cache.Manager
-	TxManager   *repository.TxManager
+	Pool               *pgxpool.Pool
+	EmailSender        *email.Sender
+	FrontendURL        string
+	Cache              *cache.Manager
+	TxManager          *repository.TxManager
+	MeiliURL           string
+	MeiliMasterKey     string
+	EmailServiceURL    string
+	EmailServiceAPIKey string
+}
+
+// sendViaEmailService attempts to send an email through the email-service microservice.
+// It maps notifType to a template name and passes org_id so custom org templates are used.
+func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, notifType, title, body string) error {
+	svcURL := h.EmailServiceURL
+	if svcURL == "" {
+		svcURL = "http://email-service:8050"
+	}
+
+	template := "notification"
+	if notifType == "announcement_created" {
+		template = "announcement"
+	}
+
+	payload := map[string]any{
+		"to":      to,
+		"subject": subject,
+		"template": template,
+		"context": map[string]string{
+			"title":        title,
+			"body":         body,
+			"org_id":       orgID,
+			"frontend_url": h.FrontendURL,
+		},
+	}
+
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal email service payload: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, svcURL+"/api/v1/email/send", bytes.NewReader(encoded))
+	if err != nil {
+		return fmt.Errorf("build email service request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	apiKey := h.EmailServiceAPIKey
+	if apiKey == "" {
+		apiKey = "email-service-dev-key"
+	}
+	req.Header.Set("X-API-Key", apiKey)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("email service request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("email service returned %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // RegisterAll registers all task handlers on the mux.
@@ -53,20 +112,28 @@ func (h *Handlers) HandleActivityLog(ctx context.Context, t *asynq.Task) error {
 	if err != nil {
 		return fmt.Errorf("parse org_id: %w", err)
 	}
-	actorID, err := uuid.Parse(p.ActorID)
-	if err != nil {
-		return fmt.Errorf("parse actor_id: %w", err)
+	var actorID uuid.UUID
+	if p.ActorID != "" {
+		actorID, err = uuid.Parse(p.ActorID)
+		if err != nil {
+			return fmt.Errorf("parse actor_id: %w", err)
+		}
 	}
 	entityID, err := uuid.Parse(p.EntityID)
 	if err != nil {
 		return fmt.Errorf("parse entity_id: %w", err)
 	}
 
-	_, err = h.Pool.Exec(ctx,
-		`INSERT INTO activity_logs (id, org_id, entity_type, entity_id, action, actor_id, changes, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		uuid.New(), orgID, p.EntityType, entityID, p.Action, actorID, p.Changes, time.Now().UTC(),
-	)
+	// Use TxManager to set RLS context (app.current_org_id) before inserting
+	ctx = tenant.SetOrgID(ctx, orgID)
+	err = h.TxManager.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO activity_log (id, org_id, entity_type, entity_id, action, actor_id, changes, created_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			uuid.New(), orgID, p.EntityType, entityID, p.Action, actorID, p.Changes, time.Now().UTC(),
+		)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("insert activity log: %w", err)
 	}
@@ -91,12 +158,16 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 		return fmt.Errorf("parse org_id: %w", err)
 	}
 
-	// 1. Always create in-app notification
-	_, err = h.Pool.Exec(ctx,
-		`INSERT INTO notifications (id, user_id, org_id, type, title, body, payload, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		uuid.New(), userID, orgID, p.Type, p.Title, p.Body, p.Payload, time.Now().UTC(),
-	)
+	// 1. Always create in-app notification (use TxManager for RLS context)
+	ctx = tenant.SetOrgID(ctx, orgID)
+	err = h.TxManager.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO notifications (id, user_id, org_id, type, title, body, payload, created_at)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			uuid.New(), userID, orgID, p.Type, p.Title, p.Body, p.Payload, time.Now().UTC(),
+		)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("insert notification: %w", err)
 	}
@@ -126,16 +197,26 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 			if err != nil || userEmail == "" {
 				log.Warn().Err(err).Str("user_id", p.UserID).Msg("could not find user email")
 			} else {
-				htmlBody := email.FormatNotificationEmail(p.Title, p.Body, h.FrontendURL)
-				if sendErr := h.EmailSender.Send(email.Message{
-					To:      userEmail,
-					Subject: fmt.Sprintf("[OrbisPM] %s", p.Title),
-					Body:    htmlBody,
-				}); sendErr != nil {
-					log.Error().Err(sendErr).Str("to", userEmail).Msg("failed to send notification email")
-					// Don't fail the task — in-app notification was already created
+				subject := fmt.Sprintf("[OrbisPM] %s", p.Title)
+
+				// Try email-service first (supports custom org templates).
+				svcErr := h.sendViaEmailService(ctx, userEmail, subject, p.OrgID, p.Type, p.Title, p.Body)
+				if svcErr == nil {
+					log.Debug().Str("to", userEmail).Str("type", p.Type).Msg("notification email sent via email-service")
 				} else {
-					log.Debug().Str("to", userEmail).Str("type", p.Type).Msg("notification email sent")
+					// Fall back to direct SMTP.
+					log.Warn().Err(svcErr).Str("to", userEmail).Msg("email-service failed, falling back to SMTP")
+					htmlBody := email.FormatNotificationEmail(p.Title, p.Body, h.FrontendURL)
+					if sendErr := h.EmailSender.Send(email.Message{
+						To:      userEmail,
+						Subject: subject,
+						Body:    htmlBody,
+					}); sendErr != nil {
+						log.Error().Err(sendErr).Str("to", userEmail).Msg("failed to send notification email")
+						// Don't fail the task — in-app notification was already created
+					} else {
+						log.Debug().Str("to", userEmail).Str("type", p.Type).Msg("notification email sent via SMTP fallback")
+					}
 				}
 			}
 		}
@@ -156,7 +237,10 @@ func (h *Handlers) HandleSearchIndex(ctx context.Context, t *asynq.Task) error {
 		return fmt.Errorf("marshal document: %w", err)
 	}
 
-	meiliURL := "http://meilisearch:7700"
+	meiliURL := h.MeiliURL
+	if meiliURL == "" {
+		meiliURL = "http://meilisearch:7700"
+	}
 	url := fmt.Sprintf("%s/indexes/%s/documents", meiliURL, p.Index)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, strings.NewReader(string(body)))
@@ -164,6 +248,9 @@ func (h *Handlers) HandleSearchIndex(ctx context.Context, t *asynq.Task) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if h.MeiliMasterKey != "" {
+		req.Header.Set("Authorization", "Bearer "+h.MeiliMasterKey)
+	}
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -186,12 +273,18 @@ func (h *Handlers) HandleSearchDelete(ctx context.Context, t *asynq.Task) error 
 		return fmt.Errorf("unmarshal search delete payload: %w", err)
 	}
 
-	meiliURL := "http://meilisearch:7700"
+	meiliURL := h.MeiliURL
+	if meiliURL == "" {
+		meiliURL = "http://meilisearch:7700"
+	}
 	url := fmt.Sprintf("%s/indexes/%s/documents/%s", meiliURL, p.Index, p.DocID)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
 	if err != nil {
 		return err
+	}
+	if h.MeiliMasterKey != "" {
+		req.Header.Set("Authorization", "Bearer "+h.MeiliMasterKey)
 	}
 
 	resp, err := http.DefaultClient.Do(req)

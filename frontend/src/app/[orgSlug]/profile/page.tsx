@@ -7,25 +7,29 @@ import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
-import type { TOTPRegistration } from "@/types/domain";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { NotificationPreference, TOTPRegistration } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    AlertTriangle,
-    Briefcase,
-    Calendar, Camera,
-    CheckCircle,
-    Copy,
-    Download,
-    Globe,
-    Key,
-    Mail,
-    Moon,
-    Palette,
-    RefreshCw,
-    Shield, Smartphone,
-    Sun,
-    Trash2,
-    User
+  AlertTriangle,
+  Bell,
+  Briefcase,
+  Calendar,
+  Camera,
+  CheckCircle,
+  Copy,
+  Download,
+  Globe,
+  Key,
+  Lock,
+  Mail,
+  Moon,
+  Palette,
+  RefreshCw,
+  Shield,
+  Smartphone,
+  Sun,
+  Trash2,
+  User,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -71,7 +75,18 @@ interface ProfileForm {
 }
 
 /* ─── Theme preview colors for visual picker ─── */
-const THEME_PREVIEWS: Record<string, { bg: string; card: string; primary: string; secondary: string; accent: string; text: string; label: string }> = {
+const THEME_PREVIEWS: Record<
+  string,
+  {
+    bg: string;
+    card: string;
+    primary: string;
+    secondary: string;
+    accent: string;
+    text: string;
+    label: string;
+  }
+> = {
   "glass-light": {
     bg: "bg-gradient-to-br from-indigo-100 via-purple-50 to-teal-50",
     card: "bg-white/60 backdrop-blur-md border border-white/40",
@@ -79,7 +94,7 @@ const THEME_PREVIEWS: Record<string, { bg: string; card: string; primary: string
     secondary: "bg-violet-400",
     accent: "bg-teal-400",
     text: "text-gray-800",
-    label: "Frosted glass with light gradient"
+    label: "Frosted glass with light gradient",
   },
   "glass-dark": {
     bg: "bg-gradient-to-br from-purple-950 via-indigo-950 to-cyan-950",
@@ -88,7 +103,7 @@ const THEME_PREVIEWS: Record<string, { bg: string; card: string; primary: string
     secondary: "bg-cyan-400",
     accent: "bg-rose-400",
     text: "text-white",
-    label: "Frosted glass with dark gradient"
+    label: "Frosted glass with dark gradient",
   },
   "orbis-light": {
     bg: "bg-slate-50",
@@ -97,7 +112,7 @@ const THEME_PREVIEWS: Record<string, { bg: string; card: string; primary: string
     secondary: "bg-sky-500",
     accent: "bg-emerald-500",
     text: "text-slate-800",
-    label: "Clean minimal light"
+    label: "Clean minimal light",
   },
   "orbis-dark": {
     bg: "bg-slate-900",
@@ -106,9 +121,200 @@ const THEME_PREVIEWS: Record<string, { bg: string; card: string; primary: string
     secondary: "bg-teal-500",
     accent: "bg-amber-400",
     text: "text-white",
-    label: "Clean minimal dark"
+    label: "Clean minimal dark",
   },
 };
+
+/* ─── Notification event types and labels ─── */
+const EVENT_TYPES = [
+  {
+    value: "task_assigned",
+    label: "Task Assigned",
+    description: "When a task is assigned to you",
+  },
+  {
+    value: "task_status_changed",
+    label: "Task Status Changed",
+    description: "When status changes on your tasks",
+  },
+  {
+    value: "task_priority_critical",
+    label: "Critical Priority",
+    description: "When a task you're assigned to becomes critical",
+  },
+  {
+    value: "comment_mention",
+    label: "Comment Mentions",
+    description: "When someone mentions you in a comment",
+  },
+  {
+    value: "announcement_published",
+    label: "Announcements",
+    description: "When a new announcement is published",
+  },
+  {
+    value: "announcement_updated",
+    label: "Announcement Updates",
+    description: "When an announcement is updated",
+  },
+  {
+    value: "change_request_approved",
+    label: "Change Request Approved",
+    description: "When your change request is approved",
+  },
+  {
+    value: "change_request_rejected",
+    label: "Change Request Rejected",
+    description: "When your change request is rejected",
+  },
+];
+
+const CHANNELS = [
+  { value: "in_app", label: "In-App" },
+  { value: "email", label: "Email" },
+] as const;
+
+function NotificationsTab() {
+  const { currentOrg } = useAuthStore();
+  const orgId = currentOrg?.id || "";
+  const qc = useQueryClient();
+  const [success, setSuccess] = useState("");
+  const [error, setError] = useState("");
+
+  const { data: prefs, isLoading } = useQuery({
+    queryKey: ["notification-preferences", orgId],
+    queryFn: () => api.notificationPreferences.list(orgId),
+    enabled: !!orgId,
+    select: (res) => res.data || [],
+  });
+
+  const upsertMutation = useMutation({
+    mutationFn: (data: {
+      event_type: string;
+      channel: string;
+      enabled: boolean;
+    }) => api.notificationPreferences.upsert(orgId, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["notification-preferences", orgId] });
+      setSuccess("Preference updated");
+      setError("");
+      setTimeout(() => setSuccess(""), 2000);
+    },
+    onError: (e: Error) => {
+      setError(
+        e instanceof ApiError ? e.message : "Failed to update preference",
+      );
+    },
+  });
+
+  const isEnabled = (eventType: string, channel: string): boolean => {
+    if (!prefs) return true; // default enabled
+    const pref = prefs.find(
+      (p: NotificationPreference) =>
+        p.event_type === eventType && p.channel === channel,
+    );
+    return pref ? pref.enabled : true; // default enabled if no preference set
+  };
+
+  const handleToggle = (eventType: string, channel: string) => {
+    const currentlyEnabled = isEnabled(eventType, channel);
+    upsertMutation.mutate({
+      event_type: eventType,
+      channel,
+      enabled: !currentlyEnabled,
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="skeleton h-16 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {error && (
+        <div className="alert alert-error mb-4 text-sm">
+          <span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="alert alert-success mb-4 text-sm">
+          <CheckCircle className="w-4 h-4" />
+          <span>{success}</span>
+        </div>
+      )}
+
+      <Card>
+        <div className="flex items-center gap-3 mb-2">
+          <Bell className="w-5 h-5 text-primary" />
+          <div>
+            <h3 className="font-semibold text-base">
+              Notification Preferences
+            </h3>
+            <p className="text-sm text-base-content/50">
+              Choose how you want to be notified for each event type
+            </p>
+          </div>
+        </div>
+
+        {/* Header row */}
+        <div className="hidden sm:grid sm:grid-cols-[1fr_80px_80px] gap-4 px-4 py-2 text-xs font-semibold text-base-content/50 uppercase tracking-wider border-b border-base-200 mt-4">
+          <span>Event</span>
+          {CHANNELS.map((ch) => (
+            <span key={ch.value} className="text-center">
+              {ch.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Rows */}
+        <div className="divide-y divide-base-200">
+          {EVENT_TYPES.map((evt) => (
+            <div
+              key={evt.value}
+              className="grid grid-cols-1 sm:grid-cols-[1fr_80px_80px] gap-2 sm:gap-4 items-center px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-medium">{evt.label}</p>
+                <p className="text-xs text-base-content/50">
+                  {evt.description}
+                </p>
+              </div>
+              {CHANNELS.map((ch) => (
+                <div
+                  key={ch.value}
+                  className="flex items-center sm:justify-center gap-2"
+                >
+                  <span className="text-xs text-base-content/40 sm:hidden">
+                    {ch.label}
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-primary toggle-sm"
+                    checked={isEnabled(evt.value, ch.value)}
+                    onChange={() => handleToggle(evt.value, ch.value)}
+                    disabled={upsertMutation.isPending}
+                  />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      <p className="text-xs text-base-content/40 px-1">
+        In-app notifications appear in the notification bell. Email
+        notifications are sent to your account email. Preferences are
+        per-organization.
+      </p>
+    </div>
+  );
+}
 
 function AppearanceTab() {
   const { theme: currentTheme, setTheme } = useUIStore();
@@ -127,7 +333,12 @@ function AppearanceTab() {
       await api.auth.updateUser({
         data: { theme: themeValue },
       });
-      useAuthStore.getState().updateUser({ ...user!, user_metadata: { ...user?.user_metadata, theme: themeValue } });
+      useAuthStore
+        .getState()
+        .updateUser({
+          ...user!,
+          user_metadata: { ...user?.user_metadata, theme: themeValue },
+        });
       qc.invalidateQueries({ queryKey: ["profile"] });
       setSuccess("Theme saved!");
       setTimeout(() => setSuccess(""), 3000);
@@ -140,15 +351,26 @@ function AppearanceTab() {
 
   return (
     <div className="space-y-6">
-      {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
-      {success && <div className="alert alert-success mb-4 text-sm"><CheckCircle className="w-4 h-4" /><span>{success}</span></div>}
+      {error && (
+        <div className="alert alert-error mb-4 text-sm">
+          <span>{error}</span>
+        </div>
+      )}
+      {success && (
+        <div className="alert alert-success mb-4 text-sm">
+          <CheckCircle className="w-4 h-4" />
+          <span>{success}</span>
+        </div>
+      )}
 
       <Card>
         <div className="flex items-center gap-3 mb-6">
           <Palette className="w-5 h-5 text-primary" />
           <div>
             <h3 className="font-semibold text-base">Theme</h3>
-            <p className="text-sm text-base-content/50">Choose your preferred appearance</p>
+            <p className="text-sm text-base-content/50">
+              Choose your preferred appearance
+            </p>
           </div>
         </div>
 
@@ -166,41 +388,122 @@ function AppearanceTab() {
                   "relative rounded-xl p-1 transition-all duration-200 text-left cursor-pointer",
                   isActive
                     ? "ring-2 ring-primary ring-offset-2 ring-offset-base-100"
-                    : "ring-1 ring-base-300 hover:ring-base-content/30"
+                    : "ring-1 ring-base-300 hover:ring-base-content/30",
                 )}
               >
                 {/* Theme preview mockup */}
                 <div className={cn("rounded-lg overflow-hidden", preview.bg)}>
                   <div className="p-3 space-y-2">
                     {/* Mini topbar */}
-                    <div className={cn("flex items-center gap-2 rounded-md px-2 py-1.5", preview.card)}>
-                      <div className={cn("w-3 h-3 rounded-full", preview.primary)} />
-                      <div className={cn("flex-1 h-2 rounded-full opacity-40", preview.primary)} />
+                    <div
+                      className={cn(
+                        "flex items-center gap-2 rounded-md px-2 py-1.5",
+                        preview.card,
+                      )}
+                    >
+                      <div
+                        className={cn("w-3 h-3 rounded-full", preview.primary)}
+                      />
+                      <div
+                        className={cn(
+                          "flex-1 h-2 rounded-full opacity-40",
+                          preview.primary,
+                        )}
+                      />
                       <div className="w-4 h-4 rounded-full bg-current opacity-20" />
                     </div>
                     {/* Mini content cards */}
                     <div className="flex gap-2">
-                      <div className={cn("flex-1 rounded-md p-2 space-y-1.5", preview.card)}>
-                        <div className={cn("w-6 h-1.5 rounded-full", preview.primary)} />
-                        <div className={cn("w-full h-1 rounded-full opacity-20", preview.text === "text-white" ? "bg-white" : "bg-black")} />
-                        <div className={cn("w-3/4 h-1 rounded-full opacity-15", preview.text === "text-white" ? "bg-white" : "bg-black")} />
+                      <div
+                        className={cn(
+                          "flex-1 rounded-md p-2 space-y-1.5",
+                          preview.card,
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "w-6 h-1.5 rounded-full",
+                            preview.primary,
+                          )}
+                        />
+                        <div
+                          className={cn(
+                            "w-full h-1 rounded-full opacity-20",
+                            preview.text === "text-white"
+                              ? "bg-white"
+                              : "bg-black",
+                          )}
+                        />
+                        <div
+                          className={cn(
+                            "w-3/4 h-1 rounded-full opacity-15",
+                            preview.text === "text-white"
+                              ? "bg-white"
+                              : "bg-black",
+                          )}
+                        />
                       </div>
-                      <div className={cn("flex-1 rounded-md p-2 space-y-1.5", preview.card)}>
-                        <div className={cn("w-6 h-1.5 rounded-full", preview.secondary)} />
-                        <div className={cn("w-full h-1 rounded-full opacity-20", preview.text === "text-white" ? "bg-white" : "bg-black")} />
-                        <div className={cn("w-3/4 h-1 rounded-full opacity-15", preview.text === "text-white" ? "bg-white" : "bg-black")} />
+                      <div
+                        className={cn(
+                          "flex-1 rounded-md p-2 space-y-1.5",
+                          preview.card,
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            "w-6 h-1.5 rounded-full",
+                            preview.secondary,
+                          )}
+                        />
+                        <div
+                          className={cn(
+                            "w-full h-1 rounded-full opacity-20",
+                            preview.text === "text-white"
+                              ? "bg-white"
+                              : "bg-black",
+                          )}
+                        />
+                        <div
+                          className={cn(
+                            "w-3/4 h-1 rounded-full opacity-15",
+                            preview.text === "text-white"
+                              ? "bg-white"
+                              : "bg-black",
+                          )}
+                        />
                       </div>
                     </div>
                     {/* Color dots */}
                     <div className="flex items-center gap-1.5 pt-1">
-                      <div className={cn("w-3 h-3 rounded-full", preview.primary)} />
-                      <div className={cn("w-3 h-3 rounded-full", preview.secondary)} />
-                      <div className={cn("w-3 h-3 rounded-full", preview.accent)} />
+                      <div
+                        className={cn("w-3 h-3 rounded-full", preview.primary)}
+                      />
+                      <div
+                        className={cn(
+                          "w-3 h-3 rounded-full",
+                          preview.secondary,
+                        )}
+                      />
+                      <div
+                        className={cn("w-3 h-3 rounded-full", preview.accent)}
+                      />
                       <div className="flex-1" />
                       {t.colorScheme === "light" ? (
-                        <Sun className={cn("w-3.5 h-3.5", preview.text, "opacity-40")} />
+                        <Sun
+                          className={cn(
+                            "w-3.5 h-3.5",
+                            preview.text,
+                            "opacity-40",
+                          )}
+                        />
                       ) : (
-                        <Moon className={cn("w-3.5 h-3.5", preview.text, "opacity-40")} />
+                        <Moon
+                          className={cn(
+                            "w-3.5 h-3.5",
+                            preview.text,
+                            "opacity-40",
+                          )}
+                        />
                       )}
                     </div>
                   </div>
@@ -209,9 +512,15 @@ function AppearanceTab() {
                 <div className="px-2 py-2">
                   <div className="flex items-center justify-between">
                     <span className="font-medium text-sm">{t.label}</span>
-                    {isActive && <span className="badge badge-primary badge-xs">Active</span>}
+                    {isActive && (
+                      <span className="badge badge-primary badge-xs">
+                        Active
+                      </span>
+                    )}
                   </div>
-                  <p className="text-xs text-base-content/50 mt-0.5">{preview.label}</p>
+                  <p className="text-xs text-base-content/50 mt-0.5">
+                    {preview.label}
+                  </p>
                 </div>
               </button>
             );
@@ -225,7 +534,9 @@ function AppearanceTab() {
 export default function ProfilePage() {
   const { user, orgs, currentOrg, updateUser } = useAuthStore();
   const qc = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"profile" | "appearance" | "security">("profile");
+  const [activeTab, setActiveTab] = useState<
+    "profile" | "appearance" | "notifications" | "security"
+  >("profile");
 
   // ── Profile state ───────────────────────────────────────────────────────────
   const [profileError, setProfileError] = useState("");
@@ -234,7 +545,14 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const meta = user?.user_metadata || {};
-  const { register, handleSubmit, reset, watch, setValue, formState: { isDirty } } = useForm<ProfileForm>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { isDirty },
+  } = useForm<ProfileForm>({
     defaultValues: {
       name: (meta.name as string) || "",
       phone: user?.phone || "",
@@ -294,8 +612,14 @@ export default function ProfilePage() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !currentOrg) return;
-    if (!file.type.startsWith("image/")) { setProfileError("Please select an image file"); return; }
-    if (file.size > 5 * 1024 * 1024) { setProfileError("Image must be less than 5MB"); return; }
+    if (!file.type.startsWith("image/")) {
+      setProfileError("Please select an image file");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setProfileError("Image must be less than 5MB");
+      return;
+    }
     setUploading(true);
     setProfileError("");
     try {
@@ -322,7 +646,14 @@ export default function ProfilePage() {
   const [totpSetup, setTotpSetup] = useState<TOTPRegistration | null>(null);
   const [totpCode, setTotpCode] = useState("");
 
-  const clearSecMessages = useCallback(() => { setSecError(""); setSecSuccess(""); }, []);
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+
+  const clearSecMessages = useCallback(() => {
+    setSecError("");
+    setSecSuccess("");
+  }, []);
 
   const totpEnabled = user?.totp_enabled ?? false;
   const otpEmailEnabled = user?.otp_email_enabled ?? false;
@@ -330,56 +661,154 @@ export default function ProfilePage() {
   const anyMFAEnabled = user?.mfa_enabled ?? false;
 
   const refreshUser = useCallback(async () => {
-    try { const freshUser = await api.auth.getUser(); updateUser(freshUser); } catch { /* ignore */ }
+    try {
+      const freshUser = await api.auth.getUser();
+      updateUser(freshUser);
+    } catch {
+      /* ignore */
+    }
   }, [updateUser]);
 
-  useEffect(() => { refreshUser(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    refreshUser();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const registerTOTP = useMutation({
     mutationFn: () => api.mfa.registerTOTP(),
-    onSuccess: (data) => { setTotpSetup(data); clearSecMessages(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to setup TOTP"); },
+    onSuccess: (data) => {
+      setTotpSetup(data);
+      clearSecMessages();
+    },
+    onError: (e: Error) => {
+      setSecError(e instanceof ApiError ? e.message : "Failed to setup TOTP");
+    },
   });
   const verifyTOTP = useMutation({
     mutationFn: (code: string) => api.mfa.verifyTOTP(code),
-    onSuccess: () => { setTotpSetup(null); setTotpCode(""); setSecSuccess("Authenticator app enabled successfully!"); refreshUser(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Invalid TOTP code — check your app and try again"); },
+    onSuccess: () => {
+      setTotpSetup(null);
+      setTotpCode("");
+      setSecSuccess("Authenticator app enabled successfully!");
+      refreshUser();
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError
+          ? e.message
+          : "Invalid TOTP code — check your app and try again",
+      );
+    },
   });
   const removeTOTP = useMutation({
     mutationFn: () => api.mfa.removeTOTP(),
-    onSuccess: () => { setSecSuccess("Authenticator app removed"); refreshUser(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to remove TOTP"); },
+    onSuccess: () => {
+      setSecSuccess("Authenticator app removed");
+      refreshUser();
+    },
+    onError: (e: Error) => {
+      setSecError(e instanceof ApiError ? e.message : "Failed to remove TOTP");
+    },
   });
   const enableOTPEmail = useMutation({
     mutationFn: () => api.mfa.enableOTPEmail(),
-    onSuccess: () => { setSecSuccess("Email OTP enabled"); refreshUser(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to enable email OTP"); },
+    onSuccess: () => {
+      setSecSuccess("Email OTP enabled");
+      refreshUser();
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to enable email OTP",
+      );
+    },
   });
   const disableOTPEmail = useMutation({
     mutationFn: () => api.mfa.disableOTPEmail(),
-    onSuccess: () => { setSecSuccess("Email OTP disabled"); refreshUser(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to disable email OTP"); },
+    onSuccess: () => {
+      setSecSuccess("Email OTP disabled");
+      refreshUser();
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to disable email OTP",
+      );
+    },
   });
   const enableOTPSMS = useMutation({
     mutationFn: () => api.mfa.enableOTPSMS(),
-    onSuccess: () => { setSecSuccess("SMS OTP enabled"); refreshUser(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to enable SMS OTP"); },
+    onSuccess: () => {
+      setSecSuccess("SMS OTP enabled");
+      refreshUser();
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to enable SMS OTP",
+      );
+    },
   });
   const disableOTPSMS = useMutation({
     mutationFn: () => api.mfa.disableOTPSMS(),
-    onSuccess: () => { setSecSuccess("SMS OTP disabled"); refreshUser(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to disable SMS OTP"); },
+    onSuccess: () => {
+      setSecSuccess("SMS OTP disabled");
+      refreshUser();
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to disable SMS OTP",
+      );
+    },
   });
   const generateCodes = useMutation({
     mutationFn: () => api.mfa.generateRecoveryCodes(),
-    onSuccess: (data) => { setBackupCodes(data.codes); setShowCodesModal(true); clearSecMessages(); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to generate backup codes"); },
+    onSuccess: (data) => {
+      setBackupCodes(data.codes);
+      setShowCodesModal(true);
+      clearSecMessages();
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to generate backup codes",
+      );
+    },
   });
   const removeCodes = useMutation({
     mutationFn: () => api.mfa.removeRecoveryCodes(),
-    onSuccess: () => { setSecSuccess("Backup codes removed"); },
-    onError: (e: Error) => { setSecError(e instanceof ApiError ? e.message : "Failed to remove backup codes"); },
+    onSuccess: () => {
+      setSecSuccess("Backup codes removed");
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to remove backup codes",
+      );
+    },
   });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => api.auth.changePassword(oldPassword, newPassword),
+    onSuccess: () => {
+      setSecSuccess("Password changed successfully!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+    },
+    onError: (e: Error) => {
+      setSecError(
+        e instanceof ApiError ? e.message : "Failed to change password",
+      );
+    },
+  });
+
+  const handleChangePassword = () => {
+    clearSecMessages();
+    if (newPassword.length < 8) {
+      setSecError("New password must be at least 8 characters.");
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setSecError("Passwords do not match.");
+      return;
+    }
+    changePasswordMutation.mutate();
+  };
 
   const handleCopyAll = () => {
     if (!backupCodes) return;
@@ -389,27 +818,39 @@ export default function ProfilePage() {
   const handleDownload = () => {
     if (!backupCodes) return;
     const content = [
-      "OrbisPM - Account Backup Codes", "================================",
-      "Keep these codes in a safe place. Each code can only be used once.", "",
-      ...backupCodes, "", `Generated: ${new Date().toLocaleString()}`,
+      "OrbisPM - Account Backup Codes",
+      "================================",
+      "Keep these codes in a safe place. Each code can only be used once.",
+      "",
+      ...backupCodes,
+      "",
+      `Generated: ${new Date().toLocaleString()}`,
     ].join("\n");
     const blob = new Blob([content], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "orbispm-backup-codes.txt"; a.click();
+    a.href = url;
+    a.download = "orbispm-backup-codes.txt";
+    a.click();
     URL.revokeObjectURL(url);
   };
 
   // ── Render ─────────────────────────────────────────────────────────────────
   return (
     <div>
-      <PageHeader title="Account" description="Manage your profile and security settings" />
+      <PageHeader
+        title="Account"
+        description="Manage your profile and security settings"
+      />
 
       {/* Tabs */}
       <div role="tablist" className="tabs tabs-bordered mb-6">
         <button
           role="tab"
-          className={cn("tab gap-2", activeTab === "profile" && "tab-active font-medium")}
+          className={cn(
+            "tab gap-2",
+            activeTab === "profile" && "tab-active font-medium",
+          )}
           onClick={() => setActiveTab("profile")}
         >
           <User className="w-4 h-4" />
@@ -417,7 +858,10 @@ export default function ProfilePage() {
         </button>
         <button
           role="tab"
-          className={cn("tab gap-2", activeTab === "appearance" && "tab-active font-medium")}
+          className={cn(
+            "tab gap-2",
+            activeTab === "appearance" && "tab-active font-medium",
+          )}
           onClick={() => setActiveTab("appearance")}
         >
           <Palette className="w-4 h-4" />
@@ -425,7 +869,21 @@ export default function ProfilePage() {
         </button>
         <button
           role="tab"
-          className={cn("tab gap-2", activeTab === "security" && "tab-active font-medium")}
+          className={cn(
+            "tab gap-2",
+            activeTab === "notifications" && "tab-active font-medium",
+          )}
+          onClick={() => setActiveTab("notifications")}
+        >
+          <Bell className="w-4 h-4" />
+          Notifications
+        </button>
+        <button
+          role="tab"
+          className={cn(
+            "tab gap-2",
+            activeTab === "security" && "tab-active font-medium",
+          )}
           onClick={() => setActiveTab("security")}
         >
           <Shield className="w-4 h-4" />
@@ -436,34 +894,64 @@ export default function ProfilePage() {
       {/* ── Profile Tab ── */}
       {activeTab === "profile" && (
         <>
-          {profileError && <div className="alert alert-error mb-4 text-sm"><span>{profileError}</span></div>}
+          {profileError && (
+            <div className="alert alert-error mb-4 text-sm">
+              <span>{profileError}</span>
+            </div>
+          )}
           {profileSuccess && (
             <div className="alert alert-success mb-4 text-sm">
-              <CheckCircle className="w-4 h-4" /><span>{profileSuccess}</span>
+              <CheckCircle className="w-4 h-4" />
+              <span>{profileSuccess}</span>
             </div>
           )}
 
-          <form onSubmit={handleSubmit((data) => updateMutation.mutate(data))} className="space-y-6">
+          <form
+            onSubmit={handleSubmit((data) => updateMutation.mutate(data))}
+            className="space-y-6"
+          >
             {/* Avatar & Identity */}
             <Card>
               <div className="flex items-center gap-5 mb-6">
                 <div className="relative group">
-                  <Avatar name={nameVal || user?.email || "U"} src={avatarUrl || undefined} size="lg" />
+                  <Avatar
+                    name={nameVal || user?.email || "U"}
+                    src={avatarUrl || undefined}
+                    size="lg"
+                  />
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
                   >
-                    {uploading ? <span className="loading loading-spinner loading-sm text-white" /> : <Camera className="w-5 h-5 text-white" />}
+                    {uploading ? (
+                      <span className="loading loading-spinner loading-sm text-white" />
+                    ) : (
+                      <Camera className="w-5 h-5 text-white" />
+                    )}
                   </button>
-                  <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                  />
                 </div>
                 <div>
-                  <h2 className="text-lg font-semibold">{nameVal || user?.email?.split("@")[0]}</h2>
+                  <h2 className="text-lg font-semibold">
+                    {nameVal || user?.email?.split("@")[0]}
+                  </h2>
                   <p className="text-sm text-base-content/50">{user?.email}</p>
-                  {currentOrg && <span className="badge badge-sm badge-primary mt-1">{currentOrg.name}</span>}
-                  <p className="text-xs text-base-content/40 mt-1">Click avatar to upload a photo</p>
+                  {currentOrg && (
+                    <span className="badge badge-sm badge-primary mt-1">
+                      {currentOrg.name}
+                    </span>
+                  )}
+                  <p className="text-xs text-base-content/40 mt-1">
+                    Click avatar to upload a photo
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-3 mb-4">
@@ -471,10 +959,31 @@ export default function ProfilePage() {
                 <h3 className="font-semibold text-base">Basic Information</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="Full Name" placeholder="John Doe" {...register("name")} />
-                <Input label="Email Address" type="email" defaultValue={user?.email || ""} disabled helperText="Contact support to change your email" />
-                <Input label="Phone Number" type="tel" placeholder="+1 (555) 000-0000" {...register("phone")} />
-                <Input label="Avatar URL" type="url" placeholder="https://example.com/avatar.jpg" helperText="Or use upload button above" {...register("avatar_url")} />
+                <Input
+                  label="Full Name"
+                  placeholder="John Doe"
+                  {...register("name")}
+                />
+                <Input
+                  label="Email Address"
+                  type="email"
+                  defaultValue={user?.email || ""}
+                  disabled
+                  helperText="Contact support to change your email"
+                />
+                <Input
+                  label="Phone Number"
+                  type="tel"
+                  placeholder="+1 (555) 000-0000"
+                  {...register("phone")}
+                />
+                <Input
+                  label="Avatar URL"
+                  type="url"
+                  placeholder="https://example.com/avatar.jpg"
+                  helperText="Or use upload button above"
+                  {...register("avatar_url")}
+                />
               </div>
             </Card>
 
@@ -485,10 +994,22 @@ export default function ProfilePage() {
                 <h3 className="font-semibold text-base">Work Information</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Input label="Job Title" placeholder="Software Engineer" {...register("job_title")} />
-                <Input label="Department" placeholder="Engineering" {...register("department")} />
+                <Input
+                  label="Job Title"
+                  placeholder="Software Engineer"
+                  {...register("job_title")}
+                />
+                <Input
+                  label="Department"
+                  placeholder="Engineering"
+                  {...register("department")}
+                />
                 <div className="md:col-span-2">
-                  <Textarea label="Bio" placeholder="A short bio about yourself..." {...register("bio")} />
+                  <Textarea
+                    label="Bio"
+                    placeholder="A short bio about yourself..."
+                    {...register("bio")}
+                  />
                 </div>
               </div>
             </Card>
@@ -500,8 +1021,16 @@ export default function ProfilePage() {
                 <h3 className="font-semibold text-base">Preferences</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Select label="Timezone" options={TIMEZONE_OPTIONS} {...register("timezone")} />
-                <Select label="Language" options={LANGUAGE_OPTIONS} {...register("language")} />
+                <Select
+                  label="Timezone"
+                  options={TIMEZONE_OPTIONS}
+                  {...register("timezone")}
+                />
+                <Select
+                  label="Language"
+                  options={LANGUAGE_OPTIONS}
+                  {...register("language")}
+                />
               </div>
             </Card>
 
@@ -513,30 +1042,53 @@ export default function ProfilePage() {
               </div>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-4">
                 <div className="text-center p-3 bg-base-200 rounded-lg">
-                  <div className="text-xs text-base-content/50 mb-1">Member Since</div>
-                  <div className="text-sm font-medium">{user?.created_at ? formatDate(user.created_at) : "—"}</div>
+                  <div className="text-xs text-base-content/50 mb-1">
+                    Member Since
+                  </div>
+                  <div className="text-sm font-medium">
+                    {user?.created_at ? formatDate(user.created_at) : "—"}
+                  </div>
                 </div>
                 <div className="text-center p-3 bg-base-200 rounded-lg">
-                  <div className="text-xs text-base-content/50 mb-1">Organizations</div>
+                  <div className="text-xs text-base-content/50 mb-1">
+                    Organizations
+                  </div>
                   <div className="text-lg font-semibold">{orgs.length}</div>
                 </div>
                 <div className="text-center p-3 bg-base-200 rounded-lg">
-                  <div className="text-xs text-base-content/50 mb-1">User ID</div>
-                  <div className="font-mono text-xs truncate">{user?.id?.slice(0, 12)}…</div>
+                  <div className="text-xs text-base-content/50 mb-1">
+                    User ID
+                  </div>
+                  <div className="font-mono text-xs truncate">
+                    {user?.id?.slice(0, 12)}…
+                  </div>
                 </div>
               </div>
               {orgs.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">Your Organizations</p>
+                  <p className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+                    Your Organizations
+                  </p>
                   <div className="space-y-2">
                     {orgs.map((org) => (
-                      <div key={org.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition-colors">
+                      <div
+                        key={org.id}
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200 transition-colors"
+                      >
                         <Avatar name={org.name} size="sm" />
                         <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium">{org.name}</span>
-                          <span className="text-xs text-base-content/40 ml-2">/{org.slug}</span>
+                          <span className="text-sm font-medium">
+                            {org.name}
+                          </span>
+                          <span className="text-xs text-base-content/40 ml-2">
+                            /{org.slug}
+                          </span>
                         </div>
-                        <span className={`badge badge-sm ${org.plan === "pro" ? "badge-primary" : "badge-ghost"}`}>{org.plan}</span>
+                        <span
+                          className={`badge badge-sm ${org.plan === "pro" ? "badge-primary" : "badge-ghost"}`}
+                        >
+                          {org.plan}
+                        </span>
                       </div>
                     ))}
                   </div>
@@ -545,8 +1097,14 @@ export default function ProfilePage() {
             </Card>
 
             <div className="flex items-center justify-between py-2">
-              <p className="text-sm text-base-content/50">{isDirty ? "You have unsaved changes" : "Profile is up to date"}</p>
-              <Button type="submit" loading={updateMutation.isPending} disabled={!isDirty && !updateMutation.isPending}>
+              <p className="text-sm text-base-content/50">
+                {isDirty ? "You have unsaved changes" : "Profile is up to date"}
+              </p>
+              <Button
+                type="submit"
+                loading={updateMutation.isPending}
+                disabled={!isDirty && !updateMutation.isPending}
+              >
                 Save Profile
               </Button>
             </div>
@@ -557,32 +1115,88 @@ export default function ProfilePage() {
       {/* ── Appearance Tab ── */}
       {activeTab === "appearance" && <AppearanceTab />}
 
+      {/* ── Notifications Tab ── */}
+      {activeTab === "notifications" && <NotificationsTab />}
+
       {/* ── Security Tab ── */}
       {activeTab === "security" && (
         <>
           {secError && (
             <div className="alert alert-error mb-4 text-sm">
-              <AlertTriangle className="w-4 h-4" /><span>{secError}</span>
+              <AlertTriangle className="w-4 h-4" />
+              <span>{secError}</span>
             </div>
           )}
           {secSuccess && (
             <div className="alert alert-success mb-4 text-sm">
-              <CheckCircle className="w-4 h-4" /><span>{secSuccess}</span>
+              <CheckCircle className="w-4 h-4" />
+              <span>{secSuccess}</span>
             </div>
           )}
+
+          {/* Change Password Card */}
+          <Card className="mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Lock className="w-5 h-5 text-primary" />
+              <h3 className="font-semibold text-base">Change Password</h3>
+            </div>
+            <p className="text-sm text-base-content/60 mb-4">
+              Update your account password. You&apos;ll need to enter your
+              current password for verification.
+            </p>
+            <div className="space-y-3 max-w-sm">
+              <Input
+                label="Current Password"
+                type="password"
+                placeholder="Enter current password"
+                autoComplete="current-password"
+                value={oldPassword}
+                onChange={(e) => setOldPassword(e.target.value)}
+              />
+              <Input
+                label="New Password"
+                type="password"
+                placeholder="Enter new password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+              <Input
+                label="Confirm New Password"
+                type="password"
+                placeholder="Confirm new password"
+                autoComplete="new-password"
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+              />
+              <Button
+                size="sm"
+                onClick={handleChangePassword}
+                loading={changePasswordMutation.isPending}
+                disabled={!oldPassword || !newPassword || !confirmNewPassword}
+              >
+                <Lock className="w-4 h-4" /> Update Password
+              </Button>
+            </div>
+          </Card>
 
           {/* MFA Card */}
           <Card>
             <div className="flex items-center gap-3 mb-4">
               <Shield className="w-5 h-5 text-primary" />
-              <h3 className="font-semibold text-base">Multi-Factor Authentication</h3>
-              <span className={`badge ${anyMFAEnabled ? "badge-success" : "badge-warning"} badge-sm ml-auto`}>
+              <h3 className="font-semibold text-base">
+                Multi-Factor Authentication
+              </h3>
+              <span
+                className={`badge ${anyMFAEnabled ? "badge-success" : "badge-warning"} badge-sm ml-auto`}
+              >
                 {anyMFAEnabled ? "Enabled" : "Not Enabled"}
               </span>
             </div>
             <p className="text-sm text-base-content/60 mb-6">
-              Add an extra layer of security to your account. When MFA is enabled,
-              you&apos;ll need to provide a second verification code during login.
+              Add an extra layer of security to your account. When MFA is
+              enabled, you&apos;ll need to provide a second verification code
+              during login.
             </p>
 
             {/* TOTP */}
@@ -591,19 +1205,40 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-3">
                   <Smartphone className="w-5 h-5 text-info" />
                   <div>
-                    <h4 className="font-medium text-sm">Authenticator App (TOTP)</h4>
-                    <p className="text-xs text-base-content/50">Use Google Authenticator, Authy, or similar app</p>
+                    <h4 className="font-medium text-sm">
+                      Authenticator App (TOTP)
+                    </h4>
+                    <p className="text-xs text-base-content/50">
+                      Use Google Authenticator, Authy, or similar app
+                    </p>
                   </div>
-                  {totpEnabled && <span className="badge badge-success badge-xs">Active</span>}
+                  {totpEnabled && (
+                    <span className="badge badge-success badge-xs">Active</span>
+                  )}
                 </div>
                 {!totpSetup && (
                   <div className="flex gap-2">
                     {totpEnabled ? (
-                      <Button size="sm" variant="error" onClick={() => { clearSecMessages(); removeTOTP.mutate(); }} loading={removeTOTP.isPending}>
+                      <Button
+                        size="sm"
+                        variant="error"
+                        onClick={() => {
+                          clearSecMessages();
+                          removeTOTP.mutate();
+                        }}
+                        loading={removeTOTP.isPending}
+                      >
                         <Trash2 className="w-4 h-4" /> Remove
                       </Button>
                     ) : (
-                      <Button size="sm" onClick={() => { clearSecMessages(); registerTOTP.mutate(); }} loading={registerTOTP.isPending}>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          clearSecMessages();
+                          registerTOTP.mutate();
+                        }}
+                        loading={registerTOTP.isPending}
+                      >
                         <Key className="w-4 h-4" /> Setup
                       </Button>
                     )}
@@ -614,31 +1249,59 @@ export default function ProfilePage() {
                 <div className="mt-4 border-t border-base-200 pt-4">
                   <div className="space-y-4">
                     <div>
-                      <p className="text-sm font-medium mb-2">1. Scan this QR code with your authenticator app:</p>
+                      <p className="text-sm font-medium mb-2">
+                        1. Scan this QR code with your authenticator app:
+                      </p>
                       <div className="bg-white p-4 rounded-lg inline-block">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(totpSetup.uri)}`}
-                          alt="TOTP QR Code" width={200} height={200}
+                          alt="TOTP QR Code"
+                          width={200}
+                          height={200}
                         />
                       </div>
                     </div>
                     <div>
-                      <p className="text-sm font-medium mb-1">2. Or enter the secret manually:</p>
-                      <code className="text-xs bg-base-200 p-2 rounded block break-all select-all">{totpSetup.secret}</code>
+                      <p className="text-sm font-medium mb-1">
+                        2. Or enter the secret manually:
+                      </p>
+                      <code className="text-xs bg-base-200 p-2 rounded block break-all select-all">
+                        {totpSetup.secret}
+                      </code>
                     </div>
                     <div>
-                      <p className="text-sm font-medium mb-2">3. Enter the 6-digit code from your app to verify:</p>
+                      <p className="text-sm font-medium mb-2">
+                        3. Enter the 6-digit code from your app to verify:
+                      </p>
                       <div className="flex gap-2">
                         <Input
-                          placeholder="000000" maxLength={6} value={totpCode}
-                          onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, ""))}
+                          placeholder="000000"
+                          maxLength={6}
+                          value={totpCode}
+                          onChange={(e) =>
+                            setTotpCode(e.target.value.replace(/\D/g, ""))
+                          }
                           className="w-32"
                         />
-                        <Button onClick={() => { clearSecMessages(); verifyTOTP.mutate(totpCode); }} loading={verifyTOTP.isPending} disabled={totpCode.length !== 6}>
+                        <Button
+                          onClick={() => {
+                            clearSecMessages();
+                            verifyTOTP.mutate(totpCode);
+                          }}
+                          loading={verifyTOTP.isPending}
+                          disabled={totpCode.length !== 6}
+                        >
                           Verify &amp; Enable
                         </Button>
-                        <Button variant="ghost" onClick={() => { setTotpSetup(null); setTotpCode(""); clearSecMessages(); }}>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setTotpSetup(null);
+                            setTotpCode("");
+                            clearSecMessages();
+                          }}
+                        >
                           Cancel
                         </Button>
                       </div>
@@ -655,15 +1318,38 @@ export default function ProfilePage() {
                   <Mail className="w-5 h-5 text-success" />
                   <div>
                     <h4 className="font-medium text-sm">Email OTP</h4>
-                    <p className="text-xs text-base-content/50">Receive a one-time code via email ({user?.email})</p>
+                    <p className="text-xs text-base-content/50">
+                      Receive a one-time code via email ({user?.email})
+                    </p>
                   </div>
-                  {otpEmailEnabled && <span className="badge badge-success badge-xs">Active</span>}
+                  {otpEmailEnabled && (
+                    <span className="badge badge-success badge-xs">Active</span>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   {otpEmailEnabled ? (
-                    <Button size="sm" variant="error" onClick={() => { clearSecMessages(); disableOTPEmail.mutate(); }} loading={disableOTPEmail.isPending}>Disable</Button>
+                    <Button
+                      size="sm"
+                      variant="error"
+                      onClick={() => {
+                        clearSecMessages();
+                        disableOTPEmail.mutate();
+                      }}
+                      loading={disableOTPEmail.isPending}
+                    >
+                      Disable
+                    </Button>
                   ) : (
-                    <Button size="sm" onClick={() => { clearSecMessages(); enableOTPEmail.mutate(); }} loading={enableOTPEmail.isPending}>Enable</Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        clearSecMessages();
+                        enableOTPEmail.mutate();
+                      }}
+                      loading={enableOTPEmail.isPending}
+                    >
+                      Enable
+                    </Button>
                   )}
                 </div>
               </div>
@@ -677,15 +1363,40 @@ export default function ProfilePage() {
                     <Smartphone className="w-5 h-5 text-warning" />
                     <div>
                       <h4 className="font-medium text-sm">SMS OTP</h4>
-                      <p className="text-xs text-base-content/50">Receive a code via SMS to {user.phone}</p>
+                      <p className="text-xs text-base-content/50">
+                        Receive a code via SMS to {user.phone}
+                      </p>
                     </div>
-                    {otpSMSEnabled && <span className="badge badge-success badge-xs">Active</span>}
+                    {otpSMSEnabled && (
+                      <span className="badge badge-success badge-xs">
+                        Active
+                      </span>
+                    )}
                   </div>
                   <div className="flex gap-2">
                     {otpSMSEnabled ? (
-                      <Button size="sm" variant="error" onClick={() => { clearSecMessages(); disableOTPSMS.mutate(); }} loading={disableOTPSMS.isPending}>Disable</Button>
+                      <Button
+                        size="sm"
+                        variant="error"
+                        onClick={() => {
+                          clearSecMessages();
+                          disableOTPSMS.mutate();
+                        }}
+                        loading={disableOTPSMS.isPending}
+                      >
+                        Disable
+                      </Button>
                     ) : (
-                      <Button size="sm" onClick={() => { clearSecMessages(); enableOTPSMS.mutate(); }} loading={enableOTPSMS.isPending}>Enable</Button>
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          clearSecMessages();
+                          enableOTPSMS.mutate();
+                        }}
+                        loading={enableOTPSMS.isPending}
+                      >
+                        Enable
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -695,8 +1406,12 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-3">
                   <Smartphone className="w-5 h-5 text-base-content/30" />
                   <div>
-                    <h4 className="font-medium text-sm text-base-content/50">SMS OTP</h4>
-                    <p className="text-xs text-base-content/40">Add a phone number in your profile to enable SMS OTP</p>
+                    <h4 className="font-medium text-sm text-base-content/50">
+                      SMS OTP
+                    </h4>
+                    <p className="text-xs text-base-content/40">
+                      Add a phone number in your profile to enable SMS OTP
+                    </p>
                   </div>
                 </div>
               </div>
@@ -711,37 +1426,93 @@ export default function ProfilePage() {
                 <h3 className="font-semibold text-base">Backup Codes</h3>
               </div>
               <p className="text-sm text-base-content/60 mb-4">
-                Backup codes let you sign in if you lose access to your MFA device.
-                Each code can only be used once. Store them somewhere safe.
+                Backup codes let you sign in if you lose access to your MFA
+                device. Each code can only be used once. Store them somewhere
+                safe.
               </p>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => { clearSecMessages(); generateCodes.mutate(); }} loading={generateCodes.isPending}>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    clearSecMessages();
+                    generateCodes.mutate();
+                  }}
+                  loading={generateCodes.isPending}
+                >
                   <RefreshCw className="w-4 h-4" /> Generate New Codes
                 </Button>
-                <Button size="sm" variant="error" onClick={() => { clearSecMessages(); removeCodes.mutate(); }} loading={removeCodes.isPending}>
+                <Button
+                  size="sm"
+                  variant="error"
+                  onClick={() => {
+                    clearSecMessages();
+                    removeCodes.mutate();
+                  }}
+                  loading={removeCodes.isPending}
+                >
                   <Trash2 className="w-4 h-4" /> Remove Backup Codes
                 </Button>
               </div>
               {showCodesModal && backupCodes && (
-                <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
+                <dialog
+                  className="modal modal-open"
+                  style={{ backgroundColor: "transparent" }}
+                >
                   <div className="modal-box max-w-md">
-                    <h3 className="font-bold text-lg mb-2">Your Backup Codes</h3>
+                    <h3 className="font-bold text-lg mb-2">
+                      Your Backup Codes
+                    </h3>
                     <div className="alert alert-warning mb-4 text-xs">
                       <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>Save these codes now — they will not be shown again. Each code can only be used once.</span>
+                      <span>
+                        Save these codes now — they will not be shown again.
+                        Each code can only be used once.
+                      </span>
                     </div>
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       {backupCodes.map((code, i) => (
-                        <code key={i} className="bg-base-200 rounded px-3 py-1.5 text-sm font-mono text-center select-all">{code}</code>
+                        <code
+                          key={i}
+                          className="bg-base-200 rounded px-3 py-1.5 text-sm font-mono text-center select-all"
+                        >
+                          {code}
+                        </code>
                       ))}
                     </div>
                     <div className="modal-action flex-wrap gap-2 justify-start">
-                      <Button size="sm" variant="outline" onClick={handleCopyAll}><Copy className="w-4 h-4" /> Copy All</Button>
-                      <Button size="sm" variant="outline" onClick={handleDownload}><Download className="w-4 h-4" /> Download .txt</Button>
-                      <Button size="sm" className="ml-auto" onClick={() => { setShowCodesModal(false); setBackupCodes(null); }}>Done</Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleCopyAll}
+                      >
+                        <Copy className="w-4 h-4" /> Copy All
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleDownload}
+                      >
+                        <Download className="w-4 h-4" /> Download .txt
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="ml-auto"
+                        onClick={() => {
+                          setShowCodesModal(false);
+                          setBackupCodes(null);
+                        }}
+                      >
+                        Done
+                      </Button>
                     </div>
                   </div>
-                  <div className="modal-backdrop bg-transparent" onClick={() => { setShowCodesModal(false); setBackupCodes(null); }} />
+                  <div
+                    className="modal-backdrop bg-transparent"
+                    onClick={() => {
+                      setShowCodesModal(false);
+                      setBackupCodes(null);
+                    }}
+                  />
                 </dialog>
               )}
             </Card>
@@ -765,14 +1536,20 @@ export default function ProfilePage() {
               <div>
                 <span className="text-base-content/50">MFA Status</span>
                 <p className="mt-1">
-                  <span className={`badge ${anyMFAEnabled ? "badge-success" : "badge-warning"} badge-sm`}>
+                  <span
+                    className={`badge ${anyMFAEnabled ? "badge-success" : "badge-warning"} badge-sm`}
+                  >
                     {anyMFAEnabled ? "Active" : "Inactive"}
                   </span>
                 </p>
               </div>
               <div>
                 <span className="text-base-content/50">Account Created</span>
-                <p className="mt-1">{user?.created_at ? new Date(user.created_at).toLocaleDateString() : "—"}</p>
+                <p className="mt-1">
+                  {user?.created_at
+                    ? new Date(user.created_at).toLocaleDateString()
+                    : "—"}
+                </p>
               </div>
             </div>
           </Card>

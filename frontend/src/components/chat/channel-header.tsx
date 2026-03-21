@@ -1,0 +1,468 @@
+"use client";
+
+import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useChatStore } from "@/stores/chat-store";
+import type { ChatChannelMember, OrgMemberInfo } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Hash,
+  Info,
+  MessageCircle,
+  Pin,
+  Search,
+  Shield,
+  UserMinus,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+
+const EMPTY_MEMBERS: ChatChannelMember[] = [];
+
+export function ChannelHeader() {
+  const activeChannelId = useChatStore((s) => s.activeChannelId);
+  const channels = useChatStore((s) => s.channels);
+  const detailsOpen = useChatStore((s) => s.detailsOpen);
+  const toggleDetails = useChatStore((s) => s.toggleDetails);
+  const searchOpen = useChatStore((s) => s.searchOpen);
+  const setSearchOpen = useChatStore((s) => s.setSearchOpen);
+  const searchQuery = useChatStore((s) => s.searchQuery);
+  const setSearchQuery = useChatStore((s) => s.setSearchQuery);
+  const connected = useChatStore((s) => s.connected);
+
+  const channel = channels.find((c) => c.id === activeChannelId);
+
+  if (!channel) return null;
+
+  const isChannel = channel.type !== "dm";
+  const displayName =
+    channel.type === "dm"
+      ? channel.name || channel.description || "Direct Message"
+      : channel.name || "Unnamed Channel";
+
+  return (
+    <div className="flex items-center justify-between h-14 px-4 border-b border-base-200 bg-base-100/80 backdrop-blur-sm flex-shrink-0">
+      <div className="flex items-center gap-2.5 min-w-0">
+        <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-base-200 flex-shrink-0">
+          {isChannel ? (
+            <Hash className="w-4 h-4 text-base-content/60" />
+          ) : (
+            <MessageCircle className="w-4 h-4 text-base-content/60" />
+          )}
+        </span>
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-bold truncate">{displayName}</h3>
+            {/* Connection status */}
+            <span
+              className={cn(
+                "w-2 h-2 rounded-full flex-shrink-0",
+                connected ? "bg-success" : "bg-error animate-pulse",
+              )}
+              title={connected ? "Connected" : "Reconnecting..."}
+            />
+          </div>
+          {channel.description && (
+            <p className="text-xs text-base-content/50 truncate">
+              {channel.description}
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex items-center gap-1">
+        {/* Search in channel */}
+        {searchOpen ? (
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              placeholder="Search messages..."
+              className="input input-xs input-bordered w-48"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              onClick={() => {
+                setSearchOpen(false);
+                setSearchQuery("");
+              }}
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <button
+            className="btn btn-ghost btn-sm btn-square"
+            onClick={() => setSearchOpen(true)}
+            title="Search messages"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        )}
+
+        {/* Members / Info */}
+        {isChannel && (
+          <button
+            className="btn btn-ghost btn-sm btn-square"
+            title="Members"
+            onClick={toggleDetails}
+          >
+            <Users className="w-4 h-4" />
+          </button>
+        )}
+
+        <button
+          className={cn(
+            "btn btn-ghost btn-sm btn-square",
+            detailsOpen && "btn-active",
+          )}
+          title="Channel details"
+          onClick={toggleDetails}
+        >
+          <Info className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function ChannelDetails() {
+  const activeChannelId = useChatStore((s) => s.activeChannelId);
+  const channels = useChatStore((s) => s.channels);
+  const detailsOpen = useChatStore((s) => s.detailsOpen);
+  const setDetailsOpen = useChatStore((s) => s.setDetailsOpen);
+  const setChannelMembers = useChatStore((s) => s.setChannelMembers);
+  const channelMembers = useChatStore(
+    (s) => s.channelMembers.get(activeChannelId || "") ?? EMPTY_MEMBERS,
+  );
+  const [showAddMember, setShowAddMember] = useState(false);
+
+  const channel = channels.find((c) => c.id === activeChannelId);
+  const qc = useQueryClient();
+
+  const { isLoading } = useQuery({
+    queryKey: ["chat-channel-members", activeChannelId],
+    queryFn: async () => {
+      if (!activeChannelId) return [];
+      const members = await api.chat.members.list(activeChannelId);
+      const data = members ?? [];
+      setChannelMembers(activeChannelId, data);
+      return data;
+    },
+    enabled: !!activeChannelId && detailsOpen,
+  });
+
+  // Pins
+  const { data: pins } = useQuery({
+    queryKey: ["chat-pins", activeChannelId],
+    queryFn: async () => (await api.chat.pins.list(activeChannelId!)) ?? [],
+    enabled: !!activeChannelId && detailsOpen,
+  });
+
+  const removeMember = useMutation({
+    mutationFn: async (userId: string) => {
+      if (!activeChannelId) return;
+      await api.chat.members.remove(activeChannelId, userId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["chat-channel-members", activeChannelId],
+      });
+    },
+  });
+
+  if (!detailsOpen || !channel) return null;
+
+  const isChannel = channel.type !== "dm";
+
+  return (
+    <div className="w-72 border-l border-base-200 bg-base-100 flex flex-col flex-shrink-0 h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-base-200">
+        <h3 className="text-sm font-bold">Details</h3>
+        <button
+          className="btn btn-ghost btn-xs btn-square"
+          onClick={() => setDetailsOpen(false)}
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Channel info */}
+        <div className="px-4 py-3 border-b border-base-200">
+          <h4 className="text-sm font-semibold mb-1">
+            {channel.type === "dm"
+              ? channel.name || channel.description || "Direct Message"
+              : channel.name}
+          </h4>
+          {channel.description && (
+            <p className="text-xs text-base-content/60">
+              {channel.description}
+            </p>
+          )}
+          <div className="flex items-center gap-3 mt-2 text-xs text-base-content/50">
+            <span className="flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              {channel.member_count || channelMembers.length} members
+            </span>
+            {channel.type !== "dm" && (
+              <span className="capitalize badge badge-sm badge-ghost">
+                {channel.type}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Pinned Messages */}
+        {pins && pins.length > 0 && (
+          <div className="px-4 py-3 border-b border-base-200">
+            <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-2">
+              Pinned Messages ({pins.length})
+            </h4>
+            <div className="flex flex-col gap-1.5">
+              {pins.slice(0, 5).map((pin) => (
+                <div
+                  key={pin.message_id}
+                  className="bg-base-200/50 rounded-lg px-2.5 py-2 text-xs"
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <Pin className="w-3 h-3 text-warning" />
+                    <span className="font-medium">
+                      {pin.message?.sender_name || "Unknown"}
+                    </span>
+                  </div>
+                  <p className="text-base-content/70 line-clamp-2">
+                    {pin.message?.body || "—"}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Members */}
+        <div className="px-4 py-3">
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider">
+              Members
+            </h4>
+            {isChannel && (
+              <button
+                className="btn btn-ghost btn-xs btn-square"
+                title="Add member"
+                onClick={() => setShowAddMember((p) => !p)}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {showAddMember && activeChannelId && (
+            <DetailsAddMemberSearch
+              channelId={activeChannelId}
+              existingMembers={channelMembers}
+              onClose={() => setShowAddMember(false)}
+            />
+          )}
+
+          {isLoading ? (
+            <div className="flex flex-col gap-2">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="skeleton h-8 w-full rounded" />
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {channelMembers.map((member) => (
+                <MemberItem
+                  key={member.user_id}
+                  member={member}
+                  channelId={activeChannelId!}
+                  onRemove={() => removeMember.mutate(member.user_id)}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MemberItem({
+  member,
+  channelId,
+  onRemove,
+}: {
+  member: ChatChannelMember;
+  channelId: string;
+  onRemove: () => void;
+}) {
+  const currentUser = useAuthStore((s) => s.user);
+  const isCurrentUser = currentUser?.internal_id === member.user_id;
+  const qc = useQueryClient();
+
+  const updateRole = useMutation({
+    mutationFn: async (newRole: string) => {
+      await api.chat.members.updateRole(channelId, member.user_id, newRole);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["chat-channel-members", channelId],
+      });
+    },
+  });
+
+  return (
+    <div className="flex items-center gap-2.5 px-2 py-1.5 rounded-lg hover:bg-base-200/50 group/member">
+      <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
+        {member.avatar_url ? (
+          <img
+            src={member.avatar_url}
+            alt=""
+            className="w-7 h-7 rounded-full object-cover"
+          />
+        ) : (
+          (member.display_name?.[0] || member.email?.[0] || "?").toUpperCase()
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs font-medium truncate">
+          {member.display_name || member.email}
+        </div>
+        {member.role !== "member" && (
+          <span className="text-[10px] text-base-content/40 capitalize">
+            {member.role}
+          </span>
+        )}
+      </div>
+      {!isCurrentUser && (
+        <div className="opacity-0 group-hover/member:opacity-100 flex items-center gap-0.5 transition-opacity">
+          {member.role === "member" && (
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              title="Make admin"
+              onClick={() => updateRole.mutate("admin")}
+            >
+              <Shield className="w-3 h-3" />
+            </button>
+          )}
+          <button
+            className="btn btn-ghost btn-xs btn-square text-error"
+            title="Remove member"
+            onClick={onRemove}
+          >
+            <UserMinus className="w-3 h-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailsAddMemberSearch({
+  channelId,
+  existingMembers,
+  onClose,
+}: {
+  channelId: string;
+  existingMembers: ChatChannelMember[];
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+  const qc = useQueryClient();
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    const timer = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const { data: results, isLoading } = useQuery<OrgMemberInfo[]>({
+    queryKey: ["chat-user-search", debouncedQuery],
+    queryFn: async () => {
+      if (!debouncedQuery.trim()) return [];
+      return (await api.chat.users.search(debouncedQuery.trim(), 10)) ?? [];
+    },
+    enabled: !!debouncedQuery.trim(),
+  });
+
+  const addMember = useMutation({
+    mutationFn: async (userId: string) => {
+      await api.chat.members.add(channelId, userId);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({
+        queryKey: ["chat-channel-members", channelId],
+      });
+    },
+  });
+
+  const existingIds = new Set(existingMembers.map((m) => m.user_id));
+  const filteredResults = results?.filter((u) => !existingIds.has(u.user_id));
+
+  return (
+    <div className="mb-2 border border-base-300 rounded-lg bg-base-200/50 overflow-hidden">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300/50">
+        <UserPlus className="w-3.5 h-3.5 text-base-content/40" />
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Search users..."
+          className="flex-1 bg-transparent text-xs outline-none"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Escape" && onClose()}
+        />
+        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
+          <X className="w-3 h-3" />
+        </button>
+      </div>
+      <div className="max-h-36 overflow-y-auto">
+        {isLoading && (
+          <div className="flex justify-center py-2">
+            <span className="loading loading-spinner loading-xs" />
+          </div>
+        )}
+        {!isLoading &&
+          debouncedQuery &&
+          (!filteredResults || filteredResults.length === 0) && (
+            <p className="text-[10px] text-center text-base-content/40 py-2">
+              No users found
+            </p>
+          )}
+        {!debouncedQuery && (
+          <p className="text-[10px] text-center text-base-content/40 py-2">
+            Type to search
+          </p>
+        )}
+        {filteredResults?.map((u) => (
+          <button
+            key={u.user_id}
+            className="w-full flex items-center gap-2 px-2 py-1.5 hover:bg-base-200 transition-colors text-left"
+            onClick={() => addMember.mutate(u.user_id)}
+            disabled={addMember.isPending}
+          >
+            <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[9px]">
+              {(u.display_name?.[0] || u.email?.[0] || "?").toUpperCase()}
+            </div>
+            <div className="min-w-0 flex-1">
+              <span className="text-xs font-medium truncate block">
+                {u.display_name || u.email}
+              </span>
+            </div>
+            <UserPlus className="w-3 h-3 text-success" />
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}

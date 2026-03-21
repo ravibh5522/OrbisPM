@@ -8,7 +8,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { Team, TeamMember } from "@/types/domain";
+import type { Role, Team, TeamMember } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Plus, Trash2, UserPlus, Users } from "lucide-react";
 import Link from "next/link";
@@ -202,9 +202,9 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
     queryFn: () => api.members.list(orgId),
   });
 
-  const { data: customRoles } = useQuery({
-    queryKey: ["custom-roles", orgId],
-    queryFn: () => api.customRoles.list(orgId),
+  const { data: teamRoles } = useQuery({
+    queryKey: ["team-roles", orgId],
+    queryFn: () => api.permissions.roles.list(orgId, "team"),
   });
 
   const addMutation = useMutation({
@@ -229,12 +229,10 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
 
   const memberIds = new Set((members?.data || []).map((m: TeamMember) => m.user_id));
   const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
-  const roleOptions = [
-    { value: "lead", label: "Lead" },
-    { value: "member", label: "Member" },
-    { value: "viewer", label: "Viewer" },
-    ...(customRoles?.data || []).map((r) => ({ value: r.name, label: r.name })),
-  ];
+  const roleOptions = (teamRoles || []).map((r: Role) => ({
+    value: r.slug,
+    label: r.name + (r.is_system ? "" : " (Custom)"),
+  }));
 
   return (
     <Modal open onClose={onClose} title={team.name} className="max-w-lg">

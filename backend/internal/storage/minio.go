@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/minio/minio-go/v7"
@@ -14,12 +15,16 @@ import (
 
 // Client wraps the MinIO SDK to provide object storage operations.
 type Client struct {
-	mc     *minio.Client
-	bucket string
+	mc           *minio.Client // internal — used for uploads, downloads, bucket ops
+	presignMC    *minio.Client // public  — used for presigned URLs (browser-reachable host)
+	bucket       string
+	presignBase  string // public base URL, e.g. "https://minioapi.orbispm.in"
 }
 
 // NewClient creates a new MinIO storage client and ensures the bucket exists.
-func NewClient(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*Client, error) {
+// publicURL is the browser-reachable base URL (e.g. "https://minioapi.orbispm.in");
+// it is used when generating presigned URLs so the browser can reach them.
+func NewClient(endpoint, accessKey, secretKey, bucket, publicURL string, useSSL bool) (*Client, error) {
 	mc, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -28,7 +33,23 @@ func NewClient(endpoint, accessKey, secretKey, bucket string, useSSL bool) (*Cli
 		return nil, fmt.Errorf("minio client: %w", err)
 	}
 
-	c := &Client{mc: mc, bucket: bucket}
+	// Build a second client using the public-facing hostname so that presigned
+	// URLs contain the browser-reachable host (TLS termination is handled by
+	// the reverse proxy; MinIO itself runs plain HTTP behind it).
+	var presignMC *minio.Client
+	parsedPublic, parseErr := url.Parse(publicURL)
+	if parseErr == nil && parsedPublic.Host != "" {
+		publicSecure := parsedPublic.Scheme == "https"
+		presignMC, _ = minio.New(parsedPublic.Host, &minio.Options{
+			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
+			Secure: publicSecure,
+		})
+	}
+	if presignMC == nil {
+		presignMC = mc // fallback: same client
+	}
+
+	c := &Client{mc: mc, presignMC: presignMC, bucket: bucket, presignBase: strings.TrimRight(publicURL, "/")}
 
 	// Ensure bucket exists
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -84,19 +105,21 @@ func (c *Client) Download(ctx context.Context, objectName string) (io.ReadCloser
 	return obj, nil
 }
 
-// PresignedGetURL generates a pre-signed URL for downloading an object.
+// PresignedGetURL generates a pre-signed download URL using the public-facing
+// MinIO host so the URL is accessible from the browser.
 func (c *Client) PresignedGetURL(ctx context.Context, objectName string, expires time.Duration) (string, error) {
 	reqParams := make(url.Values)
-	u, err := c.mc.PresignedGetObject(ctx, c.bucket, objectName, expires, reqParams)
+	u, err := c.presignMC.PresignedGetObject(ctx, c.bucket, objectName, expires, reqParams)
 	if err != nil {
 		return "", fmt.Errorf("presign get %s: %w", objectName, err)
 	}
 	return u.String(), nil
 }
 
-// PresignedPutURL generates a pre-signed URL for uploading an object.
+// PresignedPutURL generates a pre-signed upload URL using the public-facing
+// MinIO host so the browser can PUT directly to MinIO.
 func (c *Client) PresignedPutURL(ctx context.Context, objectName string, expires time.Duration) (string, error) {
-	u, err := c.mc.PresignedPutObject(ctx, c.bucket, objectName, expires)
+	u, err := c.presignMC.PresignedPutObject(ctx, c.bucket, objectName, expires)
 	if err != nil {
 		return "", fmt.Errorf("presign put %s: %w", objectName, err)
 	}

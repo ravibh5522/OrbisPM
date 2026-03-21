@@ -1,45 +1,45 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback, use } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
-import { api } from "@/lib/api";
-import { Card, Badge, LoadingPage, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
+import { Avatar, Badge, Card, LoadingPage } from "@/components/ui/shared";
+import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { use, useCallback, useEffect, useRef, useState } from "react";
 
 
-import {
-  ArrowLeft,
-  CheckSquare,
-  Paperclip,
-  Link2,
-  Shield,
-  Trash2,
-  Send,
-  Square,
-  Check,
-  Upload,
-  Clock,
-  Plus,
-  Pencil,
-  X,
-  Tag,
-  Calendar,
-  Download,
-  Eye,
-  EyeOff,
-  FileText,
-  Image as ImageIcon,
-} from "lucide-react";
-import { statusColor, priorityColor, statusLabel, formatRelative, formatDate, cn } from "@/lib/utils";
 import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-editor";
-import { TimeTracker } from "@/components/tasks/time-tracker";
+import { ChangeRequestToast, TaskChangeRequests } from "@/components/tasks/change-requests";
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
+import { TimeTracker } from "@/components/tasks/time-tracker";
 import { PresenceIndicator } from "@/components/ui/presence-indicator";
-import { TaskChangeRequests, ChangeRequestToast } from "@/components/tasks/change-requests";
-import { usePermissions } from "@/hooks/use-permissions";
-import type { Task, Checklist, Comment, Attachment, TaskRule, TaskDependency, TaskWatcher, TaskStatus, TaskPriority, OrgMember, TaskUpdateResult } from "@/types/domain";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
+import { cn, formatDate, formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import type { Attachment, Checklist, Comment, OrgMember, Task, TaskDependency, TaskPriority, TaskRule, TaskStatus, TaskUpdateResult, TaskWatcher } from "@/types/domain";
+import {
+    ArrowLeft,
+    Calendar,
+    Check,
+    CheckSquare,
+    Clock,
+    Download,
+    Eye,
+    EyeOff,
+    FileText,
+    Image as ImageIcon,
+    Link2,
+    Paperclip,
+    Pencil,
+    Plus,
+    Send,
+    Shield,
+    Square,
+    Tag,
+    Trash2,
+    Upload,
+    X,
+} from "lucide-react";
 
 /* ─── helpers ─── */
 
@@ -83,7 +83,7 @@ export default function TaskDetailPage({
   const qc = useQueryClient();
   const orgId = currentOrg?.id || "";
 
-  const { can } = usePermissions();
+  const { can } = useProjectPermissions(projectId);
   const canEdit = can("tasks", "update");
   const { members } = useMemberMap(orgId);
 

@@ -10,12 +10,14 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
 )
 
 type CreateProjectParams struct {
 	OrgID       uuid.UUID   `json:"-"`
+	UserID      uuid.UUID   `json:"-"`
 	TeamID      uuid.UUID   `json:"team_id"`            // Legacy: primary team
 	TeamIDs     []uuid.UUID `json:"team_ids,omitempty"` // Multi-team: overrides TeamID if non-empty
 	Name        string      `json:"name" validate:"required,min=2,max=100"`
@@ -35,6 +37,7 @@ type ProjectService struct {
 	projectTeamRepo   repository.ProjectTeamRepository
 	taskRepo          repository.TaskRepository
 	teamMemberRepo    repository.TeamMemberRepository
+	roleRepo          repository.RoleRepository
 	txm               *repository.TxManager
 	workerSrv         *worker.Server
 	publisher         EventPublisher
@@ -69,6 +72,9 @@ func (s *ProjectService) SetTeamMemberRepo(tmr repository.TeamMemberRepository) 
 	s.teamMemberRepo = tmr
 }
 
+// SetRoleRepo injects the role repository for role validation.
+func (s *ProjectService) SetRoleRepo(rr repository.RoleRepository) { s.roleRepo = rr }
+
 func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams) (*domain.Project, error) {
 	// Determine team IDs — prefer TeamIDs, fall back to single TeamID
 	teamIDs := params.TeamIDs
@@ -82,6 +88,11 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 		Description: strings.TrimSpace(params.Description),
 		Status:      "active",
 		Settings:    map[string]any{"reviewable_fields": []string{}},
+	}
+
+	// Track creator
+	if params.UserID != uuid.Nil {
+		project.CreatedBy = &params.UserID
 	}
 
 	// Set legacy TeamID for backward compat (first team)
@@ -105,6 +116,45 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 				}
 			}
 		}
+
+		// Auto-add creator as project lead
+		if params.UserID != uuid.Nil {
+			creatorMember := &domain.ProjectMember{
+				ProjectID: created.ID,
+				UserID:    params.UserID,
+				Role:      domain.RoleProjectLead,
+				Source:    "direct",
+			}
+			if err := s.projectMemberRepo.Add(ctx, tx, creatorMember); err != nil {
+				return fmt.Errorf("add creator as lead: %w", err)
+			}
+		}
+
+		// Sync team members into project_members
+		if s.projectTeamRepo != nil && s.teamMemberRepo != nil && len(teamIDs) > 0 {
+			for _, tID := range teamIDs {
+				teamMembers, tmErr := s.teamMemberRepo.ListByTeam(ctx, tID)
+				if tmErr != nil {
+					log.Warn().Err(tmErr).Str("team_id", tID.String()).Msg("sync team members: list failed")
+					continue
+				}
+				for _, tm := range teamMembers {
+					projectRole := domain.DefaultTeamProjectRoleMap[tm.Role]
+					if projectRole == "" {
+						projectRole = domain.RoleProjectObserver
+					}
+					pm := &domain.ProjectMember{
+						ProjectID:    created.ID,
+						UserID:       tm.UserID,
+						Role:         projectRole,
+						Source:       "team",
+						SourceTeamID: &tID,
+					}
+					_ = s.projectMemberRepo.Add(ctx, tx, pm) // ON CONFLICT DO NOTHING
+				}
+			}
+		}
+
 		return nil
 	})
 	if err != nil {
@@ -116,7 +166,7 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "project", created.ID.String(), "created", "")
 
-	s.publishEvent(ctx, domain.EventProjectCreated, created.OrgID.String(), created.ID.String(), nil)
+	s.publishEvent(ctx, domain.EventProjectCreated, created.OrgID.String(), created.ID.String(), map[string]any{"name": created.Name})
 
 	return created, nil
 }
@@ -179,7 +229,7 @@ func (s *ProjectService) Delete(ctx context.Context, id uuid.UUID) error {
 
 	s.enqueueActivity(project.OrgID.String(), "project", id.String(), "deleted", "")
 
-	s.publishEvent(ctx, "project.deleted", project.OrgID.String(), id.String(), nil)
+	s.publishEvent(ctx, domain.EventProjectDeleted, project.OrgID.String(), id.String(), map[string]any{"name": project.Name})
 
 	return nil
 }
@@ -197,6 +247,14 @@ func (s *ProjectService) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID 
 func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.UUID, role string, sourceTeamID *uuid.UUID) error {
 	if role == "" {
 		role = domain.RoleProjectContributor
+	}
+	if err := s.validateRole(ctx, projectID, role); err != nil {
+		return err
+	}
+	// Fetch project for orgID (needed for event publishing)
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return err
 	}
 	source := "direct"
 	if sourceTeamID != nil {
@@ -237,13 +295,13 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.U
 		}
 	}
 	m := &domain.ProjectMember{ProjectID: projectID, UserID: userID, Role: role, Source: source, SourceTeamID: sourceTeamID}
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.Add(ctx, tx, m)
 	})
 	if err != nil {
 		return err
 	}
-	s.publishEvent(ctx, domain.EventMemberInvited, "", projectID.String(), map[string]any{"user_id": userID.String(), "scope": "project"})
+	s.publishEvent(ctx, domain.EventProjectMemberAdded, project.OrgID.String(), projectID.String(), map[string]any{"user_id": userID.String(), "role": role})
 	return nil
 }
 
@@ -253,7 +311,18 @@ func (s *ProjectService) RemoveMember(ctx context.Context, projectID, userID uui
 
 // RemoveMemberWithReassign removes a member and reassigns (or unassigns) all their tasks transactionally.
 func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID, userID uuid.UUID, reassignTo *uuid.UUID) error {
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	// Governance: prevent removing the last lead
+	if err := s.ensureNotLastLead(ctx, projectID, userID); err != nil {
+		return err
+	}
+
+	// Fetch project for orgID (needed for event publishing)
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return err
+	}
+
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		// Reassign/unassign tasks
 		if s.taskRepo != nil {
 			affected, err := s.taskRepo.ReassignOrUnassignTasks(ctx, tx, projectID, []uuid.UUID{userID}, reassignTo)
@@ -272,7 +341,7 @@ func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID
 	if err != nil {
 		return err
 	}
-	s.publishEvent(ctx, "member.removed", "", projectID.String(), map[string]any{"user_id": userID.String(), "scope": "project"})
+	s.publishEvent(ctx, domain.EventProjectMemberRemoved, project.OrgID.String(), projectID.String(), map[string]any{"user_id": userID.String()})
 	return nil
 }
 
@@ -292,6 +361,16 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 	if role == "" {
 		return fmt.Errorf("role is required")
 	}
+	if err := s.validateRole(ctx, projectID, role); err != nil {
+		return err
+	}
+
+	// Governance: prevent downgrading the last lead
+	if role != domain.RoleProjectLead {
+		if err := s.ensureNotLastLead(ctx, projectID, userID); err != nil {
+			return err
+		}
+	}
 
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.projectMemberRepo.UpdateRole(ctx, tx, projectID, userID, role)
@@ -307,6 +386,44 @@ func (s *ProjectService) ListMembers(ctx context.Context, projectID uuid.UUID) (
 	return s.projectMemberRepo.ListByProject(ctx, projectID)
 }
 
+// validateRole checks that a role slug is valid for the project scope.
+func (s *ProjectService) validateRole(ctx context.Context, projectID uuid.UUID, slug string) error {
+	if s.roleRepo == nil {
+		return nil
+	}
+	project, err := s.projectRepo.GetByID(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	_, err = s.roleRepo.GetBySlug(ctx, project.OrgID, domain.ScopeProject, slug)
+	if err != nil {
+		return domain.ErrBadRequest.WithDetail("invalid role: " + slug)
+	}
+	return nil
+}
+
+// ensureNotLastLead prevents removing or downgrading the last project lead.
+func (s *ProjectService) ensureNotLastLead(ctx context.Context, projectID, userID uuid.UUID) error {
+	members, err := s.projectMemberRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	leadCount := 0
+	isLead := false
+	for _, m := range members {
+		if m.Role == domain.RoleProjectLead {
+			leadCount++
+			if m.UserID == userID {
+				isLead = true
+			}
+		}
+	}
+	if isLead && leadCount <= 1 {
+		return domain.ErrBadRequest.WithDetail("cannot remove or downgrade the last project lead")
+	}
+	return nil
+}
+
 // publishEvent publishes a domain event for real-time propagation via SSE.
 func (s *ProjectService) publishEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
 	if s.publisher == nil {
@@ -315,6 +432,7 @@ func (s *ProjectService) publishEvent(ctx context.Context, eventType, orgID, ent
 	event := domain.DomainEvent{
 		Type:     eventType,
 		OrgID:    orgID,
+		ActorID:  tenant.UserID(ctx).String(),
 		EntityID: entityID,
 		Payload:  payload,
 	}

@@ -2,15 +2,15 @@ _format_version: "3.0"
 _transform: true
 
 services:
-  # Zitadel (external)
-  - name: zitadel
-    url: https://zitadel.animastuff.fun
+  # Mailpit web UI (local dev only — works when running with --profile local)
+  - name: mailpit
+    url: http://mailpit:8025
     routes:
-      - name: zitadel-console
+      - name: mailpit-ui
         paths:
-          - /zitadel
-        strip_path: true
-        preserve_host: false
+          - /mail
+        strip_path: false
+        preserve_host: true
 
   # SSE endpoint — long-lived streaming, must come BEFORE generic /api route
   - name: backend-sse
@@ -74,8 +74,47 @@ services:
           fault_tolerant: true
           hide_client_headers: false
 
-  # Storage proxy removed — MinIO is external (HTTPS)
-  # Access files directly via MINIO_SERVER_URL
+  # Chat WebSocket — long-lived connection for messaging service
+  - name: messaging-ws
+    url: http://messaging-service:8082
+    read_timeout: 86400000
+    write_timeout: 86400000
+    connect_timeout: 10000
+    routes:
+      - name: messaging-ws-route
+        paths:
+          - /ws/chat
+        strip_path: false
+        preserve_host: false
+        protocols:
+          - http
+          - https
+        regex_priority: 200
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 30
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+
+  # Chat REST API — messaging service
+  - name: messaging-api
+    url: http://messaging-service:8082
+    routes:
+      - name: messaging-api-routes
+        paths:
+          - /api/v1/chat
+        strip_path: false
+        preserve_host: false
+        regex_priority: 100
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 1000
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
 
   # NocoDB UI
   - name: nocodb
@@ -100,13 +139,12 @@ plugins:
       origins:
         - http://localhost:3000
         - http://localhost:3001
-        - https://orbispm.crewsity.com
-        - https://www.orbispm.crewsity.com
-        - https://orbisom.live
-        - https://www.orbisom.live
-        - https://orbisom.in
-        - https://www.orbisom.in
-        - http://xgkwk0wkwg4c8cogg4ow44gk.35.207.238.251.sslip.io
+        - https://orbispm.live
+        - https://www.orbispm.live
+        - https://app.orbispm.live
+        - https://orbispm.in
+        - https://www.orbispm.in
+        - https://app.orbispm.in
       methods:
         - GET
         - POST

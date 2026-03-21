@@ -32,6 +32,7 @@ type UpdateOrgParams struct {
 type OrgService struct {
 	orgRepo       repository.OrgRepository
 	orgMemberRepo repository.OrgMemberRepository
+	roleRepo      repository.RoleRepository
 	txm           *repository.TxManager
 }
 
@@ -39,6 +40,9 @@ type OrgService struct {
 func NewOrgService(orgRepo repository.OrgRepository, orgMemberRepo repository.OrgMemberRepository, txm *repository.TxManager) *OrgService {
 	return &OrgService{orgRepo: orgRepo, orgMemberRepo: orgMemberRepo, txm: txm}
 }
+
+// SetRoleRepo injects the role repository for role validation.
+func (s *OrgService) SetRoleRepo(rr repository.RoleRepository) { s.roleRepo = rr }
 
 var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
@@ -174,11 +178,26 @@ func (s *OrgService) InviteByEmail(ctx context.Context, orgID uuid.UUID, email, 
 	return s.orgMemberRepo.Get(ctx, orgID, userID)
 }
 
-// UpdateMemberRole updates a member's role.
+// UpdateMemberRole updates a member's role after validating the slug.
 func (s *OrgService) UpdateMemberRole(ctx context.Context, orgID, userID uuid.UUID, role string) error {
+	if err := s.validateRole(ctx, orgID, domain.ScopeOrg, role); err != nil {
+		return err
+	}
 	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.orgMemberRepo.UpdateRole(ctx, tx, orgID, userID, role)
 	})
+}
+
+// validateRole checks that a role slug is valid for the given scope (system or custom).
+func (s *OrgService) validateRole(ctx context.Context, orgID uuid.UUID, scope, slug string) error {
+	if s.roleRepo == nil {
+		return nil // skip validation if repo not injected
+	}
+	_, err := s.roleRepo.GetBySlug(ctx, orgID, scope, slug)
+	if err != nil {
+		return domain.ErrBadRequest.WithDetail("invalid role: " + slug)
+	}
+	return nil
 }
 
 // RemoveMember removes a member from an org.

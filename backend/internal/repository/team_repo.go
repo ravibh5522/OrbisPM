@@ -23,16 +23,24 @@ func NewTeamRepo(pool *pgxpool.Pool) TeamRepository {
 func (r *teamRepo) Create(ctx context.Context, tx pgx.Tx, team *domain.Team) (*domain.Team, error) {
 	q := conn(r.pool, tx)
 	row := q.QueryRow(ctx,
-		`INSERT INTO teams (org_id, name, description) VALUES ($1, $2, $3)
-		 RETURNING id, org_id, name, description, created_at, updated_at`,
-		team.OrgID, team.Name, nilStr(team.Description))
+		`INSERT INTO teams (org_id, name, description, manager_id)
+		 VALUES ($1, $2, $3, $4)
+		 RETURNING id, org_id, name, description, manager_id, is_auto_managed, auto_source, auto_source_id, created_at, updated_at`,
+		team.OrgID, team.Name, nilStr(team.Description), nilUUID(team.ManagerID))
 	return scanTeam(row)
 }
 
 func (r *teamRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Team, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT id, org_id, name, description, created_at, updated_at FROM teams WHERE id = $1`, id)
-	t, err := scanTeam(row)
+		`SELECT t.id, t.org_id, t.name, t.description, t.manager_id,
+		        t.is_auto_managed, t.auto_source, t.auto_source_id,
+		        t.created_at, t.updated_at,
+		        COALESCE(u.display_name, '') AS manager_name,
+		        (SELECT count(*) FROM team_members tm WHERE tm.team_id = t.id)::int AS member_count
+		 FROM teams t
+		 LEFT JOIN users u ON u.id = t.manager_id
+		 WHERE t.id = $1`, id)
+	t, err := scanTeamFull(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrNotFound
@@ -45,9 +53,10 @@ func (r *teamRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.Team, err
 func (r *teamRepo) Update(ctx context.Context, tx pgx.Tx, team *domain.Team) (*domain.Team, error) {
 	q := conn(r.pool, tx)
 	row := q.QueryRow(ctx,
-		`UPDATE teams SET name=$1, description=$2 WHERE id=$3
-		 RETURNING id, org_id, name, description, created_at, updated_at`,
-		team.Name, nilStr(team.Description), team.ID)
+		`UPDATE teams SET name=$1, description=$2, manager_id=$3, updated_at=now()
+		 WHERE id=$4
+		 RETURNING id, org_id, name, description, manager_id, is_auto_managed, auto_source, auto_source_id, created_at, updated_at`,
+		team.Name, nilStr(team.Description), nilUUID(team.ManagerID), team.ID)
 	return scanTeam(row)
 }
 
@@ -59,7 +68,15 @@ func (r *teamRepo) Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 
 func (r *teamRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, name, description, created_at, updated_at FROM teams WHERE org_id = $1 ORDER BY name`, orgID)
+		`SELECT t.id, t.org_id, t.name, t.description, t.manager_id,
+		        t.is_auto_managed, t.auto_source, t.auto_source_id,
+		        t.created_at, t.updated_at,
+		        COALESCE(u.display_name, '') AS manager_name,
+		        (SELECT count(*) FROM team_members tm WHERE tm.team_id = t.id)::int AS member_count
+		 FROM teams t
+		 LEFT JOIN users u ON u.id = t.manager_id
+		 WHERE t.org_id = $1
+		 ORDER BY t.name`, orgID)
 	if err != nil {
 		return nil, fmt.Errorf("list teams: %w", err)
 	}
@@ -67,7 +84,7 @@ func (r *teamRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Te
 
 	var teams []*domain.Team
 	for rows.Next() {
-		t, err := scanTeamRow(rows)
+		t, err := scanTeamFullRow(rows)
 		if err != nil {
 			return nil, err
 		}
@@ -76,28 +93,83 @@ func (r *teamRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Te
 	return teams, rows.Err()
 }
 
+func (r *teamRepo) SetManager(ctx context.Context, tx pgx.Tx, teamID uuid.UUID, managerID *uuid.UUID) error {
+	q := conn(r.pool, tx)
+	_, err := q.Exec(ctx,
+		`UPDATE teams SET manager_id = $1, updated_at = now() WHERE id = $2`,
+		nilUUID(managerID), teamID)
+	return err
+}
+
 func scanTeam(row pgx.Row) (*domain.Team, error) {
 	var t domain.Team
-	var desc *string
-	err := row.Scan(&t.ID, &t.OrgID, &t.Name, &desc, &t.CreatedAt, &t.UpdatedAt)
+	var desc, autoSource, autoSourceID *string
+	err := row.Scan(&t.ID, &t.OrgID, &t.Name, &desc, &t.ManagerID,
+		&t.IsAutoManaged, &autoSource, &autoSourceID,
+		&t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
 	if desc != nil {
 		t.Description = *desc
+	}
+	if autoSource != nil {
+		t.AutoSource = *autoSource
+	}
+	if autoSourceID != nil {
+		t.AutoSourceID = *autoSourceID
 	}
 	return &t, nil
 }
 
-func scanTeamRow(rows pgx.Rows) (*domain.Team, error) {
+func scanTeamFull(row pgx.Row) (*domain.Team, error) {
 	var t domain.Team
-	var desc *string
-	err := rows.Scan(&t.ID, &t.OrgID, &t.Name, &desc, &t.CreatedAt, &t.UpdatedAt)
+	var desc, autoSource, autoSourceID *string
+	err := row.Scan(&t.ID, &t.OrgID, &t.Name, &desc, &t.ManagerID,
+		&t.IsAutoManaged, &autoSource, &autoSourceID,
+		&t.CreatedAt, &t.UpdatedAt,
+		&t.ManagerName, &t.MemberCount)
 	if err != nil {
 		return nil, err
 	}
 	if desc != nil {
 		t.Description = *desc
 	}
+	if autoSource != nil {
+		t.AutoSource = *autoSource
+	}
+	if autoSourceID != nil {
+		t.AutoSourceID = *autoSourceID
+	}
 	return &t, nil
+}
+
+func scanTeamFullRow(rows pgx.Rows) (*domain.Team, error) {
+	var t domain.Team
+	var desc, autoSource, autoSourceID *string
+	err := rows.Scan(&t.ID, &t.OrgID, &t.Name, &desc, &t.ManagerID,
+		&t.IsAutoManaged, &autoSource, &autoSourceID,
+		&t.CreatedAt, &t.UpdatedAt,
+		&t.ManagerName, &t.MemberCount)
+	if err != nil {
+		return nil, err
+	}
+	if desc != nil {
+		t.Description = *desc
+	}
+	if autoSource != nil {
+		t.AutoSource = *autoSource
+	}
+	if autoSourceID != nil {
+		t.AutoSourceID = *autoSourceID
+	}
+	return &t, nil
+}
+
+// nilUUID returns nil if the UUID pointer is nil or zero value.
+func nilUUID(id *uuid.UUID) *uuid.UUID {
+	if id == nil || *id == uuid.Nil {
+		return nil
+	}
+	return id
 }

@@ -35,5 +35,6 @@
   },
   "github.copilot.chat.codeGeneration.instructions": [
     { "file": ".github/copilot-instructions.md" }
-  ]
+  ],
+  "chat.agent.maxRequests": 1360000
 }

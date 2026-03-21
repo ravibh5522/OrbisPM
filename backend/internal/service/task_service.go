@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
@@ -293,6 +294,20 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	s.enqueueSearchIndex("tasks", created)
 	// Publish real-time event
 	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), nil)
+
+	// Notify assigned users
+	for _, aid := range created.AssigneeIDs {
+		s.enqueueNotification(
+			aid.String(), created.OrgID.String(),
+			"task_assigned",
+			"Task assigned to you",
+			fmt.Sprintf("You have been assigned to: %s", created.Title),
+			map[string]any{
+				"task_id":    created.ID.String(),
+				"project_id": created.ProjectID.String(),
+			},
+		)
+	}
 
 	return &domain.TaskCreateResult{
 		Task:             created,
@@ -1012,6 +1027,68 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	// Publish real-time event
 	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), directChanges)
 
+	// ── Notification triggers ──
+	actorStr := ""
+	if params.ActorID != nil {
+		actorStr = params.ActorID.String()
+	}
+	notifPayload := map[string]any{
+		"task_id":    task.ID.String(),
+		"project_id": task.ProjectID.String(),
+	}
+
+	// Notify new assignees
+	if _, ok := directChanges["assignee_ids"]; ok {
+		for _, aid := range updated.AssigneeIDs {
+			if aid.String() != actorStr {
+				s.enqueueNotification(aid.String(), task.OrgID.String(), "task_assigned",
+					"Task assigned to you",
+					fmt.Sprintf("You have been assigned to: %s", updated.Title),
+					notifPayload)
+			}
+		}
+	}
+
+	// Notify assignees and reporter on status change
+	if newStatus, ok := directChanges["status"]; ok {
+		notifiedUsers := map[string]bool{actorStr: true}
+		// Notify all assignees
+		for _, aid := range updated.AssigneeIDs {
+			aidStr := aid.String()
+			if !notifiedUsers[aidStr] {
+				notifiedUsers[aidStr] = true
+				s.enqueueNotification(aidStr, task.OrgID.String(), "task_status_changed",
+					"Task status updated",
+					fmt.Sprintf("Task \"%s\" status changed to %s", updated.Title, newStatus),
+					notifPayload)
+			}
+		}
+		// Also notify reporter if different from actor and assignees
+		if updated.ReporterID != nil {
+			rStr := updated.ReporterID.String()
+			if !notifiedUsers[rStr] {
+				s.enqueueNotification(rStr, task.OrgID.String(), "task_status_changed",
+					"Task status updated",
+					fmt.Sprintf("Task \"%s\" status changed to %s", updated.Title, newStatus),
+					notifPayload)
+			}
+		}
+	}
+
+	// Notify assignees on priority change to critical
+	if newPri, ok := directChanges["priority"]; ok {
+		if priStr, ok := newPri.(string); ok && priStr == "critical" {
+			for _, aid := range updated.AssigneeIDs {
+				if aid.String() != actorStr {
+					s.enqueueNotification(aid.String(), task.OrgID.String(), "task_priority_critical",
+						"Task marked critical",
+						fmt.Sprintf("Task \"%s\" priority changed to critical", updated.Title),
+						notifPayload)
+				}
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -1383,6 +1460,28 @@ func (s *TaskService) enqueueSearchDelete(index, docID string) {
 	}
 	if err := s.workerSrv.Enqueue(task); err != nil {
 		log.Error().Err(err).Msg("enqueue search delete task")
+	}
+}
+
+func (s *TaskService) enqueueNotification(userID, orgID, ntype, title, body string, payload map[string]any) {
+	if s.workerSrv == nil {
+		return
+	}
+	task, err := worker.NewNotificationTask(worker.NotificationPayload{
+		UserID:  userID,
+		OrgID:   orgID,
+		Type:    ntype,
+		Title:   title,
+		Body:    body,
+		Payload: payload,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("build notification task")
+		return
+	}
+	// Delay task notifications by 5 minutes to batch with nearby task updates
+	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(5*time.Minute)); err != nil {
+		log.Error().Err(err).Msg("enqueue notification task")
 	}
 }
 

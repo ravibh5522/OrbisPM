@@ -32,7 +32,7 @@ func (h *DashboardHandler) Routes() chi.Router {
 
 // GetStats godoc
 // @Summary Get dashboard stats
-// @Description Get aggregated dashboard statistics for an organization
+// @Description Get aggregated dashboard statistics for an organization (filtered by user's role and permissions)
 // @Tags Dashboard
 // @Produce json
 // @Security BearerAuth
@@ -43,7 +43,8 @@ func (h *DashboardHandler) Routes() chi.Router {
 // @Router /orgs/{orgId}/dashboard/stats [get]
 func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-	stats, err := h.dashboardSvc.GetStats(r.Context(), orgID)
+	userID := middleware.UserIDFromCtx(r.Context())
+	stats, err := h.dashboardSvc.GetStats(r.Context(), orgID, userID)
 	if err != nil {
 		Error(w, r, err)
 		return

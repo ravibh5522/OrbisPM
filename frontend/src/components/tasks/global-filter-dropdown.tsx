@@ -73,21 +73,27 @@ export function GlobalFilterDropdown({
   const toggleStatus = (s: TaskStatus) => {
     setLocal((p) => ({
       ...p,
-      statuses: p.statuses.includes(s) ? p.statuses.filter((x) => x !== s) : [...p.statuses, s],
+      statuses: p.statuses.includes(s)
+        ? p.statuses.filter((x) => x !== s)
+        : [...p.statuses, s],
     }));
   };
 
   const togglePriority = (pr: TaskPriority) => {
     setLocal((p) => ({
       ...p,
-      priorities: p.priorities.includes(pr) ? p.priorities.filter((x) => x !== pr) : [...p.priorities, pr],
+      priorities: p.priorities.includes(pr)
+        ? p.priorities.filter((x) => x !== pr)
+        : [...p.priorities, pr],
     }));
   };
 
   const toggleAssignee = (id: string) => {
     setLocal((p) => ({
       ...p,
-      assigneeIds: p.assigneeIds.includes(id) ? p.assigneeIds.filter((x) => x !== id) : [...p.assigneeIds, id],
+      assigneeIds: p.assigneeIds.includes(id)
+        ? p.assigneeIds.filter((x) => x !== id)
+        : [...p.assigneeIds, id],
     }));
   };
 
@@ -104,40 +110,50 @@ export function GlobalFilterDropdown({
   return (
     <div
       ref={ref}
-      className="absolute top-full right-0 mt-1 z-50 bg-base-100 border border-base-200 rounded-lg shadow-xl w-72 max-h-[70vh] overflow-y-auto"
+      className="absolute top-full right-0 mt-1 z-50 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl w-72 max-h-[70vh] overflow-y-auto"
     >
       <div className="p-3 space-y-3">
         <div className="flex items-center justify-between">
           <span className="text-xs font-semibold">Global Filters</span>
-          <button className="btn btn-ghost btn-xs" onClick={clearFilter}>Clear All</button>
+          <button className="btn btn-ghost btn-xs" onClick={clearFilter}>
+            Clear All
+          </button>
         </div>
 
         {/* Search */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Search</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Search
+          </label>
           <input
             type="text"
             className="input input-bordered input-xs w-full mt-0.5"
             placeholder="Filter by title..."
             value={local.search}
-            onChange={(e) => setLocal((p) => ({ ...p, search: e.target.value }))}
+            onChange={(e) =>
+              setLocal((p) => ({ ...p, search: e.target.value }))
+            }
           />
         </div>
 
         {/* Status */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Status</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Status
+          </label>
           <div className="flex flex-wrap gap-1 mt-0.5">
             {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
               <button
                 key={s}
                 className={cn(
                   "badge badge-sm cursor-pointer gap-1",
-                  local.statuses.includes(s) ? "badge-primary" : "badge-ghost"
+                  local.statuses.includes(s) ? "badge-primary" : "badge-ghost",
                 )}
                 onClick={() => toggleStatus(s)}
               >
-                {s === "in_progress" ? "In Progress" : s.charAt(0).toUpperCase() + s.slice(1)}
+                {s === "in_progress"
+                  ? "In Progress"
+                  : s.charAt(0).toUpperCase() + s.slice(1)}
               </button>
             ))}
           </div>
@@ -145,14 +161,18 @@ export function GlobalFilterDropdown({
 
         {/* Priority */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Priority</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Priority
+          </label>
           <div className="flex flex-wrap gap-1 mt-0.5">
             {(["critical", "high", "medium", "low"] as const).map((p) => (
               <button
                 key={p}
                 className={cn(
                   "badge badge-sm cursor-pointer gap-1",
-                  local.priorities.includes(p) ? "badge-primary" : "badge-ghost"
+                  local.priorities.includes(p)
+                    ? "badge-primary"
+                    : "badge-ghost",
                 )}
                 onClick={() => togglePriority(p)}
               >
@@ -164,7 +184,9 @@ export function GlobalFilterDropdown({
 
         {/* Assignee */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Assignee</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Assignee
+          </label>
           <div className="flex flex-col gap-0.5 mt-0.5 max-h-28 overflow-y-auto">
             <label className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
               <input
@@ -176,14 +198,19 @@ export function GlobalFilterDropdown({
               <span className="text-xs text-base-content/60">Unassigned</span>
             </label>
             {members.map((m) => (
-              <label key={m.user_id} className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
+              <label
+                key={m.user_id}
+                className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200"
+              >
                 <input
                   type="checkbox"
                   className="checkbox checkbox-xs"
                   checked={local.assigneeIds.includes(m.user_id)}
                   onChange={() => toggleAssignee(m.user_id)}
                 />
-                <span className="text-xs truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
+                <span className="text-xs truncate">
+                  {m.display_name || m.email || m.user_id.slice(0, 8)}
+                </span>
               </label>
             ))}
           </div>
@@ -191,7 +218,9 @@ export function GlobalFilterDropdown({
 
         {/* Labels */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">Labels</label>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Labels
+          </label>
           <input
             type="text"
             className="input input-bordered input-xs w-full mt-0.5"
@@ -212,28 +241,39 @@ export function GlobalFilterDropdown({
         {/* Due date range */}
         <div className="grid grid-cols-2 gap-1.5">
           <div>
-            <label className="text-[10px] font-semibold text-base-content/50 uppercase">Due From</label>
+            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+              Due From
+            </label>
             <input
               type="date"
               className="input input-bordered input-xs w-full mt-0.5"
               value={local.dueDateFrom}
-              onChange={(e) => setLocal((p) => ({ ...p, dueDateFrom: e.target.value }))}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, dueDateFrom: e.target.value }))
+              }
             />
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-base-content/50 uppercase">Due To</label>
+            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+              Due To
+            </label>
             <input
               type="date"
               className="input input-bordered input-xs w-full mt-0.5"
               value={local.dueDateTo}
-              onChange={(e) => setLocal((p) => ({ ...p, dueDateTo: e.target.value }))}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, dueDateTo: e.target.value }))
+              }
             />
           </div>
         </div>
 
         {/* Actions */}
         <div className="flex items-center gap-1 pt-2 border-t border-base-200">
-          <button className="btn btn-primary btn-xs flex-1" onClick={applyFilter}>
+          <button
+            className="btn btn-primary btn-xs flex-1"
+            onClick={applyFilter}
+          >
             Apply
           </button>
           <button className="btn btn-ghost btn-xs flex-1" onClick={onClose}>

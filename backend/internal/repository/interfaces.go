@@ -61,6 +61,7 @@ type TeamRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, team *domain.Team) (*domain.Team, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error)
+	SetManager(ctx context.Context, tx pgx.Tx, teamID uuid.UUID, managerID *uuid.UUID) error
 }
 
 type TeamMemberRepository interface {
@@ -87,6 +88,7 @@ type ProjectMemberRepository interface {
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error)
 	ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error)
 	RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID uuid.UUID) error
+	RemoveBySourceTeamAndUser(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID, userID uuid.UUID) error
 }
 
 // --- Task ---
@@ -285,6 +287,18 @@ type ProjectTeamRepository interface {
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectTeam, error)
 	ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.ProjectTeam, error)
 	Count(ctx context.Context, projectID uuid.UUID) (int, error)
+}
+
+// --- Announcement ---
+
+type AnnouncementRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, a *domain.Announcement) (*domain.Announcement, error)
+	GetByID(ctx context.Context, id uuid.UUID) (*domain.Announcement, error)
+	Update(ctx context.Context, tx pgx.Tx, a *domain.Announcement) (*domain.Announcement, error)
+	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
+	List(ctx context.Context, orgID uuid.UUID, projectID *uuid.UUID, userID uuid.UUID, limit, offset int) ([]*domain.Announcement, int, error)
+	MarkRead(ctx context.Context, announcementID, userID uuid.UUID) error
+	CountUnread(ctx context.Context, orgID, userID uuid.UUID) (int, error)
 }
 
 // --- Task Change Request ---

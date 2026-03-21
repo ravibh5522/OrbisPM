@@ -1067,6 +1067,12 @@ func (h *WSHandler) handleCRApprove(ctx context.Context, conn *websocket.OrgConn
 
 	h.reply(conn, msg.ID, msg.Action, cr, "")
 	h.broadcastProject(conn.OrgID, projectID, "cr:approved", cr, conn.UserID.String(), conn)
+
+	// Broadcast the updated task so all clients see the approved changes
+	if updatedTask, err := h.taskSvc.Get(ctx, cr.TaskID); err == nil {
+		result := &domain.TaskUpdateResult{Task: updatedTask}
+		h.broadcastProject(conn.OrgID, projectID, "task:updated", result, conn.UserID.String(), nil)
+	}
 }
 
 func (h *WSHandler) handleCRReject(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {

@@ -12,6 +12,7 @@ import {
   Activity,
   Bell,
   Building2,
+  CalendarDays,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -21,6 +22,7 @@ import {
   ListTodo,
   LogOut,
   Menu,
+  MessageSquare,
   Palette,
   Search,
   UserCircle,
@@ -41,26 +43,74 @@ interface NavItem {
 
 function getSidebarItems(orgSlug: string): NavItem[] {
   return [
-    { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
-    { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
-    { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
-    { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
-    { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
-    { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
-    { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
+    {
+      href: `/${orgSlug}`,
+      label: "Dashboard",
+      icon: <LayoutDashboard className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/my-tasks`,
+      label: "My Tasks",
+      icon: <ListTodo className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/calendar`,
+      label: "Calendar",
+      icon: <CalendarDays className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/messages`,
+      label: "Messages",
+      icon: <MessageSquare className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/projects`,
+      label: "Projects",
+      icon: <FolderKanban className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/teams`,
+      label: "Teams",
+      icon: <Users className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/templates`,
+      label: "Templates",
+      icon: <FileText className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/activity`,
+      label: "Activity",
+      icon: <Activity className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/notifications`,
+      label: "Notifications",
+      icon: <Bell className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/search`,
+      label: "Search",
+      icon: <Search className="w-5 h-5" />,
+    },
   ];
 }
 
 function getSettingsItems(orgSlug: string): NavItem[] {
   return [
-    { href: `/${orgSlug}/settings`, label: "Organisation", icon: <Building2 className="w-5 h-5" />, roles: ["owner", "admin", "billing_admin"] },
+    {
+      href: `/${orgSlug}/settings`,
+      label: "Organisation",
+      icon: <Building2 className="w-5 h-5" />,
+      roles: ["owner", "admin", "billing_admin"],
+    },
   ];
 }
 
 function Sidebar() {
   const pathname = usePathname();
-  const { currentOrg, currentMembership, orgs, setCurrentOrg, user, logout } = useAuthStore();
+  const { currentOrg, currentMembership, orgs, setCurrentOrg, user, logout } =
+    useAuthStore();
   const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useUIStore();
   const router = useRouter();
 
@@ -72,11 +122,13 @@ function Sidebar() {
 
   const handleThemeSwitch = (value: string) => {
     setTheme(value as Parameters<typeof setTheme>[0]);
-    api.auth.updateUser({ data: { theme: value } }).catch(() => { /* non-critical */ });
+    api.auth.updateUser({ data: { theme: value } }).catch(() => {
+      /* non-critical */
+    });
   };
 
   const filteredSettings = settingsItems.filter(
-    (item) => !item.roles || (userRole && item.roles.includes(userRole))
+    (item) => !item.roles || (userRole && item.roles.includes(userRole)),
   );
 
   const isActive = (href: string) => {
@@ -97,23 +149,31 @@ function Sidebar() {
       className={cn(
         "fixed left-0 top-0 h-full bg-base-100 border-r border-base-200 z-40 transition-all duration-300 ease-in-out glass-sidebar",
         "hidden lg:flex", // Hide on mobile
-        sidebarCollapsed ? "w-[92px]" : "w-64"
+        sidebarCollapsed ? "w-[92px]" : "w-64",
       )}
     >
       <div className="flex flex-col h-full w-full">
         {/* Org header */}
-        <div className={cn(
-          "flex items-center border-b border-base-200 transition-all duration-300 ease-in-out",
-          sidebarCollapsed ? "flex-col justify-center p-3 gap-2" : "justify-between p-4"
-        )}>
+        <div
+          className={cn(
+            "flex items-center border-b border-base-200 transition-all duration-300 ease-in-out",
+            sidebarCollapsed
+              ? "flex-col justify-center p-3 gap-2"
+              : "justify-between p-4",
+          )}
+        >
           {/* Collapsed: show org logo centered */}
           {sidebarCollapsed && (
             <div className="flex items-center justify-center">
               {currentOrg.logo_url ? (
-                <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-10 h-10 rounded-lg object-cover" />
+                <img
+                  src={currentOrg.logo_url}
+                  alt={currentOrg.name}
+                  className="w-10 h-10 rounded-lg object-cover"
+                />
               ) : (
                 <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-base">
-                  {(currentOrg.name?.[0] || '?').toUpperCase()}
+                  {(currentOrg.name?.[0] || "?").toUpperCase()}
                 </div>
               )}
             </div>
@@ -121,21 +181,35 @@ function Sidebar() {
           {/* Open: show full org picker dropdown */}
           {!sidebarCollapsed && (
             <div className="dropdown dropdown-bottom flex-1 mr-1">
-              <label tabIndex={0} className="flex items-center gap-2 cursor-pointer hover:bg-base-200 rounded-lg p-1 w-full">
+              <label
+                tabIndex={0}
+                className="flex items-center gap-2 cursor-pointer hover:bg-base-200 rounded-lg p-1 w-full"
+              >
                 {currentOrg.logo_url ? (
-                  <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                  <img
+                    src={currentOrg.logo_url}
+                    alt={currentOrg.name}
+                    className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+                  />
                 ) : (
                   <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm flex-shrink-0">
-                    {(currentOrg.name?.[0] || '?').toUpperCase()}
+                    {(currentOrg.name?.[0] || "?").toUpperCase()}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <div className="font-semibold text-sm truncate">{currentOrg.name}</div>
-                  <div className="text-xs text-base-content/50">{userRole || "member"}</div>
+                  <div className="font-semibold text-sm truncate">
+                    {currentOrg.name}
+                  </div>
+                  <div className="text-xs text-base-content/50">
+                    {userRole || "member"}
+                  </div>
                 </div>
                 <ChevronDown className="w-4 h-4 text-base-content/50" />
               </label>
-              <ul tabIndex={0} className="dropdown-content z-50 menu p-2 shadow bg-base-100 rounded-box w-56 border border-base-200">
+              <ul
+                tabIndex={0}
+                className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-56 border border-base-200"
+              >
                 {orgs.map((org) => (
                   <li key={org.id}>
                     <button
@@ -143,10 +217,14 @@ function Sidebar() {
                       onClick={() => handleOrgSwitch(org.slug)}
                     >
                       {org.logo_url ? (
-                        <img src={org.logo_url} alt={org.name} className="w-6 h-6 rounded object-cover" />
+                        <img
+                          src={org.logo_url}
+                          alt={org.name}
+                          className="w-6 h-6 rounded object-cover"
+                        />
                       ) : (
                         <div className="w-6 h-6 bg-primary rounded flex items-center justify-center text-primary-content font-bold text-xs">
-                          {(org.name?.[0] || '?').toUpperCase()}
+                          {(org.name?.[0] || "?").toUpperCase()}
                         </div>
                       )}
                       {org.name}
@@ -157,14 +235,26 @@ function Sidebar() {
             </div>
           )}
           {/* Toggle button */}
-          <button className="btn btn-ghost btn-sm btn-square flex-shrink-0" onClick={toggleSidebar}>
-            {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
+          <button
+            className="btn btn-ghost btn-sm btn-square flex-shrink-0"
+            onClick={toggleSidebar}
+          >
+            {sidebarCollapsed ? (
+              <ChevronRight className="w-5 h-5" />
+            ) : (
+              <ChevronLeft className="w-5 h-5" />
+            )}
           </button>
         </div>
 
         {/* Nav items */}
         <nav className="flex-1 overflow-y-auto py-3">
-          <ul className={cn("flex flex-col gap-1", sidebarCollapsed ? "items-center px-0" : "px-2")}>
+          <ul
+            className={cn(
+              "flex flex-col gap-1",
+              sidebarCollapsed ? "items-center px-0" : "px-2",
+            )}
+          >
             {mainItems.map((item) => (
               <li key={item.href} className="list-none">
                 <Link
@@ -177,7 +267,7 @@ function Sidebar() {
                       : "text-base-content",
                     sidebarCollapsed
                       ? "justify-center mx-auto w-14 pt-2 pb-4"
-                      : "gap-2 px-3 py-2.5"
+                      : "gap-2 px-3 py-2.5",
                   )}
                   title={sidebarCollapsed ? item.label : undefined}
                 >
@@ -186,18 +276,28 @@ function Sidebar() {
                     {item.icon}
                   </span>
                   {/* Full label — clips horizontally when collapsing (right → gone) */}
-                  <span className={cn(
-                    "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
-                    sidebarCollapsed ? "w-0 max-w-0 opacity-0" : "opacity-100 max-w-full"
-                  )}>
+                  <span
+                    className={cn(
+                      "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
+                      sidebarCollapsed
+                        ? "w-0 max-w-0 opacity-0"
+                        : "opacity-100 max-w-full",
+                    )}
+                  >
                     {item.label}
                   </span>
                   {/* Short label — absolute below icon, fades in when collapsed */}
-                  <span className={cn(
-                    "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
-                    sidebarCollapsed ? "bottom-0.5 opacity-100 translate-y-0" : "bottom-0 opacity-0 translate-y-1 pointer-events-none"
-                  )}>
-                    {item.label.length > 7 ? item.label.slice(0, 7) + '..' : item.label}
+                  <span
+                    className={cn(
+                      "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
+                      sidebarCollapsed
+                        ? "bottom-0.5 opacity-100 translate-y-0"
+                        : "bottom-0 opacity-0 translate-y-1 pointer-events-none",
+                    )}
+                  >
+                    {item.label.length > 7
+                      ? item.label.slice(0, 7) + ".."
+                      : item.label}
                   </span>
                 </Link>
               </li>
@@ -207,15 +307,24 @@ function Sidebar() {
           {filteredSettings.length > 0 && (
             <>
               {/* Settings section label */}
-              <div className={cn(
-                "px-4 mt-3 mb-1 overflow-hidden transition-all duration-300 ease-in-out",
-                sidebarCollapsed ? "max-h-0 opacity-0 py-0" : "max-h-8 opacity-100 py-1"
-              )}>
+              <div
+                className={cn(
+                  "px-4 mt-3 mb-1 overflow-hidden transition-all duration-300 ease-in-out",
+                  sidebarCollapsed
+                    ? "max-h-0 opacity-0 py-0"
+                    : "max-h-8 opacity-100 py-1",
+                )}
+              >
                 <span className="text-xs font-semibold text-base-content/40 uppercase tracking-wider">
                   Organisation
                 </span>
               </div>
-              <ul className={cn("flex flex-col gap-1", sidebarCollapsed ? "items-center px-0" : "px-2")}>
+              <ul
+                className={cn(
+                  "flex flex-col gap-1",
+                  sidebarCollapsed ? "items-center px-0" : "px-2",
+                )}
+              >
                 {filteredSettings.map((item) => (
                   <li key={item.href} className="list-none">
                     <Link
@@ -228,7 +337,7 @@ function Sidebar() {
                           : "text-base-content",
                         sidebarCollapsed
                           ? "justify-center mx-auto w-14 pt-2 pb-4"
-                          : "gap-2 px-3 py-2.5"
+                          : "gap-2 px-3 py-2.5",
                       )}
                       title={sidebarCollapsed ? item.label : undefined}
                     >
@@ -237,18 +346,28 @@ function Sidebar() {
                         {item.icon}
                       </span>
                       {/* Full label — clips when collapsing */}
-                      <span className={cn(
-                        "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
-                        sidebarCollapsed ? "w-0 max-w-0 opacity-0" : "opacity-100 max-w-full"
-                      )}>
+                      <span
+                        className={cn(
+                          "text-sm font-medium whitespace-nowrap overflow-hidden transition-all duration-300 ease-in-out",
+                          sidebarCollapsed
+                            ? "w-0 max-w-0 opacity-0"
+                            : "opacity-100 max-w-full",
+                        )}
+                      >
                         {item.label}
                       </span>
                       {/* Short label — absolute below icon, fades in when collapsed */}
-                      <span className={cn(
-                        "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
-                        sidebarCollapsed ? "bottom-0.5 opacity-100 translate-y-0" : "bottom-0 opacity-0 translate-y-1 pointer-events-none"
-                      )}>
-                        {item.label.length > 7 ? item.label.slice(0, 7) + '..' : item.label}
+                      <span
+                        className={cn(
+                          "absolute left-0 right-0 text-center text-[10px] font-medium leading-tight transition-all duration-300 ease-in-out px-0.5 truncate",
+                          sidebarCollapsed
+                            ? "bottom-0.5 opacity-100 translate-y-0"
+                            : "bottom-0 opacity-0 translate-y-1 pointer-events-none",
+                        )}
+                      >
+                        {item.label.length > 7
+                          ? item.label.slice(0, 7) + ".."
+                          : item.label}
                       </span>
                     </Link>
                   </li>
@@ -265,23 +384,36 @@ function Sidebar() {
               tabIndex={0}
               className={cn(
                 "flex cursor-pointer hover:bg-base-200 rounded-xl transition-all duration-300 ease-in-out items-center w-full",
-                sidebarCollapsed ? "justify-center p-2" : "gap-2 px-2 py-1.5"
+                sidebarCollapsed ? "justify-center p-2" : "gap-2 px-2 py-1.5",
               )}
             >
               <Avatar
-                name={user?.user_metadata?.name as string || user?.email || "U"}
+                name={
+                  (user?.user_metadata?.name as string) || user?.email || "U"
+                }
                 src={user?.user_metadata?.avatar_url as string | undefined}
                 size="sm"
               />
-              <div className={cn(
-                "flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out",
-                sidebarCollapsed ? "max-w-0 opacity-0 w-0" : "max-w-full opacity-100"
-              )}>
-                <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
-                <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
+              <div
+                className={cn(
+                  "flex-1 min-w-0 overflow-hidden transition-all duration-300 ease-in-out",
+                  sidebarCollapsed
+                    ? "max-w-0 opacity-0 w-0"
+                    : "max-w-full opacity-100",
+                )}
+              >
+                <div className="text-sm font-medium truncate">
+                  {(user?.user_metadata?.name as string) || "User"}
+                </div>
+                <div className="text-xs text-base-content/50 truncate">
+                  {user?.email}
+                </div>
               </div>
             </label>
-            <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-52 border border-base-200 mb-2">
+            <ul
+              tabIndex={0}
+              className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-52 border border-base-200 mb-2"
+            >
               <li>
                 <Link href={`/${currentOrg.slug}/profile`}>
                   <UserCircle className="w-4 h-4" />
@@ -296,7 +428,10 @@ function Sidebar() {
                   <ul>
                     {THEMES.map((t) => (
                       <li key={t.value}>
-                        <button className={cn(theme === t.value && "active")} onClick={() => handleThemeSwitch(t.value)}>
+                        <button
+                          className={cn(theme === t.value && "active")}
+                          onClick={() => handleThemeSwitch(t.value)}
+                        >
                           {t.label}
                         </button>
                       </li>
@@ -325,10 +460,13 @@ function TopBar() {
     <header
       className={cn(
         "sticky top-0 z-30 h-14 bg-base-100 border-b border-base-200 flex items-center px-4 gap-4 transition-all duration-300 ease-in-out glass-topbar",
-        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
+        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64",
       )}
     >
-      <button className="btn btn-ghost btn-sm btn-square lg:hidden" onClick={() => setMobileMenuOpen(true)}>
+      <button
+        className="btn btn-ghost btn-sm btn-square lg:hidden"
+        onClick={() => setMobileMenuOpen(true)}
+      >
         <Menu className="w-5 h-5" />
       </button>
 
@@ -336,11 +474,16 @@ function TopBar() {
       {breadcrumb && (
         <div className="flex items-center gap-2 min-w-0">
           {breadcrumb.backHref && (
-            <button className="btn btn-ghost btn-xs btn-square flex-shrink-0" onClick={() => router.push(breadcrumb.backHref!)}>
+            <button
+              className="btn btn-ghost btn-xs btn-square flex-shrink-0"
+              onClick={() => router.push(breadcrumb.backHref!)}
+            >
               <ChevronLeft className="w-4 h-4" />
             </button>
           )}
-          <span className="text-sm font-semibold truncate">{breadcrumb.label}</span>
+          <span className="text-sm font-semibold truncate">
+            {breadcrumb.label}
+          </span>
         </div>
       )}
 
@@ -348,7 +491,6 @@ function TopBar() {
 
       {/* Notifications */}
       <NotificationBell />
-
     </header>
   );
 }
@@ -364,27 +506,72 @@ function MobileSidebar() {
   const orgSlug = currentOrg?.slug || "";
 
   const mainItems: NavItem[] = [
-    { href: `/${orgSlug}`, label: "Dashboard", icon: <LayoutDashboard className="w-5 h-5" /> },
-    { href: `/${orgSlug}/projects`, label: "Projects", icon: <FolderKanban className="w-5 h-5" /> },
-    { href: `/${orgSlug}/my-tasks`, label: "My Tasks", icon: <ListTodo className="w-5 h-5" /> },
-    { href: `/${orgSlug}/teams`, label: "Teams", icon: <Users className="w-5 h-5" /> },
-    { href: `/${orgSlug}/activity`, label: "Activity", icon: <Activity className="w-5 h-5" /> },
-    { href: `/${orgSlug}/templates`, label: "Templates", icon: <FileText className="w-5 h-5" /> },
-    { href: `/${orgSlug}/notifications`, label: "Notifications", icon: <Bell className="w-5 h-5" /> },
-    { href: `/${orgSlug}/search`, label: "Search", icon: <Search className="w-5 h-5" /> },
+    {
+      href: `/${orgSlug}`,
+      label: "Dashboard",
+      icon: <LayoutDashboard className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/projects`,
+      label: "Projects",
+      icon: <FolderKanban className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/my-tasks`,
+      label: "My Tasks",
+      icon: <ListTodo className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/calendar`,
+      label: "Calendar",
+      icon: <CalendarDays className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/messages`,
+      label: "Messages",
+      icon: <MessageSquare className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/teams`,
+      label: "Teams",
+      icon: <Users className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/activity`,
+      label: "Activity",
+      icon: <Activity className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/templates`,
+      label: "Templates",
+      icon: <FileText className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/notifications`,
+      label: "Notifications",
+      icon: <Bell className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/search`,
+      label: "Search",
+      icon: <Search className="w-5 h-5" />,
+    },
   ];
 
   const settingsItems = getSettingsItems(orgSlug);
 
   const filteredSettings = settingsItems.filter(
-    (item) => !item.roles || (userRole && item.roles.includes(userRole))
+    (item) => !item.roles || (userRole && item.roles.includes(userRole)),
   );
 
-  const isActive = (href: string) => pathname === href || (href !== `/${orgSlug}` && pathname.startsWith(href));
+  const isActive = (href: string) =>
+    pathname === href || (href !== `/${orgSlug}` && pathname.startsWith(href));
 
   const handleThemeSwitch = (value: string) => {
     setTheme(value as Parameters<typeof setTheme>[0]);
-    api.auth.updateUser({ data: { theme: value } }).catch(() => { /* non-critical */ });
+    api.auth.updateUser({ data: { theme: value } }).catch(() => {
+      /* non-critical */
+    });
   };
 
   const handleOrgSwitch = async (orgSlug: string) => {
@@ -405,7 +592,7 @@ function MobileSidebar() {
         className="fixed inset-0 bg-black/50 z-40 lg:hidden"
         onClick={() => setMobileMenuOpen(false)}
       />
-      
+
       {/* Drawer */}
       <aside className="fixed left-0 top-0 h-full w-72 max-w-[calc(100vw-3rem)] bg-base-100 z-50 lg:hidden shadow-xl glass-sidebar">
         <div className="flex flex-col h-full">
@@ -413,18 +600,27 @@ function MobileSidebar() {
           <div className="flex items-center justify-between p-4 border-b border-base-200">
             <div className="flex items-center gap-2">
               {currentOrg.logo_url ? (
-                <img src={currentOrg.logo_url} alt={currentOrg.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                <img
+                  src={currentOrg.logo_url}
+                  alt={currentOrg.name}
+                  className="w-8 h-8 rounded-lg object-cover flex-shrink-0"
+                />
               ) : (
                 <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center text-primary-content font-bold text-sm flex-shrink-0">
-                  {(currentOrg.name?.[0] || '?').toUpperCase()}
+                  {(currentOrg.name?.[0] || "?").toUpperCase()}
                 </div>
               )}
               <div>
                 <div className="font-semibold text-sm">{currentOrg.name}</div>
-                <div className="text-xs text-base-content/50">{userRole || "member"}</div>
+                <div className="text-xs text-base-content/50">
+                  {userRole || "member"}
+                </div>
               </div>
             </div>
-            <button className="btn btn-ghost btn-sm btn-square" onClick={() => setMobileMenuOpen(false)}>
+            <button
+              className="btn btn-ghost btn-sm btn-square"
+              onClick={() => setMobileMenuOpen(false)}
+            >
               <ChevronLeft className="w-5 h-5" />
             </button>
           </div>
@@ -486,10 +682,14 @@ function MobileSidebar() {
                         onClick={() => handleOrgSwitch(org.slug)}
                       >
                         {org.logo_url ? (
-                          <img src={org.logo_url} alt={org.name} className="w-6 h-6 rounded object-cover" />
+                          <img
+                            src={org.logo_url}
+                            alt={org.name}
+                            className="w-6 h-6 rounded object-cover"
+                          />
                         ) : (
                           <div className="w-6 h-6 bg-primary/20 rounded flex items-center justify-center text-primary font-bold text-xs">
-                            {(org.name?.[0] || '?').toUpperCase()}
+                            {(org.name?.[0] || "?").toUpperCase()}
                           </div>
                         )}
                         {org.name}
@@ -509,18 +709,30 @@ function MobileSidebar() {
                 className="flex cursor-pointer hover:bg-base-200 rounded-xl items-center gap-2 px-2 py-1.5 w-full"
               >
                 <Avatar
-                  name={user?.user_metadata?.name as string || user?.email || "U"}
+                  name={
+                    (user?.user_metadata?.name as string) || user?.email || "U"
+                  }
                   src={user?.user_metadata?.avatar_url as string | undefined}
                   size="sm"
                 />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium truncate">{user?.user_metadata?.name as string || "User"}</div>
-                  <div className="text-xs text-base-content/50 truncate">{user?.email}</div>
+                  <div className="text-sm font-medium truncate">
+                    {(user?.user_metadata?.name as string) || "User"}
+                  </div>
+                  <div className="text-xs text-base-content/50 truncate">
+                    {user?.email}
+                  </div>
                 </div>
               </label>
-              <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-56 border border-base-200 mb-2">
+              <ul
+                tabIndex={0}
+                className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-56 border border-base-200 mb-2"
+              >
                 <li>
-                  <Link href={`/${currentOrg.slug}/profile`} onClick={() => setMobileMenuOpen(false)}>
+                  <Link
+                    href={`/${currentOrg.slug}/profile`}
+                    onClick={() => setMobileMenuOpen(false)}
+                  >
                     <UserCircle className="w-4 h-4" />
                     Profile &amp; Security
                   </Link>
@@ -533,7 +745,10 @@ function MobileSidebar() {
                     <ul>
                       {THEMES.map((t) => (
                         <li key={t.value}>
-                          <button className={cn(theme === t.value && "active")} onClick={() => handleThemeSwitch(t.value)}>
+                          <button
+                            className={cn(theme === t.value && "active")}
+                            onClick={() => handleThemeSwitch(t.value)}
+                          >
                             {t.label}
                           </button>
                         </li>
@@ -542,7 +757,13 @@ function MobileSidebar() {
                   </details>
                 </li>
                 <li className="border-t border-base-200 mt-1 pt-1">
-                  <button className="text-error" onClick={() => { setMobileMenuOpen(false); logout(); }}>
+                  <button
+                    className="text-error"
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                  >
                     <LogOut className="w-4 h-4" /> Logout
                   </button>
                 </li>
@@ -564,8 +785,19 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   // Sync theme from user profile on load
   useEffect(() => {
     const savedTheme = user?.user_metadata?.theme as string | undefined;
-    if (savedTheme && ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(savedTheme)) {
-      setTheme(savedTheme as "glass-light" | "glass-dark" | "orbis-light" | "orbis-dark");
+    if (
+      savedTheme &&
+      ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
+        savedTheme,
+      )
+    ) {
+      setTheme(
+        savedTheme as
+          | "glass-light"
+          | "glass-dark"
+          | "orbis-light"
+          | "orbis-dark",
+      );
     }
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -585,11 +817,13 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <MobileSidebar />
       <TopBar />
-      <main className={cn(
-        "transition-all duration-300 ease-in-out py-3 px-3 md:px-5 lg:px-6",
-        "h-[calc(100vh-3.5rem)] overflow-auto",
-        sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64"
-      )}>
+      <main
+        className={cn(
+          "transition-all duration-300 ease-in-out py-3 px-3 md:px-5 lg:px-6",
+          "h-[calc(100vh-3.5rem)] overflow-auto",
+          sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64",
+        )}
+      >
         {children}
       </main>
     </div>

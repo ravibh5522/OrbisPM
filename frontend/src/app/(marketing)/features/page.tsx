@@ -2,34 +2,37 @@ import { JsonLd } from "@/components/marketing/json-ld";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
 import {
-    Activity,
-    ArrowRight,
-    BarChart3,
-    Bell,
-    Bot,
-    Brain,
-    CalendarDays,
-    CheckSquare,
-    Cpu,
-    Eye,
-    FileText,
-    FolderKanban,
-    Gauge,
-    GitBranch,
-    Globe,
-    LineChart,
-    Lock,
-    MessageCircle, Network,
-    Puzzle, Repeat,
-    Search,
-    Settings2,
-    Shield,
-    Sparkles,
-    SquareStack, Table2,
-    Timer,
-    Users,
-    Webhook,
-    Workflow
+  Activity,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  Bot,
+  Brain,
+  CalendarDays,
+  CheckSquare,
+  Cpu,
+  Eye,
+  FileText,
+  FolderKanban,
+  Gauge,
+  GitBranch,
+  Globe,
+  LineChart,
+  Lock,
+  MessageCircle,
+  Network,
+  Puzzle,
+  Repeat,
+  Search,
+  Settings2,
+  Shield,
+  Sparkles,
+  SquareStack,
+  Table2,
+  Timer,
+  Users,
+  Webhook,
+  Workflow,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -61,6 +64,21 @@ export const metadata: Metadata = {
     description:
       "AI sprint planning, smart estimation, real-time collaboration, enterprise RBAC, change requests, webhooks & API. The most feature-rich project management platform for engineering teams.",
     url: "/features",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM Features – 30+ AI-Powered Tools",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM Features – 30+ AI-Powered Tools to Ship Faster",
+    description:
+      "AI sprint planning, smart estimation, real-time collaboration, enterprise RBAC, and change request workflows.",
+    images: ["/og-image.png"],
   },
 };
 
@@ -285,13 +303,24 @@ export default function FeaturesPage() {
           "@context": "https://schema.org",
           "@type": "WebPage",
           name: "OrbisPM Features – 30+ AI-Powered Project Management Tools",
-          description: "Complete feature overview of OrbisPM project management platform with AI sprint planning, smart estimation, and 30+ tools for engineering teams",
+          description:
+            "Complete feature overview of OrbisPM project management platform with AI sprint planning, smart estimation, and 30+ tools for engineering teams",
           url: "https://orbisom.live/features",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
-              { "@type": "ListItem", position: 2, name: "Features", item: "https://orbisom.live/features" },
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://orbisom.live",
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: "Features",
+                item: "https://orbisom.live/features",
+              },
             ],
           },
         }}
@@ -312,11 +341,15 @@ export default function FeaturesPage() {
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
-            OrbisPM combines enterprise-grade project management with AI-powered intelligence.
-            From AI sprint planning to predictive analytics — features no other platform offers.
+            OrbisPM combines enterprise-grade project management with AI-powered
+            intelligence. From AI sprint planning to predictive analytics —
+            features no other platform offers.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/signup" className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25">
+            <Link
+              href="/signup"
+              className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
+            >
               Start Free Today <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/pricing" className="btn btn-ghost btn-lg gap-2">
@@ -330,8 +363,20 @@ export default function FeaturesPage() {
       <section className="py-8">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="flex flex-wrap items-center justify-center gap-3">
-            {["AI-Powered", "Collaboration", "Security", "Automation", "Analytics", "Enterprise"].map((cat) => (
-              <span key={cat} className="badge badge-lg badge-outline badge-primary">{cat}</span>
+            {[
+              "AI-Powered",
+              "Collaboration",
+              "Security",
+              "Automation",
+              "Analytics",
+              "Enterprise",
+            ].map((cat) => (
+              <span
+                key={cat}
+                className="badge badge-lg badge-outline badge-primary"
+              >
+                {cat}
+              </span>
             ))}
           </div>
         </div>
@@ -355,17 +400,24 @@ export default function FeaturesPage() {
                       <div className="flex items-center gap-2 mb-2">
                         <h2 className="text-xl font-bold">{feature.title}</h2>
                         {feature.badge && (
-                          <span className={`badge badge-sm ${
-                            feature.badge === "AI-Powered" ? "badge-primary" :
-                            feature.badge === "Unique" ? "badge-secondary" :
-                            feature.badge === "Enterprise" ? "badge-accent" :
-                            "badge-warning"
-                          }`}>
+                          <span
+                            className={`badge badge-sm ${
+                              feature.badge === "AI-Powered"
+                                ? "badge-primary"
+                                : feature.badge === "Unique"
+                                  ? "badge-secondary"
+                                  : feature.badge === "Enterprise"
+                                    ? "badge-accent"
+                                    : "badge-warning"
+                            }`}
+                          >
                             {feature.badge}
                           </span>
                         )}
                       </div>
-                      <p className="text-base-content/60 leading-relaxed">{feature.description}</p>
+                      <p className="text-base-content/60 leading-relaxed">
+                        {feature.description}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -383,23 +435,61 @@ export default function FeaturesPage() {
               <Brain className="w-4 h-4" />
               AI That Actually Helps
             </div>
-            <h2 className="text-3xl md:text-4xl font-bold">8 AI Features No Other PM Tool Has</h2>
+            <h2 className="text-3xl md:text-4xl font-bold">
+              8 AI Features No Other PM Tool Has
+            </h2>
             <p className="text-base-content/50 mt-3 text-lg max-w-2xl mx-auto">
-              OrbisPM doesn&apos;t just bolt on AI as a chatbot. Intelligence is woven into every workflow — from planning to retrospectives.
+              OrbisPM doesn&apos;t just bolt on AI as a chatbot. Intelligence is
+              woven into every workflow — from planning to retrospectives.
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {[
-              { icon: Brain, title: "Sprint Planning", desc: "AI suggests optimal sprint compositions based on velocity and capacity" },
-              { icon: Bot, title: "Task Estimation", desc: "ML predicts story points from historical patterns and complexity analysis" },
-              { icon: Sparkles, title: "Natural Language Input", desc: "Create tasks from plain text, Slack messages, or meeting notes" },
-              { icon: LineChart, title: "Burndown Prediction", desc: "Forecast sprint completion and suggest scope adjustments" },
-              { icon: MessageCircle, title: "Auto-Retrospectives", desc: "AI-generated sprint reports with actionable improvement suggestions" },
-              { icon: Gauge, title: "Workload Balancing", desc: "Real-time capacity analysis with AI reassignment recommendations" },
-              { icon: SquareStack, title: "Backlog Grooming", desc: "AI prioritizes work items by business impact and dependency analysis" },
-              { icon: Cpu, title: "Meeting → Tasks", desc: "Extract action items from notes with assignees, priorities, and dates" },
+              {
+                icon: Brain,
+                title: "Sprint Planning",
+                desc: "AI suggests optimal sprint compositions based on velocity and capacity",
+              },
+              {
+                icon: Bot,
+                title: "Task Estimation",
+                desc: "ML predicts story points from historical patterns and complexity analysis",
+              },
+              {
+                icon: Sparkles,
+                title: "Natural Language Input",
+                desc: "Create tasks from plain text, Slack messages, or meeting notes",
+              },
+              {
+                icon: LineChart,
+                title: "Burndown Prediction",
+                desc: "Forecast sprint completion and suggest scope adjustments",
+              },
+              {
+                icon: MessageCircle,
+                title: "Auto-Retrospectives",
+                desc: "AI-generated sprint reports with actionable improvement suggestions",
+              },
+              {
+                icon: Gauge,
+                title: "Workload Balancing",
+                desc: "Real-time capacity analysis with AI reassignment recommendations",
+              },
+              {
+                icon: SquareStack,
+                title: "Backlog Grooming",
+                desc: "AI prioritizes work items by business impact and dependency analysis",
+              },
+              {
+                icon: Cpu,
+                title: "Meeting → Tasks",
+                desc: "Extract action items from notes with assignees, priorities, and dates",
+              },
             ].map((item) => (
-              <div key={item.title} className="bg-base-100 rounded-xl p-6 border border-base-200 hover:border-primary/30 transition-colors">
+              <div
+                key={item.title}
+                className="bg-base-100 rounded-xl p-6 border border-base-200 hover:border-primary/30 transition-colors"
+              >
                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center mb-3">
                   <item.icon className="w-5 h-5 text-primary" />
                 </div>
@@ -415,9 +505,12 @@ export default function FeaturesPage() {
       <section className="py-16 bg-base-100">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold">Built on Modern, Battle-Tested Technology</h2>
+            <h2 className="text-3xl font-bold">
+              Built on Modern, Battle-Tested Technology
+            </h2>
             <p className="text-base-content/50 mt-3 text-lg">
-              Enterprise-grade infrastructure designed for performance, reliability, and scale
+              Enterprise-grade infrastructure designed for performance,
+              reliability, and scale
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-6">
@@ -433,10 +526,14 @@ export default function FeaturesPage() {
             ].map((tech) => (
               <div key={tech.name} className="text-center">
                 <div className="w-14 h-14 mx-auto rounded-xl bg-base-200 flex items-center justify-center">
-                  <span className="text-lg font-bold text-primary">{tech.name[0]}</span>
+                  <span className="text-lg font-bold text-primary">
+                    {tech.name[0]}
+                  </span>
                 </div>
                 <div className="text-xs font-semibold mt-2">{tech.name}</div>
-                <div className="text-[10px] text-base-content/40">{tech.desc}</div>
+                <div className="text-[10px] text-base-content/40">
+                  {tech.desc}
+                </div>
               </div>
             ))}
           </div>
@@ -447,13 +544,18 @@ export default function FeaturesPage() {
       <section className="py-20 md:py-28 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-secondary/5 to-accent/5" />
         <div className="relative w-full px-4 sm:px-6 lg:px-8 xl:px-12 text-center">
-          <h2 className="text-3xl md:text-5xl font-bold">Ready to supercharge your workflow?</h2>
+          <h2 className="text-3xl md:text-5xl font-bold">
+            Ready to supercharge your workflow?
+          </h2>
           <p className="mt-6 text-lg text-base-content/60 max-w-2xl mx-auto">
             Join thousands of engineering teams shipping faster with OrbisPM.
             Start free — no credit card required.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/signup" className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25">
+            <Link
+              href="/signup"
+              className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
+            >
               Get Started Free <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/alternatives/jira" className="btn btn-outline btn-lg">

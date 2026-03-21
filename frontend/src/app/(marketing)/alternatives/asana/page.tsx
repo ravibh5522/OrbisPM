@@ -1,7 +1,16 @@
 import { JsonLd } from "@/components/marketing/json-ld";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { ArrowRight, CheckSquare, Code, DollarSign, Lock, Sparkles, X, Zap } from "lucide-react";
+import {
+  ArrowRight,
+  CheckSquare,
+  Code,
+  DollarSign,
+  Lock,
+  Sparkles,
+  X,
+  Zap,
+} from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -15,6 +24,21 @@ export const metadata: Metadata = {
     description:
       "AI-powered project management with real-time collaboration and enterprise RBAC. The best Asana alternative for engineering teams.",
     url: "/alternatives/asana",
+    images: [
+      {
+        url: "/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "OrbisPM vs Asana Comparison",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "OrbisPM vs Asana – Best AI-Powered Asana Alternative in 2026",
+    description:
+      "AI-powered project management with real-time collaboration and enterprise RBAC. The best Asana alternative for engineering teams.",
+    images: ["/og-image.png"],
   },
   keywords: [
     "Asana alternative",
@@ -57,14 +81,30 @@ export default function AsanaAlternativePage() {
           "@context": "https://schema.org",
           "@type": "WebPage",
           name: "OrbisPM vs Asana – Best AI-Powered Asana Alternative",
-          description: "Feature comparison of OrbisPM and Asana project management platforms",
+          description:
+            "Feature comparison of OrbisPM and Asana project management platforms",
           url: "https://orbisom.live/alternatives/asana",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
-              { "@type": "ListItem", position: 1, name: "Home", item: "https://orbisom.live" },
-              { "@type": "ListItem", position: 2, name: "Alternatives", item: "https://orbisom.live/alternatives/jira" },
-              { "@type": "ListItem", position: 3, name: "OrbisPM vs Asana", item: "https://orbisom.live/alternatives/asana" },
+              {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://orbisom.live",
+              },
+              {
+                "@type": "ListItem",
+                position: 2,
+                name: "Alternatives",
+                item: "https://orbisom.live/alternatives",
+              },
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: "OrbisPM vs Asana",
+                item: "https://orbisom.live/alternatives/asana",
+              },
             ],
           },
         }}
@@ -85,11 +125,15 @@ export default function AsanaAlternativePage() {
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
-            Asana is great for marketing and operations teams, but engineering teams need more: AI-powered
-            sprint planning, real-time sync, granular RBAC, and change request workflows. That&apos;s OrbisPM.
+            Asana is great for marketing and operations teams, but engineering
+            teams need more: AI-powered sprint planning, real-time sync,
+            granular RBAC, and change request workflows. That&apos;s OrbisPM.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/signup" className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25">
+            <Link
+              href="/signup"
+              className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
+            >
               Try OrbisPM Free <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/features" className="btn btn-ghost btn-lg">
@@ -102,7 +146,9 @@ export default function AsanaAlternativePage() {
       {/* Why Switch */}
       <section className="py-16 bg-base-100 border-y border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
-          <h2 className="text-3xl font-bold text-center mb-12">Why Engineering Teams Prefer OrbisPM Over Asana</h2>
+          <h2 className="text-3xl font-bold text-center mb-12">
+            Why Engineering Teams Prefer OrbisPM Over Asana
+          </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             {[
               {
@@ -131,7 +177,9 @@ export default function AsanaAlternativePage() {
                   <item.icon className="w-7 h-7 text-primary" />
                 </div>
                 <h3 className="text-lg font-bold mb-2">{item.title}</h3>
-                <p className="text-sm text-base-content/60 leading-relaxed">{item.desc}</p>
+                <p className="text-sm text-base-content/60 leading-relaxed">
+                  {item.desc}
+                </p>
               </article>
             ))}
           </div>
@@ -142,22 +190,30 @@ export default function AsanaAlternativePage() {
       <section className="py-20 md:py-28">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold text-center mb-4">Feature-by-Feature Comparison</h2>
+            <h2 className="text-3xl font-bold text-center mb-4">
+              Feature-by-Feature Comparison
+            </h2>
             <p className="text-center text-base-content/60 mb-12">
-              OrbisPM vs Asana — see exactly how they compare for engineering teams.
+              OrbisPM vs Asana — see exactly how they compare for engineering
+              teams.
             </p>
             <div className="overflow-x-auto">
               <table className="table w-full text-sm">
                 <thead>
                   <tr className="border-b-2 border-base-200">
                     <th className="text-left py-3 w-1/2">Feature</th>
-                    <th className="text-center py-3 text-primary font-bold">OrbisPM</th>
+                    <th className="text-center py-3 text-primary font-bold">
+                      OrbisPM
+                    </th>
                     <th className="text-center py-3">Asana</th>
                   </tr>
                 </thead>
                 <tbody>
                   {comparisonData.map((row) => (
-                    <tr key={row.feature} className="border-b border-base-200/50">
+                    <tr
+                      key={row.feature}
+                      className="border-b border-base-200/50"
+                    >
                       <td className="py-3 font-medium">{row.feature}</td>
                       <td className="text-center py-3">
                         {row.orbis ? (
@@ -185,9 +241,12 @@ export default function AsanaAlternativePage() {
       {/* CTA */}
       <section className="py-16 bg-base-100 border-t border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12 text-center">
-          <h2 className="text-3xl md:text-4xl font-bold">Ready to switch from Asana?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold">
+            Ready to switch from Asana?
+          </h2>
           <p className="mt-4 text-lg text-base-content/60">
-            Import your tasks via CSV and get your team up and running in minutes.
+            Import your tasks via CSV and get your team up and running in
+            minutes.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/signup" className="btn btn-primary btn-lg gap-2">

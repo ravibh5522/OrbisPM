@@ -1,7 +1,13 @@
 "use client";
 
-import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-editor";
-import { RecurrenceBadge, RecurrenceSelector } from "@/components/tasks/recurrence-selector";
+import {
+  RichTextEditor,
+  RichTextViewer,
+} from "@/components/editor/rich-text-editor";
+import {
+  RecurrenceBadge,
+  RecurrenceSelector,
+} from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { Button } from "@/components/ui/button";
 import { Avatar, ConfirmDialog } from "@/components/ui/shared";
@@ -10,40 +16,47 @@ import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { cn, formatDate, formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import {
+  cn,
+  formatDate,
+  formatRelative,
+  priorityColor,
+  statusColor,
+  statusLabel,
+} from "@/lib/utils";
 import type {
-    Attachment,
-    Checklist,
-    Comment,
-    OrgMember,
-    ProjectMember,
-    Task,
-    TaskDependency,
-    TaskPriority,
-    TaskStatus,
-    TaskWatcher
+  Attachment,
+  Checklist,
+  Comment,
+  OrgMember,
+  ProjectMember,
+  Task,
+  TaskDependency,
+  TaskPriority,
+  TaskStatus,
+  TaskWatcher,
 } from "@/types/domain";
 import {
-    CheckSquare,
-    Clock,
-    Copy,
-    Download,
-    Eye,
-    FileText,
-    Image as ImageIcon,
-    Link2,
-    ListChecks,
-    MessageSquare,
-    Paperclip,
-    Plus,
-    Send,
-    Settings2,
-    Square,
-    Tag,
-    Trash2,
-    Upload,
-    Users,
-    X,
+  CheckSquare,
+  Clock,
+  Copy,
+  Download,
+  Eye,
+  FileText,
+  Image as ImageIcon,
+  Link2,
+  ListChecks,
+  MessageSquare,
+  Paperclip,
+  Plus,
+  Send,
+  Settings2,
+  Square,
+  Tag,
+  Trash2,
+  Upload,
+  Users,
+  X,
 } from "lucide-react";
 
 const MAX_DEPTH = 3;
@@ -60,7 +73,11 @@ interface AccessControl {
   canAttach: boolean;
 }
 
-function getAccessControl(role: string | undefined, isAssignee: boolean, isReporter: boolean): AccessControl {
+function getAccessControl(
+  role: string | undefined,
+  isAssignee: boolean,
+  isReporter: boolean,
+): AccessControl {
   const r = role ?? "";
 
   // Viewers can only read and comment
@@ -110,13 +127,21 @@ function getAccessControl(role: string | undefined, isAssignee: boolean, isRepor
    Member helpers
    ═══════════════════════════════════════════════════════ */
 
-function memberLabel(id: string | null | undefined, members: OrgMember[]): string {
+function memberLabel(
+  id: string | null | undefined,
+  members: OrgMember[],
+): string {
   if (!id) return "Unassigned";
   const m = members.find((x) => x.user_id === id);
-  return m ? (m.display_name || m.email || m.user_id.slice(0, 8) + "…") : id.slice(0, 8) + "…";
+  return m
+    ? m.display_name || m.email || m.user_id.slice(0, 8) + "…"
+    : id.slice(0, 8) + "…";
 }
 
-function memberAvatarUrl(id: string | null | undefined, members: OrgMember[]): string | undefined {
+function memberAvatarUrl(
+  id: string | null | undefined,
+  members: OrgMember[],
+): string | undefined {
   if (!id) return undefined;
   const m = members.find((x) => x.user_id === id);
   return m?.avatar_url || undefined;
@@ -142,7 +167,12 @@ interface TaskPreviewPanelProps {
   onAddSubtask: () => void;
 }
 
-type TabType = "details" | "checklist" | "comments" | "attachments" | "relations";
+type TabType =
+  | "details"
+  | "checklist"
+  | "comments"
+  | "attachments"
+  | "relations";
 
 export function TaskPreviewPanel({
   task,
@@ -162,12 +192,12 @@ export function TaskPreviewPanel({
   const send = useProjectTaskStore((s) => s.send);
   const [activeTab, setActiveTab] = useState<TabType>("details");
   const [showDelete, setShowDelete] = useState(false);
-  
+
   // Role-based access
   const isAssignee = task.assignee_id === currentUserId;
   const isReporter = task.reporter_id === currentUserId;
   const access = getAccessControl(userProjectRole, isAssignee, isReporter);
-  
+
   // Inline editing states
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -180,7 +210,7 @@ export function TaskPreviewPanel({
   const [attachmentItems, setAttachmentItems] = useState<Attachment[]>([]);
   const [dependencyItems, setDependencyItems] = useState<TaskDependency[]>([]);
   const [watcherItems, setWatcherItems] = useState<TaskWatcher[]>([]);
-  
+
   // Fetch helpers
   const fetchChecklists = useCallback(async () => {
     if (!send) return;
@@ -203,17 +233,26 @@ export function TaskPreviewPanel({
   }, [send, task.id]);
 
   const fetchAttachments = useCallback(async () => {
-    try { const res = await api.attachments.list(orgId, projectId, task.id); setAttachmentItems(res?.data || []); } catch {}
+    try {
+      const res = await api.attachments.list(orgId, projectId, task.id);
+      setAttachmentItems(res?.data || []);
+    } catch {}
   }, [orgId, projectId, task.id]);
 
   const fetchDependencies = useCallback(async () => {
     if (!send) return;
-    try { const res = await send("dependency:list", { task_id: task.id }); setDependencyItems(res?.data || []); } catch {}
+    try {
+      const res = await send("dependency:list", { task_id: task.id });
+      setDependencyItems(res?.data || []);
+    } catch {}
   }, [send, task.id]);
 
   const fetchWatchers = useCallback(async () => {
     if (!send) return;
-    try { const res = await send("watcher:list", { task_id: task.id }); setWatcherItems(res?.data || []); } catch {}
+    try {
+      const res = await send("watcher:list", { task_id: task.id });
+      setWatcherItems(res?.data || []);
+    } catch {}
   }, [send, task.id]);
 
   // Reset on task change
@@ -239,25 +278,62 @@ export function TaskPreviewPanel({
     fetchAttachments();
     fetchDependencies();
     fetchWatchers();
-  }, [fetchChecklists, fetchComments, fetchAttachments, fetchDependencies, fetchWatchers]);
+  }, [
+    fetchChecklists,
+    fetchComments,
+    fetchAttachments,
+    fetchDependencies,
+    fetchWatchers,
+  ]);
 
   // Sync comments & checklists from Zustand store (real-time WS broadcasts)
   const storeComments = useProjectTaskStore((s) => s.comments.get(task.id));
   const storeChecklists = useProjectTaskStore((s) => s.checklists.get(task.id));
   useEffect(() => {
-    if (storeComments && storeComments.length > 0) setCommentItems(storeComments);
+    if (storeComments && storeComments.length > 0)
+      setCommentItems(storeComments);
   }, [storeComments]);
   useEffect(() => {
-    if (storeChecklists && storeChecklists.length > 0) setChecklistItems(storeChecklists);
+    if (storeChecklists && storeChecklists.length > 0)
+      setChecklistItems(storeChecklists);
   }, [storeChecklists]);
 
   // Tab badges
-  const tabs: { id: TabType; label: string; icon: React.ReactNode; badge?: number }[] = [
-    { id: "details", label: "Details", icon: <Settings2 className="w-4 h-4" /> },
-    { id: "checklist", label: "Tasks", icon: <ListChecks className="w-4 h-4" />, badge: checklistItems.length },
-    { id: "comments", label: "Chat", icon: <MessageSquare className="w-4 h-4" />, badge: commentItems.length },
-    { id: "attachments", label: "Files", icon: <Paperclip className="w-4 h-4" />, badge: attachmentItems.length },
-    { id: "relations", label: "Links", icon: <Link2 className="w-4 h-4" />, badge: dependencyItems.length + watcherItems.length },
+  const tabs: {
+    id: TabType;
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+  }[] = [
+    {
+      id: "details",
+      label: "Details",
+      icon: <Settings2 className="w-4 h-4" />,
+    },
+    {
+      id: "checklist",
+      label: "Tasks",
+      icon: <ListChecks className="w-4 h-4" />,
+      badge: checklistItems.length,
+    },
+    {
+      id: "comments",
+      label: "Chat",
+      icon: <MessageSquare className="w-4 h-4" />,
+      badge: commentItems.length,
+    },
+    {
+      id: "attachments",
+      label: "Files",
+      icon: <Paperclip className="w-4 h-4" />,
+      badge: attachmentItems.length,
+    },
+    {
+      id: "relations",
+      label: "Links",
+      icon: <Link2 className="w-4 h-4" />,
+      badge: dependencyItems.length + watcherItems.length,
+    },
   ];
 
   return (
@@ -293,7 +369,10 @@ export function TaskPreviewPanel({
               >
                 Save
               </button>
-              <button className="btn btn-ghost btn-xs" onClick={() => setEditingTitle(false)}>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setEditingTitle(false)}
+              >
                 Cancel
               </button>
             </div>
@@ -302,7 +381,8 @@ export function TaskPreviewPanel({
           <h2
             className={cn(
               "text-base font-semibold line-clamp-2",
-              access.canEdit && "cursor-pointer hover:text-primary transition-colors"
+              access.canEdit &&
+                "cursor-pointer hover:text-primary transition-colors",
             )}
             onClick={() => {
               if (access.canEdit) {
@@ -314,12 +394,23 @@ export function TaskPreviewPanel({
             {task.title}
           </h2>
         )}
-        
+
         {/* Quick status badges */}
         <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <span className={cn("badge badge-sm", statusColor(task.status))}>{statusLabel(task.status)}</span>
-          <span className={cn("badge badge-sm badge-outline", priorityColor(task.priority))}>{task.priority}</span>
-          {task.recurrence_rule && <RecurrenceBadge rule={task.recurrence_rule} />}
+          <span className={cn("badge badge-sm", statusColor(task.status))}>
+            {statusLabel(task.status)}
+          </span>
+          <span
+            className={cn(
+              "badge badge-sm badge-outline",
+              priorityColor(task.priority),
+            )}
+          >
+            {task.priority}
+          </span>
+          {task.recurrence_rule && (
+            <RecurrenceBadge rule={task.recurrence_rule} />
+          )}
           {!access.canEdit && (
             <span className="badge badge-sm badge-warning gap-1">
               <Eye className="w-3 h-3" /> View Only
@@ -327,7 +418,7 @@ export function TaskPreviewPanel({
           )}
         </div>
       </div>
-      
+
       {/* Tabs */}
       <div className="shrink-0 border-b border-base-200">
         <div className="flex overflow-x-auto scrollbar-hide">
@@ -338,20 +429,22 @@ export function TaskPreviewPanel({
                 "flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap",
                 activeTab === tab.id
                   ? "border-primary text-primary"
-                  : "border-transparent text-base-content/60 hover:text-base-content hover:bg-base-200/50"
+                  : "border-transparent text-base-content/60 hover:text-base-content hover:bg-base-200/50",
               )}
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.icon}
               <span className="hidden sm:inline">{tab.label}</span>
               {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="badge badge-xs badge-primary">{tab.badge}</span>
+                <span className="badge badge-xs badge-primary">
+                  {tab.badge}
+                </span>
               )}
             </button>
           ))}
         </div>
       </div>
-      
+
       {/* Tab Content - scrollable */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {activeTab === "details" && (
@@ -369,7 +462,7 @@ export function TaskPreviewPanel({
             setDescDraft={setDescDraft}
           />
         )}
-        
+
         {activeTab === "checklist" && (
           <ChecklistTab
             orgId={orgId}
@@ -380,7 +473,7 @@ export function TaskPreviewPanel({
             onRefresh={fetchChecklists}
           />
         )}
-        
+
         {activeTab === "comments" && (
           <CommentsTab
             orgId={orgId}
@@ -393,7 +486,7 @@ export function TaskPreviewPanel({
             onRefresh={fetchComments}
           />
         )}
-        
+
         {activeTab === "attachments" && (
           <AttachmentsTab
             orgId={orgId}
@@ -404,7 +497,7 @@ export function TaskPreviewPanel({
             onRefresh={fetchAttachments}
           />
         )}
-        
+
         {activeTab === "relations" && (
           <RelationsTab
             orgId={orgId}
@@ -420,30 +513,37 @@ export function TaskPreviewPanel({
           />
         )}
       </div>
-      
+
       {/* Footer Actions */}
       <div className="shrink-0 p-3 border-t border-base-200 space-y-2 bg-base-100">
         {task.depth < MAX_DEPTH && access.canEdit && (
-          <button className="btn btn-xs btn-outline btn-primary w-full gap-1" onClick={onAddSubtask}>
+          <button
+            className="btn btn-xs btn-outline btn-primary w-full gap-1"
+            onClick={onAddSubtask}
+          >
             <Plus className="w-3 h-3" /> Subtask
           </button>
         )}
         <div className="flex gap-1">
           {access.canEdit && (
-            <button className="btn btn-xs btn-ghost flex-1 gap-1" onClick={onDuplicate}>
+            <button
+              className="btn btn-xs btn-ghost flex-1 gap-1"
+              onClick={onDuplicate}
+            >
               <Copy className="w-3 h-3" /> Clone
             </button>
           )}
           {access.canDelete && (
-            <button className="btn btn-xs btn-ghost text-error flex-1 gap-1" onClick={() => setShowDelete(true)}>
+            <button
+              className="btn btn-xs btn-ghost text-error flex-1 gap-1"
+              onClick={() => setShowDelete(true)}
+            >
               <Trash2 className="w-3 h-3" /> Delete
             </button>
           )}
         </div>
-        
-
       </div>
-      
+
       <ConfirmDialog
         open={showDelete}
         title="Delete Task"
@@ -503,13 +603,15 @@ function DetailsTab({
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
-  
+
   return (
     <div className="p-3 space-y-4">
       {/* Status & Priority */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Status</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Status
+          </label>
           <select
             className="select select-bordered select-xs w-full"
             value={task.status}
@@ -523,11 +625,15 @@ function DetailsTab({
           </select>
         </div>
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Priority</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Priority
+          </label>
           <select
             className="select select-bordered select-xs w-full"
             value={task.priority}
-            onChange={(e) => onUpdate({ priority: e.target.value as TaskPriority })}
+            onChange={(e) =>
+              onUpdate({ priority: e.target.value as TaskPriority })
+            }
             disabled={!access.canEdit}
           >
             <option value="critical">Critical</option>
@@ -537,11 +643,13 @@ function DetailsTab({
           </select>
         </div>
       </div>
-      
+
       {/* Assignees & Reporter */}
       <div className="space-y-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Assignees</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Assignees
+          </label>
           <div className="flex items-center gap-1 flex-wrap">
             {(task.assignee_ids || []).map((uid) => {
               const m = members.find((x) => x.user_id === uid);
@@ -560,7 +668,11 @@ function DetailsTab({
                   >
                     {m.avatar_url ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={m.avatar_url} alt="" className="rounded-full w-full h-full object-cover" />
+                      <img
+                        src={m.avatar_url}
+                        alt=""
+                        className="rounded-full w-full h-full object-cover"
+                      />
                     ) : (
                       initials
                     )}
@@ -569,8 +681,13 @@ function DetailsTab({
                     <button
                       className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-error text-error-content text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => {
-                        const next = (task.assignee_ids || []).filter((id) => id !== uid);
-                        onUpdate({ assignee_ids: next, assignee_id: next[0] || null } as Partial<Task>);
+                        const next = (task.assignee_ids || []).filter(
+                          (id) => id !== uid,
+                        );
+                        onUpdate({
+                          assignee_ids: next,
+                          assignee_id: next[0] || null,
+                        } as Partial<Task>);
                       }}
                     >
                       ×
@@ -588,25 +705,43 @@ function DetailsTab({
                   <Plus className="w-3.5 h-3.5" />
                 </button>
                 {assigneeDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
+                  <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
                     {selectableMembers
-                      .filter((m) => !(task.assignee_ids || []).includes(m.user_id))
+                      .filter(
+                        (m) => !(task.assignee_ids || []).includes(m.user_id),
+                      )
                       .map((m) => (
                         <button
                           key={m.user_id}
                           className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-xs hover:bg-base-200"
                           onClick={() => {
-                            const next = [...(task.assignee_ids || []), m.user_id];
-                            onUpdate({ assignee_ids: next, assignee_id: next[0] } as Partial<Task>);
+                            const next = [
+                              ...(task.assignee_ids || []),
+                              m.user_id,
+                            ];
+                            onUpdate({
+                              assignee_ids: next,
+                              assignee_id: next[0],
+                            } as Partial<Task>);
                             setAssigneeDropdownOpen(false);
                           }}
                         >
-                          <Avatar name={m.display_name || m.email || ""} size="xs" src={m.avatar_url} />
-                          <span className="truncate">{m.display_name || m.email || m.user_id.slice(0, 8)}</span>
+                          <Avatar
+                            name={m.display_name || m.email || ""}
+                            size="xs"
+                            src={m.avatar_url}
+                          />
+                          <span className="truncate">
+                            {m.display_name || m.email || m.user_id.slice(0, 8)}
+                          </span>
                         </button>
                       ))}
-                    {selectableMembers.filter((m) => !(task.assignee_ids || []).includes(m.user_id)).length === 0 && (
-                      <div className="px-3 py-1.5 text-xs text-base-content/40">All members assigned</div>
+                    {selectableMembers.filter(
+                      (m) => !(task.assignee_ids || []).includes(m.user_id),
+                    ).length === 0 && (
+                      <div className="px-3 py-1.5 text-xs text-base-content/40">
+                        All members assigned
+                      </div>
                     )}
                   </div>
                 )}
@@ -614,56 +749,54 @@ function DetailsTab({
             )}
           </div>
         </div>
-        <div>
-          <label className="text-xs text-base-content/50 block mb-1">Reporter</label>
-          <select
-            className="select select-bordered select-xs w-full"
-            value={task.reporter_id || ""}
-            onChange={(e) => onUpdate({ reporter_id: e.target.value })}
-            disabled={!access.canEdit}
-          >
-            <option value="">None</option>
-            {selectableMembers.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.display_name || m.email || m.user_id.slice(0, 12)}
-              </option>
-            ))}
-          </select>
-        </div>
       </div>
-      
+
       {/* Dates */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Start Date</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Start Date
+          </label>
           <input
             type="date"
             className="input input-bordered input-xs w-full"
             value={task.start_date ? task.start_date.split("T")[0] : ""}
             onChange={(e) =>
-              onUpdate({ start_date: e.target.value ? new Date(e.target.value).toISOString() : null })
+              onUpdate({
+                start_date: e.target.value
+                  ? new Date(e.target.value).toISOString()
+                  : null,
+              })
             }
             disabled={!access.canEdit}
           />
         </div>
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Due Date</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Due Date
+          </label>
           <input
             type="date"
             className="input input-bordered input-xs w-full"
             value={task.due_date ? task.due_date.split("T")[0] : ""}
             onChange={(e) =>
-              onUpdate({ due_date: e.target.value ? new Date(e.target.value).toISOString() : null })
+              onUpdate({
+                due_date: e.target.value
+                  ? new Date(e.target.value).toISOString()
+                  : null,
+              })
             }
             disabled={!access.canEdit}
           />
         </div>
       </div>
-      
+
       {/* Hours */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Est. Hours</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Est. Hours
+          </label>
           <input
             type="number"
             className="input input-bordered input-xs w-full"
@@ -672,13 +805,19 @@ function DetailsTab({
             placeholder="0"
             value={task.estimated_hours ?? ""}
             onChange={(e) =>
-              onUpdate({ estimated_hours: e.target.value ? parseFloat(e.target.value) : null })
+              onUpdate({
+                estimated_hours: e.target.value
+                  ? parseFloat(e.target.value)
+                  : null,
+              })
             }
             disabled={!access.canEdit}
           />
         </div>
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">Actual Hours</label>
+          <label className="text-xs text-base-content/50 block mb-1">
+            Actual Hours
+          </label>
           <input
             type="number"
             className="input input-bordered input-xs w-full"
@@ -687,13 +826,17 @@ function DetailsTab({
             placeholder="0"
             value={task.actual_hours ?? ""}
             onChange={(e) =>
-              onUpdate({ actual_hours: e.target.value ? parseFloat(e.target.value) : null })
+              onUpdate({
+                actual_hours: e.target.value
+                  ? parseFloat(e.target.value)
+                  : null,
+              })
             }
             disabled={!access.canEdit}
           />
         </div>
       </div>
-      
+
       {/* Time Tracker */}
       {access.canEdit && (
         <div>
@@ -703,7 +846,7 @@ function DetailsTab({
           <TimeTracker orgId={orgId} projectId={projectId} task={task} />
         </div>
       )}
-      
+
       {/* Recurrence */}
       <div>
         <label className="text-xs text-base-content/50 flex items-center gap-1 mb-1">
@@ -725,7 +868,7 @@ function DetailsTab({
           </div>
         )}
       </div>
-      
+
       {/* Labels */}
       <div>
         <label className="text-xs text-base-content/50 flex items-center gap-1 mb-1">
@@ -733,12 +876,20 @@ function DetailsTab({
         </label>
         <div className="flex flex-wrap gap-1">
           {(task.labels || []).slice(0, 7).map((l) => (
-            <span key={l} className="badge badge-xs badge-outline gap-1 group" title={l.length > 10 ? l : undefined}>
+            <span
+              key={l}
+              className="badge badge-xs badge-outline gap-1 group"
+              title={l.length > 10 ? l : undefined}
+            >
               {l.length > 10 ? l.slice(0, 10) + "…" : l}
               {access.canEdit && (
                 <button
                   className="opacity-0 group-hover:opacity-100"
-                  onClick={() => onUpdate({ labels: (task.labels || []).filter((x) => x !== l) })}
+                  onClick={() =>
+                    onUpdate({
+                      labels: (task.labels || []).filter((x) => x !== l),
+                    })
+                  }
                 >
                   <X className="w-2 h-2" />
                 </button>
@@ -746,10 +897,12 @@ function DetailsTab({
             </span>
           ))}
           {(task.labels || []).length > 7 && (
-            <span className="badge badge-xs badge-ghost">+{(task.labels || []).length - 7}</span>
+            <span className="badge badge-xs badge-ghost">
+              +{(task.labels || []).length - 7}
+            </span>
           )}
-          {access.canEdit && (
-            labelsOpen ? (
+          {access.canEdit &&
+            (labelsOpen ? (
               <div className="flex gap-1 items-center">
                 <input
                   type="text"
@@ -760,29 +913,38 @@ function DetailsTab({
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newLabel.trim()) {
-                      onUpdate({ labels: [...(task.labels || []), newLabel.trim()] });
+                      onUpdate({
+                        labels: [...(task.labels || []), newLabel.trim()],
+                      });
                       setNewLabel("");
                       setLabelsOpen(false);
                     }
                     if (e.key === "Escape") setLabelsOpen(false);
                   }}
                 />
-                <button className="btn btn-ghost btn-xs" onClick={() => setLabelsOpen(false)}>
+                <button
+                  className="btn btn-ghost btn-xs"
+                  onClick={() => setLabelsOpen(false)}
+                >
                   <X className="w-3 h-3" />
                 </button>
               </div>
             ) : (
-              <button className="badge badge-xs badge-ghost" onClick={() => setLabelsOpen(true)}>
+              <button
+                className="badge badge-xs badge-ghost"
+                onClick={() => setLabelsOpen(true)}
+              >
                 <Plus className="w-2 h-2" />
               </button>
-            )
-          )}
+            ))}
         </div>
       </div>
-      
+
       {/* Description */}
       <div>
-        <label className="text-xs text-base-content/50 block mb-1">Description</label>
+        <label className="text-xs text-base-content/50 block mb-1">
+          Description
+        </label>
         {editingDesc && access.canEdit ? (
           <div className="space-y-2">
             <RichTextEditor
@@ -800,7 +962,10 @@ function DetailsTab({
               >
                 Save
               </button>
-              <button className="btn btn-ghost btn-xs" onClick={() => setEditingDesc(false)}>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => setEditingDesc(false)}
+              >
                 Cancel
               </button>
             </div>
@@ -809,7 +974,7 @@ function DetailsTab({
           <div
             className={cn(
               "text-sm min-h-[60px] p-2 rounded border border-base-200 bg-base-50",
-              access.canEdit && "cursor-pointer hover:border-base-300"
+              access.canEdit && "cursor-pointer hover:border-base-300",
             )}
             onClick={() => {
               if (access.canEdit) {
@@ -822,13 +987,15 @@ function DetailsTab({
               <RichTextViewer content={task.description} />
             ) : (
               <span className="text-base-content/30 italic">
-                {access.canEdit ? "Click to add description…" : "No description"}
+                {access.canEdit
+                  ? "Click to add description…"
+                  : "No description"}
               </span>
             )}
           </div>
         )}
       </div>
-      
+
       {/* Meta */}
       <div className="text-[10px] text-base-content/40 pt-2 border-t border-base-200 space-y-0.5">
         <p>Created {formatRelative(task.created_at)}</p>
@@ -881,14 +1048,23 @@ function ChecklistTab({
       } else {
         onRefresh();
       }
-    } catch {} finally { setCreating(false); }
+    } catch {
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleToggle = async (id: string, is_checked: boolean) => {
     if (!send) return;
     try {
-      await send("checklist:update", { task_id: taskId, checklist_id: id, is_checked });
-      useProjectTaskStore.getState().updateChecklist(taskId, id, { is_checked });
+      await send("checklist:update", {
+        task_id: taskId,
+        checklist_id: id,
+        is_checked,
+      });
+      useProjectTaskStore
+        .getState()
+        .updateChecklist(taskId, id, { is_checked });
     } catch {}
   };
 
@@ -910,12 +1086,18 @@ function ChecklistTab({
         <div className="p-3 pb-0 shrink-0">
           <div className="flex items-center justify-between text-xs text-base-content/60 mb-1">
             <span>Progress</span>
-            <span>{checked}/{total}</span>
+            <span>
+              {checked}/{total}
+            </span>
           </div>
-          <progress className="progress progress-success w-full h-1.5" value={checked} max={total} />
+          <progress
+            className="progress progress-success w-full h-1.5"
+            value={checked}
+            max={total}
+          />
         </div>
       )}
-      
+
       {/* List */}
       <div ref={parentRef} className="flex-1 overflow-auto p-3">
         {items.length === 0 ? (
@@ -925,7 +1107,11 @@ function ChecklistTab({
           </div>
         ) : (
           <div
-            style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
           >
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const item = items[virtualItem.index];
@@ -944,7 +1130,9 @@ function ChecklistTab({
                 >
                   <button
                     className="btn btn-ghost btn-xs btn-square shrink-0"
-                    onClick={() => access.canEdit && handleToggle(item.id, !item.is_checked)}
+                    onClick={() =>
+                      access.canEdit && handleToggle(item.id, !item.is_checked)
+                    }
                     disabled={!access.canEdit}
                   >
                     {item.is_checked ? (
@@ -953,7 +1141,12 @@ function ChecklistTab({
                       <Square className="w-4 h-4" />
                     )}
                   </button>
-                  <span className={cn("flex-1 text-sm truncate", item.is_checked && "line-through text-base-content/40")}>
+                  <span
+                    className={cn(
+                      "flex-1 text-sm truncate",
+                      item.is_checked && "line-through text-base-content/40",
+                    )}
+                  >
                     {item.title}
                   </span>
                   {access.canEdit && (
@@ -970,7 +1163,7 @@ function ChecklistTab({
           </div>
         )}
       </div>
-      
+
       {/* Add new */}
       {access.canEdit && (
         <form
@@ -1049,7 +1242,10 @@ function CommentsTab({
       } else {
         onRefresh();
       }
-    } catch {} finally { setCreating(false); }
+    } catch {
+    } finally {
+      setCreating(false);
+    }
   };
 
   const handleDeleteComment = async (id: string) => {
@@ -1072,11 +1268,16 @@ function CommentsTab({
           </div>
         ) : (
           <div
-            style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: "100%",
+              position: "relative",
+            }}
           >
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const comment = items[virtualItem.index];
-              const canDelete = comment.user_id === currentUserId || access.canDelete;
+              const canDelete =
+                comment.user_id === currentUserId || access.canDelete;
               return (
                 <div
                   key={comment.id}
@@ -1096,8 +1297,12 @@ function CommentsTab({
                   />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="font-medium text-xs">{memberLabel(comment.user_id, members)}</span>
-                      <span className="text-[10px] text-base-content/50">{formatRelative(comment.created_at)}</span>
+                      <span className="font-medium text-xs">
+                        {memberLabel(comment.user_id, members)}
+                      </span>
+                      <span className="text-[10px] text-base-content/50">
+                        {formatRelative(comment.created_at)}
+                      </span>
                       {canDelete && (
                         <button
                           className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
@@ -1117,7 +1322,7 @@ function CommentsTab({
           </div>
         )}
       </div>
-      
+
       {/* Add comment */}
       {access.canComment && (
         <form
@@ -1134,7 +1339,11 @@ function CommentsTab({
               value={body}
               onChange={(e) => setBody(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && body.trim()) {
+                if (
+                  e.key === "Enter" &&
+                  (e.metaKey || e.ctrlKey) &&
+                  body.trim()
+                ) {
                   e.preventDefault();
                   handleCreate(body.trim());
                 }
@@ -1149,7 +1358,9 @@ function CommentsTab({
               <Send className="w-3 h-3" />
             </Button>
           </div>
-          <p className="text-[10px] text-base-content/40 mt-1">⌘+Enter to send</p>
+          <p className="text-[10px] text-base-content/40 mt-1">
+            ⌘+Enter to send
+          </p>
         </form>
       )}
     </div>
@@ -1176,7 +1387,11 @@ function AttachmentsTab({
   onRefresh: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<{ url: string; mime: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    url: string;
+    mime: string;
+    name: string;
+  } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
@@ -1202,7 +1417,12 @@ function AttachmentsTab({
   const handleDownload = async (att: Attachment) => {
     try {
       setLoadingId(att.id);
-      const res = await api.attachments.download(orgId, projectId, taskId, att.id);
+      const res = await api.attachments.download(
+        orgId,
+        projectId,
+        taskId,
+        att.id,
+      );
       window.open(res.download_url, "_blank");
     } finally {
       setLoadingId(null);
@@ -1212,8 +1432,17 @@ function AttachmentsTab({
   const handlePreview = async (att: Attachment) => {
     try {
       setLoadingId(att.id);
-      const res = await api.attachments.download(orgId, projectId, taskId, att.id);
-      setPreview({ url: res.download_url, mime: att.mime_type, name: att.filename });
+      const res = await api.attachments.download(
+        orgId,
+        projectId,
+        taskId,
+        att.id,
+      );
+      setPreview({
+        url: res.download_url,
+        mime: att.mime_type,
+        name: att.filename,
+      });
     } finally {
       setLoadingId(null);
     }
@@ -1279,36 +1508,58 @@ function AttachmentsTab({
             </div>
           ))
         )}
-        
+
         {access.canAttach && (
           <label className="btn btn-outline btn-xs gap-1 w-full">
             <Upload className="w-3 h-3" />
             {uploading ? "Uploading..." : "Upload"}
-            <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleUpload}
+              disabled={uploading}
+            />
           </label>
         )}
       </div>
-      
+
       {/* Preview Modal */}
       {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreview(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setPreview(null)}
+        >
           <div
             className="relative bg-base-100 rounded-lg shadow-xl max-w-3xl max-h-[85vh] w-full overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-base-200">
               <h3 className="font-semibold text-sm truncate">{preview.name}</h3>
-              <button className="btn btn-ghost btn-xs btn-square" onClick={() => setPreview(null)}>
+              <button
+                className="btn btn-ghost btn-xs btn-square"
+                onClick={() => setPreview(null)}
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex items-center justify-center overflow-auto p-4" style={{ maxHeight: "calc(85vh - 48px)" }}>
+            <div
+              className="flex items-center justify-center overflow-auto p-4"
+              style={{ maxHeight: "calc(85vh - 48px)" }}
+            >
               {isImage(preview.mime) && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview.url} alt={preview.name} className="max-w-full max-h-[70vh] object-contain rounded" />
+                <img
+                  src={preview.url}
+                  alt={preview.name}
+                  className="max-w-full max-h-[70vh] object-contain rounded"
+                />
               )}
               {isPDF(preview.mime) && (
-                <iframe src={preview.url} className="w-full h-[70vh] rounded" title={preview.name} />
+                <iframe
+                  src={preview.url}
+                  className="w-full h-[70vh] rounded"
+                  title={preview.name}
+                />
               )}
             </div>
           </div>
@@ -1359,13 +1610,19 @@ function RelationsTab({
         await send("watcher:watch", { task_id: taskId });
       }
       onRefreshWatchers();
-    } catch {} finally { setWatchPending(false); }
+    } catch {
+    } finally {
+      setWatchPending(false);
+    }
   };
 
   const handleRemoveDep = async (depId: string) => {
     if (!send) return;
     try {
-      await send("dependency:remove", { task_id: taskId, depends_on_id: depId });
+      await send("dependency:remove", {
+        task_id: taskId,
+        depends_on_id: depId,
+      });
       onRefreshDeps();
     } catch {}
   };
@@ -1379,7 +1636,10 @@ function RelationsTab({
             <Users className="w-3 h-3" /> Watchers ({watchers.length})
           </label>
           <button
-            className={cn("btn btn-xs gap-1", isWatching ? "btn-primary" : "btn-outline")}
+            className={cn(
+              "btn btn-xs gap-1",
+              isWatching ? "btn-primary" : "btn-outline",
+            )}
             onClick={() => handleToggleWatch()}
             disabled={watchPending}
           >
@@ -1393,16 +1653,22 @@ function RelationsTab({
           <div className="flex flex-wrap gap-1">
             {watchers.map((w) => (
               <div key={w.user_id} className="badge badge-sm gap-1">
-                <Avatar name={memberLabel(w.user_id, members)} src={memberAvatarUrl(w.user_id, members)} size="xs" />
-                <span className="text-xs">{memberLabel(w.user_id, members)}</span>
+                <Avatar
+                  name={memberLabel(w.user_id, members)}
+                  src={memberAvatarUrl(w.user_id, members)}
+                  size="xs"
+                />
+                <span className="text-xs">
+                  {memberLabel(w.user_id, members)}
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
-      
+
       <div className="divider my-2" />
-      
+
       {/* Dependencies */}
       <div>
         <label className="text-xs text-base-content/50 flex items-center gap-1 mb-2">
@@ -1413,14 +1679,21 @@ function RelationsTab({
         ) : (
           <div className="space-y-1">
             {dependencies.map((dep) => (
-              <div key={`${dep.task_id}-${dep.depends_on_id}`} className="flex items-center gap-2 p-1.5 rounded border border-base-200 text-xs group">
-                <span className={cn(
-                  "badge badge-xs",
-                  dep.type === "blocks" ? "badge-warning" : "badge-info"
-                )}>
+              <div
+                key={`${dep.task_id}-${dep.depends_on_id}`}
+                className="flex items-center gap-2 p-1.5 rounded border border-base-200 text-xs group"
+              >
+                <span
+                  className={cn(
+                    "badge badge-xs",
+                    dep.type === "blocks" ? "badge-warning" : "badge-info",
+                  )}
+                >
                   {dep.type}
                 </span>
-                <span className="flex-1 truncate">{dep.depends_on_id.slice(0, 8)}...</span>
+                <span className="flex-1 truncate">
+                  {dep.depends_on_id.slice(0, 8)}...
+                </span>
                 {access.canEdit && (
                   <button
                     className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"

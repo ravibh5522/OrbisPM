@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -222,14 +223,28 @@ func (s *BillingService) HandlePaymentFailed(ctx context.Context, inv *stripe.In
 
 // DashboardService handles dashboard/analytics queries.
 type DashboardService struct {
-	taskRepo    repository.TaskRepository
-	projectRepo repository.ProjectRepository
-	txm         *repository.TxManager
+	taskRepo       repository.TaskRepository
+	projectRepo    repository.ProjectRepository
+	projectMemRepo repository.ProjectMemberRepository
+	orgMemberRepo  repository.OrgMemberRepository
+	txm            *repository.TxManager
 }
 
 // NewDashboardService creates a new DashboardService.
-func NewDashboardService(taskRepo repository.TaskRepository, projectRepo repository.ProjectRepository, txm *repository.TxManager) *DashboardService {
-	return &DashboardService{taskRepo: taskRepo, projectRepo: projectRepo, txm: txm}
+func NewDashboardService(
+	taskRepo repository.TaskRepository,
+	projectRepo repository.ProjectRepository,
+	projectMemRepo repository.ProjectMemberRepository,
+	orgMemberRepo repository.OrgMemberRepository,
+	txm *repository.TxManager,
+) *DashboardService {
+	return &DashboardService{
+		taskRepo:       taskRepo,
+		projectRepo:    projectRepo,
+		projectMemRepo: projectMemRepo,
+		orgMemberRepo:  orgMemberRepo,
+		txm:            txm,
+	}
 }
 
 // DashboardStats holds aggregated dashboard statistics.
@@ -244,49 +259,113 @@ type DashboardStats struct {
 	RecentTasks     []*domain.Task `json:"recent_tasks,omitempty"`
 }
 
-// GetStats returns aggregated dashboard statistics for an organization.
-func (s *DashboardService) GetStats(ctx context.Context, orgID uuid.UUID) (*DashboardStats, error) {
+// GetStats returns aggregated dashboard statistics for an organization (filtered by user's role).
+// If user is org admin/owner, shows all projects. If org member, shows only accessible projects.
+func (s *DashboardService) GetStats(ctx context.Context, orgID, userID uuid.UUID) (*DashboardStats, error) {
 	pool := s.txm.Pool()
 	stats := &DashboardStats{
 		TasksByStatus:   make(map[string]int),
 		TasksByPriority: make(map[string]int),
 	}
 
-	// Total projects
-	err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM projects WHERE org_id = $1`, orgID).Scan(&stats.TotalProjects)
+	// Get user's org role to determine visibility
+	orgMember, err := s.orgMemberRepo.Get(ctx, orgID, userID)
 	if err != nil {
-		return nil, fmt.Errorf("count projects: %w", err)
+		return nil, fmt.Errorf("get org member: %w", err)
 	}
 
-	// Total tasks
-	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM tasks WHERE org_id = $1`, orgID).Scan(&stats.TotalTasks)
-	if err != nil {
-		return nil, fmt.Errorf("count tasks: %w", err)
+	// For org admin/owner, show all projects. For members/viewers, get only accessible projects
+	var projectIDs []uuid.UUID
+	isAdmin := orgMember.Role == "owner" || orgMember.Role == "admin"
+
+	if isAdmin {
+		// Admin sees all projects in org
+		projects, err := s.projectRepo.ListByOrg(ctx, orgID, nil)
+		if err != nil {
+			return nil, fmt.Errorf("list all projects: %w", err)
+		}
+		for _, p := range projects {
+			projectIDs = append(projectIDs, p.ID)
+		}
+	} else {
+		// Non-admin only sees projects they're a member of
+		memberProjects, err := pool.Query(ctx,
+			`SELECT DISTINCT p.id FROM projects p
+			 WHERE p.org_id = $1 AND (
+				p.id IN (SELECT project_id FROM project_members WHERE user_id = $2)
+				OR EXISTS (SELECT 1 FROM project_teams pt
+						   WHERE pt.project_id = p.id
+						   AND pt.team_id IN (SELECT team_id FROM team_members WHERE user_id = $2))
+			 )`,
+			orgID, userID)
+		if err != nil {
+			return nil, fmt.Errorf("list user projects: %w", err)
+		}
+		defer memberProjects.Close()
+		for memberProjects.Next() {
+			var pid uuid.UUID
+			if err := memberProjects.Scan(&pid); err != nil {
+				return nil, fmt.Errorf("scan project id: %w", err)
+			}
+			projectIDs = append(projectIDs, pid)
+		}
+		if err := memberProjects.Err(); err != nil {
+			return nil, fmt.Errorf("list user projects error: %w", err)
+		}
 	}
 
-	// Total teams
+	// Count projects
+	stats.TotalProjects = len(projectIDs)
+
+	// Count teams (all teams in org - teams are org-level)
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM teams WHERE org_id = $1`, orgID).Scan(&stats.TotalTeams)
 	if err != nil {
 		return nil, fmt.Errorf("count teams: %w", err)
 	}
 
-	// Total members
+	// Count members
 	err = pool.QueryRow(ctx, `SELECT COUNT(*) FROM org_members WHERE org_id = $1`, orgID).Scan(&stats.TotalMembers)
 	if err != nil {
 		return nil, fmt.Errorf("count members: %w", err)
 	}
 
-	// Overdue tasks (not done, due_date in the past)
-	err = pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND status != 'done' AND due_date IS NOT NULL AND due_date < $2`,
-		orgID, time.Now(),
-	).Scan(&stats.OverdueTasks)
+	// Build project filter clause for tasks
+	var tasksWhere string
+	args := []any{orgID}
+	if len(projectIDs) > 0 {
+		placeholders := make([]string, len(projectIDs))
+		for i, pid := range projectIDs {
+			placeholders[i] = fmt.Sprintf("$%d", i+2)
+			args = append(args, pid)
+		}
+		tasksWhere = fmt.Sprintf("AND t.project_id IN (%s)", strings.Join(placeholders, ","))
+	} else {
+		// User has no accessible projects - return empty stats
+		stats.TotalTasks = 0
+		stats.OverdueTasks = 0
+		stats.RecentTasks = []*domain.Task{}
+		return stats, nil
+	}
+
+	// Total tasks (in accessible projects)
+	query := fmt.Sprintf(`SELECT COUNT(*) FROM tasks t WHERE t.org_id = $1 %s`, tasksWhere)
+	err = pool.QueryRow(ctx, query, args...).Scan(&stats.TotalTasks)
+	if err != nil {
+		return nil, fmt.Errorf("count tasks: %w", err)
+	}
+
+	// Overdue tasks
+	query = fmt.Sprintf(`SELECT COUNT(*) FROM tasks t 
+		WHERE t.org_id = $1 AND t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < $%d %s`,
+		len(args)+1, tasksWhere)
+	err = pool.QueryRow(ctx, query, append(args, time.Now())...).Scan(&stats.OverdueTasks)
 	if err != nil {
 		return nil, fmt.Errorf("count overdue tasks: %w", err)
 	}
 
 	// Tasks by status
-	rows, err := pool.Query(ctx, `SELECT status, COUNT(*) FROM tasks WHERE org_id = $1 GROUP BY status`, orgID)
+	query = fmt.Sprintf(`SELECT t.status, COUNT(*) FROM tasks t WHERE t.org_id = $1 %s GROUP BY t.status`, tasksWhere)
+	rows, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("tasks by status: %w", err)
 	}
@@ -304,7 +383,8 @@ func (s *DashboardService) GetStats(ctx context.Context, orgID uuid.UUID) (*Dash
 	}
 
 	// Tasks by priority
-	rows2, err := pool.Query(ctx, `SELECT priority, COUNT(*) FROM tasks WHERE org_id = $1 GROUP BY priority`, orgID)
+	query = fmt.Sprintf(`SELECT t.priority, COUNT(*) FROM tasks t WHERE t.org_id = $1 %s GROUP BY t.priority`, tasksWhere)
+	rows2, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("tasks by priority: %w", err)
 	}
@@ -321,12 +401,12 @@ func (s *DashboardService) GetStats(ctx context.Context, orgID uuid.UUID) (*Dash
 		return nil, fmt.Errorf("tasks by priority rows: %w", err)
 	}
 
-	// Recent tasks (last 5)
-	rows3, err := pool.Query(ctx,
-		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
-		  assignee_id, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
-		  labels, metadata, review_status, created_at, updated_at
-		 FROM tasks WHERE org_id = $1 ORDER BY created_at DESC LIMIT 5`, orgID)
+	// Recent tasks (last 5, in accessible projects)
+	query = fmt.Sprintf(`SELECT t.id, t.org_id, t.project_id, t.parent_task_id, t.title, t.description, t.status, t.priority,
+		  t.assignee_id, t.reporter_id, t.depth, t.position, t.due_date, t.start_date, t.estimated_hours, t.actual_hours,
+		  t.labels, t.metadata, t.review_status, t.created_at, t.updated_at
+		 FROM tasks t WHERE t.org_id = $1 %s ORDER BY t.created_at DESC LIMIT 5`, tasksWhere)
+	rows3, err := pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("recent tasks: %w", err)
 	}
@@ -392,7 +472,8 @@ type TeamDashboardStats struct {
 }
 
 // GetTeamDashboard returns aggregated analytics for a specific team.
-func (s *DashboardService) GetTeamDashboard(ctx context.Context, teamID uuid.UUID) (*TeamDashboardStats, error) {
+// UserID is passed for potential future role-based filtering within a team.
+func (s *DashboardService) GetTeamDashboard(ctx context.Context, teamID, userID uuid.UUID) (*TeamDashboardStats, error) {
 	pool := s.txm.Pool()
 	stats := &TeamDashboardStats{
 		TasksByStatus:   make(map[string]int),
@@ -604,7 +685,8 @@ type ProjectDashboardStats struct {
 }
 
 // GetProjectDashboard returns aggregated analytics for a specific project.
-func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID uuid.UUID) (*ProjectDashboardStats, error) {
+// UserID is passed for potential future role-based filtering within a project.
+func (s *DashboardService) GetProjectDashboard(ctx context.Context, projectID, userID uuid.UUID) (*ProjectDashboardStats, error) {
 	pool := s.txm.Pool()
 	stats := &ProjectDashboardStats{
 		TasksByStatus:   make(map[string]int),

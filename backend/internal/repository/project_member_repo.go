@@ -116,3 +116,11 @@ func (r *projectMemberRepo) RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, p
 		projectID, sourceTeamID)
 	return err
 }
+
+func (r *projectMemberRepo) RemoveBySourceTeamAndUser(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID, userID uuid.UUID) error {
+	q := conn(r.pool, tx)
+	_, err := q.Exec(ctx,
+		`DELETE FROM project_members WHERE project_id = $1 AND source_team_id = $2 AND user_id = $3`,
+		projectID, sourceTeamID, userID)
+	return err
+}

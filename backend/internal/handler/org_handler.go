@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/service"
@@ -13,11 +15,12 @@ import (
 
 // OrgHandler handles organization HTTP endpoints.
 type OrgHandler struct {
-	orgSvc *service.OrgService
+	orgSvc  *service.OrgService
+	zitadel *auth.ZitadelClient
 }
 
-func NewOrgHandler(orgSvc *service.OrgService) *OrgHandler {
-	return &OrgHandler{orgSvc: orgSvc}
+func NewOrgHandler(orgSvc *service.OrgService, zitadel *auth.ZitadelClient) *OrgHandler {
+	return &OrgHandler{orgSvc: orgSvc, zitadel: zitadel}
 }
 
 // Routes registers org routes on a chi router.
@@ -37,6 +40,12 @@ func (h *OrgHandler) Routes() chi.Router {
 		r.Post("/members/invite", h.InviteMember)
 		r.Patch("/members/{userId}", h.UpdateMemberRole)
 		r.Delete("/members/{userId}", h.RemoveMember)
+		r.Post("/members/{userId}/reset-password", h.AdminResetPassword)
+		r.Post("/members/{userId}/update-email", h.AdminUpdateEmail)
+		r.Post("/members/{userId}/deactivate", h.DeactivateMember)
+		r.Post("/members/{userId}/reactivate", h.ReactivateMember)
+		r.Post("/members/{userId}/force-mfa", h.ForceMFA)
+		r.Delete("/members/{userId}/account", h.DeleteMemberAccount)
 	})
 
 	return r
@@ -343,6 +352,190 @@ func (h *OrgHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.orgSvc.RemoveMember(r.Context(), orgID, userID); err != nil {
 		Error(w, r, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// resolveZitadelUserID looks up the member email in our DB, then finds the Zitadel user ID.
+func (h *OrgHandler) resolveZitadelUserID(ctx context.Context, orgID, userID uuid.UUID) (string, error) {
+	member, err := h.orgSvc.GetMember(ctx, orgID, userID)
+	if err != nil {
+		return "", err
+	}
+	if member.Email == "" {
+		return "", domain.ErrBadRequest.WithDetail("member has no email")
+	}
+	zitadelID, err := h.zitadel.FindUserByEmail(ctx, member.Email)
+	if err != nil {
+		return "", domain.ErrNotFound.WithDetail("user not found in auth provider")
+	}
+	return zitadelID, nil
+}
+
+type resetPasswordRequest struct {
+	NewPassword string `json:"new_password" validate:"required,min=8,max=128"`
+}
+
+// AdminResetPassword resets a member's password (admin action).
+func (h *OrgHandler) AdminResetPassword(w http.ResponseWriter, r *http.Request) {
+	orgID, err := uuidParam(r, "orgId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	var req resetPasswordRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	zitadelID, err := h.resolveZitadelUserID(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if err := h.zitadel.AdminResetPassword(r.Context(), zitadelID, req.NewPassword); err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to reset password"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type updateEmailRequest struct {
+	NewEmail string `json:"new_email" validate:"required,email,max=255"`
+}
+
+// AdminUpdateEmail updates a member's email address.
+func (h *OrgHandler) AdminUpdateEmail(w http.ResponseWriter, r *http.Request) {
+	orgID, err := uuidParam(r, "orgId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	var req updateEmailRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	zitadelID, err := h.resolveZitadelUserID(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if err := h.zitadel.UpdateUserEmail(r.Context(), zitadelID, req.NewEmail); err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to update email"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeactivateMember deactivates a member's account in the auth provider.
+func (h *OrgHandler) DeactivateMember(w http.ResponseWriter, r *http.Request) {
+	orgID, err := uuidParam(r, "orgId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	zitadelID, err := h.resolveZitadelUserID(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if err := h.zitadel.DeactivateUser(r.Context(), zitadelID); err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to deactivate account"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ReactivateMember reactivates a previously deactivated member account.
+func (h *OrgHandler) ReactivateMember(w http.ResponseWriter, r *http.Request) {
+	orgID, err := uuidParam(r, "orgId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	zitadelID, err := h.resolveZitadelUserID(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if err := h.zitadel.ReactivateUser(r.Context(), zitadelID); err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to reactivate account"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ForceMFA enables email OTP MFA for a member.
+func (h *OrgHandler) ForceMFA(w http.ResponseWriter, r *http.Request) {
+	orgID, err := uuidParam(r, "orgId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	zitadelID, err := h.resolveZitadelUserID(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if err := h.zitadel.AddOTPEmail(r.Context(), zitadelID); err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to enable MFA"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DeleteMemberAccount removes a member from the org and deletes their Zitadel account.
+func (h *OrgHandler) DeleteMemberAccount(w http.ResponseWriter, r *http.Request) {
+	orgID, err := uuidParam(r, "orgId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
+		return
+	}
+	userID, err := uuidParam(r, "userId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid user id"})
+		return
+	}
+	zitadelID, err := h.resolveZitadelUserID(r.Context(), orgID, userID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	// Remove from org first
+	if err := h.orgSvc.RemoveMember(r.Context(), orgID, userID); err != nil {
+		Error(w, r, err)
+		return
+	}
+	// Delete Zitadel account
+	if err := h.zitadel.DeleteUser(r.Context(), zitadelID); err != nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "removed from org but failed to delete auth account"})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

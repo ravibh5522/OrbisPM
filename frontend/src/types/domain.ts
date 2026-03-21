@@ -60,10 +60,10 @@ export type ProjectStatus = "active" | "archived" | "completed";
 
 // Custom task status configuration (stored in project.settings.task_statuses)
 export interface TaskStatusConfig {
-  id: string;        // e.g. "todo", "in_progress", "review", "done"
-  label: string;     // Display name
-  color: string;     // DaisyUI color: primary, secondary, accent, info, success, warning, error
-  done?: boolean;    // Marks task as completed (for burndown/progress calculations)
+  id: string; // e.g. "todo", "in_progress", "review", "done"
+  label: string; // Display name
+  color: string; // DaisyUI color: primary, secondary, accent, info, success, warning, error
+  done?: boolean; // Marks task as completed (for burndown/progress calculations)
 }
 
 // Default statuses used when project has none configured
@@ -90,6 +90,11 @@ export interface ProjectMember {
 // --- Permission System Types ---
 
 export type PermissionScope = "org" | "team" | "project";
+
+export interface ScopePermissionsResponse {
+  role: string;
+  permissions: { resource: string; action: string }[];
+}
 
 export interface Permission {
   id: string;
@@ -478,6 +483,7 @@ export interface DomainEvent {
 // Auth types from Zitadel
 export interface AuthUser {
   id: string;
+  internal_id?: string; // UUID derived from Zitadel ID for internal use (matches message user_id)
   email: string;
   email_confirmed_at?: string;
   phone?: string;
@@ -545,4 +551,167 @@ export interface OIDCAuthorizeResponse {
   auth_url: string;
   code_verifier: string;
   state: string;
+}
+
+// ─── Chat / Messaging Types ───────────────────────────
+
+export type ChatChannelType = "dm" | "group" | "team" | "project";
+export type ChatMemberRole = "owner" | "admin" | "member";
+export type ChatMessageFormat = "text" | "markdown";
+
+export interface ChatChannel {
+  id: string;
+  org_id: string;
+  name: string;
+  description: string;
+  type: ChatChannelType;
+  team_id?: string | null;
+  project_id?: string | null;
+  is_archived: boolean;
+  dm_pair?: string;
+  avatar_url?: string;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  member_count?: number;
+  unread_count?: number;
+  is_muted?: boolean;
+  is_pinned?: boolean;
+  last_message?: string;
+  last_activity?: string | null;
+}
+
+export interface ChatChannelMember {
+  channel_id: string;
+  user_id: string;
+  role: ChatMemberRole;
+  last_read_at?: string | null;
+  is_muted: boolean;
+  is_pinned: boolean;
+  joined_at: string;
+  display_name?: string;
+  email?: string;
+  avatar_url?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  org_id: string;
+  channel_id: string;
+  user_id: string;
+  body: string;
+  body_format: ChatMessageFormat;
+  parent_message_id?: string | null;
+  thread_count: number;
+  forwarded_from_id?: string | null;
+  mentions?: string[];
+  is_deleted: boolean;
+  deleted_at?: string | null;
+  is_edited: boolean;
+  edited_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  sender_name?: string;
+  sender_avatar?: string;
+  reactions?: ChatReaction[];
+  attachments?: ChatMessageAttachment[];
+}
+
+export interface ChatReaction {
+  emoji: string;
+  count: number;
+  users: string[];
+}
+
+export interface ChatMessageAttachment {
+  id: string;
+  org_id: string;
+  message_id: string;
+  file_name: string;
+  file_size: number;
+  content_type: string;
+  url?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ChatPinnedMessage {
+  channel_id: string;
+  message_id: string;
+  pinned_by: string;
+  pinned_at: string;
+  message?: ChatMessage;
+}
+
+export interface ChatBookmark {
+  user_id: string;
+  message_id: string;
+  note: string;
+  created_at: string;
+  message?: ChatMessage;
+}
+
+// ─── Sidebar Types ────────────────────────────────────
+
+export interface SidebarTeam {
+  id: string;
+  name: string;
+  manager_id?: string | null;
+  channels: ChatChannel[];
+}
+
+export interface SidebarCategory {
+  id: string;
+  name: string;
+  position: number;
+  is_collapsed: boolean;
+  auto_source?: string;
+  auto_source_id?: string;
+  channels: ChatChannel[];
+}
+
+export interface ChannelCategory {
+  id: string;
+  org_id: string;
+  name: string;
+  position: number;
+  auto_source?: string;
+  auto_source_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SidebarData {
+  categories: SidebarCategory[];
+  teams: SidebarTeam[];
+  project_channels: ChatChannel[];
+  dm_channels: ChatChannel[];
+  group_channels: ChatChannel[];
+}
+
+export interface OrgMemberInfo {
+  user_id: string;
+  display_name: string;
+  email: string;
+  avatar_url?: string;
+}
+
+// Announcements
+export type AnnouncementPriority = "low" | "normal" | "high" | "urgent";
+
+export interface Announcement {
+  id: string;
+  org_id: string;
+  project_id?: string | null;
+  author_id: string;
+  title: string;
+  body: string;
+  priority: AnnouncementPriority;
+  pinned: boolean;
+  published_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+  updated_at: string;
+  read_count: number;
+  unread: boolean;
 }
