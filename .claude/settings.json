@@ -4,7 +4,12 @@
       "Bash(mc --version)",
       "Bash(curl -s -o /tmp/mc https://dl.min.io/client/mc/release/linux-amd64/mc)",
       "Bash(chmod +x /tmp/mc)",
-      "Bash(/tmp/mc --version)"
+      "Bash(/tmp/mc --version)",
+      "Bash(sshpass -p 'Suraj5522' ssh -o StrictHostKeyChecking=no ravi@192.168.1.23 'find ~ -name \"\"docker-compose.yaml\"\" -o -name \"\"docker-compose.yml\"\" 2>/dev/null | head -5')",
+      "Bash(sshpass -p 'Suraj5522' ssh -o StrictHostKeyChecking=no ravi@192.168.1.23 'cd ~/Project && git fetch origin && git checkout ravi2 && git pull origin ravi2')",
+      "Bash(sshpass -p 'Suraj5522' ssh -o StrictHostKeyChecking=no ravi@192.168.1.23 'cd ~/Project && docker compose --env-file .env.production --profile prod up --build -d 2>&1')",
+      "Bash(sshpass -p 'Suraj5522' ssh -o StrictHostKeyChecking=no ravi@192.168.1.23 'cd ~/Project && docker compose --env-file .env.production ps --format \"\"table {{.Name}}\\\\t{{.Status}}\\\\t{{.Ports}}\"\"')",
+      "Bash(sshpass -p 'Suraj5522' ssh -o StrictHostKeyChecking=no ravi@192.168.1.23 'cd ~/Project && docker logs orbispm-api-1 --tail 30 2>&1')"
     ]
   }
 }
