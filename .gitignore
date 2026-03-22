@@ -1,8 +1,4 @@
-# ── Environment files (NEVER commit secrets) ─────────────────
-.env
-.env.production
-.env.staging
-.env.local
+
 
 # ── Frontend ──────────────────────────────────────────────────
 orbispm/frontend/node_modules/
