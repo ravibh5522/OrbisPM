@@ -9,7 +9,7 @@ services:
     container_name: orbispm-grafana
     # ONLY external-facing monitoring port
     ports:
-      - "3003:3000"
+      - "${GRAFANA_PORT:-3003}:3000"
     environment:
       # Admin credentials
       GF_SECURITY_ADMIN_USER: ${GF_ADMIN_USER:-admin}

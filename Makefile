@@ -35,6 +35,18 @@ scale:
 logs:
 	docker compose --env-file .env.local --profile local logs -f
 
+monitoring-up:
+	docker compose --env-file .env.local -f monitoring/docker-compose.yml up -d
+
+monitoring-down:
+	docker compose --env-file .env.local -f monitoring/docker-compose.yml down
+
+monitoring-up-prod:
+	docker compose --env-file .env.production -f monitoring/docker-compose.yml up -d
+
+monitoring-down-prod:
+	docker compose --env-file .env.production -f monitoring/docker-compose.yml down
+
 # ════════════════════════════════════════════════════════════
 # PRODUCTION STACK
 # Uses remote DB / Redis / MinIO / Zitadel — no local profile.

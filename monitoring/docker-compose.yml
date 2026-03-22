@@ -2,7 +2,9 @@
 # OrbisPM Monitoring Stack — Master Docker Compose
 # =======================================================
 # Includes all monitoring microservices
-# Run: docker compose up -d
+# Local:      docker compose --env-file ../.env.local -f monitoring/docker-compose.yml up -d
+# Production: docker compose --env-file ../.env.production -f monitoring/docker-compose.yml up -d
+# Env source: root-level .env.local / .env.production (no monitoring/.env)
 
 name: orbispm-monitoring
 

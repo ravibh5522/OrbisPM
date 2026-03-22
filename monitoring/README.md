@@ -5,16 +5,14 @@
 ## Quick Start
 
 ```bash
-# 1. Copy environment configuration
-cp .env.example .env
+# 1. Configure root env file (from repository root)
+#    Use .env.local for local or .env.production for production
 
-# 2. Customize .env values (especially passwords!)
+# 2. Start monitoring stack from repository root
+docker compose --env-file .env.local -f monitoring/docker-compose.yml up -d
 
-# 3. Start the monitoring stack
-docker compose up -d
-
-# 4. Verify services
-docker compose ps
+# 3. Verify services
+docker compose --env-file .env.local -f monitoring/docker-compose.yml ps
 ```
 
 ## Architecture
@@ -41,7 +39,6 @@ The monitoring stack consists of 7 microservices:
 ```
 monitoring/
 ├── docker-compose.yml          # Master compose file
-├── .env.example                 # Environment template
 ├── collector-service/           # OTel Collector + Prometheus + Exporters
 ├── tracing-service/             # Grafana Tempo
 ├── log-aggregator-service/      # Vector + Loki
@@ -92,7 +89,7 @@ monitoring/
 - **Super Admin**: JWT validation via Zitadel, requires `super_admin` role
 
 ### Secret Management
-- All secrets in `.env` file (gitignored)
+- All secrets in root `.env.local` / `.env.production` files (gitignored)
 - Production: use Docker Secrets or Vault
 
 ## Alerting
@@ -122,27 +119,28 @@ monitoring/
 
 ### Start Stack
 ```bash
-docker compose up -d
+docker compose --env-file .env.local -f monitoring/docker-compose.yml up -d
 ```
 
 ### Stop Stack
 ```bash
-docker compose down
+docker compose --env-file .env.local -f monitoring/docker-compose.yml down
 ```
 
 ### View Logs
 ```bash
-docker compose logs -f [service-name]
+docker compose --env-file .env.local -f monitoring/docker-compose.yml logs -f [service-name]
 ```
 
 ### Restart Service
 ```bash
-docker compose restart [service-name]
+docker compose --env-file .env.local -f monitoring/docker-compose.yml restart [service-name]
 ```
 
 ### Verify Prometheus Targets
 ```bash
-curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.job'
+docker compose --env-file .env.local -f monitoring/docker-compose.yml exec prometheus \
+        wget -q -O - http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.job'
 ```
 
 ### Test Alert
@@ -151,7 +149,8 @@ curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels.
 docker compose -f ../docker-compose.yaml stop api
 
 # Check Alertmanager
-curl -s http://localhost:9093/api/v2/alerts | jq '.[].labels.alertname'
+docker compose --env-file .env.local -f monitoring/docker-compose.yml exec alertmanager \
+        wget -q -O - http://localhost:9093/api/v2/alerts | jq '.[].labels.alertname'
 
 # Restart API
 docker compose -f ../docker-compose.yaml start api
@@ -167,7 +166,7 @@ docker compose -f ../docker-compose.yaml start api
 ### Grafana can't connect to datasources
 1. Verify services are on same Docker network
 2. Check datasource URLs use service names, not localhost
-3. Verify credentials in `.env`
+3. Verify credentials in root `.env.local` / `.env.production`
 
 ### Alerts not firing
 1. Check Prometheus alert rules: http://localhost:9090/alerts
@@ -176,7 +175,7 @@ docker compose -f ../docker-compose.yaml start api
 
 ### High memory usage
 1. Check container limits in docker-compose.yml
-2. Adjust retention settings in `.env`
+2. Adjust retention settings in root `.env.local` / `.env.production`
 3. Enable tail sampling for traces
 
 ## License

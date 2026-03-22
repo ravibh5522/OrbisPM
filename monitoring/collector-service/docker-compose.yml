@@ -7,9 +7,9 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.96.0
     container_name: orbispm-otel-collector
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    command: ["--config=/etc/otelcol-contrib/otel-config.yml"]
     volumes:
-      - ./otel-collector/otel-config.yml:/etc/otelcol-contrib/config.yaml:ro
+      - ./otel-collector:/etc/otelcol-contrib:ro
     environment:
       - ENV=${ENV:-development}
     # Internal only — no host port mapping
@@ -50,8 +50,7 @@ services:
       - --web.enable-remote-write-receiver
       - --enable-feature=exemplar-storage
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/rules:/etc/prometheus/rules:ro
+      - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
     # Internal only — no host port mapping
     expose:

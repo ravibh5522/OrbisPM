@@ -14,6 +14,8 @@
 #   3000  Frontend
 #   9000  MinIO local only — browser needs direct access for presigned URLs
 # ============================================================
+include:
+  - path: monitoring/docker-compose.yml
 
 services:
   # ══════════════════════════════════════════════════════════
