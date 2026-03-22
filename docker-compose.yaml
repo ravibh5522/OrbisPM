@@ -3,7 +3,7 @@
 # ============================================================
 #
 # Local dev  : docker compose --env-file .env.local --profile local up -d
-# Production : docker compose --env-file .env.production up -d
+# Production : docker compose --env-file .env.production --profile prod up -d
 #
 # Profiles:
 #   local — postgres, redis, minio, zitadel, mailpit (local Docker infra).
@@ -112,7 +112,7 @@ services:
       ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "${ZITADEL_MACHINE_PAT_EXPIRY:-2030-01-01T00:00:00Z}"
 
       ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: "true"
-      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "redis:6379"
+      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
       ZITADEL_CACHES_INSTANCE_CONNECTOR: redis
       ZITADEL_CACHES_MILESTONES_CONNECTOR: redis
       ZITADEL_CACHES_ORGANIZATION_CONNECTOR: redis
@@ -200,7 +200,7 @@ services:
       PORT: ${API_PORT:-8080}
       ENV: ${APP_ENV:-development}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       ZITADEL_DOMAIN: ${ZITADEL_DOMAIN:?ZITADEL_DOMAIN required}
       ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
       ZITADEL_INTERNAL_URL: http://zitadel:8080
@@ -326,7 +326,7 @@ services:
       PORT: ${MSG_PORT:-8082}
       ENV: ${APP_ENV:-development}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispmdev}?sslmode=disable
-      REDIS_URL: redis://redis:6379/0
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       NATS_URL: ${NATS_URL:-nats://nats:4222}
       ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
       ZITADEL_INTERNAL_URL: ${ZITADEL_INTERNAL_URL:?ZITADEL_INTERNAL_URL required}

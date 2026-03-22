@@ -17,15 +17,6 @@ include:
   - path: analytics-db/docker-compose.yml
   - path: super-admin-service/docker-compose.yml
 
-networks:
-  # Internal monitoring network
-  monitoring:
-    driver: bridge
-
-  # Connect to main OrbisPM network (external)
-  orbispm_default:
-    external: false
-
 volumes:
   # Prometheus data
   prometheus-data:
