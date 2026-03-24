@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,6 +96,7 @@ func (s *SyncService) syncTeamChannels(ctx context.Context) error {
 		}
 		teams = append(teams, t)
 	}
+	rows.Close() // close before opening more queries
 
 	for _, team := range teams {
 		if err := s.ensureTeamChannel(ctx, team); err != nil {
@@ -120,6 +122,7 @@ func (s *SyncService) syncProjectChannels(ctx context.Context) error {
 		}
 		projects = append(projects, p)
 	}
+	rows.Close() // close before opening more queries
 
 	for _, proj := range projects {
 		if err := s.ensureProjectChannel(ctx, proj); err != nil {
@@ -130,8 +133,31 @@ func (s *SyncService) syncProjectChannels(ctx context.Context) error {
 }
 
 func (s *SyncService) ensureTeamChannel(ctx context.Context, team teamRow) error {
+	// ── Fetch members OUTSIDE the transaction ──────────────────────────────
+	// pool.Query inside a WithOrgTx callback races with the open transaction
+	// and may hit a different connection with no RLS context, causing a policy
+	// violation that aborts the transaction (SQLSTATE 25P02).
+	memberRows, err := s.pool.Query(ctx,
+		`SELECT tm.user_id, COALESCE(u.display_name, '')
+		 FROM team_members tm
+		 LEFT JOIN users u ON u.id = tm.user_id
+		 WHERE tm.team_id = $1`, team.ID)
+	if err != nil {
+		return fmt.Errorf("fetch team members: %w", err)
+	}
+	var members []memberRow
+	for memberRows.Next() {
+		var m memberRow
+		if err := memberRows.Scan(&m.UserID, &m.DisplayName); err != nil {
+			memberRows.Close()
+			return fmt.Errorf("scan team member: %w", err)
+		}
+		members = append(members, m)
+	}
+	memberRows.Close()
+
+	// ── All writes inside a single transaction ────────────────────────────
 	return s.txMgr.WithOrgTx(ctx, team.OrgID, func(tx pgx.Tx) error {
-		// Check if auto-managed team channel already exists
 		var channelID uuid.UUID
 		err := tx.QueryRow(ctx,
 			`SELECT id FROM channels WHERE auto_source = 'team' AND auto_source_id = $1 AND name = 'general' LIMIT 1`,
@@ -139,6 +165,9 @@ func (s *SyncService) ensureTeamChannel(ctx context.Context, team teamRow) error
 		).Scan(&channelID)
 
 		if err != nil {
+			if err != pgx.ErrNoRows {
+				return fmt.Errorf("lookup team channel: %w", err)
+			}
 			// Channel doesn't exist — create it
 			ch := &domain.Channel{
 				OrgID:       team.OrgID,
@@ -150,7 +179,6 @@ func (s *SyncService) ensureTeamChannel(ctx context.Context, team teamRow) error
 			if err := s.channelR.Create(ctx, tx, ch); err != nil {
 				return err
 			}
-			// Set auto-managed fields
 			if _, err := tx.Exec(ctx,
 				`UPDATE channels SET is_auto_managed = true, auto_source = 'team', auto_source_id = $1 WHERE id = $2`,
 				team.ID, ch.ID,
@@ -160,26 +188,6 @@ func (s *SyncService) ensureTeamChannel(ctx context.Context, team teamRow) error
 			channelID = ch.ID
 		}
 
-		// Sync members: get all team members
-		memberRows, err := s.pool.Query(ctx,
-			`SELECT tm.user_id, COALESCE(u.display_name, '') FROM team_members tm
-			 LEFT JOIN users u ON u.id = tm.user_id
-			 WHERE tm.team_id = $1`, team.ID)
-		if err != nil {
-			return err
-		}
-		defer memberRows.Close()
-
-		var members []memberRow
-		for memberRows.Next() {
-			var m memberRow
-			if err := memberRows.Scan(&m.UserID, &m.DisplayName); err != nil {
-				return err
-			}
-			members = append(members, m)
-		}
-
-		// Add missing members
 		for _, m := range members {
 			isMember, err := s.memberR.IsMember(ctx, tx, channelID, m.UserID)
 			if err != nil {
@@ -201,8 +209,28 @@ func (s *SyncService) ensureTeamChannel(ctx context.Context, team teamRow) error
 }
 
 func (s *SyncService) ensureProjectChannel(ctx context.Context, proj projectRow) error {
+	// ── Fetch members OUTSIDE the transaction (same reason as ensureTeamChannel) ──
+	memberRows, err := s.pool.Query(ctx,
+		`SELECT DISTINCT pm.user_id, COALESCE(u.display_name,'')
+		 FROM project_members pm
+		 LEFT JOIN users u ON u.id = pm.user_id
+		 WHERE pm.project_id = $1`, proj.ID)
+	if err != nil {
+		return fmt.Errorf("fetch project members: %w", err)
+	}
+	var members []memberRow
+	for memberRows.Next() {
+		var m memberRow
+		if err := memberRows.Scan(&m.UserID, &m.DisplayName); err != nil {
+			memberRows.Close()
+			return fmt.Errorf("scan project member: %w", err)
+		}
+		members = append(members, m)
+	}
+	memberRows.Close()
+
+	// ── All writes inside a single transaction ────────────────────────────
 	return s.txMgr.WithOrgTx(ctx, proj.OrgID, func(tx pgx.Tx) error {
-		// Check if auto-managed project channel already exists
 		var channelID uuid.UUID
 		err := tx.QueryRow(ctx,
 			`SELECT id FROM channels WHERE auto_source = 'project' AND auto_source_id = $1 LIMIT 1`,
@@ -210,6 +238,9 @@ func (s *SyncService) ensureProjectChannel(ctx context.Context, proj projectRow)
 		).Scan(&channelID)
 
 		if err != nil {
+			if err != pgx.ErrNoRows {
+				return fmt.Errorf("lookup project channel: %w", err)
+			}
 			// Channel doesn't exist — create it
 			ch := &domain.Channel{
 				OrgID:       proj.OrgID,
@@ -228,25 +259,6 @@ func (s *SyncService) ensureProjectChannel(ctx context.Context, proj projectRow)
 				return err
 			}
 			channelID = ch.ID
-		}
-
-		// Sync members: get all project members (direct + team-inherited)
-		memberRows, err := s.pool.Query(ctx,
-			`SELECT DISTINCT pm.user_id, COALESCE(u.display_name,'') FROM project_members pm
-			 LEFT JOIN users u ON u.id = pm.user_id
-			 WHERE pm.project_id = $1`, proj.ID)
-		if err != nil {
-			return err
-		}
-		defer memberRows.Close()
-
-		var members []memberRow
-		for memberRows.Next() {
-			var m memberRow
-			if err := memberRows.Scan(&m.UserID, &m.DisplayName); err != nil {
-				return err
-			}
-			members = append(members, m)
 		}
 
 		for _, m := range members {
