@@ -30,7 +30,7 @@ Each tool MUST have:
 func (s *MCPServer) registerTools() {
     s.AddTool(mcp.Tool{
         Name:        "create_task",
-        Description: "Create a new task or subtask in a project. Use parentTaskId to create a subtask (max depth 5).",
+        Description: "Create a new task or subtask in a project. Use parentTaskId to create a subtask (max depth 3).",
         InputSchema: mcp.Schema{
             Type: "object",
             Properties: map[string]mcp.Property{

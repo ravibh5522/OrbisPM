@@ -9,11 +9,11 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "https://orbispm.dev/terms",
+        "termsOfService": "https://orbisom.live/terms",
         "contact": {
             "name": "OrbisPM Support",
-            "url": "https://orbispm.dev/support",
-            "email": "support@orbispm.dev"
+            "url": "https://orbisom.live/support",
+            "email": "support@orbispm.in"
         },
         "license": {
             "name": "MIT",

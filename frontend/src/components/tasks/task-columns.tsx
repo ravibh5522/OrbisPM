@@ -1,32 +1,150 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { ConfirmDialog, Avatar } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { Input, Select } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useAuthStore } from "@/stores/auth-store";
+import { PendingReviewBadge } from "@/components/tasks/change-requests";
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
+import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/form-fields";
+import { Modal } from "@/components/ui/modal";
+import { AvatarStack, ConfirmDialog } from "@/components/ui/shared";
+import { useUndoRedo } from "@/hooks/use-undo-redo";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import type {
+  DeadlineConflict,
+  OrgMember,
+  ProjectMember,
+  Task,
+  TaskPriority,
+  TaskStatus,
+} from "@/types/domain";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Plus,
-  ChevronRight,
-  Loader2,
-  GripVertical,
-  Pencil,
   Check,
+  ChevronRight,
+  Filter,
+  GripVertical,
+  ListPlus,
+  Loader2,
+  Pencil,
+  Plus,
+  Redo2,
+  Tags,
+  Trash2,
+  Undo2,
+  UserPlus,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
-import type { Task, TaskStatus, TaskPriority, ProjectMember, OrgMember } from "@/types/domain";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useForm } from "react-hook-form";
 
 const MAX_DEPTH = 3;
 const DEFAULT_COL_WIDTHS = [220, 220, 200, 200];
 const DEFAULT_COL_NAMES = ["TASKS", "SUBTASKS", "LEVEL 3", "LEVEL 4"];
 const LS_WIDTHS_KEY = "task-column-widths";
 const LS_NAMES_KEY = "task-column-names";
+
+/* ─── Column Filter Types ─── */
+
+interface ColumnFilterState {
+  statuses: TaskStatus[];
+  priorities: TaskPriority[];
+  assigneeIds: string[];
+  labels: string[];
+  dueDateFrom: string;
+  dueDateTo: string;
+  search: string;
+}
+
+const EMPTY_FILTER: ColumnFilterState = {
+  statuses: [],
+  priorities: [],
+  assigneeIds: [],
+  labels: [],
+  dueDateFrom: "",
+  dueDateTo: "",
+  search: "",
+};
+
+function isFilterActive(f: ColumnFilterState | undefined): boolean {
+  if (!f) return false;
+  return (
+    f.statuses.length > 0 ||
+    f.priorities.length > 0 ||
+    f.assigneeIds.length > 0 ||
+    f.labels.length > 0 ||
+    f.dueDateFrom !== "" ||
+    f.dueDateTo !== "" ||
+    f.search !== ""
+  );
+}
+
+function applyFilter(
+  tasks: Task[],
+  f: ColumnFilterState | undefined,
+  gf?: GlobalFilterState,
+): Task[] {
+  let result = tasks;
+  // Apply global filter first
+  if (gf) {
+    result = result.filter((t) => {
+      if (gf.assigneeIds.length > 0) {
+        const ids = t.assignee_ids?.length
+          ? t.assignee_ids
+          : t.assignee_id
+            ? [t.assignee_id]
+            : [];
+        // "" means unassigned
+        const matchesUnassigned =
+          gf.assigneeIds.includes("") && ids.length === 0;
+        const matchesAny = ids.some((id) => gf.assigneeIds.includes(id));
+        if (!matchesUnassigned && !matchesAny) return false;
+      }
+      if (gf.statuses.length > 0 && !gf.statuses.includes(t.status))
+        return false;
+      if (gf.priorities.length > 0 && !gf.priorities.includes(t.priority))
+        return false;
+      if (gf.labels.length > 0) {
+        if (!t.labels || !t.labels.some((l) => gf.labels.includes(l)))
+          return false;
+      }
+      if (gf.dueDateFrom && (!t.due_date || t.due_date < gf.dueDateFrom))
+        return false;
+      if (gf.dueDateTo && (!t.due_date || t.due_date > gf.dueDateTo))
+        return false;
+      if (gf.search) {
+        const q = gf.search.toLowerCase();
+        if (!t.title.toLowerCase().includes(q)) return false;
+      }
+      return true;
+    });
+  }
+  if (!f || !isFilterActive(f)) return result;
+  return result.filter((t) => {
+    if (f.statuses.length > 0 && !f.statuses.includes(t.status)) return false;
+    if (f.priorities.length > 0 && !f.priorities.includes(t.priority))
+      return false;
+    if (f.assigneeIds.length > 0) {
+      const aid = t.assignee_id || "";
+      if (!f.assigneeIds.includes(aid)) return false;
+    }
+    if (f.labels.length > 0) {
+      if (!t.labels || !t.labels.some((l) => f.labels.includes(l)))
+        return false;
+    }
+    if (f.dueDateFrom && (!t.due_date || t.due_date < f.dueDateFrom))
+      return false;
+    if (f.dueDateTo && (!t.due_date || t.due_date > f.dueDateTo)) return false;
+    if (f.search) {
+      const q = f.search.toLowerCase();
+      if (!t.title.toLowerCase().includes(q)) return false;
+    }
+    return true;
+  });
+}
 
 /* ═══════════════════════════════════════════════════════
    Main 5-column component
@@ -40,28 +158,110 @@ interface TaskColumnsProps {
   orgMembers?: OrgMember[];
   /** Optional task ID to auto-focus on mount */
   focusTaskId?: string;
+  /** If provided, toolbar buttons are portaled into this element instead of rendered inline */
+  toolbarPortal?: HTMLElement | null;
+  /** Global filter state from the toolbar */
+  globalFilter?: GlobalFilterState;
 }
 
-export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, focusTaskId }: TaskColumnsProps) {
+export function TaskColumns({
+  orgId,
+  orgSlug,
+  projectId,
+  members,
+  orgMembers,
+  focusTaskId,
+  toolbarPortal,
+  globalFilter,
+}: TaskColumnsProps) {
   const send = useProjectTaskStore((s) => s.send);
   const user = useAuthStore((s) => s.user);
   const orgMembership = useAuthStore((s) => s.currentMembership);
   const currentUserId = user?.id || "";
-  const [selected, setSelected] = useState<(string | null)[]>([null, null, null, null]);
+  const [selected, setSelected] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
   const [createDepth, setCreateDepth] = useState<number | null>(null);
   const [createParentId, setCreateParentId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
+  const [bulkCreateDepth, setBulkCreateDepth] = useState<number | null>(null);
+  const [bulkCreateParentId, setBulkCreateParentId] = useState<string | null>(
+    null,
+  );
   const [autoExpanded, setAutoExpanded] = useState(false);
   const [deepLinkProcessed, setDeepLinkProcessed] = useState(false);
   const [prevFocusTaskId, setPrevFocusTaskId] = useState(focusTaskId);
 
+  // Multi-select state
+  const [multiSelected, setMultiSelected] = useState<Set<string>>(new Set());
+  const [bulkActionMode, setBulkActionMode] = useState(false);
+
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    task: Task;
+    depth: number;
+  } | null>(null);
+
+  // Drag-and-drop reparenting state
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
+
+  // Split view state
+  const [splitView, setSplitView] = useState(false);
+  const [splitSelected, setSplitSelected] = useState<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
+  const [splitColumnData, setSplitColumnData] = useState<Task[][]>([
+    [],
+    [],
+    [],
+    [],
+  ]);
+  const [splitColumnLoading, setSplitColumnLoading] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+  ]);
+
+  // Track which pane was last focused (for preview panel)
+  const [lastFocusedPane, setLastFocusedPane] = useState<"top" | "bottom">(
+    "top",
+  );
+
   // Column data state (one per depth)
   const [columnData, setColumnData] = useState<Task[][]>([[], [], [], []]);
-  const [columnLoading, setColumnLoading] = useState<boolean[]>([false, false, false, false]);
+  const [columnLoading, setColumnLoading] = useState<boolean[]>([
+    false,
+    false,
+    false,
+    false,
+  ]);
+
+  // Track previous selection to detect which depth actually changed
+  const prevSelectedRef = useRef<(string | null)[]>([null, null, null, null]);
 
   // Mutation state
   const [updatePending, setUpdatePending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+
+  // Deadline conflict state for updates
+  const [updateDeadlineConflicts, setUpdateDeadlineConflicts] = useState<
+    DeadlineConflict[]
+  >([]);
+  const pendingUpdateRef = useRef<{
+    taskId: string;
+    data: Partial<Task>;
+    baseVersion: number;
+  } | null>(null);
 
   // Reset deep-link state when focusTaskId changes
   if (focusTaskId !== prevFocusTaskId) {
@@ -69,42 +269,194 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     setDeepLinkProcessed(false);
   }
 
-  // Fetch column tasks via WS
-  const fetchColumn = useCallback(async (depth: number, parentId: string | null) => {
-    if (!send) return;
-    setColumnLoading((prev) => { const n = [...prev]; n[depth] = true; return n; });
-    try {
+  // Fetch column tasks via WS (soft: don't show loading if we already have cached data)
+  const fetchColumn = useCallback(
+    async (depth: number, parentId: string | null, soft = false) => {
+      if (!send) return;
       const param = parentId ?? "root";
-      const res = await send("task:list", { parent_id: param });
-      setColumnData((prev) => { const n = [...prev]; n[depth] = res?.data || []; return n; });
-    } catch {
-      setColumnData((prev) => { const n = [...prev]; n[depth] = []; return n; });
-    } finally {
-      setColumnLoading((prev) => { const n = [...prev]; n[depth] = false; return n; });
-    }
-  }, [send]);
+      // Check store for cached data first — show it instantly (no loading state)
+      const cached = useProjectTaskStore.getState().tasks.get(param);
+      if (cached && cached.length > 0) {
+        setColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = cached;
+          return n;
+        });
+      }
+      // Only show loading spinner if we have NO cached data and soft mode is off
+      if (!soft && (!cached || cached.length === 0)) {
+        setColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = true;
+          return n;
+        });
+      }
+      try {
+        const res = await send("task:list", { parent_id: param });
+        const data = res?.data || [];
+        setColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = data;
+          return n;
+        });
+        useProjectTaskStore
+          .getState()
+          .setTasks(param, data, res?.total ?? data.length);
+      } catch {
+        // Only clear if we had no cached fallback
+        if (!cached || cached.length === 0) {
+          setColumnData((prev) => {
+            const n = [...prev];
+            n[depth] = [];
+            return n;
+          });
+        }
+      } finally {
+        setColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = false;
+          return n;
+        });
+      }
+    },
+    [send],
+  );
 
-  // Refetch all visible columns
-  const refetchAll = useCallback(() => {
-    fetchColumn(0, null);
-    for (let i = 0; i < selected.length; i++) {
-      if (selected[i]) fetchColumn(i + 1, selected[i]);
-    }
-  }, [fetchColumn, selected]);
+  // Refetch a single column silently (no loading state)
+  const softRefetch = useCallback(
+    (depth: number, parentId: string | null) => {
+      fetchColumn(depth, parentId, true);
+    },
+    [fetchColumn],
+  );
+
+  // Fetch for split view pane
+  const fetchSplitColumn = useCallback(
+    async (depth: number, parentId: string | null) => {
+      if (!send) return;
+      const param = parentId ?? "root";
+      const cached = useProjectTaskStore.getState().tasks.get(param);
+      if (cached && cached.length > 0) {
+        setSplitColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = cached;
+          return n;
+        });
+      }
+      if (!cached || cached.length === 0) {
+        setSplitColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = true;
+          return n;
+        });
+      }
+      try {
+        const res = await send("task:list", { parent_id: param });
+        const data = res?.data || [];
+        setSplitColumnData((prev) => {
+          const n = [...prev];
+          n[depth] = data;
+          return n;
+        });
+        useProjectTaskStore
+          .getState()
+          .setTasks(param, data, res?.total ?? data.length);
+      } catch {
+        if (!cached || cached.length === 0) {
+          setSplitColumnData((prev) => {
+            const n = [...prev];
+            n[depth] = [];
+            return n;
+          });
+        }
+      } finally {
+        setSplitColumnLoading((prev) => {
+          const n = [...prev];
+          n[depth] = false;
+          return n;
+        });
+      }
+    },
+    [send],
+  );
 
   // Load root column on connect
-  useEffect(() => { if (send) fetchColumn(0, null); }, [send, fetchColumn]);
-
-  // Load child column when selection changes
   useEffect(() => {
-    for (let i = 0; i < selected.length; i++) {
-      if (selected[i]) {
-        fetchColumn(i + 1, selected[i]);
-      } else {
-        // Clear deeper columns
-        setColumnData((prev) => { const n = [...prev]; n[i + 1] = []; return n; });
+    if (send) fetchColumn(0, null);
+  }, [send, fetchColumn]);
+
+  // Load split view root when split is activated
+  useEffect(() => {
+    if (splitView && send) {
+      fetchSplitColumn(0, null);
+    }
+  }, [splitView, send, fetchSplitColumn]);
+
+  // Split view selection changes
+  const prevSplitSelectedRef = useRef<(string | null)[]>([
+    null,
+    null,
+    null,
+    null,
+  ]);
+  useEffect(() => {
+    if (!splitView) return;
+    const prev = prevSplitSelectedRef.current;
+    for (let i = 0; i < splitSelected.length; i++) {
+      if (splitSelected[i] !== prev[i]) {
+        if (splitSelected[i] && i + 1 < 4) {
+          fetchSplitColumn(i + 1, splitSelected[i]);
+        }
+        for (let j = i + 1; j < 4; j++) {
+          if (!splitSelected[j - 1]) {
+            setSplitColumnData((p) => {
+              const n = [...p];
+              n[j] = [];
+              return n;
+            });
+          }
+        }
+        break;
       }
     }
+    prevSplitSelectedRef.current = [...splitSelected];
+  }, [splitSelected, splitView, fetchSplitColumn]);
+
+  const splitSelectTask = useCallback(
+    (depth: number, taskId: string | null) => {
+      setLastFocusedPane("bottom");
+      setSplitSelected((prev) => {
+        const next = [...prev];
+        next[depth] = taskId;
+        for (let i = depth + 1; i < next.length; i++) next[i] = null;
+        return next;
+      });
+    },
+    [],
+  );
+
+  // Load ONLY the changed child column when selection changes (not all)
+  useEffect(() => {
+    const prev = prevSelectedRef.current;
+    for (let i = 0; i < selected.length; i++) {
+      if (selected[i] !== prev[i]) {
+        if (selected[i] && i + 1 < 4) {
+          fetchColumn(i + 1, selected[i], true);
+        }
+        // Clear all deeper columns when a selection changes
+        for (let j = i + 1; j < 4; j++) {
+          if (!selected[j - 1]) {
+            setColumnData((p) => {
+              const n = [...p];
+              n[j] = [];
+              return n;
+            });
+          }
+        }
+        break; // Only one depth changes per selection click
+      }
+    }
+    prevSelectedRef.current = [...selected];
   }, [selected, fetchColumn]);
 
   // Deep-link: fetch the target task via WS
@@ -121,7 +473,9 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         setSelected(newSelected);
         setDeepLinkProcessed(true);
         setAutoExpanded(true);
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     })();
   }, [focusTaskId, send, deepLinkProcessed]);
 
@@ -140,34 +494,49 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     try {
       const stored = localStorage.getItem(`${LS_WIDTHS_KEY}-${projectId}`);
       return stored ? JSON.parse(stored) : DEFAULT_COL_WIDTHS;
-    } catch { return DEFAULT_COL_WIDTHS; }
+    } catch {
+      return DEFAULT_COL_WIDTHS;
+    }
   });
   const [columnNames, setColumnNames] = useState<string[]>(() => {
     if (typeof window === "undefined") return DEFAULT_COL_NAMES;
     try {
       const stored = localStorage.getItem(`${LS_NAMES_KEY}-${projectId}`);
       return stored ? JSON.parse(stored) : DEFAULT_COL_NAMES;
-    } catch { return DEFAULT_COL_NAMES; }
+    } catch {
+      return DEFAULT_COL_NAMES;
+    }
   });
 
   // Get user's project role, fall back to org role for owners/admins not explicitly added as project members
-  const projectMemberRole = members.find((m) => m.user_id === currentUserId)?.role;
-  const userProjectRole = projectMemberRole
-    ?? (orgMembership?.role === "owner" || orgMembership?.role === "admin" ? orgMembership.role : undefined);
-  const canEditColumns = userProjectRole === "lead" || userProjectRole === "admin" || userProjectRole === "owner";
+  const projectMemberRole = members.find(
+    (m) => m.user_id === currentUserId,
+  )?.role;
+  const userProjectRole =
+    projectMemberRole ??
+    (orgMembership?.role === "owner" || orgMembership?.role === "admin"
+      ? orgMembership.role
+      : undefined);
+  const canEditColumns =
+    userProjectRole === "lead" ||
+    userProjectRole === "admin" ||
+    userProjectRole === "owner";
 
   // Convert ProjectMember to OrgMember format if orgMembers not provided
-  const effectiveMembers: OrgMember[] = orgMembers || members.map((m) => ({
-    org_id: orgId,
-    user_id: m.user_id,
-    email: m.email || "",
-    display_name: m.display_name || m.email || "",
-    avatar_url: m.avatar_url,
-    role: "member" as const, // ProjectMember role is different from OrgRole, default to member
-    joined_at: m.joined_at,
-  }));
+  const effectiveMembers: OrgMember[] =
+    orgMembers ||
+    members.map((m) => ({
+      org_id: orgId,
+      user_id: m.user_id,
+      email: m.email || "",
+      display_name: m.display_name || m.email || "",
+      avatar_url: m.avatar_url,
+      role: "member" as const, // ProjectMember role is different from OrgRole, default to member
+      joined_at: m.joined_at,
+    }));
 
   const selectTask = useCallback((depth: number, taskId: string | null) => {
+    setLastFocusedPane("top");
     setSelected((prev) => {
       const next = [...prev];
       next[depth] = taskId;
@@ -184,12 +553,98 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
     return -1;
   }, [selected]);
 
+  /* ── Sync columnData from Zustand store broadcasts (does NOT depend on `selected`) ── */
+  const storeTasks = useProjectTaskStore((s) => s.tasks);
+  useEffect(() => {
+    setColumnData((prev) => {
+      const next = [...prev];
+      let changed = false;
+      // Build keys from the current selected ref to avoid depending on selected state
+      const sel = prevSelectedRef.current;
+      const keys = ["root", sel[0] || "", sel[1] || "", sel[2] || ""];
+      for (let i = 0; i < 4; i++) {
+        const key = keys[i];
+        if (!key) continue;
+        const storeList = storeTasks.get(key);
+        if (!storeList) continue;
+        if (storeList !== prev[i]) {
+          next[i] = storeList;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // Also sync split view columns
+    if (splitView) {
+      setSplitColumnData((prev) => {
+        const next = [...prev];
+        let changed = false;
+        const sel = prevSplitSelectedRef.current;
+        const keys = ["root", sel[0] || "", sel[1] || "", sel[2] || ""];
+        for (let i = 0; i < 4; i++) {
+          const key = keys[i];
+          if (!key) continue;
+          const storeList = storeTasks.get(key);
+          if (!storeList) continue;
+          if (storeList !== prev[i]) {
+            next[i] = storeList;
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }
+  }, [storeTasks, splitView]);
+
+  /* ── Undo / Redo ── */
+  const { pushCommand, undo, redo, canUndo, canRedo } = useUndoRedo();
+
+  // Keyboard: Ctrl+Z → undo, Ctrl+Y / Ctrl+Shift+Z → redo
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const isMeta = e.ctrlKey || e.metaKey;
+      if (!isMeta) return;
+      if (e.key === "z" && !e.shiftKey) {
+        e.preventDefault();
+        void undo();
+      } else if (e.key === "z" && e.shiftKey) {
+        e.preventDefault();
+        void redo();
+      } else if (e.key === "y") {
+        e.preventDefault();
+        void redo();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [undo, redo]);
+
+  // Helper: refetch all visible columns
+  const refetchAll = useCallback(() => {
+    softRefetch(0, null);
+    const sel = prevSelectedRef.current;
+    for (let i = 0; i < sel.length; i++) {
+      if (sel[i]) softRefetch(i + 1, sel[i]);
+    }
+  }, [softRefetch]);
+
+  // Stable refs for undo/redo closures (avoid stale captures)
+  const refetchAllRef = useRef(refetchAll);
+  refetchAllRef.current = refetchAll;
+  const getSend = () => useProjectTaskStore.getState().send;
+
   /* ── Mutations via WS ── */
-  const handleDelete = useCallback(async (id: string) => {
-    if (!send) return;
-    setDeletePending(true);
-    try {
-      await send("task:delete", { task_id: id });
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!send) return;
+      // Capture snapshot for undo
+      const deletedTask = columnData.flat().find((t) => t.id === id);
+      setDeletePending(true);
+      // Optimistic: remove immediately from BOTH local state AND store
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => t.id !== id)),
+      );
+      useProjectTaskStore.getState().removeTask(id);
       setSelected((prev) => {
         const idx = prev.indexOf(id);
         if (idx >= 0) {
@@ -200,198 +655,1304 @@ export function TaskColumns({ orgId, orgSlug, projectId, members, orgMembers, fo
         return prev;
       });
       setDeleteTarget(null);
-      refetchAll();
-    } catch { /* ignore */ }
-    finally { setDeletePending(false); }
-  }, [send, refetchAll]);
+      try {
+        await send("task:delete", { task_id: id });
+        // Push undo command — re-create the task to "undo" a delete
+        if (deletedTask) {
+          pushCommand({
+            type: "delete",
+            description: `Delete "${deletedTask.title}"`,
+            undo: async () => {
+              const s = getSend();
+              if (!s) return;
+              const payload: Record<string, unknown> = {
+                title: deletedTask.title,
+                status: deletedTask.status,
+                priority: deletedTask.priority,
+              };
+              if (deletedTask.assignee_id)
+                payload.assignee_id = deletedTask.assignee_id;
+              if (deletedTask.parent_task_id)
+                payload.parent_task_id = deletedTask.parent_task_id;
+              if (deletedTask.labels) payload.labels = deletedTask.labels;
+              if (deletedTask.description)
+                payload.description = deletedTask.description;
+              const recreated = await s("task:create", payload);
+              if (recreated?.id) {
+                const store = useProjectTaskStore.getState();
+                const parentKey = recreated.parent_task_id || "root";
+                const existing = store.tasks.get(parentKey) || [];
+                store.setTasks(
+                  parentKey,
+                  [...existing, recreated],
+                  (store.totals.get(parentKey) ?? 0) + 1,
+                );
+              }
+              refetchAllRef.current();
+            },
+            redo: async () => {
+              const s = getSend();
+              if (!s) return;
+              await s("task:delete", { task_id: id });
+              useProjectTaskStore.getState().removeTask(id);
+              refetchAllRef.current();
+            },
+          });
+        }
+      } catch {
+        refetchAll();
+      } finally {
+        setDeletePending(false);
+      }
+    },
+    [send, refetchAll, columnData, pushCommand],
+  );
 
-  const handleUpdate = useCallback(async (taskId: string, data: Partial<Task>) => {
-    if (!send) return;
-    // Optimistic update in column data
-    setColumnData((prev) =>
-      prev.map((col) => col.map((t) => (t.id === taskId ? { ...t, ...data } : t)))
-    );
+  const handleUpdate = useCallback(
+    async (taskId: string, data: Partial<Task>) => {
+      if (!send) return;
+      // Find current task to get version for optimistic concurrency
+      const currentTask = columnData.flat().find((t) => t.id === taskId);
+      // Snapshot old values for undo
+      const oldValues: Partial<Task> = {};
+      if (currentTask) {
+        for (const key of Object.keys(data) as (keyof Task)[]) {
+          (oldValues as Record<string, unknown>)[key] = currentTask[key];
+        }
+      }
+      // Optimistic update in column data — instant, no loading
+      setColumnData((prev) =>
+        prev.map((col) =>
+          col.map((t) => (t.id === taskId ? { ...t, ...data } : t)),
+        ),
+      );
+      // Also update Zustand store optimistically
+      if (currentTask) {
+        useProjectTaskStore
+          .getState()
+          .upsertTask({ ...currentTask, ...data } as Task);
+      }
+      setUpdatePending(true);
+      try {
+        const payload = {
+          task_id: taskId,
+          base_version: currentTask?.version ?? 0,
+          ...data,
+        };
+        const updated = await send("task:update", payload);
+        // Check for deadline warning (no applied_changes, only conflicts)
+        if (
+          updated?.deadline_conflicts?.length &&
+          !updated?.applied_changes?.length
+        ) {
+          // Revert optimistic update
+          if (currentTask) {
+            useProjectTaskStore.getState().upsertTask(currentTask);
+            setColumnData((prev) =>
+              prev.map((col) =>
+                col.map((t) => (t.id === taskId ? currentTask : t)),
+              ),
+            );
+          }
+          pendingUpdateRef.current = {
+            taskId,
+            data,
+            baseVersion: currentTask?.version ?? 0,
+          };
+          setUpdateDeadlineConflicts(updated.deadline_conflicts);
+          return;
+        }
+        // Reconcile with server response — handle both direct task and wrapped result
+        const task = updated?.task ?? updated;
+        if (task?.id) {
+          useProjectTaskStore.getState().upsertTask(task);
+          setColumnData((prev) =>
+            prev.map((col) => col.map((t) => (t.id === taskId ? task : t))),
+          );
+        }
+        // Handle ancestor updates from deadline cascade
+        if (updated?.ancestors_updated?.length) {
+          for (const anc of updated.ancestors_updated) {
+            useProjectTaskStore.getState().upsertTask(anc);
+          }
+        }
+        // Push undo command
+        pushCommand({
+          type: "update",
+          description: `Update "${currentTask?.title || "task"}"`,
+          undo: async () => {
+            const s = getSend();
+            if (!s) return;
+            await s("task:update", {
+              task_id: taskId,
+              base_version: task?.version ?? updated?.version ?? 0,
+              ...oldValues,
+            });
+            refetchAllRef.current();
+          },
+          redo: async () => {
+            const s = getSend();
+            if (!s) return;
+            await s("task:update", {
+              task_id: taskId,
+              ...data,
+            });
+            refetchAllRef.current();
+          },
+        });
+      } catch {
+        refetchAll();
+      } finally {
+        setUpdatePending(false);
+      }
+    },
+    [send, refetchAll, columnData, pushCommand],
+  );
+
+  const confirmExtendDeadlinesOnUpdate = useCallback(async () => {
+    const pending = pendingUpdateRef.current;
+    if (!pending || !send) return;
+    const conflicts = updateDeadlineConflicts;
+    setUpdateDeadlineConflicts([]);
+    pendingUpdateRef.current = null;
     setUpdatePending(true);
     try {
-      await send("task:update", { task_id: taskId, ...data });
-      refetchAll();
+      const hasAncestor = conflicts.some((c) => c.direction === "ancestor");
+      const hasDescendant = conflicts.some((c) => c.direction === "descendant");
+      const updated = await send("task:update", {
+        task_id: pending.taskId,
+        base_version: pending.baseVersion,
+        ...pending.data,
+        ...(hasAncestor && { extend_parent_deadlines: true }),
+        ...(hasDescendant && { adjust_child_deadlines: true }),
+      });
+      const task = updated?.task ?? updated;
+      if (task?.id) {
+        useProjectTaskStore.getState().upsertTask(task);
+        setColumnData((prev) =>
+          prev.map((col) =>
+            col.map((t) => (t.id === pending.taskId ? task : t)),
+          ),
+        );
+      }
+      if (updated?.ancestors_updated?.length) {
+        for (const anc of updated.ancestors_updated) {
+          useProjectTaskStore.getState().upsertTask(anc);
+        }
+        refetchAll();
+      }
     } catch {
-      refetchAll(); // rollback
-    } finally { setUpdatePending(false); }
-  }, [send, refetchAll]);
-
-  const handleDuplicate = useCallback(async (id: string) => {
-    if (!send) return;
-    try {
-      await send("task:duplicate", { task_id: id });
       refetchAll();
-    } catch { /* ignore */ }
-  }, [send, refetchAll]);
+    } finally {
+      setUpdatePending(false);
+    }
+  }, [send, refetchAll, updateDeadlineConflicts]);
 
-  const focusedTask =
-    focusedDepth >= 0
-      ? columnData[focusedDepth]?.find((t) => t.id === selected[focusedDepth]) ?? null
+  const handleDuplicate = useCallback(
+    async (id: string) => {
+      if (!send) return;
+      try {
+        const task = await send("task:duplicate", { task_id: id });
+        // Broadcast excludes sender, so add duplicate to store directly
+        if (task?.id) {
+          const store = useProjectTaskStore.getState();
+          const parentKey = task.parent_task_id || "root";
+          const existing = store.tasks.get(parentKey) || [];
+          if (!existing.find((t: Task) => t.id === task.id)) {
+            store.setTasks(
+              parentKey,
+              [...existing, task],
+              (store.totals.get(parentKey) ?? 0) + 1,
+            );
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [send],
+  );
+
+  // Multi-select handlers (must be before drop handlers that reference them)
+  const toggleMultiSelect = useCallback((taskId: string) => {
+    setMultiSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(taskId)) next.delete(taskId);
+      else next.add(taskId);
+      return next;
+    });
+  }, []);
+
+  const clearMultiSelection = useCallback(() => {
+    setMultiSelected(new Set());
+    setBulkActionMode(false);
+  }, []);
+
+  const toggleBulkActionMode = useCallback(() => {
+    setBulkActionMode((prev) => {
+      if (prev) setMultiSelected(new Set());
+      return !prev;
+    });
+  }, []);
+
+  // Select all tasks in a specific column
+  const selectAllInColumn = useCallback((tasks: Task[]) => {
+    setMultiSelected((prev) => {
+      const next = new Set(prev);
+      for (const t of tasks) next.add(t.id);
+      return next;
+    });
+  }, []);
+
+  const handleDropOnTask = useCallback(
+    async (targetTask: Task) => {
+      if (!send || !draggedTask || draggedTask.id === targetTask.id) return;
+      if (targetTask.depth >= MAX_DEPTH) return;
+      if (draggedTask.parent_task_id === targetTask.id) return;
+
+      // Determine tasks to move (multi-select support)
+      const tasksToMove: Task[] =
+        bulkActionMode && multiSelected.has(draggedTask.id)
+          ? columnData
+              .flat()
+              .filter((t) => multiSelected.has(t.id) && t.id !== targetTask.id)
+          : [draggedTask];
+      if (tasksToMove.length === 0) return;
+
+      // Snapshot old parents for undo
+      const oldParents = tasksToMove.map((t) => ({
+        id: t.id,
+        parentId: t.parent_task_id,
+      }));
+
+      // Optimistic: remove moved tasks from BOTH local state AND store BEFORE await
+      const movedIds = new Set(tasksToMove.map((t) => t.id));
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => !movedIds.has(t.id))),
+      );
+      for (const tid of movedIds)
+        useProjectTaskStore.getState().removeTask(tid);
+
+      try {
+        const reorderItems = tasksToMove.map((t, i) => ({
+          id: t.id,
+          parent_id: targetTask.id,
+          position: i,
+        }));
+        await send("task:reorder", { items: reorderItems });
+
+        // Refetch all columns to get fresh data from server
+        refetchAll();
+
+        // Push undo command
+        pushCommand({
+          type: "reparent",
+          description: `Move ${tasksToMove.length} task(s) to "${targetTask.title}"`,
+          undo: async () => {
+            const s = getSend();
+            if (!s) return;
+            const undoItems = oldParents.map((op, i) => ({
+              id: op.id,
+              parent_id: op.parentId ?? null,
+              position: i,
+            }));
+            await s("task:reorder", { items: undoItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+          redo: async () => {
+            const s = getSend();
+            if (!s) return;
+            await s("task:reorder", { items: reorderItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+        });
+
+        if (bulkActionMode) clearMultiSelection();
+      } catch {
+        refetchAll();
+      }
+      setDraggedTask(null);
+      setDragOverTaskId(null);
+    },
+    [
+      send,
+      draggedTask,
+      columnData,
+      refetchAll,
+      pushCommand,
+      bulkActionMode,
+      multiSelected,
+      clearMultiSelection,
+    ],
+  );
+
+  // Drop on blank column space → reparent to that column's parent
+  const handleDropOnColumn = useCallback(
+    async (depth: number) => {
+      if (!send || !draggedTask) return;
+      // Column at depth N shows children of selected[depth-1]. Dropping here means reparent to selected[depth-1].
+      const newParentId = depth > 0 ? (selected[depth - 1] ?? null) : null;
+      // Don't reparent to same parent
+      if ((draggedTask.parent_task_id || null) === newParentId) return;
+
+      const tasksToMove: Task[] =
+        bulkActionMode && multiSelected.has(draggedTask.id)
+          ? columnData.flat().filter((t) => multiSelected.has(t.id))
+          : [draggedTask];
+      if (tasksToMove.length === 0) return;
+
+      const oldParents = tasksToMove.map((t) => ({
+        id: t.id,
+        parentId: t.parent_task_id,
+      }));
+      // Optimistic: remove from BOTH local state AND store BEFORE await
+      const movedIds = new Set(tasksToMove.map((t) => t.id));
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => !movedIds.has(t.id))),
+      );
+      for (const tid of movedIds)
+        useProjectTaskStore.getState().removeTask(tid);
+
+      try {
+        const reorderItems = tasksToMove.map((t, i) => ({
+          id: t.id,
+          parent_id: newParentId,
+          position: i,
+        }));
+        await send("task:reorder", { items: reorderItems });
+        refetchAll();
+
+        pushCommand({
+          type: "reparent",
+          description: `Move ${tasksToMove.length} task(s) to column`,
+          undo: async () => {
+            const s = getSend();
+            if (!s) return;
+            const undoItems = oldParents.map((op, i) => ({
+              id: op.id,
+              parent_id: op.parentId ?? null,
+              position: i,
+            }));
+            await s("task:reorder", { items: undoItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+          redo: async () => {
+            const s = getSend();
+            if (!s) return;
+            await s("task:reorder", { items: reorderItems });
+            for (const tid of movedIds)
+              useProjectTaskStore.getState().removeTask(tid);
+            refetchAllRef.current();
+          },
+        });
+
+        if (bulkActionMode) clearMultiSelection();
+      } catch {
+        refetchAll();
+      }
+      setDraggedTask(null);
+      setDragOverTaskId(null);
+    },
+    [
+      send,
+      draggedTask,
+      selected,
+      columnData,
+      refetchAll,
+      pushCommand,
+      bulkActionMode,
+      multiSelected,
+      clearMultiSelection,
+    ],
+  );
+
+  const focusedTask = useMemo(() => {
+    if (splitView && lastFocusedPane === "bottom") {
+      // Find focused in split pane
+      for (let i = splitSelected.length - 1; i >= 0; i--) {
+        if (splitSelected[i]) {
+          return (
+            splitColumnData[i]?.find((t) => t.id === splitSelected[i]) ?? null
+          );
+        }
+      }
+      return null;
+    }
+    return focusedDepth >= 0
+      ? (columnData[focusedDepth]?.find(
+          (t) => t.id === selected[focusedDepth],
+        ) ?? null)
       : null;
+  }, [
+    splitView,
+    lastFocusedPane,
+    splitSelected,
+    splitColumnData,
+    focusedDepth,
+    columnData,
+    selected,
+  ]);
 
   const openCreate = (depth: number) => {
     setCreateDepth(depth);
     setCreateParentId(depth > 0 ? selected[depth - 1] : null);
   };
 
-  /* ── Column resize handlers ── */
-  const handleResizeStart = useCallback((colIndex: number, e: React.MouseEvent) => {
-    e.preventDefault();
-    const startX = e.clientX;
-    const startWidth = columnWidths[colIndex];
-    let currentWidths = [...columnWidths];
+  // Resolve parent task for create modal (inherits fields)
+  const createParentTask = useMemo(() => {
+    if (!createParentId) return null;
+    for (const tasks of columnData) {
+      const found = tasks?.find((t) => t.id === createParentId);
+      if (found) return found;
+    }
+    for (const tasks of splitColumnData) {
+      const found = tasks?.find((t) => t.id === createParentId);
+      if (found) return found;
+    }
+    return null;
+  }, [createParentId, columnData, splitColumnData]);
 
-    const handleMouseMove = (moveEvent: MouseEvent) => {
-      const delta = moveEvent.clientX - startX;
-      const newWidth = Math.max(120, Math.min(400, startWidth + delta));
-      currentWidths = [...currentWidths];
-      currentWidths[colIndex] = newWidth;
-      setColumnWidths(currentWidths);
-    };
+  const openBulkCreate = (depth: number) => {
+    setBulkCreateDepth(depth);
+    setBulkCreateParentId(depth > 0 ? selected[depth - 1] : null);
+  };
 
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      // Save directly to localStorage with current widths
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`${LS_WIDTHS_KEY}-${projectId}`, JSON.stringify(currentWidths));
+  // Get all selected tasks as objects (from all columns)
+  const selectedTasks = useMemo(() => {
+    if (multiSelected.size === 0) return [];
+    const allTasks = columnData.flat();
+    return allTasks.filter((t) => multiSelected.has(t.id));
+  }, [multiSelected, columnData]);
+
+  // Bulk update selected tasks
+  const handleBulkUpdate = useCallback(
+    async (changes: Record<string, unknown>) => {
+      if (!send || multiSelected.size === 0) return;
+      try {
+        const taskIds = Array.from(multiSelected);
+        const result = await send("task:bulk-update", {
+          task_ids: taskIds,
+          changes,
+        });
+        // Broadcast excludes sender, update store directly
+        const tasks: Task[] = Array.isArray(result) ? result : [];
+        if (tasks.length > 0) {
+          const store = useProjectTaskStore.getState();
+          store.bulkUpsertTasks(tasks);
+        }
+        clearMultiSelection();
+      } catch {
+        /* ignore */
       }
-    };
+    },
+    [send, multiSelected, clearMultiSelection],
+  );
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  }, [columnWidths, projectId]);
+  // Bulk delete selected tasks
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const handleBulkDelete = useCallback(async () => {
+    if (!send || multiSelected.size === 0) return;
+    try {
+      for (const id of multiSelected) {
+        await send("task:delete", { task_id: id });
+        useProjectTaskStore.getState().removeTask(id);
+      }
+      setColumnData((prev) =>
+        prev.map((col) => col.filter((t) => !multiSelected.has(t.id))),
+      );
+      clearMultiSelection();
+      setBulkDeleteConfirm(false);
+    } catch {
+      /* ignore */
+    }
+  }, [send, multiSelected, clearMultiSelection]);
+
+  /* ── Column resize handlers ── */
+  const handleResizeStart = useCallback(
+    (colIndex: number, e: React.MouseEvent) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startWidth = columnWidths[colIndex];
+      let currentWidths = [...columnWidths];
+
+      const handleMouseMove = (moveEvent: MouseEvent) => {
+        const delta = moveEvent.clientX - startX;
+        const newWidth = Math.max(80, Math.min(600, startWidth + delta));
+        currentWidths = [...currentWidths];
+        currentWidths[colIndex] = newWidth;
+        setColumnWidths(currentWidths);
+      };
+
+      const handleMouseUp = () => {
+        document.removeEventListener("mousemove", handleMouseMove);
+        document.removeEventListener("mouseup", handleMouseUp);
+        // Save directly to localStorage with current widths
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `${LS_WIDTHS_KEY}-${projectId}`,
+            JSON.stringify(currentWidths),
+          );
+        }
+      };
+
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
+    },
+    [columnWidths, projectId],
+  );
 
   /* ── Column rename handlers ── */
   const [editingColumn, setEditingColumn] = useState<number | null>(null);
   const [editingName, setEditingName] = useState("");
 
-  const startEditingName = useCallback((colIndex: number) => {
-    if (!canEditColumns) return;
-    setEditingColumn(colIndex);
-    setEditingName(columnNames[colIndex]);
-  }, [canEditColumns, columnNames]);
+  const startEditingName = useCallback(
+    (colIndex: number) => {
+      if (!canEditColumns) return;
+      setEditingColumn(colIndex);
+      setEditingName(columnNames[colIndex]);
+    },
+    [canEditColumns, columnNames],
+  );
 
-  const confirmEditName = useCallback((colIndex: number) => {
-    if (editingName.trim()) {
-      const updatedNames = [...columnNames];
-      updatedNames[colIndex] = editingName.trim();
-      setColumnNames(updatedNames);
-      // Save directly to localStorage
-      if (typeof window !== "undefined") {
-        localStorage.setItem(`${LS_NAMES_KEY}-${projectId}`, JSON.stringify(updatedNames));
+  const confirmEditName = useCallback(
+    (colIndex: number) => {
+      if (editingName.trim()) {
+        const updatedNames = [...columnNames];
+        updatedNames[colIndex] = editingName.trim();
+        setColumnNames(updatedNames);
+        // Save directly to localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            `${LS_NAMES_KEY}-${projectId}`,
+            JSON.stringify(updatedNames),
+          );
+        }
       }
-    }
-    setEditingColumn(null);
-    setEditingName("");
-  }, [editingName, columnNames, projectId]);
+      setEditingColumn(null);
+      setEditingName("");
+    },
+    [editingName, columnNames, projectId],
+  );
 
   const cancelEditName = useCallback(() => {
     setEditingColumn(null);
     setEditingName("");
   }, []);
 
+  /* ── Column Filters ── */
+  const [columnFilters, setColumnFilters] = useState<
+    Map<number, ColumnFilterState>
+  >(new Map());
+
+  const setFilterForColumn = useCallback(
+    (depth: number, filter: ColumnFilterState) => {
+      setColumnFilters((prev) => {
+        const next = new Map(prev);
+        if (isFilterActive(filter)) {
+          next.set(depth, filter);
+        } else {
+          next.delete(depth);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const filteredColumnData = useMemo(
+    () =>
+      columnData.map((tasks, depth) =>
+        applyFilter(tasks, columnFilters.get(depth), globalFilter),
+      ),
+    [columnData, columnFilters, globalFilter],
+  );
+
+  const filteredSplitColumnData = useMemo(
+    () =>
+      splitColumnData.map((tasks, depth) =>
+        applyFilter(tasks, columnFilters.get(depth), globalFilter),
+      ),
+    [splitColumnData, columnFilters, globalFilter],
+  );
+
   /* ── Render ── */
   const columnMeta = [
-    { depth: 0, label: columnNames[0], tasks: columnData[0], loading: columnLoading[0], show: true },
-    { depth: 1, label: columnNames[1], tasks: columnData[1], loading: columnLoading[1], show: !!selected[0] },
-    { depth: 2, label: columnNames[2], tasks: columnData[2], loading: columnLoading[2], show: !!selected[1] },
-    { depth: 3, label: columnNames[3], tasks: columnData[3], loading: columnLoading[3], show: !!selected[2] },
+    {
+      depth: 0,
+      label: columnNames[0],
+      tasks: filteredColumnData[0],
+      loading: columnLoading[0],
+      show: true,
+    },
+    {
+      depth: 1,
+      label: columnNames[1],
+      tasks: filteredColumnData[1],
+      loading: columnLoading[1],
+      show: !!selected[0],
+    },
+    {
+      depth: 2,
+      label: columnNames[2],
+      tasks: filteredColumnData[2],
+      loading: columnLoading[2],
+      show: !!selected[1],
+    },
+    {
+      depth: 3,
+      label: columnNames[3],
+      tasks: filteredColumnData[3],
+      loading: columnLoading[3],
+      show: !!selected[2],
+    },
   ];
 
-  return (
-    <div className="flex flex-col lg:flex-row h-[calc(100vh-180px)] min-h-[500px] border border-base-200 rounded-lg overflow-hidden bg-base-100">
-      {/* Columns area — scrollable, fills space beside preview panel */}
-      <div className="flex flex-row flex-1 min-w-0 overflow-x-auto">
-        {columnMeta.map(
-          (col) =>
-            col.show && (
-              <TaskColumn
-                key={col.depth}
-                depth={col.depth}
-                label={col.label}
-                tasks={col.tasks}
-                loading={col.loading}
-                selectedId={selected[col.depth]}
-                onSelect={(id) => selectTask(col.depth, id)}
-                onAdd={() => openCreate(col.depth)}
-                members={members}
-                width={columnWidths[col.depth]}
-                canEdit={canEditColumns}
-                isEditing={editingColumn === col.depth}
-                editingName={editingName}
-                onEditingNameChange={setEditingName}
-                onStartEdit={() => startEditingName(col.depth)}
-                onConfirmEdit={() => confirmEditName(col.depth)}
-                onCancelEdit={cancelEditName}
-                onResizeStart={(e) => handleResizeStart(col.depth, e)}
-              />
-            ),
+  const splitColumnMeta = [
+    {
+      depth: 0,
+      label: columnNames[0],
+      tasks: filteredSplitColumnData[0],
+      loading: splitColumnLoading[0],
+      show: true,
+    },
+    {
+      depth: 1,
+      label: columnNames[1],
+      tasks: filteredSplitColumnData[1],
+      loading: splitColumnLoading[1],
+      show: !!splitSelected[0],
+    },
+    {
+      depth: 2,
+      label: columnNames[2],
+      tasks: filteredSplitColumnData[2],
+      loading: splitColumnLoading[2],
+      show: !!splitSelected[1],
+    },
+    {
+      depth: 3,
+      label: columnNames[3],
+      tasks: filteredSplitColumnData[3],
+      loading: splitColumnLoading[3],
+      show: !!splitSelected[2],
+    },
+  ];
+
+  /* Toolbar buttons (rendered inline or portaled) */
+  const toolbarContent = (
+    <>
+      <div className="flex items-center gap-1">
+        <button
+          className={cn(
+            "btn btn-xs gap-1",
+            bulkActionMode ? "btn-primary" : "btn-ghost",
+          )}
+          onClick={toggleBulkActionMode}
+        >
+          <Check className="w-3 h-3" />
+          {bulkActionMode ? `Select (${multiSelected.size})` : "Select"}
+        </button>
+        {bulkActionMode && multiSelected.size > 0 && (
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={clearMultiSelection}
+          >
+            Clear
+          </button>
         )}
       </div>
+      <div className="flex items-center gap-0.5">
+        <button
+          className={cn(
+            "btn btn-xs gap-1",
+            splitView ? "btn-secondary" : "btn-ghost",
+          )}
+          onClick={() => setSplitView((p) => !p)}
+          title="Toggle split view"
+        >
+          {splitView ? "Unsplit" : "Split"}
+        </button>
+        <button
+          className="btn btn-ghost btn-xs btn-square"
+          onClick={undo}
+          disabled={!canUndo}
+          title="Undo (Ctrl+Z)"
+        >
+          <Undo2 className="w-3.5 h-3.5" />
+        </button>
+        <button
+          className="btn btn-ghost btn-xs btn-square"
+          onClick={redo}
+          disabled={!canRedo}
+          title="Redo (Ctrl+Y)"
+        >
+          <Redo2 className="w-3.5 h-3.5" />
+        </button>
+      </div>
+    </>
+  );
 
-      {/* Detail panel — fixed 25% width, no gap */}
-      <div className="w-full lg:w-1/4 lg:min-w-[280px] lg:max-w-[480px] flex-shrink-0 border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
-        {focusedTask ? (
-          <TaskPreviewPanel
-            task={focusedTask}
+  return (
+    <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-100 relative">
+      {/* Toolbar: portal to parent row if available, otherwise render inline */}
+      {toolbarPortal ? (
+        createPortal(toolbarContent, toolbarPortal)
+      ) : (
+        <div className="flex items-center justify-between px-3 py-1 border-b border-base-200 bg-base-200/20">
+          {toolbarContent}
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0">
+        {/* Columns area — scrollable, fills space beside preview panel */}
+        <div
+          className={cn(
+            "flex flex-col flex-1 min-w-0",
+            splitView && "divide-y divide-base-300",
+          )}
+        >
+          {/* Top row — always shown */}
+          <div
+            className={cn(
+              "flex flex-row min-w-0 overflow-hidden",
+              splitView ? "flex-1 min-h-0" : "flex-1",
+            )}
+          >
+            {columnMeta.map(
+              (col) =>
+                col.show && (
+                  <TaskColumn
+                    key={col.depth}
+                    depth={col.depth}
+                    label={col.label}
+                    tasks={col.tasks}
+                    loading={col.loading}
+                    selectedId={selected[col.depth]}
+                    onSelect={(id) => selectTask(col.depth, id)}
+                    onAdd={() => openCreate(col.depth)}
+                    onBulkAdd={() => openBulkCreate(col.depth)}
+                    members={members}
+                    width={columnWidths[col.depth]}
+                    canEdit={canEditColumns}
+                    isEditing={editingColumn === col.depth}
+                    editingName={editingName}
+                    onEditingNameChange={setEditingName}
+                    onStartEdit={() => startEditingName(col.depth)}
+                    onConfirmEdit={() => confirmEditName(col.depth)}
+                    onCancelEdit={cancelEditName}
+                    onResizeStart={(e) => handleResizeStart(col.depth, e)}
+                    bulkMode={bulkActionMode}
+                    multiSelected={multiSelected}
+                    onToggleSelect={toggleMultiSelect}
+                    onSelectAll={selectAllInColumn}
+                    filter={columnFilters.get(col.depth)}
+                    onFilterChange={(f) => setFilterForColumn(col.depth, f)}
+                    onTaskContextMenu={(e, task) => {
+                      e.preventDefault();
+                      setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        task,
+                        depth: col.depth,
+                      });
+                    }}
+                    onDragStart={(task) => setDraggedTask(task)}
+                    onDragEnd={() => {
+                      setDraggedTask(null);
+                      setDragOverTaskId(null);
+                    }}
+                    onDropOnTask={handleDropOnTask}
+                    onDropOnColumn={() => handleDropOnColumn(col.depth)}
+                    dragOverTaskId={dragOverTaskId}
+                    onDragOverTask={setDragOverTaskId}
+                  />
+                ),
+            )}
+          </div>
+          {/* Bottom row — split view only */}
+          {splitView && (
+            <div className="flex flex-row flex-1 min-w-0 min-h-0 overflow-hidden">
+              {splitColumnMeta.map(
+                (col) =>
+                  col.show && (
+                    <TaskColumn
+                      key={`split-${col.depth}`}
+                      depth={col.depth}
+                      label={col.label}
+                      tasks={col.tasks}
+                      loading={col.loading}
+                      selectedId={splitSelected[col.depth]}
+                      onSelect={(id) => splitSelectTask(col.depth, id)}
+                      onAdd={() => openCreate(col.depth)}
+                      onBulkAdd={() => openBulkCreate(col.depth)}
+                      members={members}
+                      width={columnWidths[col.depth]}
+                      canEdit={canEditColumns}
+                      isEditing={false}
+                      editingName=""
+                      onEditingNameChange={() => {}}
+                      onStartEdit={() => {}}
+                      onConfirmEdit={() => {}}
+                      onCancelEdit={() => {}}
+                      onResizeStart={(e) => handleResizeStart(col.depth, e)}
+                      bulkMode={bulkActionMode}
+                      multiSelected={multiSelected}
+                      onToggleSelect={toggleMultiSelect}
+                      onSelectAll={selectAllInColumn}
+                      filter={columnFilters.get(col.depth)}
+                      onFilterChange={(f) => setFilterForColumn(col.depth, f)}
+                      onTaskContextMenu={(e, task) => {
+                        e.preventDefault();
+                        setContextMenu({
+                          x: e.clientX,
+                          y: e.clientY,
+                          task,
+                          depth: col.depth,
+                        });
+                      }}
+                      onDragStart={(task) => setDraggedTask(task)}
+                      onDragEnd={() => {
+                        setDraggedTask(null);
+                        setDragOverTaskId(null);
+                      }}
+                      onDropOnTask={handleDropOnTask}
+                      onDropOnColumn={() => handleDropOnColumn(col.depth)}
+                      dragOverTaskId={dragOverTaskId}
+                      onDragOverTask={setDragOverTaskId}
+                    />
+                  ),
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Detail panel — flexible width, shrinks with viewport */}
+        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
+          {focusedTask ? (
+            <TaskPreviewPanel
+              task={focusedTask}
+              orgId={orgId}
+              orgSlug={orgSlug}
+              projectId={projectId}
+              members={effectiveMembers}
+              projectMembers={members}
+              currentUserId={currentUserId}
+              userProjectRole={userProjectRole}
+              updating={updatePending}
+              onUpdate={(data) => handleUpdate(focusedTask.id, data)}
+              onDelete={() => setDeleteTarget(focusedTask)}
+              onDuplicate={() => handleDuplicate(focusedTask.id)}
+              onAddSubtask={() => {
+                if (focusedTask.depth < MAX_DEPTH) {
+                  setCreateParentId(focusedTask.id);
+                  setCreateDepth(focusedTask.depth + 1);
+                }
+              }}
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-base-content/30 p-6">
+              <p className="text-sm text-center">
+                Select a task to view details
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Create modal */}
+        {createDepth !== null && (
+          <CreateTaskModal
             orgId={orgId}
-            orgSlug={orgSlug}
             projectId={projectId}
-            members={effectiveMembers}
-            projectMembers={members}
-            currentUserId={currentUserId}
-            userProjectRole={userProjectRole}
-            updating={updatePending}
-            onUpdate={(data) => handleUpdate(focusedTask.id, data)}
-            onDelete={() => setDeleteTarget(focusedTask)}
-            onDuplicate={() => handleDuplicate(focusedTask.id)}
-            onAddSubtask={() => {
-              if (focusedTask.depth < MAX_DEPTH) {
-                setCreateParentId(focusedTask.id);
-                setCreateDepth(focusedTask.depth + 1);
-              }
+            parentId={createParentId}
+            parentTask={createParentTask}
+            members={members}
+            onClose={() => {
+              setCreateDepth(null);
+              setCreateParentId(null);
+            }}
+            onCreated={() => {
+              // WS broadcast task:created will add to store → synced via useEffect
+              setCreateDepth(null);
+              setCreateParentId(null);
             }}
           />
-        ) : (
-          <div className="h-full flex items-center justify-center text-base-content/30 p-6">
-            <p className="text-sm text-center">Select a task to view details</p>
-          </div>
         )}
-      </div>
 
-      {/* Create modal */}
-      {createDepth !== null && (
-        <CreateTaskModal
-          orgId={orgId}
-          projectId={projectId}
-          parentId={createParentId}
+        {/* Bulk create modal */}
+        {bulkCreateDepth !== null && (
+          <BulkCreateTaskModal
+            projectId={projectId}
+            parentId={bulkCreateParentId}
+            members={members}
+            onClose={() => {
+              setBulkCreateDepth(null);
+              setBulkCreateParentId(null);
+            }}
+          />
+        )}
+
+        {/* Delete confirmation */}
+        <ConfirmDialog
+          open={!!deleteTarget}
+          onClose={() => setDeleteTarget(null)}
+          onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
+          title="Delete Task"
+          message={`Delete "${deleteTarget?.title}" and all its subtasks?`}
+          loading={deletePending}
+        />
+
+        {/* Bulk delete confirmation */}
+        <ConfirmDialog
+          open={bulkDeleteConfirm}
+          onClose={() => setBulkDeleteConfirm(false)}
+          onConfirm={handleBulkDelete}
+          title="Delete Selected Tasks"
+          message={`Delete ${multiSelected.size} selected task${multiSelected.size !== 1 ? "s" : ""} and all their subtasks?`}
+        />
+
+        {/* Update deadline conflict confirmation */}
+        {updateDeadlineConflicts.length > 0 &&
+          (() => {
+            const ancestorConflicts = updateDeadlineConflicts.filter(
+              (c) => c.direction === "ancestor",
+            );
+            const descendantConflicts = updateDeadlineConflicts.filter(
+              (c) => c.direction === "descendant" || !c.direction,
+            );
+            return (
+              <dialog
+                className="modal modal-open"
+                style={{ backgroundColor: "transparent" }}
+              >
+                <div className="modal-box shadow-2xl max-w-md">
+                  <h3 className="font-bold text-lg flex items-center gap-2">
+                    <span className="text-warning">⚠</span> Date Range Conflict
+                  </h3>
+                  <div className="py-3 space-y-2 text-sm">
+                    {ancestorConflicts.length > 0 && (
+                      <div>
+                        <p className="text-base-content/70 mb-1">
+                          The new due date extends beyond{" "}
+                          {ancestorConflicts.length} parent task
+                          {ancestorConflicts.length !== 1 ? "s" : ""}:
+                        </p>
+                        <ul className="list-disc list-inside text-xs space-y-0.5">
+                          {ancestorConflicts.map((c) => (
+                            <li
+                              key={c.task_id}
+                              className="text-base-content/60"
+                            >
+                              {c.title}{" "}
+                              <span className="text-warning">
+                                (due{" "}
+                                {c.due_date
+                                  ? new Date(c.due_date).toLocaleDateString()
+                                  : "—"}
+                                )
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {descendantConflicts.length > 0 && (
+                      <div>
+                        <p className="text-base-content/70 mb-1">
+                          {descendantConflicts.length} subtask
+                          {descendantConflicts.length !== 1 ? "s" : ""} fall
+                          outside the new date range:
+                        </p>
+                        <ul className="list-disc list-inside text-xs space-y-0.5">
+                          {descendantConflicts.slice(0, 8).map((c) => (
+                            <li
+                              key={c.task_id}
+                              className="text-base-content/60"
+                            >
+                              {c.title}{" "}
+                              <span className="text-warning">
+                                (due{" "}
+                                {c.due_date
+                                  ? new Date(c.due_date).toLocaleDateString()
+                                  : "—"}
+                                )
+                              </span>
+                            </li>
+                          ))}
+                          {descendantConflicts.length > 8 && (
+                            <li className="text-base-content/40">
+                              …and {descendantConflicts.length - 8} more
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                    <p className="text-base-content/50 text-xs pt-1">
+                      Apply to automatically adjust all affected tasks to fit
+                      within the new range.
+                    </p>
+                  </div>
+                  <div className="modal-action">
+                    <button
+                      className="btn btn-sm"
+                      onClick={() => {
+                        setUpdateDeadlineConflicts([]);
+                        pendingUpdateRef.current = null;
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      className="btn btn-sm btn-warning"
+                      onClick={confirmExtendDeadlinesOnUpdate}
+                    >
+                      Apply &amp; Adjust
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="modal-backdrop"
+                  style={{ background: "transparent" }}
+                  onClick={() => {
+                    setUpdateDeadlineConflicts([]);
+                    pendingUpdateRef.current = null;
+                  }}
+                />
+              </dialog>
+            );
+          })()}
+      </div>
+      {/* end main content */}
+
+      {/* Right-click context menu */}
+      {contextMenu && (
+        <TaskContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          task={contextMenu.task}
+          depth={contextMenu.depth}
           members={members}
-          onClose={() => {
-            setCreateDepth(null);
-            setCreateParentId(null);
+          onClose={() => setContextMenu(null)}
+          onSelect={() => selectTask(contextMenu.depth, contextMenu.task.id)}
+          onUpdate={(data) => handleUpdate(contextMenu.task.id, data)}
+          onDelete={() => setDeleteTarget(contextMenu.task)}
+          onDuplicate={() => handleDuplicate(contextMenu.task.id)}
+          onAddSubtask={() => {
+            if (contextMenu.task.depth < MAX_DEPTH) {
+              setCreateParentId(contextMenu.task.id);
+              setCreateDepth(contextMenu.task.depth + 1);
+            }
           }}
-          onCreated={() => {
-            refetchAll();
-            setCreateDepth(null);
-            setCreateParentId(null);
+          onCopyLink={() => {
+            const url = `${window.location.origin}${window.location.pathname}?task=${contextMenu.task.id}`;
+            navigator.clipboard.writeText(url);
           }}
         />
       )}
 
-      {/* Delete confirmation */}
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
-        title="Delete Task"
-        message={`Delete "${deleteTarget?.title}" and all its subtasks?`}
-        loading={deletePending}
-      />
+      {/* Floating bulk actions bar */}
+      {bulkActionMode && multiSelected.size > 0 && (
+        <BulkActionsBar
+          selectedCount={multiSelected.size}
+          members={members}
+          onAssign={(assigneeId) =>
+            handleBulkUpdate({ assignee_id: assigneeId || "" })
+          }
+          onSetPriority={(priority) => handleBulkUpdate({ priority })}
+          onSetStatus={(status) => handleBulkUpdate({ status })}
+          onSetLabels={(labels) => handleBulkUpdate({ labels })}
+          onDelete={() => setBulkDeleteConfirm(true)}
+          onClear={clearMultiSelection}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Floating Bulk Actions Bar
+   ═══════════════════════════════════════════════════════ */
+
+function BulkActionsBar({
+  selectedCount,
+  members,
+  onAssign,
+  onSetPriority,
+  onSetStatus,
+  onSetLabels,
+  onDelete,
+  onClear,
+}: {
+  selectedCount: number;
+  members: ProjectMember[];
+  onAssign: (assigneeId: string) => void;
+  onSetPriority: (priority: string) => void;
+  onSetStatus: (status: string) => void;
+  onSetLabels: (labels: string[]) => void;
+  onDelete: () => void;
+  onClear: () => void;
+}) {
+  const [showAssign, setShowAssign] = useState(false);
+  const [showLabels, setShowLabels] = useState(false);
+  const [labelInput, setLabelInput] = useState("");
+
+  return (
+    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-50 bg-base-300 shadow-xl rounded-xl px-4 py-2.5 flex items-center gap-2 border border-base-content/10">
+      <span className="text-sm font-medium text-primary mr-1">
+        {selectedCount} selected
+      </span>
+      <div className="divider divider-horizontal mx-0 h-6" />
+
+      {/* Status dropdown */}
+      <div className="dropdown dropdown-top">
+        <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1">
+          Status
+        </div>
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-36 p-1 mb-2"
+        >
+          {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
+            <li key={s}>
+              <a onClick={() => onSetStatus(s)} className="text-xs">
+                {s === "in_progress"
+                  ? "In Progress"
+                  : s.charAt(0).toUpperCase() + s.slice(1)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Priority dropdown */}
+      <div className="dropdown dropdown-top">
+        <div tabIndex={0} role="button" className="btn btn-ghost btn-xs gap-1">
+          Priority
+        </div>
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-32 p-1 mb-2"
+        >
+          {(["critical", "high", "medium", "low"] as const).map((p) => (
+            <li key={p}>
+              <a onClick={() => onSetPriority(p)} className="text-xs">
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Assign dropdown */}
+      <div className="dropdown dropdown-top">
+        <div
+          tabIndex={0}
+          role="button"
+          className="btn btn-ghost btn-xs gap-1"
+          onClick={() => setShowAssign(!showAssign)}
+        >
+          <UserPlus className="w-3 h-3" /> Assign
+        </div>
+        <ul
+          tabIndex={0}
+          className="dropdown-content menu bg-base-200 rounded-box shadow-lg z-50 w-48 p-1 mb-2 max-h-48 overflow-y-auto"
+        >
+          <li>
+            <a onClick={() => onAssign("")} className="text-xs">
+              Unassigned
+            </a>
+          </li>
+          {members.map((m) => (
+            <li key={m.user_id}>
+              <a onClick={() => onAssign(m.user_id)} className="text-xs">
+                {m.display_name || m.email || m.user_id.slice(0, 12)}
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Labels */}
+      <div className="dropdown dropdown-top">
+        <div
+          tabIndex={0}
+          role="button"
+          className="btn btn-ghost btn-xs gap-1"
+          onClick={() => setShowLabels(!showLabels)}
+        >
+          <Tags className="w-3 h-3" /> Labels
+        </div>
+        <div
+          tabIndex={0}
+          className="dropdown-content bg-base-200 rounded-box shadow-lg z-50 w-56 p-3 mb-2"
+        >
+          <div className="flex gap-1.5">
+            <input
+              type="text"
+              className="input input-bordered input-xs flex-1"
+              placeholder="label1, label2"
+              value={labelInput}
+              onChange={(e) => setLabelInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  const labels = labelInput
+                    .split(",")
+                    .map((l) => l.trim())
+                    .filter(Boolean);
+                  if (labels.length > 0) {
+                    onSetLabels(labels);
+                    setLabelInput("");
+                  }
+                }
+              }}
+            />
+            <button
+              className="btn btn-primary btn-xs"
+              onClick={() => {
+                const labels = labelInput
+                  .split(",")
+                  .map((l) => l.trim())
+                  .filter(Boolean);
+                if (labels.length > 0) {
+                  onSetLabels(labels);
+                  setLabelInput("");
+                }
+              }}
+            >
+              Apply
+            </button>
+          </div>
+          <p className="text-[10px] text-base-content/50 mt-1">
+            Comma-separated labels
+          </p>
+        </div>
+      </div>
+
+      <div className="divider divider-horizontal mx-0 h-6" />
+
+      {/* Delete */}
+      <button
+        className="btn btn-ghost btn-xs text-error gap-1"
+        onClick={onDelete}
+      >
+        <Trash2 className="w-3 h-3" /> Delete
+      </button>
+
+      {/* Clear selection */}
+      <button
+        className="btn btn-ghost btn-xs btn-square"
+        onClick={onClear}
+        title="Clear selection"
+      >
+        <X className="w-3.5 h-3.5" />
+      </button>
     </div>
   );
 }
@@ -408,6 +1969,7 @@ function TaskColumn({
   selectedId,
   onSelect,
   onAdd,
+  onBulkAdd,
   members,
   width,
   canEdit,
@@ -418,6 +1980,19 @@ function TaskColumn({
   onConfirmEdit,
   onCancelEdit,
   onResizeStart,
+  bulkMode,
+  multiSelected,
+  onToggleSelect,
+  onSelectAll,
+  filter,
+  onFilterChange,
+  onTaskContextMenu,
+  onDragStart,
+  onDragEnd,
+  onDropOnTask,
+  onDropOnColumn,
+  dragOverTaskId,
+  onDragOverTask,
 }: {
   depth: number;
   label: string;
@@ -426,6 +2001,7 @@ function TaskColumn({
   selectedId: string | null;
   onSelect: (id: string) => void;
   onAdd: () => void;
+  onBulkAdd: () => void;
   members: ProjectMember[];
   width: number;
   canEdit: boolean;
@@ -436,20 +2012,35 @@ function TaskColumn({
   onConfirmEdit: () => void;
   onCancelEdit: () => void;
   onResizeStart: (e: React.MouseEvent) => void;
+  bulkMode: boolean;
+  multiSelected: Set<string>;
+  onToggleSelect: (id: string) => void;
+  onSelectAll: (tasks: Task[]) => void;
+  filter?: ColumnFilterState;
+  onFilterChange: (f: ColumnFilterState) => void;
+  onTaskContextMenu: (e: React.MouseEvent, task: Task) => void;
+  onDragStart: (task: Task) => void;
+  onDragEnd: () => void;
+  onDropOnTask: (targetTask: Task) => void;
+  onDropOnColumn: () => void;
+  dragOverTaskId: string | null;
+  onDragOverTask: (taskId: string | null) => void;
 }) {
   const parentRef = useRef<HTMLDivElement>(null);
-  
+  const [showFilter, setShowFilter] = useState(false);
+  const filterActive = isFilterActive(filter);
+
   const virtualizer = useVirtualizer({
     count: tasks.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 52, // approximate row height
+    estimateSize: () => 58,
     overscan: 5,
   });
 
   return (
-    <div 
-      className="flex flex-col border-r border-base-200 shrink-0 relative flex-1"
-      style={{ minWidth: `${width}px`, flex: width }}
+    <div
+      className="flex flex-col border-r border-base-200 relative flex-1 min-w-0"
+      style={{ flex: `${width} 1 0%` }}
     >
       {/* Header */}
       <div className="px-3 py-2 border-b border-base-200 flex items-center justify-between bg-base-200/30">
@@ -462,22 +2053,28 @@ function TaskColumn({
               className="input input-xs input-bordered flex-1 min-w-0 text-xs uppercase tracking-wide font-semibold"
               autoFocus
               onKeyDown={(e) => {
-                if (e.key === 'Enter') onConfirmEdit();
-                if (e.key === 'Escape') onCancelEdit();
+                if (e.key === "Enter") onConfirmEdit();
+                if (e.key === "Escape") onCancelEdit();
               }}
             />
-            <button className="btn btn-ghost btn-xs btn-square text-success" onClick={onConfirmEdit}>
+            <button
+              className="btn btn-ghost btn-xs btn-square text-success"
+              onClick={onConfirmEdit}
+            >
               <Check className="w-3 h-3" />
             </button>
-            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={onCancelEdit}>
+            <button
+              className="btn btn-ghost btn-xs btn-square text-error"
+              onClick={onCancelEdit}
+            >
               <X className="w-3 h-3" />
             </button>
           </div>
         ) : (
-          <span 
+          <span
             className={cn(
               "text-xs font-semibold uppercase tracking-wide text-base-content/60",
-              canEdit && "cursor-pointer hover:text-base-content"
+              canEdit && "cursor-pointer hover:text-base-content",
             )}
             onDoubleClick={onStartEdit}
             title={canEdit ? "Double-click to rename" : undefined}
@@ -486,8 +2083,33 @@ function TaskColumn({
           </span>
         )}
         <div className="flex items-center gap-1">
+          {bulkMode && tasks.length > 0 && (
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              onClick={() => {
+                const allSelected = tasks.every((t) => multiSelected.has(t.id));
+                if (allSelected) {
+                  // Deselect all in this column (handled by parent set logic)
+                  for (const t of tasks) onToggleSelect(t.id);
+                } else {
+                  onSelectAll(tasks);
+                }
+              }}
+              title="Select all in column"
+            >
+              <input
+                type="checkbox"
+                className="checkbox checkbox-xs checkbox-primary"
+                checked={
+                  tasks.length > 0 &&
+                  tasks.every((t) => multiSelected.has(t.id))
+                }
+                readOnly
+              />
+            </button>
+          )}
           {canEdit && !isEditing && (
-            <button 
+            <button
               className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 hover:opacity-100"
               onClick={onStartEdit}
               title="Rename column"
@@ -496,14 +2118,58 @@ function TaskColumn({
             </button>
           )}
           <span className="text-xs text-base-content/40">{tasks.length}</span>
-          <button className="btn btn-ghost btn-xs btn-square" onClick={onAdd} title={`Add ${label.toLowerCase()}`}>
+          <button
+            className={cn(
+              "btn btn-ghost btn-xs btn-square",
+              filterActive && "text-primary",
+            )}
+            onClick={() => setShowFilter((p) => !p)}
+            title="Filter column"
+          >
+            <Filter className="w-3 h-3" />
+          </button>
+          <button
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={onBulkAdd}
+            title={`Bulk add ${label.toLowerCase()}`}
+          >
+            <ListPlus className="w-3.5 h-3.5" />
+          </button>
+          <button
+            className="btn btn-ghost btn-xs btn-square"
+            onClick={onAdd}
+            title={`Add ${label.toLowerCase()}`}
+          >
             <Plus className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
 
+      {/* Filter dropdown */}
+      {showFilter && (
+        <ColumnFilterDropdown
+          filter={filter ?? { ...EMPTY_FILTER }}
+          members={members}
+          onChange={onFilterChange}
+          onClose={() => setShowFilter(false)}
+        />
+      )}
+
       {/* List with Virtual Scrolling */}
-      <div ref={parentRef} className="flex-1 overflow-y-auto">
+      <div
+        ref={parentRef}
+        className="flex-1 overflow-y-auto"
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }}
+        onDrop={(e) => {
+          // Only handle if not dropped on a specific task (bubbled up)
+          if ((e.target as HTMLElement).closest("[data-task-drop]")) return;
+          e.preventDefault();
+          onDropOnColumn();
+        }}
+      >
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="w-4 h-4 animate-spin text-base-content/30" />
@@ -519,68 +2185,161 @@ function TaskColumn({
           <div
             style={{
               height: `${virtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
+              width: "100%",
+              position: "relative",
             }}
           >
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const task = tasks[virtualItem.index];
               const isSelected = task.id === selectedId;
-              const assignee = members.find((m) => m.user_id === task.assignee_id);
+              const isMultiSelected = multiSelected.has(task.id);
+              const isDragOver = dragOverTaskId === task.id;
+              const ids =
+                task.assignee_ids ||
+                (task.assignee_id ? [task.assignee_id] : []);
+              const progress = task.progress ?? 0;
+              const startStr = task.start_date
+                ? new Date(task.start_date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : null;
+              const dueStr = task.due_date
+                ? new Date(task.due_date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })
+                : null;
               return (
                 <button
                   key={task.id}
-                  onClick={() => onSelect(task.id)}
+                  data-task-drop
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = "move";
+                    e.dataTransfer.setData("text/plain", task.id);
+                    onDragStart(task);
+                  }}
+                  onDragEnd={onDragEnd}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+                    onDragOverTask(task.id);
+                  }}
+                  onDragLeave={() => onDragOverTask(null)}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDropOnTask(task);
+                  }}
+                  onClick={() => {
+                    if (bulkMode) {
+                      onToggleSelect(task.id);
+                    } else {
+                      onSelect(task.id);
+                    }
+                  }}
+                  onContextMenu={(e) => onTaskContextMenu(e, task)}
                   style={{
-                    position: 'absolute',
+                    position: "absolute",
                     top: 0,
                     left: 0,
-                    width: '100%',
+                    width: "100%",
                     height: `${virtualItem.size}px`,
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                   className={cn(
-                    "w-full text-left px-3 py-2 flex items-center gap-2 transition-colors border-l-2",
-                    "hover:bg-base-200/50",
-                    isSelected ? "bg-primary/10 border-l-primary" : "border-l-transparent",
+                    "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2",
+                    "hover:bg-pink-50 dark:hover:bg-pink-950/20",
+                    isSelected && !bulkMode
+                      ? "bg-primary/20 border-l-primary shadow-sm"
+                      : "border-l-transparent",
+                    bulkMode &&
+                      isMultiSelected &&
+                      "bg-primary/20 border-l-primary shadow-sm",
+                    isDragOver &&
+                      "bg-accent/20 border-l-accent scale-[1.02] shadow-md",
                   )}
                 >
-                  {/* Status dot */}
-                  <span
-                    className={cn(
-                      "w-2 h-2 rounded-full shrink-0",
-                      task.status === "done" && "bg-success",
-                      task.status === "in_progress" && "bg-info",
-                      task.status === "blocked" && "bg-error",
-                      task.status === "todo" && "bg-base-content/20",
+                  {/* Row 1: checkbox + status dot + title + avatars + chevron */}
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    {bulkMode && (
+                      <input
+                        type="checkbox"
+                        className="checkbox checkbox-xs checkbox-primary shrink-0"
+                        checked={isMultiSelected}
+                        readOnly
+                      />
                     )}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm truncate leading-tight">{task.title}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span
-                        className={cn(
-                          "text-[10px] leading-none px-1 py-0.5 rounded",
-                          task.priority === "critical" && "bg-error/10 text-error",
-                          task.priority === "high" && "bg-warning/10 text-warning",
-                          task.priority === "medium" && "bg-info/10 text-info",
-                          task.priority === "low" && "bg-base-200 text-base-content/50",
-                        )}
-                      >
-                        {task.priority}
-                      </span>
-                      {assignee && (
-                        <Avatar
-                          name={assignee.display_name || assignee.email || ""}
-                          size="xs"
-                          src={assignee.avatar_url}
-                        />
+                    <span
+                      className={cn(
+                        "w-2 h-2 rounded-full shrink-0",
+                        task.status === "done" && "bg-success",
+                        task.status === "in_progress" && "bg-info",
+                        task.status === "blocked" && "bg-error",
+                        task.status === "todo" && "bg-base-content/20",
                       )}
+                    />
+                    <span className="text-sm truncate leading-tight flex-1 min-w-0">
+                      {task.title}
+                    </span>
+                    <AvatarStack
+                      members={members}
+                      assigneeIds={ids}
+                      max={3}
+                      size="xs"
+                    />
+                    {task.depth < MAX_DEPTH && (
+                      <ChevronRight className="w-3.5 h-3.5 text-base-content/20 shrink-0" />
+                    )}
+                  </div>
+
+                  {/* Row 2: priority + dates */}
+                  <div className="flex items-center gap-1.5 mt-px pl-[14px]">
+                    <span
+                      className={cn(
+                        "text-[10px] leading-none px-1 py-0.5 rounded",
+                        task.priority === "critical" &&
+                          "bg-error/10 text-error",
+                        task.priority === "high" &&
+                          "bg-warning/10 text-warning",
+                        task.priority === "medium" && "bg-info/10 text-info",
+                        task.priority === "low" &&
+                          "bg-base-200 text-base-content/50",
+                      )}
+                    >
+                      {task.priority}
+                    </span>
+                    {task.review_status === "pending" && (
+                      <PendingReviewBadge count={1} />
+                    )}
+                    {(startStr || dueStr) && (
+                      <span className="text-[11px] font-medium text-base-content/60 truncate">
+                        {startStr && dueStr
+                          ? `${startStr} → ${dueStr}`
+                          : startStr || dueStr}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Row 3: thin progress bar */}
+                  <div className="w-full mt-auto">
+                    <div className="w-full h-[2px] bg-base-200 rounded-full overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          progress >= 0.8
+                            ? "bg-success"
+                            : progress >= 0.4
+                              ? "bg-info"
+                              : progress > 0
+                                ? "bg-warning"
+                                : "bg-base-200",
+                        )}
+                        style={{ width: `${Math.round(progress * 100)}%` }}
+                      />
                     </div>
                   </div>
-                  {task.depth < MAX_DEPTH && (
-                    <ChevronRight className="w-3.5 h-3.5 text-base-content/20 shrink-0" />
-                  )}
                 </button>
               );
             })}
@@ -602,6 +2361,241 @@ function TaskColumn({
 }
 
 /* ═══════════════════════════════════════════════════════
+   Column Filter Dropdown (Excel-like)
+   ═══════════════════════════════════════════════════════ */
+
+function ColumnFilterDropdown({
+  filter,
+  members,
+  onChange,
+  onClose,
+}: {
+  filter: ColumnFilterState;
+  members: ProjectMember[];
+  onChange: (f: ColumnFilterState) => void;
+  onClose: () => void;
+}) {
+  const [local, setLocal] = useState<ColumnFilterState>({ ...filter });
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on click outside
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [onClose]);
+
+  const toggleStatus = (s: TaskStatus) => {
+    setLocal((p) => ({
+      ...p,
+      statuses: p.statuses.includes(s)
+        ? p.statuses.filter((x) => x !== s)
+        : [...p.statuses, s],
+    }));
+  };
+
+  const togglePriority = (pr: TaskPriority) => {
+    setLocal((p) => ({
+      ...p,
+      priorities: p.priorities.includes(pr)
+        ? p.priorities.filter((x) => x !== pr)
+        : [...p.priorities, pr],
+    }));
+  };
+
+  const toggleAssignee = (id: string) => {
+    setLocal((p) => ({
+      ...p,
+      assigneeIds: p.assigneeIds.includes(id)
+        ? p.assigneeIds.filter((x) => x !== id)
+        : [...p.assigneeIds, id],
+    }));
+  };
+
+  const applyFilter = () => {
+    onChange(local);
+    onClose();
+  };
+
+  const clearFilter = () => {
+    onChange({ ...EMPTY_FILTER });
+    onClose();
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-[38px] left-0 right-0 z-50 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-b-lg shadow-xl max-h-[60vh] overflow-y-auto"
+    >
+      <div className="p-2 space-y-2.5">
+        {/* Search */}
+        <div>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Search
+          </label>
+          <input
+            type="text"
+            className="input input-bordered input-xs w-full mt-0.5"
+            placeholder="Filter by title..."
+            value={local.search}
+            onChange={(e) =>
+              setLocal((p) => ({ ...p, search: e.target.value }))
+            }
+          />
+        </div>
+
+        {/* Status */}
+        <div>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Status
+          </label>
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
+              <button
+                key={s}
+                className={cn(
+                  "badge badge-sm cursor-pointer gap-1",
+                  local.statuses.includes(s) ? "badge-primary" : "badge-ghost",
+                )}
+                onClick={() => toggleStatus(s)}
+              >
+                {s === "in_progress"
+                  ? "In Progress"
+                  : s.charAt(0).toUpperCase() + s.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Priority */}
+        <div>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Priority
+          </label>
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {(["critical", "high", "medium", "low"] as const).map((p) => (
+              <button
+                key={p}
+                className={cn(
+                  "badge badge-sm cursor-pointer gap-1",
+                  local.priorities.includes(p)
+                    ? "badge-primary"
+                    : "badge-ghost",
+                )}
+                onClick={() => togglePriority(p)}
+              >
+                {p.charAt(0).toUpperCase() + p.slice(1)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Assignee */}
+        <div>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Assignee
+          </label>
+          <div className="flex flex-col gap-0.5 mt-0.5 max-h-24 overflow-y-auto">
+            <label className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
+              <input
+                type="checkbox"
+                className="checkbox checkbox-xs"
+                checked={local.assigneeIds.includes("")}
+                onChange={() => toggleAssignee("")}
+              />
+              <span className="text-xs text-base-content/60">Unassigned</span>
+            </label>
+            {members.map((m) => (
+              <label
+                key={m.user_id}
+                className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200"
+              >
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-xs"
+                  checked={local.assigneeIds.includes(m.user_id)}
+                  onChange={() => toggleAssignee(m.user_id)}
+                />
+                <span className="text-xs truncate">
+                  {m.display_name || m.email || m.user_id.slice(0, 8)}
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Labels */}
+        <div>
+          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            Labels
+          </label>
+          <input
+            type="text"
+            className="input input-bordered input-xs w-full mt-0.5"
+            placeholder="label1, label2 (comma-separated)"
+            value={local.labels.join(", ")}
+            onChange={(e) =>
+              setLocal((p) => ({
+                ...p,
+                labels: e.target.value
+                  .split(",")
+                  .map((l) => l.trim())
+                  .filter(Boolean),
+              }))
+            }
+          />
+        </div>
+
+        {/* Due date range */}
+        <div className="grid grid-cols-2 gap-1.5">
+          <div>
+            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+              Due From
+            </label>
+            <input
+              type="date"
+              className="input input-bordered input-xs w-full mt-0.5"
+              value={local.dueDateFrom}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, dueDateFrom: e.target.value }))
+              }
+            />
+          </div>
+          <div>
+            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+              Due To
+            </label>
+            <input
+              type="date"
+              className="input input-bordered input-xs w-full mt-0.5"
+              value={local.dueDateTo}
+              onChange={(e) =>
+                setLocal((p) => ({ ...p, dueDateTo: e.target.value }))
+              }
+            />
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="flex items-center gap-1 pt-1 border-t border-base-200">
+          <button
+            className="btn btn-primary btn-xs flex-1"
+            onClick={applyFilter}
+          >
+            Apply
+          </button>
+          <button className="btn btn-ghost btn-xs flex-1" onClick={clearFilter}>
+            Clear
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
    Create task modal
    ═══════════════════════════════════════════════════════ */
 
@@ -609,13 +2603,18 @@ interface CreateForm {
   title: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assignee_id: string;
+  assignee_ids: string[];
+  due_date: string;
+  start_date: string;
+  reporter_id: string;
+  labels: string[];
 }
 
 function CreateTaskModal({
   orgId,
   projectId,
   parentId,
+  parentTask,
   members,
   onClose,
   onCreated,
@@ -623,6 +2622,7 @@ function CreateTaskModal({
   orgId: string;
   projectId: string;
   parentId: string | null;
+  parentTask: Task | null;
   members: ProjectMember[];
   onClose: () => void;
   onCreated: () => void;
@@ -630,91 +2630,714 @@ function CreateTaskModal({
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors: formErrors },
   } = useForm<CreateForm>({
-    defaultValues: { status: "todo", priority: "medium", assignee_id: "" },
+    defaultValues: {
+      status: "todo",
+      priority: parentTask?.priority || "medium",
+      assignee_ids: parentTask?.assignee_ids?.length
+        ? [...parentTask.assignee_ids]
+        : [],
+      due_date: parentTask?.due_date ? parentTask.due_date.slice(0, 10) : "",
+      start_date: parentTask?.start_date
+        ? parentTask.start_date.slice(0, 10)
+        : "",
+      reporter_id: parentTask?.reporter_id || "",
+      labels: parentTask?.labels?.length ? [...parentTask.labels] : [],
+    },
   });
   const send = useProjectTaskStore((s) => s.send);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+  const [deadlineConflicts, setDeadlineConflicts] = useState<
+    DeadlineConflict[]
+  >([]);
+  const [pendingPayload, setPendingPayload] = useState<Record<
+    string,
+    unknown
+  > | null>(null);
+  const watchedAssignees = watch("assignee_ids");
 
-  const onSubmit = async (data: CreateForm) => {
+  const toggleAssignee = (userId: string) => {
+    const current = watchedAssignees || [];
+    const next = current.includes(userId)
+      ? current.filter((id) => id !== userId)
+      : [...current, userId];
+    setValue("assignee_ids", next);
+  };
+
+  const submitPayload = async (payload: Record<string, unknown>) => {
     if (!send) return;
     setCreating(true);
     setError("");
     try {
-      const payload: Record<string, unknown> = {
-        title: data.title,
-        status: data.status,
-        priority: data.priority,
-      };
-      if (data.assignee_id) payload.assignee_id = data.assignee_id;
-      if (parentId) payload.parent_task_id = parentId;
-      await send("task:create", payload);
+      const result = await send("task:create", payload);
+      // Check for deadline warning (no task returned, only conflicts)
+      if (!result?.id && result?.deadline_conflicts?.length) {
+        setDeadlineConflicts(result.deadline_conflicts);
+        setPendingPayload(payload);
+        setCreating(false);
+        return;
+      }
+      const task = result?.id ? result : result?.task;
+      if (task?.id) {
+        const store = useProjectTaskStore.getState();
+        const parentKey = parentId || "root";
+        const existing = store.tasks.get(parentKey) || [];
+        if (!existing.find((t: Task) => t.id === task.id)) {
+          store.setTasks(
+            parentKey,
+            [...existing, task],
+            (store.totals.get(parentKey) ?? 0) + 1,
+          );
+        }
+        // Update ancestors if they were changed
+        if (result?.ancestors_updated) {
+          for (const anc of result.ancestors_updated) {
+            store.upsertTask(anc);
+          }
+        }
+      }
       onCreated();
-    } catch (e: any) {
-      setError(e?.message || "Failed to create task");
+    } catch (e: unknown) {
+      setError((e as Error)?.message || "Failed to create task");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const onSubmit = async (data: CreateForm) => {
+    const payload: Record<string, unknown> = {
+      title: data.title,
+      status: data.status,
+      priority: data.priority,
+    };
+    if (data.assignee_ids?.length) {
+      payload.assignee_ids = data.assignee_ids;
+      payload.assignee_id = data.assignee_ids[0];
+    }
+    if (data.due_date) {
+      payload.due_date = new Date(data.due_date).toISOString();
+    }
+    if (data.start_date) {
+      payload.start_date = new Date(data.start_date).toISOString();
+    }
+    if (data.reporter_id) {
+      payload.reporter_id = data.reporter_id;
+    }
+    if (data.labels?.length) {
+      payload.labels = data.labels;
+    }
+    if (parentId) payload.parent_task_id = parentId;
+    await submitPayload(payload);
+  };
+
+  const confirmExtendDeadlines = async () => {
+    if (!pendingPayload) return;
+    setDeadlineConflicts([]);
+    await submitPayload({ ...pendingPayload, extend_parent_deadlines: true });
+  };
+
+  return (
+    <>
+      <Modal
+        open
+        onClose={onClose}
+        title={parentId ? "New Subtask" : "New Task"}
+        className="max-w-md"
+      >
+        {error && (
+          <div className="alert alert-error mb-3 text-sm">
+            <span>{error}</span>
+          </div>
+        )}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
+          <Input
+            label="Title"
+            placeholder="Task title"
+            {...register("title", { required: "Title is required" })}
+            error={formErrors.title?.message}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <Select
+              label="Status"
+              options={[
+                { value: "todo", label: "Todo" },
+                { value: "in_progress", label: "In Progress" },
+                { value: "done", label: "Done" },
+                { value: "blocked", label: "Blocked" },
+              ]}
+              {...register("status")}
+            />
+            <Select
+              label="Priority"
+              options={[
+                { value: "critical", label: "Critical" },
+                { value: "high", label: "High" },
+                { value: "medium", label: "Medium" },
+                { value: "low", label: "Low" },
+              ]}
+              {...register("priority")}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-base-content/50 block mb-1">
+                Start Date
+              </label>
+              <input
+                type="date"
+                className="input input-bordered input-sm w-full"
+                {...register("start_date")}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-base-content/50 block mb-1">
+                Due Date
+              </label>
+              <input
+                type="date"
+                className="input input-bordered input-sm w-full"
+                {...register("due_date")}
+              />
+            </div>
+          </div>
+          {/* Reporter */}
+          <div>
+            <label className="text-xs text-base-content/50 block mb-1">
+              Reporter
+            </label>
+            <select
+              className="select select-bordered select-sm w-full"
+              {...register("reporter_id")}
+            >
+              <option value="">None</option>
+              {members.map((m) => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.display_name || m.email || m.user_id.slice(0, 12)}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Multi-assignee selector */}
+          <div>
+            <label className="text-xs text-base-content/50 block mb-1">
+              Assignees
+            </label>
+            <div className="border border-base-300 rounded-lg max-h-28 overflow-y-auto">
+              {members.length === 0 && (
+                <div className="px-3 py-2 text-xs text-base-content/40">
+                  No members
+                </div>
+              )}
+              {members.map((m) => (
+                <label
+                  key={m.user_id}
+                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm"
+                >
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-xs checkbox-primary"
+                    checked={watchedAssignees?.includes(m.user_id) || false}
+                    onChange={() => toggleAssignee(m.user_id)}
+                  />
+                  <span className="truncate">
+                    {m.display_name || m.email || m.user_id.slice(0, 12)}
+                  </span>
+                </label>
+              ))}
+            </div>
+            {watchedAssignees?.length > 0 && (
+              <div className="text-xs text-base-content/50 mt-1">
+                {watchedAssignees.length} assignee
+                {watchedAssignees.length !== 1 ? "s" : ""} selected
+              </div>
+            )}
+          </div>
+          {/* Labels */}
+          <div>
+            <label className="text-xs text-base-content/50 block mb-1">
+              Labels
+            </label>
+            <input
+              type="text"
+              className="input input-bordered input-sm w-full"
+              placeholder="Comma-separated labels"
+              {...register("labels", {
+                setValueAs: (v: string | string[]) =>
+                  Array.isArray(v)
+                    ? v
+                    : typeof v === "string" && v.trim()
+                      ? v
+                          .split(",")
+                          .map((l) => l.trim())
+                          .filter(Boolean)
+                      : [],
+              })}
+              defaultValue={parentTask?.labels?.join(", ") || ""}
+            />
+          </div>
+          {parentId && parentTask && (
+            <div className="text-xs text-base-content/40 italic">
+              Inherited from parent: {parentTask.title}
+            </div>
+          )}
+          <div className="modal-action">
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" loading={creating}>
+              Create
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {deadlineConflicts.length > 0 && (
+        <dialog
+          className="modal modal-open"
+          style={{ backgroundColor: "transparent" }}
+        >
+          <div className="modal-box shadow-2xl max-w-md">
+            <h3 className="font-bold text-lg flex items-center gap-2">
+              <span className="text-warning">⚠</span> Date Range Conflict
+            </h3>
+            <div className="py-3 space-y-2 text-sm">
+              <p className="text-base-content/70">
+                The due date extends beyond {deadlineConflicts.length} parent
+                task{deadlineConflicts.length !== 1 ? "s" : ""}:
+              </p>
+              <ul className="list-disc list-inside text-xs space-y-0.5">
+                {deadlineConflicts.map((c) => (
+                  <li key={c.task_id} className="text-base-content/60">
+                    {c.title}{" "}
+                    <span className="text-warning">
+                      (due{" "}
+                      {c.due_date
+                        ? new Date(c.due_date).toLocaleDateString()
+                        : "—"}
+                      )
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-base-content/50 text-xs pt-1">
+                Apply to extend parent deadlines to accommodate this task.
+              </p>
+            </div>
+            <div className="modal-action">
+              <button
+                className="btn btn-sm"
+                onClick={() => {
+                  setDeadlineConflicts([]);
+                  setPendingPayload(null);
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-sm btn-warning"
+                onClick={confirmExtendDeadlines}
+              >
+                Apply &amp; Extend
+              </button>
+            </div>
+          </div>
+          <div
+            className="modal-backdrop"
+            style={{ background: "transparent" }}
+            onClick={() => {
+              setDeadlineConflicts([]);
+              setPendingPayload(null);
+            }}
+          />
+        </dialog>
+      )}
+    </>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Bulk Create Tasks Modal
+   ═══════════════════════════════════════════════════════ */
+
+type SeparatorType = "newline" | "comma" | "semicolon" | "custom";
+
+const SEPARATOR_OPTIONS: { value: SeparatorType; label: string }[] = [
+  { value: "newline", label: "New Line" },
+  { value: "comma", label: "Comma (,)" },
+  { value: "semicolon", label: "Semicolon (;)" },
+  { value: "custom", label: "Custom…" },
+];
+
+function BulkCreateTaskModal({
+  projectId: _projectId,
+  parentId,
+  members,
+  onClose,
+}: {
+  projectId: string;
+  parentId: string | null;
+  members: ProjectMember[];
+  onClose: () => void;
+}) {
+  const send = useProjectTaskStore((s) => s.send);
+
+  // Input state
+  const [rawText, setRawText] = useState("");
+  const [separatorType, setSeparatorType] = useState<SeparatorType>("newline");
+  const [customSeparator, setCustomSeparator] = useState("");
+
+  // Shared properties
+  const [status, setStatus] = useState<TaskStatus>("todo");
+  const [priority, setPriority] = useState<TaskPriority>("medium");
+  const [assigneeId, setAssigneeId] = useState("");
+  const [dueDate, setDueDate] = useState("");
+  const [estimatedHours, setEstimatedHours] = useState("");
+
+  // Progress
+  const [creating, setCreating] = useState(false);
+  const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [errors, setErrors] = useState<string[]>([]);
+
+  // Parse titles (with dedup)
+  const parsedTitles = useMemo(() => {
+    if (!rawText.trim()) return [];
+    let sep: string;
+    switch (separatorType) {
+      case "newline":
+        sep = "\n";
+        break;
+      case "comma":
+        sep = ",";
+        break;
+      case "semicolon":
+        sep = ";";
+        break;
+      case "custom":
+        sep = customSeparator || "\n";
+        break;
+    }
+    const titles = rawText
+      .split(sep)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+    // Deduplicate (case-insensitive, keep first occurrence)
+    const seen = new Set<string>();
+    return titles.filter((t) => {
+      const key = t.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [rawText, separatorType, customSeparator]);
+
+  // Count duplicates removed
+  const rawCount = useMemo(() => {
+    if (!rawText.trim()) return 0;
+    let sep: string;
+    switch (separatorType) {
+      case "newline":
+        sep = "\n";
+        break;
+      case "comma":
+        sep = ",";
+        break;
+      case "semicolon":
+        sep = ";";
+        break;
+      case "custom":
+        sep = customSeparator || "\n";
+        break;
+    }
+    return rawText
+      .split(sep)
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0).length;
+  }, [rawText, separatorType, customSeparator]);
+
+  const dupsRemoved = rawCount - parsedTitles.length;
+
+  const handleCreate = async () => {
+    if (!send || parsedTitles.length === 0) return;
+    setCreating(true);
+    setErrors([]);
+    setProgress({ done: 0, total: parsedTitles.length });
+
+    try {
+      const payload: Record<string, unknown> = {
+        titles: parsedTitles,
+        priority,
+      };
+      if (assigneeId) payload.assignee_id = assigneeId;
+      if (parentId) payload.parent_task_id = parentId;
+      if (dueDate) payload.due_date = new Date(dueDate).toISOString();
+
+      const result = await send("task:bulk-create", payload);
+      const tasks: Task[] = Array.isArray(result) ? result : [];
+
+      // Broadcast excludes sender → add all to store directly
+      const store = useProjectTaskStore.getState();
+      const parentKey = parentId || "root";
+      const existing = store.tasks.get(parentKey) || [];
+      const existingIds = new Set(existing.map((t: Task) => t.id));
+      const newTasks = tasks.filter((t: Task) => !existingIds.has(t.id));
+      if (newTasks.length > 0) {
+        store.setTasks(
+          parentKey,
+          [...existing, ...newTasks],
+          (store.totals.get(parentKey) ?? 0) + newTasks.length,
+        );
+      }
+
+      setProgress({ done: parsedTitles.length, total: parsedTitles.length });
+      onClose();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed";
+      setErrors([msg]);
     } finally {
       setCreating(false);
     }
   };
 
   return (
-    <Modal open onClose={onClose} title={parentId ? "New Subtask" : "New Task"} className="max-w-md">
-      {error && (
-        <div className="alert alert-error mb-3 text-sm">
-          <span>{error}</span>
-        </div>
-      )}
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
-        <Input
-          label="Title"
-          placeholder="Task title"
-          {...register("title", { required: "Title is required" })}
-          error={formErrors.title?.message}
-        />
-        <div className="grid grid-cols-2 gap-3">
-          <Select
-            label="Status"
-            options={[
-              { value: "todo", label: "Todo" },
-              { value: "in_progress", label: "In Progress" },
-              { value: "done", label: "Done" },
-              { value: "blocked", label: "Blocked" },
-            ]}
-            {...register("status")}
-          />
-          <Select
-            label="Priority"
-            options={[
-              { value: "critical", label: "Critical" },
-              { value: "high", label: "High" },
-              { value: "medium", label: "Medium" },
-              { value: "low", label: "Low" },
-            ]}
-            {...register("priority")}
+    <Modal
+      open
+      onClose={creating ? () => {} : onClose}
+      title={parentId ? "Bulk Create Subtasks" : "Bulk Create Tasks"}
+      className="max-w-lg"
+    >
+      <div className="space-y-4">
+        {/* Paste area */}
+        <div className="form-control">
+          <label className="label">
+            <span className="label-text">Paste task titles</span>
+            <span className="label-text-alt text-base-content/50">
+              {parsedTitles.length} task{parsedTitles.length !== 1 ? "s" : ""}{" "}
+              detected
+              {dupsRemoved > 0 && (
+                <span className="text-warning ml-1">
+                  ({dupsRemoved} duplicate{dupsRemoved !== 1 ? "s" : ""}{" "}
+                  removed)
+                </span>
+              )}
+            </span>
+          </label>
+          <textarea
+            className="textarea textarea-bordered w-full min-h-[120px] font-mono text-sm"
+            placeholder={"Task 1\nTask 2\nTask 3"}
+            value={rawText}
+            onChange={(e) => setRawText(e.target.value)}
+            disabled={creating}
+            autoFocus
           />
         </div>
-        <Select
-          label="Assignee"
-          options={[
-            { value: "", label: "Unassigned" },
-            ...members.map((m) => ({
-              value: m.user_id,
-              label: m.display_name || m.email || m.user_id.slice(0, 12),
-            })),
-          ]}
-          {...register("assignee_id")}
-        />
+
+        {/* Separator */}
+        <div className="flex gap-3 items-end">
+          <div className="form-control flex-1">
+            <label className="label">
+              <span className="label-text">Separator</span>
+            </label>
+            <select
+              className="select select-bordered select-sm w-full"
+              value={separatorType}
+              onChange={(e) =>
+                setSeparatorType(e.target.value as SeparatorType)
+              }
+              disabled={creating}
+            >
+              {SEPARATOR_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          {separatorType === "custom" && (
+            <div className="form-control flex-1">
+              <label className="label">
+                <span className="label-text">Custom separator</span>
+              </label>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-full"
+                placeholder="e.g. | or //"
+                value={customSeparator}
+                onChange={(e) => setCustomSeparator(e.target.value)}
+                disabled={creating}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Preview */}
+        {parsedTitles.length > 0 && (
+          <div className="border border-base-200 rounded-lg max-h-32 overflow-y-auto">
+            <div className="px-3 py-1.5 bg-base-200/50 text-xs font-medium text-base-content/60 sticky top-0">
+              Preview ({parsedTitles.length})
+            </div>
+            {parsedTitles.map((t, i) => (
+              <div
+                key={i}
+                className="px-3 py-1 text-sm border-t border-base-200/50 flex items-center gap-2"
+              >
+                <span className="text-base-content/40 text-xs w-5 text-right shrink-0">
+                  {i + 1}.
+                </span>
+                <span className="truncate">{t}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Shared properties */}
+        <details className="collapse collapse-arrow border border-base-200 rounded-lg">
+          <summary className="collapse-title text-sm font-medium py-2 min-h-0">
+            Properties (applied to all)
+          </summary>
+          <div className="collapse-content space-y-3 pb-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="form-control">
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Status</span>
+                </label>
+                <select
+                  className="select select-bordered select-sm w-full"
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                  disabled={creating}
+                >
+                  <option value="todo">Todo</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="done">Done</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              </div>
+              <div className="form-control">
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Priority</span>
+                </label>
+                <select
+                  className="select select-bordered select-sm w-full"
+                  value={priority}
+                  onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                  disabled={creating}
+                >
+                  <option value="critical">Critical</option>
+                  <option value="high">High</option>
+                  <option value="medium">Medium</option>
+                  <option value="low">Low</option>
+                </select>
+              </div>
+            </div>
+            <div className="form-control">
+              <label className="label py-0.5">
+                <span className="label-text text-xs">Assignee</span>
+              </label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={assigneeId}
+                onChange={(e) => setAssigneeId(e.target.value)}
+                disabled={creating}
+              >
+                <option value="">Unassigned</option>
+                {members.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.display_name || m.email || m.user_id.slice(0, 12)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="form-control">
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Due Date</span>
+                </label>
+                <input
+                  type="date"
+                  className="input input-bordered input-sm w-full"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                  disabled={creating}
+                />
+              </div>
+              <div className="form-control">
+                <label className="label py-0.5">
+                  <span className="label-text text-xs">Est. Hours</span>
+                </label>
+                <input
+                  type="number"
+                  className="input input-bordered input-sm w-full"
+                  placeholder="0"
+                  min="0"
+                  step="0.5"
+                  value={estimatedHours}
+                  onChange={(e) => setEstimatedHours(e.target.value)}
+                  disabled={creating}
+                />
+              </div>
+            </div>
+          </div>
+        </details>
+
+        {/* Progress bar */}
+        {creating && (
+          <div className="space-y-1">
+            <div className="flex items-center justify-between text-xs text-base-content/60">
+              <span>Creating tasks…</span>
+              <span>
+                {progress.done}/{progress.total}
+              </span>
+            </div>
+            <progress
+              className="progress progress-primary w-full"
+              value={progress.done}
+              max={progress.total}
+            />
+          </div>
+        )}
+
+        {/* Errors */}
+        {errors.length > 0 && (
+          <div className="alert alert-error text-sm">
+            <div>
+              <p className="font-medium">
+                Failed to create {errors.length} task
+                {errors.length !== 1 ? "s" : ""}:
+              </p>
+              <ul className="list-disc list-inside mt-1 text-xs">
+                {errors.map((e, i) => (
+                  <li key={i}>{e}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
         <div className="modal-action">
-          <Button type="button" variant="ghost" onClick={onClose}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onClose}
+            disabled={creating}
+          >
             Cancel
           </Button>
-          <Button type="submit" loading={creating}>
-            Create
+          <Button
+            onClick={handleCreate}
+            disabled={parsedTitles.length === 0 || creating}
+            loading={creating}
+          >
+            <ListPlus className="w-4 h-4" />
+            Create {parsedTitles.length} Task
+            {parsedTitles.length !== 1 ? "s" : ""}
           </Button>
         </div>
-      </form>
+      </div>
     </Modal>
   );
 }

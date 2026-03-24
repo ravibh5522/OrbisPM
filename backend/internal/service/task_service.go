@@ -7,54 +7,64 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
+	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
 )
 
 type CreateTaskParams struct {
-	OrgID        uuid.UUID  `json:"-"`
-	ProjectID    uuid.UUID  `json:"-"`
-	ParentTaskID *uuid.UUID `json:"parent_task_id,omitempty"`
-	Title        string     `json:"title" validate:"required,min=1,max=500"`
-	Description  string     `json:"description,omitempty"`
-	Priority     string     `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
-	AssigneeID   *uuid.UUID `json:"assignee_id,omitempty"`
-	ReporterID   *uuid.UUID `json:"reporter_id,omitempty"`
-	DueDate      *time.Time `json:"due_date,omitempty"`
-	StartDate    *time.Time `json:"start_date,omitempty"`
-	Labels       []string   `json:"labels,omitempty"`
+	OrgID                 uuid.UUID   `json:"-"`
+	ProjectID             uuid.UUID   `json:"-"`
+	ParentTaskID          *uuid.UUID  `json:"parent_task_id,omitempty"`
+	Title                 string      `json:"title" validate:"required,min=1,max=500"`
+	Description           string      `json:"description,omitempty"`
+	Priority              string      `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
+	AssigneeID            *uuid.UUID  `json:"assignee_id,omitempty"`
+	AssigneeIDs           []uuid.UUID `json:"assignee_ids,omitempty"`
+	ReporterID            *uuid.UUID  `json:"reporter_id,omitempty"`
+	DueDate               *time.Time  `json:"due_date,omitempty"`
+	StartDate             *time.Time  `json:"start_date,omitempty"`
+	Labels                []string    `json:"labels,omitempty"`
+	ExtendParentDeadlines bool        `json:"extend_parent_deadlines,omitempty"`
 }
 
 type UpdateTaskParams struct {
-	ActorID        *uuid.UUID `json:"-"` // Set by handler from auth context
-	Title          *string    `json:"title,omitempty" validate:"omitempty,min=1,max=500"`
-	Description    *string    `json:"description,omitempty"`
-	Status         *string    `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
-	Priority       *string    `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
-	AssigneeID     *string    `json:"assignee_id"`
-	ReporterID     *string    `json:"reporter_id"`
-	DueDate        *time.Time `json:"due_date,omitempty"`
-	StartDate      *time.Time `json:"start_date,omitempty"`
-	EstimatedHours *float64   `json:"estimated_hours,omitempty"`
-	ActualHours    *float64   `json:"actual_hours,omitempty"`
-	Labels         []string   `json:"labels,omitempty"`
-	RecurrenceRule *string    `json:"recurrence_rule,omitempty"`
+	ActorID               *uuid.UUID `json:"-"` // Set by handler from auth context
+	BaseVersion           int64      `json:"base_version,omitempty"`
+	Title                 *string    `json:"title,omitempty" validate:"omitempty,min=1,max=500"`
+	Description           *string    `json:"description,omitempty"`
+	Status                *string    `json:"status,omitempty" validate:"omitempty,oneof=todo in_progress done blocked"`
+	Priority              *string    `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
+	AssigneeID            *string    `json:"assignee_id"`
+	AssigneeIDs           []string   `json:"assignee_ids,omitempty"`
+	ReporterID            *string    `json:"reporter_id"`
+	DueDate               *time.Time `json:"due_date,omitempty"`
+	StartDate             *time.Time `json:"start_date,omitempty"`
+	EstimatedHours        *float64   `json:"estimated_hours,omitempty"`
+	ActualHours           *float64   `json:"actual_hours,omitempty"`
+	Labels                []string   `json:"labels,omitempty"`
+	RecurrenceRule        *string    `json:"recurrence_rule,omitempty"`
+	ExtendParentDeadlines *bool      `json:"extend_parent_deadlines,omitempty"`
+	AdjustChildDeadlines  *bool      `json:"adjust_child_deadlines,omitempty"`
 }
 
 type TaskService struct {
-	taskRepo      repository.TaskRepository
-	checklistRepo repository.ChecklistRepository
-	ruleRepo      repository.TaskRuleRepository
-	projectRepo   repository.ProjectRepository
-	crRepo        repository.TaskChangeRequestRepository
-	permResolver  *PermissionResolver
-	txm           *repository.TxManager
-	workerSrv     *worker.Server
-	publisher     EventPublisher
+	taskRepo          repository.TaskRepository
+	checklistRepo     repository.ChecklistRepository
+	ruleRepo          repository.TaskRuleRepository
+	projectRepo       repository.ProjectRepository
+	crRepo            repository.TaskChangeRequestRepository
+	projectMemberRepo repository.ProjectMemberRepository
+	permResolver      *PermissionResolver
+	txm               *repository.TxManager
+	workerSrv         *worker.Server
+	publisher         EventPublisher
+	cache             *cache.Manager
 }
 
 func NewTaskService(
@@ -78,6 +88,11 @@ func NewTaskService(
 	return s
 }
 
+// SetCache injects the optional cache manager.
+func (s *TaskService) SetCache(cm *cache.Manager) {
+	s.cache = cm
+}
+
 // SetReviewDeps injects optional review-pipeline dependencies.
 // Kept separate so the constructor signature stays backward-compatible.
 func (s *TaskService) SetReviewDeps(projectRepo repository.ProjectRepository, crRepo repository.TaskChangeRequestRepository, resolver *PermissionResolver) {
@@ -86,10 +101,72 @@ func (s *TaskService) SetReviewDeps(projectRepo repository.ProjectRepository, cr
 	s.permResolver = resolver
 }
 
-func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*domain.Task, error) {
+// SetMembershipRepo injects the project member repository for assignee validation.
+func (s *TaskService) SetMembershipRepo(pmRepo repository.ProjectMemberRepository) {
+	s.projectMemberRepo = pmRepo
+}
+
+// validateAssignees checks that all provided assignee IDs are effective members of the project.
+func (s *TaskService) validateAssignees(ctx context.Context, projectID uuid.UUID, assigneeIDs []uuid.UUID) error {
+	if s.projectMemberRepo == nil || len(assigneeIDs) == 0 {
+		return nil
+	}
+	members, err := s.projectMemberRepo.ListEffectiveMembers(ctx, projectID)
+	if err != nil {
+		return fmt.Errorf("validate assignees: %w", err)
+	}
+	memberSet := make(map[uuid.UUID]bool, len(members))
+	for _, m := range members {
+		memberSet[m.UserID] = true
+	}
+	for _, aid := range assigneeIDs {
+		if !memberSet[aid] {
+			return domain.ErrBadRequest.WithDetail(fmt.Sprintf("user %s is not a member of this project", aid))
+		}
+	}
+	return nil
+}
+
+// PreloadProjectCache loads project tasks into cache if not already loaded.
+func (s *TaskService) PreloadProjectCache(ctx context.Context, projectID uuid.UUID) {
+	if s.cache == nil {
+		return
+	}
+	if s.cache.IsProjectLoaded(ctx, projectID) {
+		s.cache.RefreshTTL(ctx, projectID)
+		return
+	}
+	tasks, err := s.taskRepo.ListTreeByProject(ctx, projectID, 0)
+	if err != nil {
+		log.Warn().Err(err).Str("project_id", projectID.String()).Msg("failed to load tasks for cache preload")
+		return
+	}
+	if err := s.cache.PreloadProject(ctx, projectID, tasks); err != nil {
+		log.Warn().Err(err).Str("project_id", projectID.String()).Msg("failed to preload project cache")
+	}
+	// Pre-compute progress values (bottom-up)
+	s.cache.PrecomputeAllProgress(ctx, projectID, tasks)
+}
+
+func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*domain.TaskCreateResult, error) {
 	priority := params.Priority
 	if priority == "" {
 		priority = domain.PriorityMedium
+	}
+
+	// Sync assignee_ids from single assignee_id if not provided
+	assigneeIDs := params.AssigneeIDs
+	if len(assigneeIDs) == 0 && params.AssigneeID != nil {
+		assigneeIDs = []uuid.UUID{*params.AssigneeID}
+	}
+	if assigneeIDs == nil {
+		assigneeIDs = []uuid.UUID{}
+	}
+
+	// Set primary assignee from array if not explicitly set
+	assigneeID := params.AssigneeID
+	if assigneeID == nil && len(assigneeIDs) > 0 {
+		assigneeID = &assigneeIDs[0]
 	}
 
 	task := &domain.Task{
@@ -100,7 +177,8 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 		Description:  strings.TrimSpace(params.Description),
 		Status:       domain.TaskStatusTodo,
 		Priority:     priority,
-		AssigneeID:   params.AssigneeID,
+		AssigneeID:   assigneeID,
+		AssigneeIDs:  assigneeIDs,
 		ReporterID:   params.ReporterID,
 		DueDate:      params.DueDate,
 		StartDate:    params.StartDate,
@@ -125,14 +203,89 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 		task.Depth = parent.Depth + 1
 	}
 
+	// Validate that all assignees are effective project members
+	if err := s.validateAssignees(ctx, params.ProjectID, assigneeIDs); err != nil {
+		return nil, err
+	}
+
+	// Check deadline conflicts with ancestors
+	var conflicts []domain.DeadlineConflict
+	if task.DueDate != nil && params.ParentTaskID != nil {
+		ancestors, err := s.taskRepo.GetAncestors(ctx, *params.ParentTaskID)
+		if err != nil {
+			return nil, fmt.Errorf("get ancestors for deadline check: %w", err)
+		}
+		// Include the immediate parent in ancestor check
+		parent, _ := s.taskRepo.GetByID(ctx, *params.ParentTaskID)
+		if parent != nil {
+			ancestors = append([]*domain.Task{parent}, ancestors...)
+		}
+		for _, anc := range ancestors {
+			if anc.DueDate != nil && task.DueDate.After(*anc.DueDate) {
+				conflicts = append(conflicts, domain.DeadlineConflict{
+					TaskID:    anc.ID,
+					Title:     anc.Title,
+					DueDate:   anc.DueDate,
+					Depth:     anc.Depth,
+					Direction: "ancestor",
+				})
+			}
+		}
+		// If there are conflicts and the user hasn't confirmed, return the conflicts
+		if len(conflicts) > 0 && !params.ExtendParentDeadlines {
+			// Still create the task but return the warning
+			// Actually, return conflicts as warning so frontend can ask for confirmation
+			return &domain.TaskCreateResult{
+				DeadlineConflicts: conflicts,
+			}, nil
+		}
+	}
+
 	var created *domain.Task
+	var ancestorsUpdated []*domain.Task
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		created, err = s.taskRepo.Create(ctx, tx, task)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Extend ancestor deadlines if requested
+		if len(conflicts) > 0 && params.ExtendParentDeadlines && created.DueDate != nil {
+			ancestors, aErr := s.taskRepo.GetAncestorsTx(ctx, tx, created.ID)
+			if aErr != nil {
+				return fmt.Errorf("get ancestors for deadline extend: %w", aErr)
+			}
+			for _, anc := range ancestors {
+				if anc.DueDate != nil && created.DueDate.After(*anc.DueDate) {
+					anc.DueDate = created.DueDate
+					updated, uErr := s.taskRepo.Update(ctx, tx, anc)
+					if uErr != nil {
+						return fmt.Errorf("extend ancestor deadline %s: %w", anc.ID, uErr)
+					}
+					ancestorsUpdated = append(ancestorsUpdated, updated)
+				}
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create task: %w", err)
+	}
+
+	// Update cache if project is loaded
+	if s.cache != nil && s.cache.IsProjectLoaded(ctx, created.ProjectID) {
+		if cacheErr := s.cache.SetTask(ctx, created.ProjectID, created); cacheErr != nil {
+			log.Warn().Err(cacheErr).Str("task_id", created.ID.String()).Msg("failed to cache new task")
+		}
+		for _, anc := range ancestorsUpdated {
+			if cacheErr := s.cache.SetTask(ctx, anc.ProjectID, anc); cacheErr != nil {
+				log.Warn().Err(cacheErr).Str("task_id", anc.ID.String()).Msg("failed to update ancestor in cache")
+			}
+		}
+		// Recalculate progress up the ancestor chain
+		progressAncestors := s.cache.RecalcProgressUp(ctx, created.ProjectID, created.ID)
+		ancestorsUpdated = append(ancestorsUpdated, progressAncestors...)
 	}
 
 	// Enqueue activity log
@@ -142,7 +295,24 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	// Publish real-time event
 	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), nil)
 
-	return created, nil
+	// Notify assigned users
+	for _, aid := range created.AssigneeIDs {
+		s.enqueueNotification(
+			aid.String(), created.OrgID.String(),
+			"task_assigned",
+			"Task assigned to you",
+			fmt.Sprintf("You have been assigned to: %s", created.Title),
+			map[string]any{
+				"task_id":    created.ID.String(),
+				"project_id": created.ProjectID.String(),
+			},
+		)
+	}
+
+	return &domain.TaskCreateResult{
+		Task:             created,
+		AncestorsUpdated: ancestorsUpdated,
+	}, nil
 }
 
 func (s *TaskService) Get(ctx context.Context, id uuid.UUID) (*domain.Task, error) {
@@ -179,6 +349,7 @@ func (s *TaskService) Duplicate(ctx context.Context, taskID uuid.UUID) (*domain.
 				Status:      domain.TaskStatusTodo,
 				Priority:    src.Priority,
 				AssigneeID:  src.AssigneeID,
+				AssigneeIDs: src.AssigneeIDs,
 				ReporterID:  src.ReporterID,
 				Depth:       src.Depth,
 				Position:    src.Position,
@@ -189,6 +360,9 @@ func (s *TaskService) Duplicate(ctx context.Context, taskID uuid.UUID) (*domain.
 			}
 			if clone.Labels == nil {
 				clone.Labels = []string{}
+			}
+			if clone.AssigneeIDs == nil {
+				clone.AssigneeIDs = []uuid.UUID{}
 			}
 			if clone.Metadata == nil {
 				clone.Metadata = map[string]any{}
@@ -226,17 +400,150 @@ func (s *TaskService) Duplicate(ctx context.Context, taskID uuid.UUID) (*domain.
 	return root, nil
 }
 
-func (s *TaskService) ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error) {
-	return s.taskRepo.ListTreeByProject(ctx, projectID)
+func (s *TaskService) ListTreeByProject(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error) {
+	return s.taskRepo.ListTreeByProject(ctx, projectID, limit)
+}
+
+func (s *TaskService) ListTreeByProjectLight(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error) {
+	return s.taskRepo.ListTreeByProjectLight(ctx, projectID, limit)
 }
 
 func (s *TaskService) List(ctx context.Context, projectID uuid.UUID, filter repository.TaskFilter) ([]*domain.Task, int, error) {
+	// Cache-first for simple parent-ID lookups (column view pattern).
+	// When the only filter is parent_id and the project is cached in Redis,
+	// serve directly from cache (~5ms) instead of hitting PostgreSQL (~500ms).
+	if s.cache != nil && filter.ParentID != nil &&
+		filter.Status == nil && filter.Priority == nil &&
+		filter.AssigneeID == nil && filter.Search == nil &&
+		len(filter.Statuses) == 0 && len(filter.Priorities) == 0 &&
+		len(filter.AssigneeIDs) == 0 && len(filter.Labels) == 0 &&
+		filter.DueDateFrom == nil && filter.DueDateTo == nil &&
+		s.cache.IsProjectLoaded(ctx, projectID) {
+		tasks, err := s.cache.ListTasks(ctx, projectID, *filter.ParentID)
+		if err == nil {
+			return tasks, len(tasks), nil
+		}
+		// Fall through to DB on cache miss
+	}
 	return s.taskRepo.List(ctx, projectID, filter)
 }
 
 // ListMyTasks returns tasks assigned to the user across all projects in the org.
 func (s *TaskService) ListMyTasks(ctx context.Context, orgID, userID uuid.UUID, limit, offset int) ([]*domain.Task, int, error) {
 	return s.taskRepo.ListByOrgAndAssignee(ctx, orgID, userID, limit, offset)
+}
+
+// BulkCreateParams defines the shape for a bulk create request.
+type BulkCreateParams struct {
+	OrgID        uuid.UUID  `json:"-"`
+	ProjectID    uuid.UUID  `json:"-"`
+	ParentTaskID *uuid.UUID `json:"parent_task_id,omitempty"`
+	Titles       []string   `json:"titles" validate:"required,min=1,max=200"`
+	Priority     string     `json:"priority,omitempty" validate:"omitempty,oneof=critical high medium low"`
+	AssigneeID   *uuid.UUID `json:"assignee_id,omitempty"`
+	ReporterID   *uuid.UUID `json:"reporter_id,omitempty"`
+	DueDate      *time.Time `json:"due_date,omitempty"`
+	StartDate    *time.Time `json:"start_date,omitempty"`
+	Labels       []string   `json:"labels,omitempty"`
+}
+
+// BulkCreate creates multiple tasks in a single transaction with deduplication.
+func (s *TaskService) BulkCreate(ctx context.Context, params BulkCreateParams) ([]*domain.Task, error) {
+	// Deduplicate titles (case-insensitive, preserving first occurrence's casing)
+	seen := make(map[string]struct{}, len(params.Titles))
+	uniqueTitles := make([]string, 0, len(params.Titles))
+	for _, t := range params.Titles {
+		trimmed := strings.TrimSpace(t)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; !exists {
+			seen[key] = struct{}{}
+			uniqueTitles = append(uniqueTitles, trimmed)
+		}
+	}
+	if len(uniqueTitles) == 0 {
+		return nil, fmt.Errorf("no valid titles provided")
+	}
+
+	priority := params.Priority
+	if priority == "" {
+		priority = domain.PriorityMedium
+	}
+
+	var depth int
+	if params.ParentTaskID != nil {
+		parent, err := s.taskRepo.GetByID(ctx, *params.ParentTaskID)
+		if err != nil {
+			return nil, fmt.Errorf("get parent task: %w", err)
+		}
+		if !parent.CanAddChild() {
+			return nil, domain.ErrMaxDepth
+		}
+		depth = parent.Depth + 1
+	}
+
+	labels := params.Labels
+	if labels == nil {
+		labels = []string{}
+	}
+
+	created := make([]*domain.Task, 0, len(uniqueTitles))
+
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, title := range uniqueTitles {
+			task := &domain.Task{
+				OrgID:        params.OrgID,
+				ProjectID:    params.ProjectID,
+				ParentTaskID: params.ParentTaskID,
+				Title:        title,
+				Status:       domain.TaskStatusTodo,
+				Priority:     priority,
+				AssigneeID:   params.AssigneeID,
+				AssigneeIDs:  []uuid.UUID{},
+				ReporterID:   params.ReporterID,
+				DueDate:      params.DueDate,
+				StartDate:    params.StartDate,
+				Labels:       labels,
+				Metadata:     map[string]any{},
+				Depth:        depth,
+			}
+			if params.AssigneeID != nil {
+				task.AssigneeIDs = []uuid.UUID{*params.AssigneeID}
+			}
+			c, err := s.taskRepo.Create(ctx, tx, task)
+			if err != nil {
+				return fmt.Errorf("create task %q: %w", title, err)
+			}
+			created = append(created, c)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bulk create: %w", err)
+	}
+
+	// Update cache for all created tasks
+	if s.cache != nil && len(created) > 0 && s.cache.IsProjectLoaded(ctx, params.ProjectID) {
+		for _, t := range created {
+			if cacheErr := s.cache.SetTask(ctx, t.ProjectID, t); cacheErr != nil {
+				log.Warn().Err(cacheErr).Str("task_id", t.ID.String()).Msg("failed to cache bulk-created task")
+			}
+		}
+		// Recalc progress for each created task (bubbles up to parents)
+		for _, t := range created {
+			s.cache.RecalcProgressUp(ctx, t.ProjectID, t.ID)
+		}
+	}
+
+	// Enqueue async jobs for all created tasks
+	for _, t := range created {
+		s.enqueueActivity(t.OrgID.String(), "task", t.ID.String(), "created", "", nil)
+		s.enqueueSearchIndex("tasks", t)
+	}
+
+	return created, nil
 }
 
 // BulkUpdateParams defines the shape for a bulk update request.
@@ -273,6 +580,20 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 					task.AssigneeID = &uid
 				}
 			}
+			if params.Changes.AssigneeIDs != nil {
+				ids := make([]uuid.UUID, 0, len(params.Changes.AssigneeIDs))
+				for _, s := range params.Changes.AssigneeIDs {
+					if uid, parseErr := uuid.Parse(s); parseErr == nil {
+						ids = append(ids, uid)
+					}
+				}
+				task.AssigneeIDs = ids
+				if len(ids) > 0 {
+					task.AssigneeID = &ids[0]
+				} else {
+					task.AssigneeID = nil
+				}
+			}
 			if params.Changes.Labels != nil {
 				task.Labels = params.Changes.Labels
 			}
@@ -290,6 +611,18 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 	})
 	if err != nil {
 		return nil, fmt.Errorf("bulk update: %w", err)
+	}
+
+	// Update cache for all updated tasks
+	if s.cache != nil && len(updated) > 0 {
+		for _, t := range updated {
+			if s.cache.IsProjectLoaded(ctx, t.ProjectID) {
+				if cacheErr := s.cache.SetTask(ctx, t.ProjectID, t); cacheErr != nil {
+					log.Warn().Err(cacheErr).Str("task_id", t.ID.String()).Msg("failed to update bulk-updated task in cache")
+				}
+				s.cache.RecalcProgressUp(ctx, t.ProjectID, t.ID)
+			}
+		}
 	}
 
 	// Enqueue async jobs
@@ -331,6 +664,17 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 			}
 		}
 	}
+	if params.AssigneeIDs != nil {
+		ids := make([]string, 0, len(params.AssigneeIDs))
+		for _, s := range params.AssigneeIDs {
+			if s != "" {
+				if _, parseErr := uuid.Parse(s); parseErr == nil {
+					ids = append(ids, s)
+				}
+			}
+		}
+		changes["assignee_ids"] = ids
+	}
 	if params.ReporterID != nil {
 		if *params.ReporterID == "" {
 			changes["reporter_id"] = nil
@@ -358,6 +702,62 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	}
 	if params.RecurrenceRule != nil {
 		changes["recurrence_rule"] = *params.RecurrenceRule
+	}
+
+	// Validate that any new assignees are effective project members
+	if rawIDs, ok := changes["assignee_ids"]; ok {
+		if idStrs, ok := rawIDs.([]string); ok && len(idStrs) > 0 {
+			uuids := make([]uuid.UUID, 0, len(idStrs))
+			for _, idStr := range idStrs {
+				if uid, err := uuid.Parse(idStr); err == nil {
+					uuids = append(uuids, uid)
+				}
+			}
+			if err := s.validateAssignees(ctx, task.ProjectID, uuids); err != nil {
+				return nil, err
+			}
+		}
+	} else if rawID, ok := changes["assignee_id"]; ok && rawID != nil {
+		if aidStr, ok := rawID.(string); ok && aidStr != "" {
+			if uid, err := uuid.Parse(aidStr); err == nil {
+				if err := s.validateAssignees(ctx, task.ProjectID, []uuid.UUID{uid}); err != nil {
+					return nil, err
+				}
+			}
+		}
+	}
+
+	// --- Optimistic version check via cache ---
+	if s.cache != nil && params.BaseVersion > 0 && s.cache.IsProjectLoaded(ctx, task.ProjectID) {
+		newVersion, vErr := s.cache.CheckAndIncrementVersion(ctx, task.ProjectID, task.ID, params.BaseVersion)
+		if vErr != nil {
+			log.Warn().Err(vErr).Str("task_id", id.String()).Msg("version check failed, falling through to DB")
+		} else if newVersion != params.BaseVersion+1 {
+			// Version mismatch — attempt field-level merge
+			serverTask, sErr := s.cache.GetTask(ctx, task.ProjectID, task.ID)
+			if sErr != nil {
+				serverTask = task // Fall back to DB version
+			}
+			mergedChanges, resolution, mErr := cache.FieldLevelMerge(serverTask, params.BaseVersion, changes)
+			if mErr != nil {
+				return nil, mErr
+			}
+			switch resolution {
+			case "auto-merged":
+				changes = mergedChanges
+			case "conflict":
+				return nil, &cache.ConflictError{
+					TaskID:        task.ID,
+					ServerVersion: newVersion,
+					ServerState:   serverTask,
+					YourChanges:   changes,
+					Resolution:    "conflict",
+				}
+			default:
+				// "" means server version matches base version — no conflict,
+				// the Redis version key was stale/expired. Proceed normally.
+			}
+		}
 	}
 
 	// --- Review pipeline ---
@@ -411,18 +811,188 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 		}
 	}
 
+	// Check deadline conflicts with ancestors (only if due_date changed and task has a parent)
+	var deadlineConflicts []domain.DeadlineConflict
+	if _, dueDateChanged := directChanges["due_date"]; dueDateChanged && task.DueDate != nil && task.ParentTaskID != nil {
+		ancestors, aErr := s.taskRepo.GetAncestors(ctx, task.ID)
+		if aErr == nil {
+			for _, anc := range ancestors {
+				if anc.DueDate != nil && task.DueDate.After(*anc.DueDate) {
+					deadlineConflicts = append(deadlineConflicts, domain.DeadlineConflict{
+						TaskID:    anc.ID,
+						Title:     anc.Title,
+						DueDate:   anc.DueDate,
+						Depth:     anc.Depth,
+						Direction: "ancestor",
+					})
+				}
+			}
+		}
+		// If there are conflicts and user hasn't confirmed, return warning without saving
+		if len(deadlineConflicts) > 0 && (params.ExtendParentDeadlines == nil || !*params.ExtendParentDeadlines) {
+			return &domain.TaskUpdateResult{
+				Task:              task,
+				DeadlineConflicts: deadlineConflicts,
+			}, nil
+		}
+	}
+
+	// Check deadline conflicts with descendants (when parent's range shrinks)
+	_, dueDateChanged := directChanges["due_date"]
+	_, startDateChanged := directChanges["start_date"]
+	if dueDateChanged || startDateChanged {
+		descendants, dErr := s.taskRepo.GetTree(ctx, task.ID)
+		if dErr == nil {
+			for _, desc := range descendants {
+				if desc.ID == task.ID {
+					continue // skip the task itself
+				}
+				// Check if descendant's due_date exceeds new parent due_date
+				if task.DueDate != nil && desc.DueDate != nil && desc.DueDate.After(*task.DueDate) {
+					deadlineConflicts = append(deadlineConflicts, domain.DeadlineConflict{
+						TaskID:    desc.ID,
+						Title:     desc.Title,
+						DueDate:   desc.DueDate,
+						StartDate: desc.StartDate,
+						Depth:     desc.Depth,
+						Direction: "descendant",
+					})
+				}
+				// Check if descendant's start_date is before new parent start_date
+				if task.StartDate != nil && desc.StartDate != nil && desc.StartDate.Before(*task.StartDate) {
+					// Avoid duplicate if already added
+					alreadyAdded := false
+					for _, c := range deadlineConflicts {
+						if c.TaskID == desc.ID {
+							alreadyAdded = true
+							break
+						}
+					}
+					if !alreadyAdded {
+						deadlineConflicts = append(deadlineConflicts, domain.DeadlineConflict{
+							TaskID:    desc.ID,
+							Title:     desc.Title,
+							DueDate:   desc.DueDate,
+							StartDate: desc.StartDate,
+							Depth:     desc.Depth,
+							Direction: "descendant",
+						})
+					}
+				}
+			}
+		}
+		// If descendant conflicts exist and user hasn't confirmed, return warning
+		hasDescendantConflicts := false
+		for _, c := range deadlineConflicts {
+			if c.Direction == "descendant" {
+				hasDescendantConflicts = true
+				break
+			}
+		}
+		if hasDescendantConflicts && (params.AdjustChildDeadlines == nil || !*params.AdjustChildDeadlines) {
+			return &domain.TaskUpdateResult{
+				Task:              task,
+				DeadlineConflicts: deadlineConflicts,
+			}, nil
+		}
+	}
+
 	var updated *domain.Task
+	var ancestorsUpdated []*domain.Task
+	var descendantsUpdated []*domain.Task
+
 	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		updated, err = s.taskRepo.Update(ctx, tx, task)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Extend ancestor deadlines if requested
+		if len(deadlineConflicts) > 0 && params.ExtendParentDeadlines != nil && *params.ExtendParentDeadlines && updated.DueDate != nil {
+			ancestors, aErr := s.taskRepo.GetAncestorsTx(ctx, tx, updated.ID)
+			if aErr != nil {
+				return fmt.Errorf("get ancestors for deadline extend: %w", aErr)
+			}
+			for _, anc := range ancestors {
+				if anc.DueDate != nil && updated.DueDate.After(*anc.DueDate) {
+					anc.DueDate = updated.DueDate
+					updatedAnc, uErr := s.taskRepo.Update(ctx, tx, anc)
+					if uErr != nil {
+						return fmt.Errorf("extend ancestor deadline %s: %w", anc.ID, uErr)
+					}
+					ancestorsUpdated = append(ancestorsUpdated, updatedAnc)
+				}
+			}
+		}
+
+		// Adjust descendant deadlines if requested
+		if params.AdjustChildDeadlines != nil && *params.AdjustChildDeadlines {
+			subtree, tErr := s.taskRepo.GetTreeTx(ctx, tx, updated.ID)
+			if tErr != nil {
+				return fmt.Errorf("get subtree for deadline adjust: %w", tErr)
+			}
+			for _, desc := range subtree {
+				if desc.ID == updated.ID {
+					continue
+				}
+				changed := false
+				// Clamp descendant due_date to parent's due_date
+				if updated.DueDate != nil && desc.DueDate != nil && desc.DueDate.After(*updated.DueDate) {
+					desc.DueDate = updated.DueDate
+					changed = true
+				}
+				// Clamp descendant start_date to parent's start_date
+				if updated.StartDate != nil && desc.StartDate != nil && desc.StartDate.Before(*updated.StartDate) {
+					desc.StartDate = updated.StartDate
+					changed = true
+				}
+				// Ensure start_date doesn't exceed due_date after clamping
+				if desc.StartDate != nil && desc.DueDate != nil && desc.StartDate.After(*desc.DueDate) {
+					desc.StartDate = desc.DueDate
+					changed = true
+				}
+				if changed {
+					updatedDesc, uErr := s.taskRepo.Update(ctx, tx, desc)
+					if uErr != nil {
+						return fmt.Errorf("adjust descendant deadline %s: %w", desc.ID, uErr)
+					}
+					descendantsUpdated = append(descendantsUpdated, updatedDesc)
+				}
+			}
+		}
+		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	// Update cache after successful DB write
+	if s.cache != nil && s.cache.IsProjectLoaded(ctx, updated.ProjectID) {
+		if cacheErr := s.cache.SetTask(ctx, updated.ProjectID, updated); cacheErr != nil {
+			log.Warn().Err(cacheErr).Str("task_id", updated.ID.String()).Msg("failed to update task in cache")
+		}
+		for _, anc := range ancestorsUpdated {
+			if cacheErr := s.cache.SetTask(ctx, anc.ProjectID, anc); cacheErr != nil {
+				log.Warn().Err(cacheErr).Str("task_id", anc.ID.String()).Msg("failed to update ancestor in cache")
+			}
+		}
+		for _, desc := range descendantsUpdated {
+			if cacheErr := s.cache.SetTask(ctx, desc.ProjectID, desc); cacheErr != nil {
+				log.Warn().Err(cacheErr).Str("task_id", desc.ID.String()).Msg("failed to update descendant in cache")
+			}
+		}
+		// Recalculate progress up the ancestor chain
+		progressAncestors := s.cache.RecalcProgressUp(ctx, updated.ProjectID, updated.ID)
+		ancestorsUpdated = append(ancestorsUpdated, progressAncestors...)
+	}
+
+	// Merge descendantsUpdated into ancestorsUpdated for broadcasting
+	ancestorsUpdated = append(ancestorsUpdated, descendantsUpdated...)
+
 	result := &domain.TaskUpdateResult{
-		Task:           updated,
-		AppliedChanges: directChanges,
+		Task:             updated,
+		AppliedChanges:   directChanges,
+		AncestorsUpdated: ancestorsUpdated,
 	}
 
 	// Create change request for review fields if any
@@ -461,6 +1031,68 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	// Publish real-time event
 	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), directChanges)
 
+	// ── Notification triggers ──
+	actorStr := ""
+	if params.ActorID != nil {
+		actorStr = params.ActorID.String()
+	}
+	notifPayload := map[string]any{
+		"task_id":    task.ID.String(),
+		"project_id": task.ProjectID.String(),
+	}
+
+	// Notify new assignees
+	if _, ok := directChanges["assignee_ids"]; ok {
+		for _, aid := range updated.AssigneeIDs {
+			if aid.String() != actorStr {
+				s.enqueueNotification(aid.String(), task.OrgID.String(), "task_assigned",
+					"Task assigned to you",
+					fmt.Sprintf("You have been assigned to: %s", updated.Title),
+					notifPayload)
+			}
+		}
+	}
+
+	// Notify assignees and reporter on status change
+	if newStatus, ok := directChanges["status"]; ok {
+		notifiedUsers := map[string]bool{actorStr: true}
+		// Notify all assignees
+		for _, aid := range updated.AssigneeIDs {
+			aidStr := aid.String()
+			if !notifiedUsers[aidStr] {
+				notifiedUsers[aidStr] = true
+				s.enqueueNotification(aidStr, task.OrgID.String(), "task_status_changed",
+					"Task status updated",
+					fmt.Sprintf("Task \"%s\" status changed to %s", updated.Title, newStatus),
+					notifPayload)
+			}
+		}
+		// Also notify reporter if different from actor and assignees
+		if updated.ReporterID != nil {
+			rStr := updated.ReporterID.String()
+			if !notifiedUsers[rStr] {
+				s.enqueueNotification(rStr, task.OrgID.String(), "task_status_changed",
+					"Task status updated",
+					fmt.Sprintf("Task \"%s\" status changed to %s", updated.Title, newStatus),
+					notifPayload)
+			}
+		}
+	}
+
+	// Notify assignees on priority change to critical
+	if newPri, ok := directChanges["priority"]; ok {
+		if priStr, ok := newPri.(string); ok && priStr == "critical" {
+			for _, aid := range updated.AssigneeIDs {
+				if aid.String() != actorStr {
+					s.enqueueNotification(aid.String(), task.OrgID.String(), "task_priority_critical",
+						"Task marked critical",
+						fmt.Sprintf("Task \"%s\" priority changed to critical", updated.Title),
+						notifPayload)
+				}
+			}
+		}
+	}
+
 	return result, nil
 }
 
@@ -490,6 +1122,22 @@ func applyParamsToTask(task *domain.Task, changes map[string]any) {
 			} else if s, ok := val.(string); ok {
 				if uid, err := uuid.Parse(s); err == nil {
 					task.AssigneeID = &uid
+				}
+			}
+		case "assignee_ids":
+			if arr, ok := val.([]string); ok {
+				ids := make([]uuid.UUID, 0, len(arr))
+				for _, s := range arr {
+					if uid, err := uuid.Parse(s); err == nil {
+						ids = append(ids, uid)
+					}
+				}
+				task.AssigneeIDs = ids
+				// Sync primary assignee with first element
+				if len(ids) > 0 {
+					task.AssigneeID = &ids[0]
+				} else {
+					task.AssigneeID = nil
 				}
 			}
 		case "reporter_id":
@@ -580,16 +1228,28 @@ func partitionChanges(changes map[string]any, reviewableFields []string) (direct
 	return direct, review
 }
 
-func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) error {
+func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) ([]*domain.Task, error) {
 	task, err := s.taskRepo.GetByID(ctx, id)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.taskRepo.Delete(ctx, tx, id)
 	})
 	if err != nil {
-		return err
+		return nil, err
+	}
+
+	var progressAncestors []*domain.Task
+	// Remove from cache
+	if s.cache != nil && s.cache.IsProjectLoaded(ctx, task.ProjectID) {
+		if cacheErr := s.cache.RemoveTask(ctx, task.ProjectID, task.ID, task.ParentTaskID); cacheErr != nil {
+			log.Warn().Err(cacheErr).Str("task_id", task.ID.String()).Msg("failed to remove task from cache")
+		}
+		// Recalculate parent's progress after child was deleted
+		if task.ParentTaskID != nil {
+			progressAncestors = s.cache.RecalcProgressUp(ctx, task.ProjectID, *task.ParentTaskID)
+		}
 	}
 
 	// Enqueue activity log
@@ -599,7 +1259,7 @@ func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) error {
 	// Publish real-time event
 	s.publishEvent(ctx, domain.EventTaskDeleted, task.OrgID.String(), task.ID.String(), nil)
 
-	return nil
+	return progressAncestors, nil
 }
 
 // SubmitForReview evaluates automatic rules and sets the task to pending_review.
@@ -671,21 +1331,55 @@ type ReorderItem struct {
 
 // Reorder updates the positions (and optionally parents) of multiple tasks in a single transaction.
 func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	type cacheEntry struct {
+		OldParentID *uuid.UUID
+		UpdatedTask *domain.Task
+	}
+	var cacheEntries []cacheEntry
+
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, item := range items {
-			if item.ParentID != nil {
-				// Reparent + reposition
-				if err := s.taskRepo.Reparent(ctx, tx, item.ID, item.ParentID, item.Position); err != nil {
-					return fmt.Errorf("reparent task %s: %w", item.ID, err)
-				}
-			} else {
-				if err := s.taskRepo.UpdatePosition(ctx, tx, item.ID, item.Position); err != nil {
-					return fmt.Errorf("reorder task %s: %w", item.ID, err)
+			// Capture old parent before reparenting (needed to clean Redis cache)
+			var oldParentID *uuid.UUID
+			if s.cache != nil {
+				_ = tx.QueryRow(ctx,
+					`SELECT parent_task_id FROM tasks WHERE id = $1`, item.ID,
+				).Scan(&oldParentID)
+			}
+
+			// Always call Reparent — handles both non-nil parent and nil (move to root)
+			if err := s.taskRepo.Reparent(ctx, tx, item.ID, item.ParentID, item.Position); err != nil {
+				return fmt.Errorf("reparent task %s: %w", item.ID, err)
+			}
+
+			// Read the updated task inside the tx (RLS context is active here)
+			if s.cache != nil {
+				updated, err := s.taskRepo.GetByIDTx(ctx, tx, item.ID)
+				if err == nil {
+					cacheEntries = append(cacheEntries, cacheEntry{
+						OldParentID: oldParentID,
+						UpdatedTask: updated,
+					})
 				}
 			}
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+
+	// Update cache after commit: remove from old parent, add to new parent
+	if s.cache != nil {
+		for _, ce := range cacheEntries {
+			if !s.cache.IsProjectLoaded(ctx, ce.UpdatedTask.ProjectID) {
+				continue
+			}
+			_ = s.cache.RemoveFromParentIndex(ctx, ce.UpdatedTask.ProjectID, ce.UpdatedTask.ID, ce.OldParentID)
+			_ = s.cache.SetTask(ctx, ce.UpdatedTask.ProjectID, ce.UpdatedTask)
+		}
+	}
+	return nil
 }
 
 // --- Worker helpers (fire-and-forget, log errors) ---
@@ -770,6 +1464,28 @@ func (s *TaskService) enqueueSearchDelete(index, docID string) {
 	}
 	if err := s.workerSrv.Enqueue(task); err != nil {
 		log.Error().Err(err).Msg("enqueue search delete task")
+	}
+}
+
+func (s *TaskService) enqueueNotification(userID, orgID, ntype, title, body string, payload map[string]any) {
+	if s.workerSrv == nil {
+		return
+	}
+	task, err := worker.NewNotificationTask(worker.NotificationPayload{
+		UserID:  userID,
+		OrgID:   orgID,
+		Type:    ntype,
+		Title:   title,
+		Body:    body,
+		Payload: payload,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("build notification task")
+		return
+	}
+	// Delay task notifications by 5 minutes to batch with nearby task updates
+	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(5*time.Minute)); err != nil {
+		log.Error().Err(err).Msg("enqueue notification task")
 	}
 }
 

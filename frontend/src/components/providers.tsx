@@ -1,9 +1,15 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { useState, useEffect, type ReactNode } from "react";
+import { ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
+import {
+  MutationCache,
+  QueryClient,
+  QueryClientProvider,
+} from "@tanstack/react-query";
+import { useEffect, useState, type ReactNode } from "react";
+import { toast, Toaster } from "sonner";
 
 function AuthInitializer({ children }: { children: ReactNode }) {
   const initialize = useAuthStore((s) => s.initialize);
@@ -38,23 +44,30 @@ export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
     () =>
       new QueryClient({
+        mutationCache: new MutationCache({
+          onError: (error) => {
+            // Don't toast 401s (handled by auth redirect)
+            if (error instanceof ApiError && error.status === 401) return;
+            const msg =
+              error instanceof ApiError
+                ? error.message
+                : error?.message || "Something went wrong";
+            toast.error(msg);
+          },
+        }),
         defaultOptions: {
           queries: {
-            // Data remains fresh for 30 seconds - reduces redundant API calls
             staleTime: 30 * 1000,
-            // Keep unused data in cache for 5 minutes before garbage collection
             gcTime: 5 * 60 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
-            // Keep showing previous data while fetching new data
             refetchOnReconnect: true,
           },
           mutations: {
-            // Retry failed mutations once
             retry: 1,
           },
         },
-      })
+      }),
   );
 
   return (
@@ -62,6 +75,15 @@ export function Providers({ children }: { children: ReactNode }) {
       <ThemeInitializer>
         <AuthInitializer>{children}</AuthInitializer>
       </ThemeInitializer>
+      <Toaster
+        position="bottom-right"
+        richColors
+        closeButton
+        toastOptions={{
+          duration: 4000,
+          className: "!bg-base-100 !text-base-content !border-base-300",
+        }}
+      />
     </QueryClientProvider>
   );
 }

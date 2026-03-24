@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,13 +22,70 @@ import (
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
-	zitadel *auth.ZitadelClient
-	pool    *pgxpool.Pool
+	zitadel            *auth.ZitadelClient
+	pool               *pgxpool.Pool
+	emailServiceURL    string
+	emailServiceAPIKey string
+	frontendURL        string
 }
 
 // NewAuthHandler creates a new AuthHandler.
-func NewAuthHandler(zitadel *auth.ZitadelClient, pool *pgxpool.Pool) *AuthHandler {
-	return &AuthHandler{zitadel: zitadel, pool: pool}
+func NewAuthHandler(zitadel *auth.ZitadelClient, pool *pgxpool.Pool, emailServiceURL, emailServiceAPIKey, frontendURL string) *AuthHandler {
+	return &AuthHandler{
+		zitadel:            zitadel,
+		pool:               pool,
+		emailServiceURL:    emailServiceURL,
+		emailServiceAPIKey: emailServiceAPIKey,
+		frontendURL:        frontendURL,
+	}
+}
+
+// sendPasswordResetEmail sends the reset code to the user via the email service.
+func (h *AuthHandler) sendPasswordResetEmail(ctx context.Context, toEmail, code string) error {
+	svcURL := h.emailServiceURL
+	if svcURL == "" {
+		svcURL = "http://email-service:8050"
+	}
+	frontendURL := h.frontendURL
+	if frontendURL == "" {
+		frontendURL = "http://localhost:3000"
+	}
+	resetURL := frontendURL + "/reset-password?email=" + toEmail + "&code=" + code
+	payload := map[string]any{
+		"to":       toEmail,
+		"subject":  "Reset your OrbisPM password",
+		"template": "password_reset",
+		"context": map[string]string{
+			"reset_code":     code,
+			"reset_url":      resetURL,
+			"app_name":       "OrbisPM",
+			"frontend_url":   frontendURL,
+			"expiry_minutes": "60",
+		},
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("marshal email payload: %w", err)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, svcURL+"/api/v1/email/send", bytes.NewReader(encoded))
+	if err != nil {
+		return fmt.Errorf("build email request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	apiKey := h.emailServiceAPIKey
+	if apiKey == "" {
+		apiKey = "email-service-dev-key"
+	}
+	req.Header.Set("X-API-Key", apiKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("email service request: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("email service returned status %d", resp.StatusCode)
+	}
+	return nil
 }
 
 // zitadelIDToUUID converts a Zitadel user ID string to the UUID stored in the DB.
@@ -214,6 +273,11 @@ func (h *AuthHandler) Routes() chi.Router {
 	r.Post("/mfa/recovery-codes", h.GenerateRecoveryCodes)
 	r.Delete("/mfa/recovery-codes", h.RemoveRecoveryCodes)
 
+	// Password management
+	r.Post("/password/change", h.ChangePassword)
+	r.Post("/password/forgot", h.ForgotPassword)
+	r.Post("/password/reset", h.ResetPassword)
+
 	// Social / IDP
 	r.Get("/idps", h.ListIDPs)
 	r.Post("/idp/start", h.StartIDPLogin)
@@ -297,6 +361,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.User != nil {
+		// Set internal UUID that matches what messaging service uses
+		result.User.InternalID = zitadelIDToUUID(result.User.ID).String()
 		h.upsertUserProfile(r.Context(), result.User)
 	}
 	JSON(w, http.StatusOK, result)
@@ -393,6 +459,8 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		handleAuthError(w, err)
 		return
 	}
+	// Set internal UUID that matches what messaging service uses
+	user.InternalID = zitadelIDToUUID(user.ID).String()
 	// Merge extended profile fields (avatar_url, bio, etc.) from our DB.
 	h.enrichUserFromDB(r.Context(), user)
 	h.upsertUserProfile(r.Context(), user)
@@ -431,6 +499,8 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		handleAuthError(w, err)
 		return
 	}
+	// Set internal UUID that matches what messaging service uses
+	user.InternalID = zitadelIDToUUID(user.ID).String()
 	// Save extended profile fields (avatar_url, bio, job_title, etc.) to our DB.
 	h.upsertUserProfilePartial(r.Context(), user, req.Data)
 	// Re-enrich so the returned user includes the fields we just saved.
@@ -842,6 +912,117 @@ func (h *AuthHandler) verifyAndConsumeBackupCode(ctx context.Context, zitadelUse
 	return false, nil
 }
 
+// --- Password Management ---
+
+// ChangePassword allows an authenticated user to change their password.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	token := extractBearerToken(r)
+	if token == "" {
+		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "missing authorization header"})
+		return
+	}
+	claims, err := h.zitadel.ValidateToken(r.Context(), token)
+	if err != nil {
+		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "invalid token"})
+		return
+	}
+
+	var req struct {
+		OldPassword string `json:"old_password"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
+		return
+	}
+	if req.OldPassword == "" || req.NewPassword == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "old_password and new_password are required"})
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "new password must be at least 8 characters"})
+		return
+	}
+
+	if err := h.zitadel.ChangePassword(r.Context(), claims.Subject, req.OldPassword, req.NewPassword); err != nil {
+		handleAuthError(w, err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "password_changed"})
+}
+
+// ForgotPassword initiates a password reset flow (public — no auth required).
+func (h *AuthHandler) ForgotPassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email string `json:"email"`
+	}
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
+		return
+	}
+	if req.Email == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "email is required"})
+		return
+	}
+
+	// Find user by email in Zitadel
+	userID, err := h.zitadel.FindUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		// Don't reveal whether the email exists — always return success
+		JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
+		return
+	}
+
+	// Request password reset code from Zitadel (returns the code via ReturnCode medium)
+	code, err := h.zitadel.RequestPasswordReset(r.Context(), userID)
+	if err != nil {
+		log.Error().Err(err).Str("email", req.Email).Msg("password reset request failed")
+		// Still return success to prevent email enumeration
+		JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
+		return
+	}
+
+	// Send the reset code to the user via the email service
+	if sendErr := h.sendPasswordResetEmail(r.Context(), req.Email, code); sendErr != nil {
+		log.Error().Err(sendErr).Str("email", req.Email).Msg("failed to send password reset email")
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"status": "reset_initiated"})
+}
+
+// ResetPassword completes a password reset using a verification code (public — no auth required).
+func (h *AuthHandler) ResetPassword(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Email       string `json:"email"`
+		Code        string `json:"code"`
+		NewPassword string `json:"new_password"`
+	}
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
+		return
+	}
+	if req.Email == "" || req.Code == "" || req.NewPassword == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "email, code, and new_password are required"})
+		return
+	}
+	if len(req.NewPassword) < 8 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "new password must be at least 8 characters"})
+		return
+	}
+
+	userID, err := h.zitadel.FindUserByEmail(r.Context(), req.Email)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid reset request"})
+		return
+	}
+
+	if err := h.zitadel.ResetPasswordWithCode(r.Context(), userID, req.Code, req.NewPassword); err != nil {
+		handleAuthError(w, err)
+		return
+	}
+	JSON(w, http.StatusOK, map[string]string{"status": "password_reset"})
+}
+
 // --- Social / IDP Endpoints ---
 
 func (h *AuthHandler) ListIDPs(w http.ResponseWriter, r *http.Request) {
@@ -894,5 +1075,6 @@ func handleAuthError(w http.ResponseWriter, err error) {
 		JSON(w, code, ErrorResponse{Message: authErr.Error()})
 		return
 	}
-	JSON(w, http.StatusBadGateway, ErrorResponse{Message: "auth service error", Detail: err.Error()})
+	log.Error().Err(err).Msg("auth service error")
+	JSON(w, http.StatusBadGateway, ErrorResponse{Message: "auth service error"})
 }

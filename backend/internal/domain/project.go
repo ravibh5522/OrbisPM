@@ -16,8 +16,11 @@ type Project struct {
 	Description string         `json:"description,omitempty"`
 	Status      string         `json:"status"`
 	Settings    map[string]any `json:"settings,omitempty"`
+	CreatedBy   *uuid.UUID     `json:"created_by,omitempty"`
 	CreatedAt   time.Time      `json:"created_at"`
 	UpdatedAt   time.Time      `json:"updated_at"`
+	MemberCount int            `json:"member_count,omitempty"`
+	TaskCount   int            `json:"task_count,omitempty"`
 }
 
 // ProjectMember represents a user's role within a project.

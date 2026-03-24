@@ -1,17 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { Plus, KeyRound, Trash2, Copy } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import {
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+} from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { APIKey } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, KeyRound, Plus, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 interface ApiKeyForm {
   name: string;
@@ -32,13 +38,21 @@ export default function ApiKeysTab() {
     enabled: !!currentOrg,
   });
 
-  const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<ApiKeyForm>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors: formErrors },
+  } = useForm<ApiKeyForm>();
 
   const createMutation = useMutation({
     mutationFn: (data: ApiKeyForm) =>
       api.apiKeys.create(currentOrg!.id, {
         name: data.name,
-        scopes: data.scopes.split(",").map((s) => s.trim()).filter(Boolean),
+        scopes: data.scopes
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean),
       }),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["api-keys"] });
@@ -46,8 +60,10 @@ export default function ApiKeysTab() {
       reset();
       setError("");
       if (result.raw_key) setNewKey(result.raw_key);
+      toast.success("API key created");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create API key"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create API key"),
   });
 
   const revokeMutation = useMutation({
@@ -55,6 +71,7 @@ export default function ApiKeysTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["api-keys"] });
       setDeleteTarget(null);
+      toast.success("API key revoked");
     },
   });
 
@@ -66,7 +83,9 @@ export default function ApiKeysTab() {
     <div className="flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-base-content/60">Manage programmatic access to your organization</p>
+        <p className="text-sm text-base-content/60">
+          Manage programmatic access to your organization
+        </p>
         <Button size="sm" onClick={() => setShowCreate(true)}>
           <Plus className="w-4 h-4" /> New Key
         </Button>
@@ -79,13 +98,23 @@ export default function ApiKeysTab() {
             <h3 className="font-bold text-sm">Save your API key</h3>
             <p className="text-xs">This key will not be shown again.</p>
             <div className="flex items-center gap-2 mt-2">
-              <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded">{newKey}</code>
-              <button className="btn btn-ghost btn-xs" onClick={() => navigator.clipboard.writeText(newKey)}>
+              <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded">
+                {newKey}
+              </code>
+              <button
+                className="btn btn-ghost btn-xs"
+                onClick={() => navigator.clipboard.writeText(newKey)}
+              >
                 <Copy className="w-3 h-3" /> Copy
               </button>
             </div>
           </div>
-          <button className="btn btn-ghost btn-sm" onClick={() => setNewKey(null)}>Dismiss</button>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setNewKey(null)}
+          >
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -94,7 +123,11 @@ export default function ApiKeysTab() {
           icon={<KeyRound className="w-16 h-16" />}
           title="No API keys"
           description="Create API keys for programmatic access"
-          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Key</Button>}
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" /> Create Key
+            </Button>
+          }
         />
       ) : (
         <Card>
@@ -114,18 +147,34 @@ export default function ApiKeysTab() {
                 {keyList.map((key: APIKey) => (
                   <tr key={key.id}>
                     <td className="font-medium">{key.name}</td>
-                    <td><code className="text-xs">{key.key_prefix}...</code></td>
+                    <td>
+                      <code className="text-xs">{key.key_prefix}...</code>
+                    </td>
                     <td>
                       <div className="flex gap-1 flex-wrap">
                         {key.scopes.map((s) => (
-                          <span key={s} className="badge badge-xs badge-outline">{s}</span>
+                          <span
+                            key={s}
+                            className="badge badge-xs badge-outline"
+                          >
+                            {s}
+                          </span>
                         ))}
                       </div>
                     </td>
-                    <td className="text-sm text-base-content/60">{key.last_used_at ? formatDate(key.last_used_at) : "Never"}</td>
-                    <td className="text-sm text-base-content/60">{formatDate(key.created_at)}</td>
+                    <td className="text-sm text-base-content/60">
+                      {key.last_used_at
+                        ? formatDate(key.last_used_at)
+                        : "Never"}
+                    </td>
+                    <td className="text-sm text-base-content/60">
+                      {formatDate(key.created_at)}
+                    </td>
                     <td>
-                      <button className="btn btn-ghost btn-xs text-error" onClick={() => setDeleteTarget(key)}>
+                      <button
+                        className="btn btn-ghost btn-xs text-error"
+                        onClick={() => setDeleteTarget(key)}
+                      >
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </td>
@@ -137,20 +186,51 @@ export default function ApiKeysTab() {
         </Card>
       )}
 
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); reset(); setError(""); }} title="New API Key">
-        {error && <div className="alert alert-error mb-4"><span>{error}</span></div>}
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
-          <Input label="Key Name" placeholder="CI/CD Pipeline"
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          reset();
+          setError("");
+        }}
+        title="New API Key"
+      >
+        {error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
+          </div>
+        )}
+        <form
+          onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+          className="space-y-4"
+        >
+          <Input
+            label="Key Name"
+            placeholder="CI/CD Pipeline"
             {...register("name", { required: "Name is required" })}
             error={formErrors.name?.message}
           />
-          <Input label="Scopes" placeholder="read, write" helperText="Comma-separated scopes"
+          <Input
+            label="Scopes"
+            placeholder="read, write"
+            helperText="Comma-separated scopes"
             {...register("scopes", { required: "At least one scope required" })}
             error={formErrors.scopes?.message}
           />
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create Key</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowCreate(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create Key
+            </Button>
           </div>
         </form>
       </Modal>

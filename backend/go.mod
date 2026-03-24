@@ -3,6 +3,7 @@ module github.com/orbispm/orbispm
 go 1.24.10
 
 require (
+	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/go-chi/chi/v5 v5.2.5
 	github.com/go-chi/cors v1.2.2
 	github.com/go-playground/validator/v10 v10.30.1
@@ -13,6 +14,7 @@ require (
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/meilisearch/meilisearch-go v0.36.1
 	github.com/minio/minio-go/v7 v7.0.98
+	github.com/orbispm/proto v0.0.0-00010101000000-000000000000
 	github.com/prometheus/client_golang v1.23.2
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/rs/zerolog v1.34.0
@@ -24,6 +26,7 @@ require (
 	golang.org/x/crypto v0.47.0
 	golang.org/x/time v0.14.0
 	google.golang.org/grpc v1.78.0
+	google.golang.org/protobuf v1.36.11
 	nhooyr.io/websocket v1.8.17
 )
 
@@ -76,6 +79,7 @@ require (
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/swaggo/files/v2 v2.0.0 // indirect
 	github.com/tinylib/msgp v1.6.1 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/zitadel/logging v0.6.2 // indirect
 	github.com/zitadel/oidc/v3 v3.45.1 // indirect
 	github.com/zitadel/schema v1.3.1 // indirect
@@ -95,7 +99,8 @@ require (
 	golang.org/x/tools v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251222181119-0a764e51fe1b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251222181119-0a764e51fe1b // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/orbispm/proto => ../proto

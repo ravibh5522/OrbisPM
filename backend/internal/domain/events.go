@@ -24,6 +24,24 @@ const (
 	EventChangeRequestCreated  = "change_request.created"
 	EventChangeRequestApproved = "change_request.approved"
 	EventChangeRequestRejected = "change_request.rejected"
+
+	// Announcement events.
+	EventAnnouncementCreated = "announcement.created"
+	EventAnnouncementUpdated = "announcement.updated"
+	EventAnnouncementDeleted = "announcement.deleted"
+
+	// Team lifecycle events (for messaging sync).
+	EventTeamDeleted        = "team.deleted"
+	EventTeamManagerChanged = "team.manager_changed"
+	EventTeamMemberAdded    = "team.member_added"
+	EventTeamMemberRemoved  = "team.member_removed"
+
+	// Project lifecycle events (for messaging sync).
+	EventProjectDeleted       = "project.deleted"
+	EventProjectTeamLinked    = "project.team_linked"
+	EventProjectTeamUnlinked  = "project.team_unlinked"
+	EventProjectMemberAdded   = "project.member_added"
+	EventProjectMemberRemoved = "project.member_removed"
 )
 
 // DomainEvent carries event data for pub/sub and notifications.

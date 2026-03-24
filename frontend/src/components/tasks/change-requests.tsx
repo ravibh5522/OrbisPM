@@ -471,9 +471,11 @@ export function PendingReviewBadge({ count }: { count?: number }) {
 export function ChangeRequestToast({
   result,
   onDismiss,
+  onViewApprovals,
 }: {
   result: { pending_review?: boolean; change_request?: TaskChangeRequest | null } | null;
   onDismiss: () => void;
+  onViewApprovals?: () => void;
 }) {
   if (!result?.pending_review || !result.change_request) return null;
 
@@ -488,9 +490,16 @@ export function ChangeRequestToast({
           Your changes to <strong>{fields.join(", ")}</strong> require approval before being applied.
         </p>
       </div>
-      <button className="btn btn-ghost btn-xs" onClick={onDismiss}>
-        Dismiss
-      </button>
+      <div className="flex gap-1">
+        {onViewApprovals && (
+          <button className="btn btn-ghost btn-xs" onClick={onViewApprovals}>
+            <Paperclip className="w-3 h-3 mr-1" /> View & Attach
+          </button>
+        )}
+        <button className="btn btn-ghost btn-xs" onClick={onDismiss}>
+          Dismiss
+        </button>
+      </div>
     </div>
   );
 }

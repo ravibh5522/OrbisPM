@@ -9,14 +9,13 @@ You are working on the OrbisPM Next.js 15 frontend (App Router, SSR, TypeScript)
 ## Tech Stack
 - **Framework:** Next.js 15 with App Router
 - **Language:** TypeScript (strict mode)
-- **Styling:** Tailwind CSS
-- **Components:** Shadcn/UI (from `components/ui/`)
-- **State:** React Query (TanStack Query) for server data, Zustand for client UI state
+- **Styling:** Tailwind CSS 4 + DaisyUI 5
+- **State:** TanStack Query v5 for server data, Zustand 5 for client state (auth-store, project-task-store)
 - **Forms:** React Hook Form + Zod validation
-- **Editor:** Tiptap (rich text)
-- **Charts:** Recharts
-- **Drag & Drop:** @dnd-kit
-- **Real-time:** Custom WebSocket client (`lib/ws.ts`)
+- **Editor:** Tiptap 3 (rich text)
+- **Charts:** Recharts 3
+- **Drag & Drop:** @dnd-kit 6
+- **Real-time:** `useOrgSocket` hook — org-level WebSocket with project room multiplexing
 
 ## Architecture Rules
 
@@ -83,12 +82,13 @@ export async function getTaskTree(projectId: string): Promise<Task[]> {
 - NEVER use `any` type. Define types in `src/types/`
 - NEVER use `// @ts-ignore` or `// @ts-nocheck`
 - ALWAYS use `cn()` from `lib/utils` for conditional classNames
-- ALWAYS use Shadcn/UI components — NEVER install MUI, Ant Design, or others
-- ALWAYS define API types in `src/types/api.ts`
+- ALWAYS use DaisyUI 5 component classes (btn, card, modal, badge, etc.) — NEVER install MUI, Ant Design, Shadcn, or others
+- ALWAYS define API types in `src/types/domain.ts`
 - ALWAYS handle loading states (`loading.tsx` or Skeleton components)
 - ALWAYS handle error states (`error.tsx` or ErrorBoundary)
-- Use `useRealtime()` hook to subscribe to WebSocket events for live updates
+- Use `useOrgSocket()` hook to subscribe to WebSocket events for live updates
 - Use `usePermissions()` hook to check RBAC before rendering actions
+- Use `useProjectTaskStore` Zustand store for task state within projects
 - Form validation: Zod schemas in component files, React Hook Form for state
 - File uploads: use `useCallback` with progress tracking via MinIO pre-signed URLs
 - NEVER fetch data in `useEffect` when it can be done in a Server Component

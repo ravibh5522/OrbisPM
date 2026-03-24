@@ -1,23 +1,25 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
+import { CalendarView, getDateRange } from "@/components/calendar";
+import { Avatar, Badge, Card, LoadingPage, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { Card, PageHeader, LoadingPage, Badge, Avatar } from "@/components/ui/shared";
-import { statusColor, priorityColor, statusLabel, formatRelative } from "@/lib/utils";
+import { formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Task, Team, TeamDashboardStats } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
 import {
-  FolderKanban,
-  ListTodo,
-  Users,
-  AlertTriangle,
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  ArrowLeft,
+    AlertTriangle,
+    ArrowLeft,
+    CalendarDays,
+    Clock,
+    FolderKanban,
+    ListTodo,
+    TrendingDown,
+    TrendingUp,
+    Users,
 } from "lucide-react";
 import Link from "next/link";
-import { use } from "react";
-import type { Team, TeamDashboardStats } from "@/types/domain";
+import { use, useCallback, useMemo, useState } from "react";
 
 /* ── Stat Card ── */
 function StatCard({
@@ -75,6 +77,11 @@ export default function TeamDashboardPage({
   const { orgSlug, teamId } = use(params);
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgId = currentOrg?.id || "";
+  const [activeTab, setActiveTab] = useState<"overview" | "calendar">("overview");
+
+  // Calendar state
+  const calInitRange = useMemo(() => getDateRange(new Date(), "month"), []);
+  const [calDateRange, setCalDateRange] = useState(calInitRange);
 
   const { data: team, isLoading: teamLoading } = useQuery<Team>({
     queryKey: ["team", orgId, teamId],
@@ -87,6 +94,57 @@ export default function TeamDashboardPage({
     queryFn: () => api.teams.dashboard(orgId, teamId),
     enabled: !!orgId,
   });
+
+  // Fetch team's projects for calendar
+  const { data: teamProjects } = useQuery({
+    queryKey: ["projects", orgId, teamId],
+    queryFn: () => api.projects.list(orgId, { team_id: teamId }),
+    enabled: !!orgId && activeTab === "calendar",
+  });
+
+  // Fetch tasks for calendar from all team projects
+  const { data: calTasksData, isLoading: calTasksLoading } = useQuery({
+    queryKey: ["calendar-tasks-team", orgId, teamId, calDateRange.from, calDateRange.to, teamProjects?.data?.map((p) => p.id)],
+    queryFn: async () => {
+      const projects = teamProjects?.data || [];
+      if (projects.length === 0) return [] as Task[];
+      const results = await Promise.all(
+        projects.map((p) => {
+          const params = new URLSearchParams();
+          params.set("due_date_from", calDateRange.from);
+          params.set("due_date_to", calDateRange.to);
+          params.set("limit", "200");
+          return api.tasks.list(orgId, p.id, params.toString()).then((r) => r.data || []);
+        })
+      );
+      return results.flat();
+    },
+    enabled: !!orgId && activeTab === "calendar" && (teamProjects?.data?.length ?? 0) > 0,
+  });
+
+  // Fetch org members for calendar avatars
+  const { data: orgMembersForCal } = useQuery({
+    queryKey: ["org-members", orgId],
+    queryFn: () => api.members.list(orgId),
+    enabled: !!orgId && activeTab === "calendar",
+    staleTime: 5 * 60_000,
+  });
+
+  const calMembers = useMemo(() => {
+    return (orgMembersForCal?.data || []).map((m) => ({
+      project_id: "",
+      user_id: m.user_id,
+      email: m.email,
+      display_name: m.display_name,
+      avatar_url: m.avatar_url,
+      role: m.role,
+      joined_at: m.joined_at,
+    }));
+  }, [orgMembersForCal]);
+
+  const handleCalRangeChange = useCallback((from: string, to: string) => {
+    setCalDateRange({ from, to });
+  }, []);
 
   if (teamLoading || statsLoading || !stats) return <LoadingPage />;
 
@@ -106,6 +164,43 @@ export default function TeamDashboardPage({
         title={team?.name || "Team Dashboard"}
         description={team?.description || "Team workload, velocity, and task breakdown"}
       />
+
+      {/* Tab switcher */}
+      <div role="tablist" className="tabs tabs-boxed bg-base-200/50 mb-6 w-fit">
+        <button
+          role="tab"
+          className={`tab tab-sm ${activeTab === "overview" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("overview")}
+        >
+          <ListTodo className="w-3.5 h-3.5 mr-1" /> Overview
+        </button>
+        <button
+          role="tab"
+          className={`tab tab-sm ${activeTab === "calendar" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("calendar")}
+        >
+          <CalendarDays className="w-3.5 h-3.5 mr-1" /> Calendar
+        </button>
+      </div>
+
+      {/* Calendar Tab */}
+      {activeTab === "calendar" && (
+        <div className="h-[calc(100vh-220px)]">
+          <CalendarView
+            tasks={calTasksData || []}
+            members={calMembers}
+            isLoading={calTasksLoading}
+            onTaskClick={(task) => {
+              window.location.href = `/${orgSlug}/projects/${task.project_id}?task=${task.id}`;
+            }}
+            onRangeChange={handleCalRangeChange}
+          />
+        </div>
+      )}
+
+      {/* Overview Tab */}
+      {activeTab === "overview" && (
+      <>
 
       {/* ── KPI Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -314,6 +409,9 @@ export default function TeamDashboardPage({
           </div>
         )}
       </Card>
+
+      </>
+      )}
     </div>
   );
 }

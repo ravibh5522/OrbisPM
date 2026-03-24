@@ -5,10 +5,14 @@ RUN apk add --no-cache git ca-certificates
 
 WORKDIR /app
 
-COPY go.mod go.sum ./
+# Copy proto dependency first (for replace directive)
+COPY proto/ /proto/
+
+# Copy backend source
+COPY backend/go.mod backend/go.sum ./
 RUN go mod download
 
-COPY . .
+COPY backend/ .
 
 RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/api ./cmd/api
@@ -23,7 +27,7 @@ WORKDIR /app
 
 COPY --from=builder /app/api /app/api
 COPY --from=builder /app/migrate /app/migrate
-COPY db/migrations /app/db/migrations
+COPY backend/db/migrations /app/db/migrations
 
 EXPOSE 8080
 

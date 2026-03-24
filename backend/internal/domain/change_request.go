@@ -30,8 +30,17 @@ type TaskChangeRequest struct {
 
 // TaskUpdateResult is returned from task update when review pipeline is involved.
 type TaskUpdateResult struct {
-	Task           *Task              `json:"task"`
-	ChangeRequest  *TaskChangeRequest `json:"change_request,omitempty"`
-	AppliedChanges map[string]any     `json:"applied_changes,omitempty"`
-	PendingReview  bool               `json:"pending_review"`
+	Task              *Task              `json:"task"`
+	ChangeRequest     *TaskChangeRequest `json:"change_request,omitempty"`
+	AppliedChanges    map[string]any     `json:"applied_changes,omitempty"`
+	PendingReview     bool               `json:"pending_review"`
+	DeadlineConflicts []DeadlineConflict `json:"deadline_conflicts,omitempty"`
+	AncestorsUpdated  []*Task            `json:"ancestors_updated,omitempty"`
+}
+
+// TaskCreateResult wraps a created task with optional deadline cascade info.
+type TaskCreateResult struct {
+	Task              *Task              `json:"task"`
+	DeadlineConflicts []DeadlineConflict `json:"deadline_conflicts,omitempty"`
+	AncestorsUpdated  []*Task            `json:"ancestors_updated,omitempty"`
 }

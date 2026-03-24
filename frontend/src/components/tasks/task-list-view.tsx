@@ -1,16 +1,25 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { useRouter } from "next/navigation";
-import { ConfirmDialog } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { Input, Select } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
 import {
-  DndContext,
+  ChangeRequestToast,
+  PendingReviewBadge,
+} from "@/components/tasks/change-requests";
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import { Button } from "@/components/ui/button";
+import { Input, Select } from "@/components/ui/form-fields";
+import { Modal } from "@/components/ui/modal";
+import { ConfirmDialog } from "@/components/ui/shared";
+import { cn, formatDate } from "@/lib/utils";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import type {
+  ProjectMember,
+  Task,
+  TaskPriority,
+  TaskStatus,
+} from "@/types/domain";
+import {
   closestCenter,
+  DndContext,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -18,44 +27,43 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import {
+  arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
   useSortable,
-  arrayMove,
+  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  Plus,
-  Trash2,
-  ArrowUpDown,
-  ArrowUp,
   ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   ChevronRight,
-  Search,
-  X,
-  ExternalLink,
   Copy,
-  Loader2,
+  ExternalLink,
   GripVertical,
+  Loader2,
   MoreHorizontal,
+  Plus,
+  Search,
+  Trash2,
+  X,
 } from "lucide-react";
-import {
-  formatDate,
-  cn,
-} from "@/lib/utils";
-import type {
-  Task,
-  TaskStatus,
-  TaskPriority,
-  ProjectMember,
-} from "@/types/domain";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 
 /* ═══════════════════════════════════════════════════════
    Sortable flat task list with inline editing
    ═══════════════════════════════════════════════════════ */
 
-type SortField = "title" | "status" | "priority" | "due_date" | "created_at" | "updated_at";
+type SortField =
+  | "title"
+  | "status"
+  | "priority"
+  | "due_date"
+  | "created_at"
+  | "updated_at";
 type SortDir = "asc" | "desc";
 
 interface TaskListViewProps {
@@ -63,9 +71,16 @@ interface TaskListViewProps {
   orgSlug: string;
   projectId: string;
   members: ProjectMember[];
+  globalFilter?: GlobalFilterState;
 }
 
-export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListViewProps) {
+export function TaskListView({
+  orgId,
+  orgSlug,
+  projectId,
+  members,
+  globalFilter,
+}: TaskListViewProps) {
   const send = useProjectTaskStore((s) => s.send);
   const router = useRouter();
 
@@ -74,9 +89,19 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
   const [sortOrder, setSortOrder] = useState<SortDir>("desc");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterPriority, setFilterPriority] = useState<string>("");
+  const [searchInput, setSearchInput] = useState<string>("");
   const [searchText, setSearchText] = useState<string>("");
   const [page, setPage] = useState(0);
   const limit = 25;
+
+  // Debounce search input: apply after 300ms of inactivity
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchText(searchInput.trim());
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   /* ── Modal state ── */
   const [showCreate, setShowCreate] = useState(false);
@@ -91,6 +116,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [bulkPending, setBulkPending] = useState(false);
+  const [pendingReviewResult, setPendingReviewResult] = useState<{
+    pending_review?: boolean;
+    change_request?: any;
+  } | null>(null);
 
   /* Fetch via WS */
   const fetchList = useCallback(async () => {
@@ -104,7 +133,20 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
         sort_order: sortOrder,
         status: filterStatus || undefined,
         priority: filterPriority || undefined,
-        search: searchText.trim() || undefined,
+        search: searchText.trim() || globalFilter?.search || undefined,
+        // Global filter fields (server-side)
+        statuses: globalFilter?.statuses?.length
+          ? globalFilter.statuses
+          : undefined,
+        priorities: globalFilter?.priorities?.length
+          ? globalFilter.priorities
+          : undefined,
+        assignee_ids: globalFilter?.assigneeIds?.length
+          ? globalFilter.assigneeIds.filter(Boolean)
+          : undefined,
+        labels: globalFilter?.labels?.length ? globalFilter.labels : undefined,
+        due_date_from: globalFilter?.dueDateFrom || undefined,
+        due_date_to: globalFilter?.dueDateTo || undefined,
       });
       setTasks(res?.data || []);
       setTotal(res?.total || 0);
@@ -114,80 +156,120 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [send, page, sortBy, sortOrder, filterStatus, filterPriority, searchText]);
+  }, [
+    send,
+    page,
+    sortBy,
+    sortOrder,
+    filterStatus,
+    filterPriority,
+    searchText,
+    globalFilter,
+  ]);
 
-  useEffect(() => { fetchList(); }, [fetchList]);
+  useEffect(() => {
+    fetchList();
+  }, [fetchList]);
 
   const totalPages = Math.ceil(total / limit);
 
   /* ── Inline update ── */
-  const handleUpdate = useCallback(async (id: string, changes: Partial<Task>) => {
-    if (!send) return;
-    // Optimistic
-    setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...changes } : t)));
-    try {
-      await send("task:update", { task_id: id, ...changes });
-    } catch {
-      fetchList(); // rollback by re-fetching
-    }
-  }, [send, fetchList]);
+  const handleUpdate = useCallback(
+    async (id: string, changes: Partial<Task>) => {
+      if (!send) return;
+      const currentTask = tasks.find((t) => t.id === id);
+      // Optimistic
+      setTasks((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...changes } : t)),
+      );
+      try {
+        const result = await send("task:update", {
+          task_id: id,
+          base_version: currentTask?.version ?? 0,
+          ...changes,
+        });
+        // Handle pending review — rollback optimistic update
+        if (result?.pending_review) {
+          fetchList();
+          setPendingReviewResult(result);
+        }
+      } catch {
+        fetchList(); // rollback by re-fetching
+      }
+    },
+    [send, fetchList, tasks],
+  );
 
   /* ── Delete ── */
-  const handleDelete = useCallback(async (id: string) => {
-    if (!send) return;
-    try {
-      await send("task:delete", { task_id: id });
-      setDeleteTarget(null);
-      fetchList();
-    } catch (e) {
-      console.error("[WS] task:delete failed", e);
-    }
-  }, [send, fetchList]);
+  const handleDelete = useCallback(
+    async (id: string) => {
+      if (!send) return;
+      try {
+        await send("task:delete", { task_id: id });
+        setDeleteTarget(null);
+        fetchList();
+      } catch (e) {
+        console.error("[WS] task:delete failed", e);
+      }
+    },
+    [send, fetchList],
+  );
 
   /* ── Duplicate ── */
-  const handleDuplicate = useCallback(async (id: string) => {
-    if (!send) return;
-    try {
-      await send("task:duplicate", { task_id: id });
-      fetchList();
-    } catch (e) {
-      console.error("[WS] task:duplicate failed", e);
-    }
-  }, [send, fetchList]);
+  const handleDuplicate = useCallback(
+    async (id: string) => {
+      if (!send) return;
+      try {
+        await send("task:duplicate", { task_id: id });
+        fetchList();
+      } catch (e) {
+        console.error("[WS] task:duplicate failed", e);
+      }
+    },
+    [send, fetchList],
+  );
 
   /* ── Bulk update ── */
-  const bulkAction = useCallback(async (changes: Partial<Task>) => {
-    if (!send || selectedIds.size === 0) return;
-    setBulkPending(true);
-    try {
-      await send("task:bulk-update", {
-        task_ids: Array.from(selectedIds),
-        changes,
-      });
-      setSelectedIds(new Set());
-      fetchList();
-    } catch (e) {
-      console.error("[WS] task:bulk-update failed", e);
-    } finally {
-      setBulkPending(false);
-    }
-  }, [send, selectedIds, fetchList]);
+  const bulkAction = useCallback(
+    async (changes: Partial<Task>) => {
+      if (!send || selectedIds.size === 0) return;
+      setBulkPending(true);
+      try {
+        await send("task:bulk-update", {
+          task_ids: Array.from(selectedIds),
+          changes,
+        });
+        setSelectedIds(new Set());
+        fetchList();
+      } catch (e) {
+        console.error("[WS] task:bulk-update failed", e);
+      } finally {
+        setBulkPending(false);
+      }
+    },
+    [send, selectedIds, fetchList],
+  );
 
   /* ── Reorder ── */
-  const handleReorder = useCallback(async (items: { id: string; position: number }[]) => {
-    if (!send) return;
-    try {
-      await send("task:reorder", { items });
-      fetchList();
-    } catch (e) {
-      console.error("[WS] task:reorder failed", e);
-    }
-  }, [send, fetchList]);
+  const handleReorder = useCallback(
+    async (items: { id: string; position: number }[]) => {
+      if (!send) return;
+      try {
+        await send("task:reorder", { items });
+        fetchList();
+      } catch (e) {
+        console.error("[WS] task:reorder failed", e);
+      }
+    },
+    [send, fetchList],
+  );
 
   /* ── DnD sensors ── */
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const handleDragEnd = useCallback(
@@ -259,14 +341,20 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
   const clearFilters = () => {
     setFilterStatus("");
     setFilterPriority("");
-    setSearchText("");
+    setSearchInput("");
     setPage(0);
   };
 
-  const hasFilters = filterStatus || filterPriority || searchText;
+  const hasFilters = filterStatus || filterPriority || searchInput;
 
   return (
     <div className="space-y-3">
+      {/* Pending review toast */}
+      <ChangeRequestToast
+        result={pendingReviewResult}
+        onDismiss={() => setPendingReviewResult(null)}
+      />
+
       {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-lg">
@@ -278,11 +366,14 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
             className="select select-bordered select-xs"
             defaultValue=""
             onChange={(e) => {
-              if (e.target.value) bulkAction({ status: e.target.value as TaskStatus });
+              if (e.target.value)
+                bulkAction({ status: e.target.value as TaskStatus });
               e.target.value = "";
             }}
           >
-            <option value="" disabled>Set Status…</option>
+            <option value="" disabled>
+              Set Status…
+            </option>
             <option value="todo">Todo</option>
             <option value="in_progress">In Progress</option>
             <option value="done">Done</option>
@@ -292,11 +383,14 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
             className="select select-bordered select-xs"
             defaultValue=""
             onChange={(e) => {
-              if (e.target.value) bulkAction({ priority: e.target.value as TaskPriority });
+              if (e.target.value)
+                bulkAction({ priority: e.target.value as TaskPriority });
               e.target.value = "";
             }}
           >
-            <option value="" disabled>Set Priority…</option>
+            <option value="" disabled>
+              Set Priority…
+            </option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
             <option value="medium">Medium</option>
@@ -306,11 +400,20 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
             className="select select-bordered select-xs"
             defaultValue=""
             onChange={(e) => {
-              if (e.target.value) bulkAction({ assignee_id: e.target.value === "__none__" ? null : e.target.value });
+              if (e.target.value) {
+                const ids =
+                  e.target.value === "__none__" ? [] : [e.target.value];
+                bulkAction({
+                  assignee_ids: ids,
+                  assignee_id: ids[0] || "",
+                } as Partial<Task>);
+              }
               e.target.value = "";
             }}
           >
-            <option value="" disabled>Set Assignee…</option>
+            <option value="" disabled>
+              Set Assignee…
+            </option>
             <option value="__none__">Unassigned</option>
             {members.map((m) => (
               <option key={m.user_id} value={m.user_id}>
@@ -318,7 +421,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
               </option>
             ))}
           </select>
-          <button className="btn btn-ghost btn-xs" onClick={() => setSelectedIds(new Set())}>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => setSelectedIds(new Set())}
+          >
             <X className="w-3 h-3" /> Clear
           </button>
           {bulkPending && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -334,8 +440,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
             type="text"
             placeholder="Search tasks…"
             className="input input-bordered input-sm w-full pl-9"
-            value={searchText}
-            onChange={(e) => { setSearchText(e.target.value); setPage(0); }}
+            value={searchInput}
+            onChange={(e) => {
+              setSearchInput(e.target.value);
+            }}
           />
         </div>
 
@@ -343,7 +451,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
         <select
           className="select select-bordered select-sm"
           value={filterStatus}
-          onChange={(e) => { setFilterStatus(e.target.value); setPage(0); }}
+          onChange={(e) => {
+            setFilterStatus(e.target.value);
+            setPage(0);
+          }}
         >
           <option value="">All Status</option>
           <option value="todo">Todo</option>
@@ -356,7 +467,10 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
         <select
           className="select select-bordered select-sm"
           value={filterPriority}
-          onChange={(e) => { setFilterPriority(e.target.value); setPage(0); }}
+          onChange={(e) => {
+            setFilterPriority(e.target.value);
+            setPage(0);
+          }}
         >
           <option value="">All Priority</option>
           <option value="critical">Critical</option>
@@ -386,103 +500,119 @@ export function TaskListView({ orgId, orgSlug, projectId, members }: TaskListVie
       </div>
 
       {/* ── Table ── */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <div className="overflow-x-auto border border-base-200 rounded-lg">
-        <table className="table table-sm">
-          <thead className="bg-base-200/50">
-            <tr>
-              <th className="w-6"></th>
-              <th className="w-8">
-                <input
-                  type="checkbox"
-                  className="checkbox checkbox-xs"
-                  checked={tasks.length > 0 && selectedIds.size === tasks.length}
-                  onChange={toggleSelectAll}
-                />
-              </th>
-              <th
-                className="cursor-pointer select-none hover:bg-base-200 transition-colors"
-                onClick={() => toggleSort("title")}
-              >
-                <span className="flex items-center gap-1">
-                  Title <SortIcon field="title" />
-                </span>
-              </th>
-              <th
-                className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
-                onClick={() => toggleSort("status")}
-              >
-                <span className="flex items-center gap-1">
-                  Status <SortIcon field="status" />
-                </span>
-              </th>
-              <th
-                className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
-                onClick={() => toggleSort("priority")}
-              >
-                <span className="flex items-center gap-1">
-                  Priority <SortIcon field="priority" />
-                </span>
-              </th>
-              <th className="w-32">Assignee</th>
-              <th
-                className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
-                onClick={() => toggleSort("due_date")}
-              >
-                <span className="flex items-center gap-1">
-                  Due Date <SortIcon field="due_date" />
-                </span>
-              </th>
-              <th
-                className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
-                onClick={() => toggleSort("updated_at")}
-              >
-                <span className="flex items-center gap-1">
-                  Updated <SortIcon field="updated_at" />
-                </span>
-              </th>
-              <th className="w-20">Actions</th>
-            </tr>
-          </thead>
-          <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          <tbody>
-            {isLoading && (
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="overflow-x-auto border border-base-200 rounded-lg">
+          <table className="table table-sm">
+            <thead className="bg-base-200/50">
               <tr>
-                <td colSpan={9} className="text-center py-6">
-                  <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-                </td>
+                <th className="w-6"></th>
+                <th className="w-8">
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-xs"
+                    checked={
+                      tasks.length > 0 && selectedIds.size === tasks.length
+                    }
+                    onChange={toggleSelectAll}
+                  />
+                </th>
+                <th
+                  className="cursor-pointer select-none hover:bg-base-200 transition-colors"
+                  onClick={() => toggleSort("title")}
+                >
+                  <span className="flex items-center gap-1">
+                    Title <SortIcon field="title" />
+                  </span>
+                </th>
+                <th
+                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  onClick={() => toggleSort("status")}
+                >
+                  <span className="flex items-center gap-1">
+                    Status <SortIcon field="status" />
+                  </span>
+                </th>
+                <th
+                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  onClick={() => toggleSort("priority")}
+                >
+                  <span className="flex items-center gap-1">
+                    Priority <SortIcon field="priority" />
+                  </span>
+                </th>
+                <th className="w-32">Assignee</th>
+                <th
+                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  onClick={() => toggleSort("due_date")}
+                >
+                  <span className="flex items-center gap-1">
+                    Due Date <SortIcon field="due_date" />
+                  </span>
+                </th>
+                <th
+                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  onClick={() => toggleSort("updated_at")}
+                >
+                  <span className="flex items-center gap-1">
+                    Updated <SortIcon field="updated_at" />
+                  </span>
+                </th>
+                <th className="w-20">Actions</th>
               </tr>
-            )}
-            {!isLoading && tasks.length === 0 && (
-              <tr>
-                <td colSpan={9} className="text-center py-8 text-base-content/50">
-                  {hasFilters ? "No tasks match your filters" : "No tasks yet — create your first!"}
-                </td>
-              </tr>
-            )}
-            {tasks.map((task) => (
-              <TaskRow
-                key={task.id}
-                task={task}
-                orgSlug={orgSlug}
-                projectId={projectId}
-                members={members}
-                memberName={memberName}
-                memberAvatar={memberAvatar}
-                isSelected={selectedIds.has(task.id)}
-                onToggleSelect={() => toggleSelect(task.id)}
-                onUpdate={(changes) => handleUpdate(task.id, changes)}
-                onDelete={() => setDeleteTarget(task)}
-                onDuplicate={() => handleDuplicate(task.id)}
-                onNavigate={() =>
-                  router.push(`/${orgSlug}/projects/${projectId}?task=${task.id}`)
-                }
-              />
-            ))}
-          </tbody>
-          </SortableContext>
-        </table>
-      </div>
+            </thead>
+            <SortableContext
+              items={tasks.map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <tbody>
+                {isLoading && (
+                  <tr>
+                    <td colSpan={9} className="text-center py-6">
+                      <Loader2 className="w-5 h-5 animate-spin mx-auto" />
+                    </td>
+                  </tr>
+                )}
+                {!isLoading && tasks.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={9}
+                      className="text-center py-8 text-base-content/50"
+                    >
+                      {hasFilters
+                        ? "No tasks match your filters"
+                        : "No tasks yet — create your first!"}
+                    </td>
+                  </tr>
+                )}
+                {tasks.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    orgSlug={orgSlug}
+                    projectId={projectId}
+                    members={members}
+                    memberName={memberName}
+                    memberAvatar={memberAvatar}
+                    isSelected={selectedIds.has(task.id)}
+                    onToggleSelect={() => toggleSelect(task.id)}
+                    onUpdate={(changes) => handleUpdate(task.id, changes)}
+                    onDelete={() => setDeleteTarget(task)}
+                    onDuplicate={() => handleDuplicate(task.id)}
+                    onNavigate={() =>
+                      router.push(
+                        `/${orgSlug}/projects/${projectId}?task=${task.id}`,
+                      )
+                    }
+                  />
+                ))}
+              </tbody>
+            </SortableContext>
+          </table>
+        </div>
       </DndContext>
 
       {/* ── Pagination ── */}
@@ -567,7 +697,9 @@ function TaskRow({
   onNavigate,
 }: TaskRowProps) {
   const isOverdue =
-    task.due_date && new Date(task.due_date) < new Date() && task.status !== "done";
+    task.due_date &&
+    new Date(task.due_date) < new Date() &&
+    task.status !== "done";
 
   const {
     attributes,
@@ -585,9 +717,21 @@ function TaskRow({
   };
 
   return (
-    <tr ref={setNodeRef} style={style} className={cn("hover group", isSelected && "bg-primary/5", isDragging && "bg-base-200")}>
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "hover group",
+        isSelected && "bg-primary/5",
+        isDragging && "bg-base-200",
+      )}
+    >
       {/* Drag handle */}
-      <td className="w-6 cursor-grab active:cursor-grabbing" {...attributes} {...listeners}>
+      <td
+        className="w-6 cursor-grab active:cursor-grabbing"
+        {...attributes}
+        {...listeners}
+      >
         <GripVertical className="w-4 h-4 text-base-content/30 group-hover:text-base-content/60" />
       </td>
       {/* Checkbox */}
@@ -603,7 +747,10 @@ function TaskRow({
       <td>
         <div className="flex items-center gap-2">
           {task.depth > 0 && (
-            <span className="text-xs text-base-content/30" style={{ marginLeft: task.depth * 12 }}>
+            <span
+              className="text-xs text-base-content/30"
+              style={{ marginLeft: task.depth * 12 }}
+            >
               <ChevronRight className="w-3 h-3 inline" />
             </span>
           )}
@@ -614,6 +761,7 @@ function TaskRow({
           >
             {task.title}
           </button>
+          {task.review_status === "pending" && <PendingReviewBadge count={1} />}
           <button
             className="opacity-0 group-hover:opacity-100 transition-opacity"
             onClick={onNavigate}
@@ -652,7 +800,9 @@ function TaskRow({
             task.priority === "medium" && "text-info",
           )}
           value={task.priority}
-          onChange={(e) => onUpdate({ priority: e.target.value as TaskPriority })}
+          onChange={(e) =>
+            onUpdate({ priority: e.target.value as TaskPriority })
+          }
         >
           <option value="critical">Critical</option>
           <option value="high">High</option>
@@ -661,22 +811,18 @@ function TaskRow({
         </select>
       </td>
 
-      {/* Assignee — inline dropdown */}
+      {/* Assignee — multi-select dropdown */}
       <td>
-        <select
-          className="select select-ghost select-xs w-full max-w-28"
-          value={task.assignee_id || ""}
-          onChange={(e) =>
-            onUpdate({ assignee_id: e.target.value || null })
+        <MultiAssigneeCell
+          assigneeIds={task.assignee_ids || []}
+          members={members}
+          onChange={(next) =>
+            onUpdate({
+              assignee_ids: next,
+              assignee_id: next.length > 0 ? next[0] : "",
+            } as Partial<Task>)
           }
-        >
-          <option value="">Unassigned</option>
-          {members.map((m) => (
-            <option key={m.user_id} value={m.user_id}>
-              {m.display_name || m.email || m.user_id.slice(0, 8)}
-            </option>
-          ))}
-        </select>
+        />
       </td>
 
       {/* Due date — inline input */}
@@ -690,7 +836,9 @@ function TaskRow({
           value={task.due_date ? task.due_date.slice(0, 10) : ""}
           onChange={(e) =>
             onUpdate({
-              due_date: e.target.value ? new Date(e.target.value).toISOString() : null,
+              due_date: e.target.value
+                ? new Date(e.target.value).toISOString()
+                : null,
             })
           }
         />
@@ -704,10 +852,16 @@ function TaskRow({
       {/* Actions */}
       <td>
         <div className="dropdown dropdown-end">
-          <label tabIndex={0} className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity">
+          <label
+            tabIndex={0}
+            className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 transition-opacity"
+          >
             <MoreHorizontal className="w-4 h-4" />
           </label>
-          <ul tabIndex={0} className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200">
+          <ul
+            tabIndex={0}
+            className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-40 border border-base-200"
+          >
             <li>
               <a onClick={onNavigate} className="text-sm">
                 <ExternalLink className="w-3.5 h-3.5" /> Open
@@ -727,6 +881,110 @@ function TaskRow({
         </div>
       </td>
     </tr>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════
+   Multi-Assignee Cell (inline dropdown with checkboxes)
+   ═══════════════════════════════════════════════════════ */
+
+function MultiAssigneeCell({
+  assigneeIds,
+  members,
+  onChange,
+}: {
+  assigneeIds: string[];
+  members: ProjectMember[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside click or Escape
+  useEffect(() => {
+    if (!open) return;
+    const onMouseDown = (e: MouseEvent) => {
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(e.target as Node)
+      )
+        setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onMouseDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onMouseDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  const toggle = (userId: string) => {
+    const next = assigneeIds.includes(userId)
+      ? assigneeIds.filter((id) => id !== userId)
+      : [...assigneeIds, userId];
+    onChange(next);
+  };
+
+  const assignedMembers = members.filter((m) =>
+    assigneeIds.includes(m.user_id),
+  );
+  const label =
+    assignedMembers.length === 0
+      ? "Unassigned"
+      : assignedMembers.length === 1
+        ? assignedMembers[0].display_name ||
+          assignedMembers[0].email ||
+          assignedMembers[0].user_id.slice(0, 8)
+        : `${assignedMembers.length} assigned`;
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button
+        className="btn btn-ghost btn-xs w-full max-w-32 justify-start truncate text-left font-normal"
+        onClick={() => setOpen((p) => !p)}
+      >
+        {label}
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-48 overflow-y-auto z-50">
+          <button
+            className={cn(
+              "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200",
+              assigneeIds.length === 0 && "font-medium",
+            )}
+            onClick={() => {
+              onChange([]);
+              setOpen(false);
+            }}
+          >
+            Clear All
+          </button>
+          {members.map((m) => {
+            const checked = assigneeIds.includes(m.user_id);
+            return (
+              <button
+                key={m.user_id}
+                className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200"
+                onClick={() => toggle(m.user_id)}
+              >
+                <input
+                  type="checkbox"
+                  className="checkbox checkbox-xs"
+                  checked={checked}
+                  readOnly
+                />
+                <span className="truncate">
+                  {m.display_name || m.email || m.user_id.slice(0, 8)}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -756,7 +1014,11 @@ function CreateTaskModal({
   onClose: () => void;
   onCreated: () => void;
 }) {
-  const { register, handleSubmit, formState: { errors } } = useForm<CreateTaskForm>({
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<CreateTaskForm>({
     defaultValues: {
       title: "",
       description: "",
@@ -782,7 +1044,10 @@ function CreateTaskModal({
         status: data.status,
         priority: data.priority,
         assignee_id: data.assignee_id || undefined,
-        due_date: data.due_date ? new Date(data.due_date).toISOString() : undefined,
+        assignee_ids: data.assignee_id ? [data.assignee_id] : [],
+        due_date: data.due_date
+          ? new Date(data.due_date).toISOString()
+          : undefined,
       });
       onCreated();
     } catch (err: any) {
@@ -838,11 +1103,13 @@ function CreateTaskModal({
           />
           <Input label="Due Date" type="date" {...register("due_date")} />
         </div>
-        {createError && (
-          <p className="text-error text-sm">{createError}</p>
-        )}
+        {createError && <p className="text-error text-sm">{createError}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            onClick={onClose}
+          >
             Cancel
           </button>
           <Button type="submit" size="sm" loading={creating}>

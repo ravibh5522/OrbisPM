@@ -2,7 +2,44 @@
 @plugin "daisyui";
 
 /* ═══════════════════════════════════════════════════════════════
-   Theme 1 — Glass Light
+   Theme 1 — Orbis Light (DEFAULT — must come first as :root)
+   Clean minimal light, blue · slate · emerald palette
+   ═══════════════════════════════════════════════════════════════ */
+:root,
+[data-theme="orbis-light"] {
+  color-scheme: light;
+  --color-base-100: oklch(99% 0 0);
+  --color-base-200: oklch(93% 0.008 250);
+  --color-base-300: oklch(86% 0.013 250);
+  --color-base-content: oklch(20% 0.02 260);
+  --color-primary: oklch(50% 0.2 260);
+  --color-primary-content: oklch(97% 0.02 260);
+  --color-secondary: oklch(55% 0.15 200);
+  --color-secondary-content: oklch(97% 0.02 200);
+  --color-accent: oklch(65% 0.18 155);
+  --color-accent-content: oklch(20% 0.06 155);
+  --color-neutral: oklch(30% 0.02 260);
+  --color-neutral-content: oklch(93% 0.005 260);
+  --color-info: oklch(68% 0.15 235);
+  --color-info-content: oklch(20% 0.05 235);
+  --color-success: oklch(72% 0.18 155);
+  --color-success-content: oklch(20% 0.06 155);
+  --color-warning: oklch(80% 0.18 85);
+  --color-warning-content: oklch(30% 0.08 85);
+  --color-error: oklch(65% 0.22 20);
+  --color-error-content: oklch(97% 0.02 20);
+  --radius-selector: 0.5rem;
+  --radius-field: 0.375rem;
+  --radius-box: 0.5rem;
+  --size-selector: 0.25rem;
+  --size-field: 0.25rem;
+  --border: 1px;
+  --depth: 1;
+  --noise: 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Theme 2 — Glass Light
    Frosted glass on soft pastel gradient
    indigo · violet · teal palette
    ═══════════════════════════════════════════════════════════════ */
@@ -36,57 +73,73 @@
   --border: 1px;
   --depth: 1;
   --noise: 0;
-  background-image: linear-gradient(
-    135deg,
-    oklch(90% 0.08 270) 0%,
-    oklch(92% 0.07 310) 30%,
-    oklch(93% 0.07 180) 60%,
-    oklch(94% 0.05 260) 100%
-  );
+  background-image:
+    radial-gradient(
+      ellipse 70% 50% at 15% 85%,
+      oklch(88% 0.1 270 / 0.5) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 55% 45% at 80% 15%,
+      oklch(90% 0.09 310 / 0.4) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 45% 35% at 50% 55%,
+      oklch(92% 0.08 180 / 0.25) 0%,
+      transparent 45%
+    ),
+    linear-gradient(
+      135deg,
+      oklch(93% 0.06 270) 0%,
+      oklch(95% 0.05 310) 30%,
+      oklch(96% 0.05 180) 60%,
+      oklch(94% 0.04 260) 100%
+    );
   background-attachment: fixed;
-  background-color: oklch(92% 0.04 270);
+  background-color: oklch(95% 0.03 270);
 }
 
 /* ═══════════════════════════════════════════════════════════════
    Theme 2 — Glass Dark
-   Frosted glass on deep gradient
+   True frosted glass on rich nebula gradient
    purple · cyan · rose palette
 
-   Design rules (dark shades + light text):
-   1. Borders use DARK shades — base-200/300 darker than surface
-   2. Surface opacity ≥ 75% for readable text
-   3. Blur ≥ 16px on dark backgrounds
-   4. Text bright white, opacity modifiers boosted
-   5. NO white tints on borders — only dark separators
+   Design rules:
+   1. Surfaces semi-transparent (30-55%) with heavy blur
+   2. Borders use faint white glow — frosted glass edge effect
+   3. Inner highlight on top edge for depth/refraction
+   4. Blur ≥ 24px everywhere, ≥ 40px on sidebars/topbar
+   5. Rich multi-stop background gradient visible through glass
    ═══════════════════════════════════════════════════════════════ */
 [data-theme="glass-dark"] {
   color-scheme: dark;
 
-  /* Dark surface scale — borders DARKER than surface for subtle separators */
-  --color-base-100: oklch(22% 0.02 275);
-  --color-base-200: oklch(18% 0.015 275);
-  --color-base-300: oklch(15% 0.012 272);
+  /* Surface colors — semi-transparent base for glass layers */
+  --color-base-100: oklch(20% 0.025 275);
+  --color-base-200: oklch(16% 0.02 275);
+  --color-base-300: oklch(13% 0.015 272);
 
-  /* Text — near-white for maximum contrast */
+  /* Text — bright white */
   --color-base-content: oklch(95% 0.005 270);
 
-  /* Primary — vibrant purple */
-  --color-primary: oklch(72% 0.18 280);
+  /* Primary — glowing purple */
+  --color-primary: oklch(72% 0.2 280);
   --color-primary-content: oklch(100% 0 0);
 
-  /* Secondary — bright cyan */
-  --color-secondary: oklch(76% 0.16 195);
-  --color-secondary-content: oklch(14% 0.04 195);
+  /* Secondary — electric cyan */
+  --color-secondary: oklch(78% 0.17 195);
+  --color-secondary-content: oklch(12% 0.04 195);
 
-  /* Accent — rose/magenta */
-  --color-accent: oklch(74% 0.17 350);
-  --color-accent-content: oklch(14% 0.04 350);
+  /* Accent — hot rose */
+  --color-accent: oklch(74% 0.18 350);
+  --color-accent-content: oklch(12% 0.04 350);
 
   /* Neutral */
-  --color-neutral: oklch(25% 0.02 275);
+  --color-neutral: oklch(24% 0.025 275);
   --color-neutral-content: oklch(95% 0.005 275);
 
-  /* Status colors */
+  /* Status */
   --color-info: oklch(74% 0.14 230);
   --color-info-content: oklch(15% 0.04 230);
   --color-success: oklch(76% 0.16 160);
@@ -97,8 +150,8 @@
   --color-error-content: oklch(15% 0.04 15);
 
   --radius-selector: 1rem;
-  --radius-field: 0.5rem;
-  --radius-box: 0.75rem;
+  --radius-field: 0.625rem;
+  --radius-box: 1rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -108,53 +161,33 @@
   /* Force white text at theme level */
   color: oklch(95% 0.005 270) !important;
 
-  /* Deep gradient background */
-  background-image: linear-gradient(
-    135deg,
-    oklch(14% 0.08 280) 0%,
-    oklch(12% 0.06 320) 30%,
-    oklch(15% 0.06 200) 60%,
-    oklch(13% 0.07 270) 100%
-  );
+  /* Nebula gradient — rich colors visible through glass */
+  background-image:
+    radial-gradient(
+      ellipse 80% 60% at 10% 90%,
+      oklch(25% 0.12 280 / 0.6) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 85% 20%,
+      oklch(22% 0.1 200 / 0.5) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 50% 50%,
+      oklch(20% 0.08 330 / 0.3) 0%,
+      transparent 50%
+    ),
+    linear-gradient(
+      160deg,
+      oklch(10% 0.06 280) 0%,
+      oklch(8% 0.05 310) 25%,
+      oklch(10% 0.05 220) 50%,
+      oklch(9% 0.06 270) 75%,
+      oklch(8% 0.04 300) 100%
+    );
   background-attachment: fixed;
-  background-color: oklch(13% 0.05 280);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Theme 3 — Orbis Light
-   Clean minimal light, blue · slate · emerald palette
-   ═══════════════════════════════════════════════════════════════ */
-:root,
-[data-theme="orbis-light"] {
-  color-scheme: light;
-  --color-base-100: oklch(99% 0 0);
-  --color-base-200: oklch(96% 0.005 250);
-  --color-base-300: oklch(92% 0.01 250);
-  --color-base-content: oklch(20% 0.02 260);
-  --color-primary: oklch(50% 0.2 260);
-  --color-primary-content: oklch(97% 0.02 260);
-  --color-secondary: oklch(55% 0.15 200);
-  --color-secondary-content: oklch(97% 0.02 200);
-  --color-accent: oklch(65% 0.18 155);
-  --color-accent-content: oklch(20% 0.06 155);
-  --color-neutral: oklch(30% 0.02 260);
-  --color-neutral-content: oklch(93% 0.005 260);
-  --color-info: oklch(68% 0.15 235);
-  --color-info-content: oklch(20% 0.05 235);
-  --color-success: oklch(72% 0.18 155);
-  --color-success-content: oklch(20% 0.06 155);
-  --color-warning: oklch(80% 0.18 85);
-  --color-warning-content: oklch(30% 0.08 85);
-  --color-error: oklch(65% 0.22 20);
-  --color-error-content: oklch(97% 0.02 20);
-  --radius-selector: 0.5rem;
-  --radius-field: 0.375rem;
-  --radius-box: 0.5rem;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 1;
-  --noise: 0;
+  background-color: oklch(9% 0.04 280);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -164,8 +197,8 @@
 [data-theme="orbis-dark"] {
   color-scheme: dark;
   --color-base-100: oklch(20% 0.015 260);
-  --color-base-200: oklch(17% 0.012 258);
-  --color-base-300: oklch(14% 0.01 255);
+  --color-base-200: oklch(26% 0.02 260);
+  --color-base-300: oklch(32% 0.025 262);
   --color-base-content: oklch(92% 0.01 260);
   --color-primary: oklch(65% 0.2 265);
   --color-primary-content: oklch(97% 0.02 265);
@@ -206,86 +239,367 @@
   background-image: none !important;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   GLASS LIGHT — Complete frosted-glass treatment
+   Design rules:
+   1. Surfaces semi-transparent white (55-75%) with strong blur
+   2. Borders use faint dark lines — crisp glass-edge effect
+   3. Inner highlight on top edge for depth/refraction (white)
+   4. Blur ≥ 20px on surfaces, ≥ 32px on sidebars/topbar
+   5. Soft colored shadows for depth (indigo-tinted)
+   6. Pastel gradient background visible through glass
+   ══════════════════════════════════════════════════════════════════ */
+
 /* ── Glass Light — surfaces ── */
 [data-theme="glass-light"] :is(.bg-base-100, .card) {
-  background-color: oklch(97% 0.008 270 / 0.5) !important;
-  backdrop-filter: blur(12px) saturate(1.4);
-  -webkit-backdrop-filter: blur(12px) saturate(1.4);
+  background-color: oklch(99% 0.005 270 / 0.55) !important;
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid oklch(0% 0 0 / 0.06) !important;
   box-shadow:
-    inset 0 1px 0 oklch(100% 0 0 / 0.2),
-    0 4px 24px oklch(0% 0 0 / 0.05);
+    inset 0 1px 0 oklch(100% 0 0 / 0.5),
+    inset 0 0 0 0.5px oklch(100% 0 0 / 0.2),
+    0 4px 24px oklch(52% 0.1 265 / 0.06),
+    0 1px 4px oklch(0% 0 0 / 0.04);
 }
 
 [data-theme="glass-light"] .glass-sidebar {
-  background: oklch(97% 0.008 270 / 0.6) !important;
-  backdrop-filter: blur(24px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
-  border-right-color: oklch(0% 0 0 / 0.06) !important;
+  background: oklch(99% 0.005 270 / 0.6) !important;
+  backdrop-filter: blur(36px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(1.6) !important;
+  border-right: 1px solid oklch(0% 0 0 / 0.07) !important;
+  box-shadow:
+    inset -1px 0 0 oklch(100% 0 0 / 0.3),
+    2px 0 16px oklch(52% 0.1 265 / 0.06) !important;
 }
 
 [data-theme="glass-light"] .glass-topbar {
-  background: oklch(97% 0.008 270 / 0.55) !important;
-  backdrop-filter: blur(18px) saturate(1.4) !important;
-  -webkit-backdrop-filter: blur(18px) saturate(1.4) !important;
-  border-bottom-color: oklch(0% 0 0 / 0.06) !important;
+  background: oklch(99% 0.005 270 / 0.55) !important;
+  backdrop-filter: blur(32px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.5) !important;
+  border-bottom: 1px solid oklch(0% 0 0 / 0.06) !important;
+  box-shadow:
+    inset 0 -1px 0 oklch(100% 0 0 / 0.2),
+    0 2px 12px oklch(52% 0.1 265 / 0.05) !important;
 }
 
 /* Light dropdowns/modals — more opaque for readability */
 [data-theme="glass-light"] .dropdown-content,
 [data-theme="glass-light"] .modal-box {
-  background-color: oklch(97% 0.008 270 / 0.92) !important;
-  backdrop-filter: blur(24px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
+  background-color: oklch(99% 0.005 270 / 0.88) !important;
+  backdrop-filter: blur(32px) saturate(1.6) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.6) !important;
+  border: 1px solid oklch(0% 0 0 / 0.08) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.4),
+    0 12px 40px oklch(52% 0.1 265 / 0.12),
+    0 4px 12px oklch(0% 0 0 / 0.08) !important;
 }
 
-/* ── Glass Dark — surfaces (dark shades, no white tints) ── */
+/* ── Glass Light — Form inputs: frosted inset ── */
+[data-theme="glass-light"] :is(.input, .select, .textarea) {
+  background-color: oklch(100% 0 0 / 0.5) !important;
+  border-color: oklch(0% 0 0 / 0.1) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: inset 0 1px 2px oklch(0% 0 0 / 0.06) !important;
+}
+[data-theme="glass-light"] :is(.input, .select, .textarea):focus,
+[data-theme="glass-light"] :is(.input, .select, .textarea):focus-within {
+  border-color: oklch(52% 0.22 265 / 0.5) !important;
+  outline: none !important;
+  box-shadow:
+    inset 0 1px 2px oklch(0% 0 0 / 0.06),
+    0 0 0 2px oklch(52% 0.22 265 / 0.12) !important;
+}
+[data-theme="glass-light"] :is(.input, .select, .textarea)::placeholder {
+  color: oklch(18% 0.02 270 / 0.35) !important;
+}
+
+/* ── Glass Light — Buttons: glassy feel ── */
+[data-theme="glass-light"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
+  background-color: oklch(100% 0 0 / 0.5) !important;
+  border-color: oklch(0% 0 0 / 0.08) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.5),
+    0 1px 4px oklch(0% 0 0 / 0.06) !important;
+}
+[data-theme="glass-light"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link):hover {
+  background-color: oklch(100% 0 0 / 0.7) !important;
+  border-color: oklch(0% 0 0 / 0.12) !important;
+}
+[data-theme="glass-light"] .btn-ghost {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+[data-theme="glass-light"] .btn-ghost:hover {
+  background-color: oklch(0% 0 0 / 0.04) !important;
+}
+[data-theme="glass-light"] .btn-outline {
+  border-color: oklch(0% 0 0 / 0.12) !important;
+  background: transparent !important;
+}
+[data-theme="glass-light"] .btn-outline:hover {
+  background-color: oklch(0% 0 0 / 0.04) !important;
+}
+/* Colored buttons — add glass depth + hue glow */
+[data-theme="glass-light"] .btn-primary {
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.2),
+    0 3px 12px oklch(52% 0.22 265 / 0.25) !important;
+}
+[data-theme="glass-light"] .btn-error {
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.2),
+    0 3px 12px oklch(62% 0.2 20 / 0.2) !important;
+}
+
+/* ── Glass Light — Badges: frosted pill ── */
+[data-theme="glass-light"] .badge {
+  border-color: oklch(0% 0 0 / 0.08) !important;
+  background-color: oklch(100% 0 0 / 0.45) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* ── Glass Light — Menu items ── */
+[data-theme="glass-light"] :is(.menu li a, .menu li button):hover,
+[data-theme="glass-light"] :is(.menu li a, .menu li button).active {
+  background-color: oklch(0% 0 0 / 0.05) !important;
+}
+
+/* ── Glass Light — Tabs ── */
+[data-theme="glass-light"] .tab {
+  color: oklch(18% 0.02 270 / 0.55) !important;
+}
+[data-theme="glass-light"] .tab-active,
+[data-theme="glass-light"] .tab[aria-selected="true"] {
+  color: oklch(18% 0.02 270) !important;
+  border-color: oklch(52% 0.22 265) !important;
+}
+
+/* ── Glass Light — Tables ── */
+[data-theme="glass-light"] .table :is(th, thead) {
+  color: oklch(18% 0.02 270 / 0.6) !important;
+  background-color: oklch(0% 0 0 / 0.02) !important;
+  border-color: oklch(0% 0 0 / 0.06) !important;
+}
+[data-theme="glass-light"] .table :is(td, tr) {
+  border-color: oklch(0% 0 0 / 0.04) !important;
+}
+[data-theme="glass-light"] .table tbody tr:hover {
+  background-color: oklch(0% 0 0 / 0.03) !important;
+}
+
+/* ── Glass Light — Tooltip ── */
+[data-theme="glass-light"] .tooltip::before {
+  background-color: oklch(22% 0.03 270 / 0.9) !important;
+  color: oklch(97% 0.008 270) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── Glass Light — Progress, Range ── */
+[data-theme="glass-light"] .progress {
+  background-color: oklch(0% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Light — Collapse / Accordion ── */
+[data-theme="glass-light"] .collapse {
+  background-color: oklch(100% 0 0 / 0.4) !important;
+  border-color: oklch(0% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Light — Border colors (frosted dark separators) ── */
+[data-theme="glass-light"]
+  :is(
+    .border-base-200,
+    .border-base-300,
+    .divide-base-200 > * + *,
+    .divide-base-300 > * + *
+  ) {
+  border-color: oklch(0% 0 0 / 0.07) !important;
+}
+
+/* ── Glass Light — Divider ── */
+[data-theme="glass-light"] .divider::before,
+[data-theme="glass-light"] .divider::after {
+  background-color: oklch(0% 0 0 / 0.08) !important;
+}
+
+/* ── Glass Light — Bg-base-200/300 as glass tiers ── */
+[data-theme="glass-light"] .bg-base-200 {
+  background-color: oklch(0% 0 0 / 0.07) !important;
+}
+[data-theme="glass-light"] .bg-base-200\/30 {
+  background-color: oklch(0% 0 0 / 0.03) !important;
+}
+[data-theme="glass-light"] .bg-base-200\/50 {
+  background-color: oklch(0% 0 0 / 0.04) !important;
+}
+[data-theme="glass-light"] .bg-base-300 {
+  background-color: oklch(0% 0 0 / 0.1) !important;
+}
+
+/* ── Glass Light — Scrollbar: sleek translucent ── */
+[data-theme="glass-light"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-theme="glass-light"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="glass-light"] ::-webkit-scrollbar-thumb {
+  background: oklch(0% 0 0 / 0.12);
+  border-radius: 3px;
+}
+[data-theme="glass-light"] ::-webkit-scrollbar-thumb:hover {
+  background: oklch(0% 0 0 / 0.2);
+}
+
+/* ── Glass Light — Modal backdrop ── */
+[data-theme="glass-light"] .modal-backdrop,
+[data-theme="glass-light"] .modal::backdrop {
+  background-color: oklch(0% 0 0 / 0.25) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+}
+
+/* ── Glass Light — Avatar group / placeholder ── */
+[data-theme="glass-light"] .avatar-placeholder,
+[data-theme="glass-light"] .avatar.placeholder > div {
+  background-color: oklch(0% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Light — Checkbox, Toggle, Radio ── */
+[data-theme="glass-light"] :is(.checkbox, .toggle, .radio) {
+  border-color: oklch(0% 0 0 / 0.15) !important;
+  background-color: oklch(100% 0 0 / 0.5) !important;
+}
+
+/* ── Glass Light — Stat component ── */
+[data-theme="glass-light"] .stat {
+  border-color: oklch(0% 0 0 / 0.06) !important;
+}
+[data-theme="glass-light"] .stat-title {
+  color: oklch(18% 0.02 270 / 0.55) !important;
+}
+[data-theme="glass-light"] .stat-desc {
+  color: oklch(18% 0.02 270 / 0.45) !important;
+}
+
+/* ── Glass Light — Alert ── */
+[data-theme="glass-light"] .alert {
+  background-color: oklch(100% 0 0 / 0.5) !important;
+  border-color: oklch(0% 0 0 / 0.08) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── Glass Light — Steps ── */
+[data-theme="glass-light"] .steps .step::before {
+  background-color: oklch(0% 0 0 / 0.08) !important;
+}
+
+/* ── Glass Light — Timeline ── */
+[data-theme="glass-light"] .timeline-hr {
+  background-color: oklch(0% 0 0 / 0.08) !important;
+}
+
+/* ── Glass Light — Skeleton loading ── */
+[data-theme="glass-light"] .skeleton {
+  background-color: oklch(0% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Light — Kbd ── */
+[data-theme="glass-light"] .kbd {
+  background-color: oklch(100% 0 0 / 0.5) !important;
+  border-color: oklch(0% 0 0 / 0.1) !important;
+}
+
+/* ── Glass Light — Labels ── */
+[data-theme="glass-light"] .label-text-alt {
+  color: oklch(18% 0.02 270 / 0.5) !important;
+}
+
+/* ── Glass Dark — surfaces: TRUE frosted glass ── */
 [data-theme="glass-dark"] :is(.bg-base-100, .card) {
-  background-color: oklch(20% 0.02 275 / 0.85) !important;
+  background-color: oklch(100% 0 0 / 0.05) !important;
   color: oklch(95% 0.005 270) !important;
-  backdrop-filter: blur(16px) saturate(1.5);
-  -webkit-backdrop-filter: blur(16px) saturate(1.5);
-  box-shadow: 0 2px 16px oklch(0% 0 0 / 0.3);
+  backdrop-filter: blur(28px) saturate(1.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.3);
+  border: 1px solid oklch(100% 0 0 / 0.08) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.1),
+    inset 0 0 0 0.5px oklch(100% 0 0 / 0.05),
+    0 8px 32px oklch(0% 0 0 / 0.35),
+    0 2px 8px oklch(0% 0 0 / 0.2);
 }
 
 [data-theme="glass-dark"] .glass-sidebar {
-  background: oklch(14% 0.02 275 / 0.92) !important;
+  background: oklch(100% 0 0 / 0.04) !important;
   color: oklch(95% 0.005 270) !important;
-  backdrop-filter: blur(24px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
+  backdrop-filter: blur(40px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.4) !important;
+  border-right: 1px solid oklch(100% 0 0 / 0.06) !important;
+  box-shadow:
+    inset -1px 0 0 oklch(100% 0 0 / 0.04),
+    4px 0 24px oklch(0% 0 0 / 0.2) !important;
 }
 
 [data-theme="glass-dark"] .glass-topbar {
-  background: oklch(14% 0.02 275 / 0.92) !important;
+  background: oklch(100% 0 0 / 0.04) !important;
   color: oklch(95% 0.005 270) !important;
-  backdrop-filter: blur(20px) saturate(1.5) !important;
-  -webkit-backdrop-filter: blur(20px) saturate(1.5) !important;
+  backdrop-filter: blur(36px) saturate(1.3) !important;
+  -webkit-backdrop-filter: blur(36px) saturate(1.3) !important;
+  border-bottom: 1px solid oklch(100% 0 0 / 0.06) !important;
+  box-shadow:
+    inset 0 -1px 0 oklch(100% 0 0 / 0.03),
+    0 4px 20px oklch(0% 0 0 / 0.15) !important;
 }
 
-/* Dark dropdowns/modals — near-opaque for readability */
+/* Dark dropdowns/modals — slightly more opaque glass for readability */
 [data-theme="glass-dark"] .dropdown-content,
 [data-theme="glass-dark"] .modal-box {
-  background-color: oklch(14% 0.02 275 / 0.98) !important;
+  background-color: oklch(100% 0 0 / 0.08) !important;
   color: oklch(95% 0.005 270) !important;
-  backdrop-filter: blur(24px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.6) !important;
+  backdrop-filter: blur(40px) saturate(1.5) !important;
+  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
+  border: 1px solid oklch(100% 0 0 / 0.1) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.12),
+    0 16px 48px oklch(0% 0 0 / 0.5),
+    0 4px 16px oklch(0% 0 0 / 0.3) !important;
 }
 
-/* ── Glass Dark — DaisyUI form components ──
-   These use background-color: var(--color-base-100) internally,
-   NOT the .bg-base-100 utility class, so they need separate overrides */
+/* ── Glass Dark — Form inputs: frosted inset ── */
 [data-theme="glass-dark"] :is(.input, .select, .textarea) {
-  background-color: oklch(18% 0.02 275 / 0.9) !important;
+  background-color: oklch(100% 0 0 / 0.04) !important;
   color: oklch(95% 0.005 270) !important;
-  border-color: oklch(30% 0.015 275) !important;
-  box-shadow: none !important;
+  border-color: oklch(100% 0 0 / 0.1) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 3px oklch(0% 0 0 / 0.3) !important;
 }
 [data-theme="glass-dark"] :is(.input, .select, .textarea):focus,
 [data-theme="glass-dark"] :is(.input, .select, .textarea):focus-within {
-  border-color: oklch(95% 0.005 270) !important;
-  outline-color: oklch(95% 0.005 270) !important;
+  border-color: oklch(72% 0.2 280 / 0.6) !important;
+  outline: none !important;
+  box-shadow:
+    inset 0 1px 3px oklch(0% 0 0 / 0.3),
+    0 0 0 2px oklch(72% 0.2 280 / 0.2) !important;
 }
 [data-theme="glass-dark"] :is(.input, .select, .textarea)::placeholder {
-  color: oklch(95% 0.005 270 / 0.4) !important;
+  color: oklch(95% 0.005 270 / 0.35) !important;
 }
 
 /* Native select dropdown picker */
@@ -294,24 +608,58 @@
   color: oklch(95% 0.005 270) !important;
 }
 
-/* ── Glass Dark — Buttons ── */
+/* ── Glass Dark — Buttons: glassy feel ── */
 [data-theme="glass-dark"] .btn {
   text-shadow: none !important;
-  box-shadow: none !important;
 }
-[data-theme="glass-dark"] .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
+[data-theme="glass-dark"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
   color: oklch(95% 0.005 270) !important;
+  background-color: oklch(100% 0 0 / 0.06) !important;
+  border-color: oklch(100% 0 0 / 0.1) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.08),
+    0 2px 8px oklch(0% 0 0 / 0.2) !important;
+}
+[data-theme="glass-dark"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link):hover {
+  background-color: oklch(100% 0 0 / 0.12) !important;
+  border-color: oklch(100% 0 0 / 0.15) !important;
 }
 [data-theme="glass-dark"] .btn-ghost {
   color: oklch(95% 0.005 270) !important;
   background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
 }
 [data-theme="glass-dark"] .btn-ghost:hover {
-  background-color: oklch(95% 0.005 270 / 0.1) !important;
+  background-color: oklch(100% 0 0 / 0.08) !important;
 }
 [data-theme="glass-dark"] .btn-outline {
   color: oklch(95% 0.005 270) !important;
-  border-color: oklch(95% 0.005 270 / 0.3) !important;
+  border-color: oklch(100% 0 0 / 0.15) !important;
+  background: transparent !important;
+}
+[data-theme="glass-dark"] .btn-outline:hover {
+  background-color: oklch(100% 0 0 / 0.08) !important;
+  color: oklch(95% 0.005 270) !important;
+}
+/* Colored buttons — add glass glow */
+[data-theme="glass-dark"] .btn-primary {
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.15),
+    0 4px 16px oklch(72% 0.2 280 / 0.3) !important;
+}
+[data-theme="glass-dark"] .btn-error {
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.15),
+    0 4px 16px oklch(72% 0.18 15 / 0.3) !important;
 }
 
 /* ── Glass Dark — Labels and text helpers ── */
@@ -319,63 +667,129 @@
   color: oklch(95% 0.005 270) !important;
 }
 [data-theme="glass-dark"] .label-text-alt {
-  color: oklch(95% 0.005 270 / 0.7) !important;
+  color: oklch(95% 0.005 270 / 0.6) !important;
 }
 
-/* ── Glass Dark — Badges ── */
+/* ── Glass Dark — Badges: frosted pill ── */
 [data-theme="glass-dark"] .badge {
-  border-color: oklch(30% 0.015 275) !important;
+  border-color: oklch(100% 0 0 / 0.1) !important;
+  background-color: oklch(100% 0 0 / 0.06) !important;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
 }
 
 /* ── Glass Dark — Menu items ── */
 [data-theme="glass-dark"] :is(.menu li a, .menu li button) {
   color: oklch(95% 0.005 270) !important;
 }
+[data-theme="glass-dark"] :is(.menu li a, .menu li button):hover,
+[data-theme="glass-dark"] :is(.menu li a, .menu li button).active {
+  background-color: oklch(100% 0 0 / 0.08) !important;
+}
 
-/* ── Glass Dark — Border colors (force dark separators) ── */
-[data-theme="glass-dark"] :is(.border-base-200, .border-base-300, .divide-base-200 > * + *) {
-  border-color: oklch(30% 0.015 275) !important;
+/* ── Glass Dark — Tabs ── */
+[data-theme="glass-dark"] .tab {
+  color: oklch(95% 0.005 270 / 0.6) !important;
+}
+[data-theme="glass-dark"] .tab-active,
+[data-theme="glass-dark"] .tab[aria-selected="true"] {
+  color: oklch(95% 0.005 270) !important;
+  border-color: oklch(72% 0.2 280) !important;
+}
+
+/* ── Glass Dark — Tables ── */
+[data-theme="glass-dark"] .table {
+  color: oklch(95% 0.005 270) !important;
+}
+[data-theme="glass-dark"] .table :is(th, thead) {
+  color: oklch(95% 0.005 270 / 0.7) !important;
+  background-color: oklch(100% 0 0 / 0.03) !important;
+  border-color: oklch(100% 0 0 / 0.06) !important;
+}
+[data-theme="glass-dark"] .table :is(td, tr) {
+  border-color: oklch(100% 0 0 / 0.04) !important;
+}
+[data-theme="glass-dark"] .table tbody tr:hover {
+  background-color: oklch(100% 0 0 / 0.04) !important;
+}
+
+/* ── Glass Dark — Tooltip ── */
+[data-theme="glass-dark"] .tooltip::before {
+  background-color: oklch(100% 0 0 / 0.1) !important;
+  color: oklch(95% 0.005 270) !important;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+/* ── Glass Dark — Progress, Range ── */
+[data-theme="glass-dark"] .progress {
+  background-color: oklch(100% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Dark — Collapse / Accordion ── */
+[data-theme="glass-dark"] .collapse {
+  background-color: oklch(100% 0 0 / 0.04) !important;
+  border-color: oklch(100% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Dark — Border colors (frosted white separators) ── */
+[data-theme="glass-dark"]
+  :is(
+    .border-base-200,
+    .border-base-300,
+    .divide-base-200 > * + *,
+    .divide-base-300 > * + *
+  ) {
+  border-color: oklch(100% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Dark — Divider ── */
+[data-theme="glass-dark"] .divider::before,
+[data-theme="glass-dark"] .divider::after {
+  background-color: oklch(100% 0 0 / 0.08) !important;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    GLASS DARK — Text opacity boost
-   Tailwind's /50, /40, /30 alpha modifiers are too dim on dark bg.
-   Boost each level significantly for readability.
+   Subtle alpha levels need boosting on transparent dark glass
    ═══════════════════════════════════════════════════════════════ */
 [data-theme="glass-dark"] .text-base-content\/10 {
-  color: oklch(95% 0.005 270 / 0.45) !important;
+  color: oklch(95% 0.005 270 / 0.4) !important;
 }
 [data-theme="glass-dark"] .text-base-content\/20 {
-  color: oklch(95% 0.005 270 / 0.55) !important;
+  color: oklch(95% 0.005 270 / 0.5) !important;
 }
 [data-theme="glass-dark"] .text-base-content\/30 {
-  color: oklch(95% 0.005 270 / 0.65) !important;
+  color: oklch(95% 0.005 270 / 0.6) !important;
 }
 [data-theme="glass-dark"] .text-base-content\/40 {
-  color: oklch(95% 0.005 270 / 0.72) !important;
+  color: oklch(95% 0.005 270 / 0.68) !important;
 }
 [data-theme="glass-dark"] .text-base-content\/50 {
-  color: oklch(95% 0.005 270 / 0.78) !important;
+  color: oklch(95% 0.005 270 / 0.75) !important;
 }
 [data-theme="glass-dark"] .text-base-content\/60 {
-  color: oklch(95% 0.005 270 / 0.85) !important;
+  color: oklch(95% 0.005 270 / 0.82) !important;
 }
 [data-theme="glass-dark"] .text-base-content\/70 {
-  color: oklch(95% 0.005 270 / 0.90) !important;
+  color: oklch(95% 0.005 270 / 0.88) !important;
 }
 
-/* ── Glass Dark — Bg-base-200 subtle tints ── */
+/* ── Glass Dark — Bg-base-200/300 as glass tiers ── */
 [data-theme="glass-dark"] .bg-base-200 {
-  background-color: oklch(18% 0.02 275) !important;
+  background-color: oklch(100% 0 0 / 0.08) !important;
 }
 [data-theme="glass-dark"] .bg-base-200\/30 {
-  background-color: oklch(18% 0.02 275 / 0.3) !important;
+  background-color: oklch(100% 0 0 / 0.04) !important;
 }
 [data-theme="glass-dark"] .bg-base-200\/50 {
-  background-color: oklch(18% 0.02 275 / 0.5) !important;
+  background-color: oklch(100% 0 0 / 0.05) !important;
+}
+[data-theme="glass-dark"] .bg-base-300 {
+  background-color: oklch(100% 0 0 / 0.1) !important;
 }
 
-/* ── Glass Dark — Scrollbar ── */
+/* ── Glass Dark — Scrollbar: sleek translucent ── */
 [data-theme="glass-dark"] ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -384,6 +798,309 @@
   background: transparent;
 }
 [data-theme="glass-dark"] ::-webkit-scrollbar-thumb {
-  background: oklch(40% 0.02 275);
+  background: oklch(100% 0 0 / 0.15);
   border-radius: 3px;
+}
+[data-theme="glass-dark"] ::-webkit-scrollbar-thumb:hover {
+  background: oklch(100% 0 0 / 0.25);
+}
+
+/* ── Glass Dark — hardcoded Tailwind text/bg overrides ── */
+[data-theme="glass-dark"] .text-gray-400,
+[data-theme="glass-dark"] .text-gray-500,
+[data-theme="glass-dark"] .text-gray-600,
+[data-theme="glass-dark"] .text-gray-700,
+[data-theme="glass-dark"] .text-gray-800,
+[data-theme="glass-dark"] .text-gray-900,
+[data-theme="glass-dark"] .text-slate-500,
+[data-theme="glass-dark"] .text-slate-600,
+[data-theme="glass-dark"] .text-slate-700,
+[data-theme="glass-dark"] .text-slate-800,
+[data-theme="glass-dark"] .text-slate-900,
+[data-theme="glass-dark"] .text-zinc-500,
+[data-theme="glass-dark"] .text-zinc-600,
+[data-theme="glass-dark"] .text-zinc-700 {
+  color: oklch(95% 0.005 270 / 0.7) !important;
+}
+[data-theme="glass-dark"] .text-gray-900,
+[data-theme="glass-dark"] .text-slate-900,
+[data-theme="glass-dark"] .text-black {
+  color: oklch(95% 0.005 270) !important;
+}
+
+/* Hardcoded bg-white / bg-gray overrides */
+[data-theme="glass-dark"] .bg-white,
+[data-theme="glass-dark"] .bg-gray-50,
+[data-theme="glass-dark"] .bg-gray-100,
+[data-theme="glass-dark"] .bg-slate-50,
+[data-theme="glass-dark"] .bg-slate-100 {
+  background-color: oklch(100% 0 0 / 0.04) !important;
+}
+[data-theme="glass-dark"] .bg-gray-200,
+[data-theme="glass-dark"] .bg-slate-200 {
+  background-color: oklch(100% 0 0 / 0.06) !important;
+}
+
+/* Hardcoded border overrides */
+[data-theme="glass-dark"] .border-gray-200,
+[data-theme="glass-dark"] .border-gray-300,
+[data-theme="glass-dark"] .border-slate-200,
+[data-theme="glass-dark"] .border-slate-300 {
+  border-color: oklch(100% 0 0 / 0.08) !important;
+}
+
+/* ── Glass Dark — Modal backdrop ── */
+[data-theme="glass-dark"] .modal-backdrop,
+[data-theme="glass-dark"] .modal::backdrop {
+  background-color: oklch(0% 0 0 / 0.6) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+/* ── Glass Dark — Avatar group / placeholder ── */
+[data-theme="glass-dark"] .avatar-placeholder,
+[data-theme="glass-dark"] .avatar.placeholder > div {
+  background-color: oklch(100% 0 0 / 0.1) !important;
+  color: oklch(95% 0.005 270) !important;
+}
+
+/* ── Glass Dark — Checkbox, Toggle, Radio ── */
+[data-theme="glass-dark"] :is(.checkbox, .toggle, .radio) {
+  border-color: oklch(100% 0 0 / 0.2) !important;
+  background-color: oklch(100% 0 0 / 0.04) !important;
+}
+
+/* ── Glass Dark — Stat component ── */
+[data-theme="glass-dark"] .stat {
+  border-color: oklch(100% 0 0 / 0.06) !important;
+}
+[data-theme="glass-dark"] .stat-title {
+  color: oklch(95% 0.005 270 / 0.6) !important;
+}
+[data-theme="glass-dark"] .stat-value {
+  color: oklch(95% 0.005 270) !important;
+}
+[data-theme="glass-dark"] .stat-desc {
+  color: oklch(95% 0.005 270 / 0.5) !important;
+}
+
+/* ── Glass Dark — Alert ── */
+[data-theme="glass-dark"] .alert {
+  background-color: oklch(100% 0 0 / 0.05) !important;
+  border-color: oklch(100% 0 0 / 0.08) !important;
+  color: oklch(95% 0.005 270) !important;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* ── Glass Dark — Steps ── */
+[data-theme="glass-dark"] .steps .step::before {
+  background-color: oklch(100% 0 0 / 0.08) !important;
+}
+
+/* ── Glass Dark — Timeline ── */
+[data-theme="glass-dark"] .timeline-hr {
+  background-color: oklch(100% 0 0 / 0.1) !important;
+}
+
+/* ── Glass Dark — Skeleton loading ── */
+[data-theme="glass-dark"] .skeleton {
+  background-color: oklch(100% 0 0 / 0.06) !important;
+}
+
+/* ── Glass Dark — Kbd ── */
+[data-theme="glass-dark"] .kbd {
+  background-color: oklch(100% 0 0 / 0.08) !important;
+  border-color: oklch(100% 0 0 / 0.12) !important;
+  color: oklch(95% 0.005 270) !important;
+}
+
+/* ── Glass Dark — Hardcoded Tailwind color overrides (pink, red, etc.) ── */
+[data-theme="glass-dark"] .bg-pink-50,
+[data-theme="glass-dark"] .hover\:bg-pink-50:hover {
+  background-color: oklch(100% 0 0 / 0.06) !important;
+}
+[data-theme="glass-dark"] .bg-red-50,
+[data-theme="glass-dark"] .hover\:bg-red-50:hover {
+  background-color: oklch(65% 0.15 20 / 0.08) !important;
+}
+[data-theme="glass-dark"] .bg-green-50,
+[data-theme="glass-dark"] .hover\:bg-green-50:hover {
+  background-color: oklch(72% 0.15 155 / 0.08) !important;
+}
+[data-theme="glass-dark"] .bg-blue-50,
+[data-theme="glass-dark"] .hover\:bg-blue-50:hover {
+  background-color: oklch(68% 0.1 235 / 0.08) !important;
+}
+[data-theme="glass-dark"] .bg-yellow-50,
+[data-theme="glass-dark"] .bg-amber-50,
+[data-theme="glass-dark"] .hover\:bg-yellow-50:hover,
+[data-theme="glass-dark"] .hover\:bg-amber-50:hover {
+  background-color: oklch(80% 0.12 85 / 0.08) !important;
+}
+[data-theme="glass-dark"] .bg-purple-50,
+[data-theme="glass-dark"] .hover\:bg-purple-50:hover {
+  background-color: oklch(72% 0.15 280 / 0.08) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOVER VISIBILITY FIXES — Glass themes need transparent overlays
+   (hover:bg-base-* uses var() which gives opaque solid colors
+    that either break glass effect or are invisible on dark bg)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Glass Light — hover uses transparent dark overlay ── */
+[data-theme="glass-light"] .hover\:bg-base-200:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/20:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/40:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/50:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/60:hover {
+  background-color: oklch(0% 0 0 / 0.08) !important;
+}
+[data-theme="glass-light"] .hover\:bg-base-300:hover,
+[data-theme="glass-light"] .hover\:bg-base-300\/30:hover,
+[data-theme="glass-light"] .hover\:bg-base-300\/40:hover,
+[data-theme="glass-light"] .hover\:bg-base-300\/60:hover {
+  background-color: oklch(0% 0 0 / 0.12) !important;
+}
+[data-theme="glass-light"] .active\:bg-base-200:active,
+[data-theme="glass-light"] .focus\:bg-base-200:focus {
+  background-color: oklch(0% 0 0 / 0.1) !important;
+}
+
+/* ── Glass Dark — hover uses transparent white overlay ── */
+[data-theme="glass-dark"] .hover\:bg-base-200:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/20:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/40:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/50:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/60:hover {
+  background-color: oklch(100% 0 0 / 0.1) !important;
+}
+[data-theme="glass-dark"] .hover\:bg-base-300:hover,
+[data-theme="glass-dark"] .hover\:bg-base-300\/30:hover,
+[data-theme="glass-dark"] .hover\:bg-base-300\/40:hover,
+[data-theme="glass-dark"] .hover\:bg-base-300\/60:hover {
+  background-color: oklch(100% 0 0 / 0.14) !important;
+}
+[data-theme="glass-dark"] .active\:bg-base-200:active,
+[data-theme="glass-dark"] .focus\:bg-base-200:focus {
+  background-color: oklch(100% 0 0 / 0.12) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TEXT CONTRAST FIXES — Boost low-opacity muted text in light themes
+   Original /30, /40, /50 values fail WCAG AA for small text
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Orbis Light — boost muted text contrast ── */
+[data-theme="orbis-light"] .text-base-content\/10 {
+  color: oklch(20% 0.02 260 / 0.25) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/20 {
+  color: oklch(20% 0.02 260 / 0.35) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/30 {
+  color: oklch(20% 0.02 260 / 0.48) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/40 {
+  color: oklch(20% 0.02 260 / 0.58) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/50 {
+  color: oklch(20% 0.02 260 / 0.68) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/60 {
+  color: oklch(20% 0.02 260 / 0.78) !important;
+}
+
+/* ── Glass Light — boost muted text contrast ── */
+[data-theme="glass-light"] .text-base-content\/10 {
+  color: oklch(18% 0.02 270 / 0.28) !important;
+}
+[data-theme="glass-light"] .text-base-content\/20 {
+  color: oklch(18% 0.02 270 / 0.38) !important;
+}
+[data-theme="glass-light"] .text-base-content\/30 {
+  color: oklch(18% 0.02 270 / 0.52) !important;
+}
+[data-theme="glass-light"] .text-base-content\/40 {
+  color: oklch(18% 0.02 270 / 0.62) !important;
+}
+[data-theme="glass-light"] .text-base-content\/50 {
+  color: oklch(18% 0.02 270 / 0.7) !important;
+}
+[data-theme="glass-light"] .text-base-content\/60 {
+  color: oklch(18% 0.02 270 / 0.8) !important;
+}
+
+/* ── Orbis Dark — mild boost for the darkest muted levels ── */
+[data-theme="orbis-dark"] .text-base-content\/10 {
+  color: oklch(92% 0.01 260 / 0.35) !important;
+}
+[data-theme="orbis-dark"] .text-base-content\/20 {
+  color: oklch(92% 0.01 260 / 0.48) !important;
+}
+[data-theme="orbis-dark"] .text-base-content\/30 {
+  color: oklch(92% 0.01 260 / 0.58) !important;
+}
+[data-theme="orbis-dark"] .text-base-content\/40 {
+  color: oklch(92% 0.01 260 / 0.68) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BADGE CONTRAST FIXES — badge-ghost needs visible text in all themes
+   ═══════════════════════════════════════════════════════════════ */
+
+[data-theme="orbis-light"] .badge-ghost {
+  background-color: oklch(88% 0.01 250) !important;
+  color: oklch(25% 0.02 260) !important;
+  border-color: oklch(80% 0.01 250) !important;
+}
+[data-theme="glass-light"] .badge-ghost {
+  background-color: oklch(0% 0 0 / 0.07) !important;
+  color: oklch(18% 0.02 270) !important;
+  border-color: oklch(0% 0 0 / 0.12) !important;
+}
+[data-theme="orbis-dark"] .badge-ghost {
+  background-color: oklch(28% 0.02 260) !important;
+  color: oklch(88% 0.01 260) !important;
+  border-color: oklch(32% 0.022 262) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BORDER CONTRAST FIXES — borders need to be visible separators
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Orbis light: border-base-200 needs to be clearly visible on white */
+[data-theme="orbis-light"] .border-base-200,
+[data-theme="orbis-light"] .divide-base-200 > * + * {
+  border-color: oklch(87% 0.012 250) !important;
+}
+[data-theme="orbis-light"] .border-base-300 {
+  border-color: oklch(80% 0.014 250) !important;
+}
+
+/* Orbis dark: borders need to be visible on dark surface */
+[data-theme="orbis-dark"] .border-base-200,
+[data-theme="orbis-dark"] .divide-base-200 > * + * {
+  border-color: oklch(28% 0.02 260) !important;
+}
+[data-theme="orbis-dark"] .border-base-300 {
+  border-color: oklch(32% 0.024 264) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SKELETON / LOADING PLACEHOLDER CONTRAST
+   ═══════════════════════════════════════════════════════════════ */
+
+[data-theme="orbis-light"] .skeleton,
+[data-theme="orbis-light"] .animate-pulse [class*="bg-base-200"],
+[data-theme="orbis-light"] .animate-pulse [class*="bg-base-300"] {
+  --tw-gradient-from: oklch(90% 0.006 250);
+  background-color: oklch(90% 0.006 250) !important;
+}
+[data-theme="orbis-dark"] .skeleton,
+[data-theme="orbis-dark"] .animate-pulse [class*="bg-base-200"],
+[data-theme="orbis-dark"] .animate-pulse [class*="bg-base-300"] {
+  --tw-gradient-from: oklch(28% 0.02 260);
+  background-color: oklch(28% 0.02 260) !important;
 }

@@ -1,27 +1,33 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
+import { Modal } from "@/components/ui/modal";
 import {
-  Shield,
-  Trash2,
-  Pencil,
-  Plus,
-  Lock,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+} from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { Permission, PermissionScope, Role } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
   Check,
   ChevronDown,
   ChevronRight,
+  Lock,
   MoreHorizontal,
+  Pencil,
+  Plus,
+  Shield,
+  Trash2,
 } from "lucide-react";
-import type { Role, Permission, PermissionScope } from "@/types/domain";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 /* ─── Team → Project Role Map ─── */
 
@@ -50,7 +56,10 @@ function TeamProjectRoleMapSection({ orgId }: { orgId: string }) {
   });
 
   useEffect(() => {
-    if (roleMap) { setDraft(roleMap); setHasChanges(false); }
+    if (roleMap) {
+      setDraft(roleMap);
+      setHasChanges(false);
+    }
   }, [roleMap]);
 
   const saveMutation = useMutation({
@@ -75,40 +84,70 @@ function TeamProjectRoleMapSection({ orgId }: { orgId: string }) {
       >
         <div>
           <h3 className="text-sm font-semibold">Team → Project Role Mapping</h3>
-          <p className="text-xs text-base-content/50">Inherited project roles when teams link to projects</p>
+          <p className="text-xs text-base-content/50">
+            Inherited project roles when teams link to projects
+          </p>
         </div>
-        {open ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+        {open ? (
+          <ChevronDown className="w-4 h-4" />
+        ) : (
+          <ChevronRight className="w-4 h-4" />
+        )}
       </button>
       {open && (
         <div className="p-3 pt-0 border-t border-base-200">
           <div className="space-y-2 mt-3">
             {teamRoleList.map((tr: Role) => (
               <div key={tr.slug} className="flex items-center gap-2">
-                <span className="w-32 text-sm font-medium capitalize truncate">{tr.name}</span>
+                <span className="w-32 text-sm font-medium capitalize truncate">
+                  {tr.name}
+                </span>
                 <span className="text-base-content/40 text-xs">→</span>
                 <select
                   className="select select-bordered select-xs flex-1"
                   value={draft[tr.slug] || ""}
                   onChange={(e) => {
-                    setDraft((prev) => ({ ...prev, [tr.slug]: e.target.value }));
+                    setDraft((prev) => ({
+                      ...prev,
+                      [tr.slug]: e.target.value,
+                    }));
                     setHasChanges(true);
                   }}
                 >
                   <option value="">— No mapping —</option>
                   {projectRoleList.map((pr: Role) => (
-                    <option key={pr.slug} value={pr.slug}>{pr.name}</option>
+                    <option key={pr.slug} value={pr.slug}>
+                      {pr.name}
+                    </option>
                   ))}
                 </select>
               </div>
             ))}
             {teamRoleList.length === 0 && (
-              <p className="text-xs text-base-content/50">No team roles defined yet.</p>
+              <p className="text-xs text-base-content/50">
+                No team roles defined yet.
+              </p>
             )}
           </div>
           {hasChanges && (
             <div className="flex justify-end gap-2 mt-3 pt-3 border-t border-base-200">
-              <Button variant="ghost" size="sm" onClick={() => { setDraft(roleMap || {}); setHasChanges(false); }}>Cancel</Button>
-              <Button size="sm" onClick={() => saveMutation.mutate(draft)} loading={saveMutation.isPending}>Save Mapping</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setDraft(roleMap || {});
+                  setHasChanges(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => saveMutation.mutate(draft)}
+                loading={saveMutation.isPending}
+              >
+                Save Mapping
+              </Button>
             </div>
           )}
         </div>
@@ -139,7 +178,9 @@ export default function PermissionsTab() {
   const [editTarget, setEditTarget] = useState<Role | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null);
   const [permTarget, setPermTarget] = useState<Role | null>(null);
-  const [selectedPermIds, setSelectedPermIds] = useState<Set<string>>(new Set());
+  const [selectedPermIds, setSelectedPermIds] = useState<Set<string>>(
+    new Set(),
+  );
   const [expandedRes, setExpandedRes] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
 
@@ -167,25 +208,37 @@ export default function PermissionsTab() {
   }, [allPermissions]);
 
   const createMutation = useMutation({
-    mutationFn: (data: { scope: string; slug: string; name: string; description?: string }) =>
-      api.permissions.roles.create(orgId, data),
+    mutationFn: (data: {
+      scope: string;
+      slug: string;
+      name: string;
+      description?: string;
+    }) => api.permissions.roles.create(orgId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setShowCreate(false);
       setError("");
+      toast.success("Role created");
     },
-    onError: (err: Error) => setError(err instanceof ApiError ? err.message : "Failed to create role"),
+    onError: (err: Error) =>
+      setError(err instanceof ApiError ? err.message : "Failed to create role"),
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { name?: string; description?: string } }) =>
-      api.permissions.roles.update(orgId, id, data),
+    mutationFn: ({
+      id,
+      data,
+    }: {
+      id: string;
+      data: { name?: string; description?: string };
+    }) => api.permissions.roles.update(orgId, id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setEditTarget(null);
       setError("");
     },
-    onError: (err: Error) => setError(err instanceof ApiError ? err.message : "Failed to update role"),
+    onError: (err: Error) =>
+      setError(err instanceof ApiError ? err.message : "Failed to update role"),
   });
 
   const deleteMutation = useMutation({
@@ -193,6 +246,7 @@ export default function PermissionsTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setDeleteTarget(null);
+      toast.success("Role deleted");
     },
   });
 
@@ -203,8 +257,12 @@ export default function PermissionsTab() {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setPermTarget(null);
       setError("");
+      toast.success("Permissions updated");
     },
-    onError: (err: Error) => setError(err instanceof ApiError ? err.message : "Failed to update permissions"),
+    onError: (err: Error) =>
+      setError(
+        err instanceof ApiError ? err.message : "Failed to update permissions",
+      ),
   });
 
   const createForm = useForm<RoleForm>();
@@ -212,7 +270,11 @@ export default function PermissionsTab() {
 
   useEffect(() => {
     if (editTarget) {
-      editForm.reset({ slug: editTarget.slug, name: editTarget.name, description: editTarget.description || "" });
+      editForm.reset({
+        slug: editTarget.slug,
+        name: editTarget.name,
+        description: editTarget.description || "",
+      });
     }
   }, [editTarget, editForm]);
 
@@ -228,7 +290,8 @@ export default function PermissionsTab() {
   const togglePermission = useCallback((permId: string) => {
     setSelectedPermIds((prev) => {
       const next = new Set(prev);
-      if (next.has(permId)) next.delete(permId); else next.add(permId);
+      if (next.has(permId)) next.delete(permId);
+      else next.add(permId);
       return next;
     });
   }, []);
@@ -236,7 +299,8 @@ export default function PermissionsTab() {
   const toggleResource = useCallback((resource: string) => {
     setExpandedRes((prev) => {
       const next = new Set(prev);
-      if (next.has(resource)) next.delete(resource); else next.add(resource);
+      if (next.has(resource)) next.delete(resource);
+      else next.add(resource);
       return next;
     });
   }, []);
@@ -245,17 +309,28 @@ export default function PermissionsTab() {
   if (rolesLoading) return <LoadingPage />;
 
   const handleCreate = (data: RoleForm) => {
-    createMutation.mutate({ scope, slug: data.slug, name: data.name, description: data.description || undefined });
+    createMutation.mutate({
+      scope,
+      slug: data.slug,
+      name: data.name,
+      description: data.description || undefined,
+    });
   };
 
   const handleEdit = (data: RoleForm) => {
     if (!editTarget) return;
-    updateMutation.mutate({ id: editTarget.id, data: { name: data.name, description: data.description || undefined } });
+    updateMutation.mutate({
+      id: editTarget.id,
+      data: { name: data.name, description: data.description || undefined },
+    });
   };
 
   const handleSetPermissions = () => {
     if (!permTarget) return;
-    setPermissionsMutation.mutate({ roleId: permTarget.id, permIds: Array.from(selectedPermIds) });
+    setPermissionsMutation.mutate({
+      roleId: permTarget.id,
+      permIds: Array.from(selectedPermIds),
+    });
   };
 
   const grouped = permissionsByResource();
@@ -273,7 +348,7 @@ export default function PermissionsTab() {
                 "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
                 scope === tab.value
                   ? "bg-base-100 text-base-content shadow-sm"
-                  : "text-base-content/60 hover:text-base-content"
+                  : "text-base-content/60 hover:text-base-content",
               )}
               onClick={() => setScope(tab.value)}
             >
@@ -281,14 +356,25 @@ export default function PermissionsTab() {
             </button>
           ))}
         </div>
-        <Button size="sm" onClick={() => { setShowCreate(true); setError(""); createForm.reset({ slug: "", name: "", description: "" }); }}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setShowCreate(true);
+            setError("");
+            createForm.reset({ slug: "", name: "", description: "" });
+          }}
+        >
           <Plus className="w-4 h-4" /> New Role
         </Button>
       </div>
 
       {/* Roles table */}
       {roleList.length === 0 ? (
-        <EmptyState icon={<Shield className="w-8 h-8" />} title="No roles" description={`No ${scope}-level roles yet.`} />
+        <EmptyState
+          icon={<Shield className="w-8 h-8" />}
+          title="No roles"
+          description={`No ${scope}-level roles yet.`}
+        />
       ) : (
         <Card>
           <div className="w-full overflow-x-auto">
@@ -312,8 +398,14 @@ export default function PermissionsTab() {
                           <Shield className="w-3.5 h-3.5 text-primary" />
                         )}
                         <span className="font-medium text-sm">{role.name}</span>
-                        <span className="badge badge-ghost badge-xs">{role.slug}</span>
-                        {role.is_system && <span className="badge badge-outline badge-xs">System</span>}
+                        <span className="badge badge-ghost badge-xs">
+                          {role.slug}
+                        </span>
+                        {role.is_system && (
+                          <span className="badge badge-outline badge-xs">
+                            System
+                          </span>
+                        )}
                       </div>
                     </td>
                     <td>
@@ -322,29 +414,54 @@ export default function PermissionsTab() {
                       </span>
                     </td>
                     <td>
-                      <span className="badge badge-sm badge-ghost">{role.permissions?.length ?? 0}</span>
+                      <span className="badge badge-sm badge-ghost">
+                        {role.permissions?.length ?? 0}
+                      </span>
                     </td>
                     <td>
                       <div className="flex gap-1 justify-end">
                         <div className="dropdown dropdown-end dropdown-left">
-                          <div tabIndex={0} role="button" className="btn btn-ghost btn-xs btn-square">
+                          <div
+                            tabIndex={0}
+                            role="button"
+                            className="btn btn-ghost btn-xs btn-square"
+                          >
                             <MoreHorizontal className="w-4 h-4" />
                           </div>
-                          <ul tabIndex={0} className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100 rounded-box w-44 border border-base-200">
+                          <ul
+                            tabIndex={0}
+                            className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200"
+                          >
                             <li>
-                              <button onClick={() => { setPermTarget(role); setError(""); }} className="text-sm">
-                                <Shield className="w-3.5 h-3.5" /> Edit Permissions
+                              <button
+                                onClick={() => {
+                                  setPermTarget(role);
+                                  setError("");
+                                }}
+                                className="text-sm"
+                              >
+                                <Shield className="w-3.5 h-3.5" /> Edit
+                                Permissions
                               </button>
                             </li>
                             {!role.is_system && (
                               <>
                                 <li>
-                                  <button onClick={() => { setEditTarget(role); setError(""); }} className="text-sm">
+                                  <button
+                                    onClick={() => {
+                                      setEditTarget(role);
+                                      setError("");
+                                    }}
+                                    className="text-sm"
+                                  >
                                     <Pencil className="w-3.5 h-3.5" /> Edit Role
                                   </button>
                                 </li>
                                 <li>
-                                  <button onClick={() => setDeleteTarget(role)} className="text-sm text-error">
+                                  <button
+                                    onClick={() => setDeleteTarget(role)}
+                                    className="text-sm text-error"
+                                  >
                                     <Trash2 className="w-3.5 h-3.5" /> Delete
                                   </button>
                                 </li>
@@ -366,58 +483,118 @@ export default function PermissionsTab() {
       <TeamProjectRoleMapSection orgId={orgId} />
 
       {/* Create Role Modal */}
-      <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Role">
-        <form onSubmit={createForm.handleSubmit(handleCreate)} className="space-y-4">
+      <Modal
+        open={showCreate}
+        onClose={() => setShowCreate(false)}
+        title="Create Role"
+      >
+        <form
+          onSubmit={createForm.handleSubmit(handleCreate)}
+          className="space-y-4"
+        >
           {error && <div className="alert alert-error text-sm">{error}</div>}
-          <Input label="Slug" placeholder="e.g. project_manager"
+          <Input
+            label="Slug"
+            placeholder="e.g. project_manager"
             {...createForm.register("slug", { required: "Slug is required" })}
             error={createForm.formState.errors.slug?.message}
           />
-          <Input label="Display Name" placeholder="e.g. Project Manager"
+          <Input
+            label="Display Name"
+            placeholder="e.g. Project Manager"
             {...createForm.register("name", { required: "Name is required" })}
             error={createForm.formState.errors.name?.message}
           />
-          <Textarea label="Description" placeholder="Optional description" {...createForm.register("description")} />
+          <Textarea
+            label="Description"
+            placeholder="Optional description"
+            {...createForm.register("description")}
+          />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create</Button>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setShowCreate(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Edit Role Modal */}
-      <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title="Edit Role">
-        <form onSubmit={editForm.handleSubmit(handleEdit)} className="space-y-4">
+      <Modal
+        open={!!editTarget}
+        onClose={() => setEditTarget(null)}
+        title="Edit Role"
+      >
+        <form
+          onSubmit={editForm.handleSubmit(handleEdit)}
+          className="space-y-4"
+        >
           {error && <div className="alert alert-error text-sm">{error}</div>}
-          <Input label="Display Name" {...editForm.register("name", { required: "Name is required" })} error={editForm.formState.errors.name?.message} />
+          <Input
+            label="Display Name"
+            {...editForm.register("name", { required: "Name is required" })}
+            error={editForm.formState.errors.name?.message}
+          />
           <Textarea label="Description" {...editForm.register("description")} />
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" type="button" onClick={() => setEditTarget(null)}>Cancel</Button>
-            <Button type="submit" loading={updateMutation.isPending}>Save</Button>
+            <Button
+              variant="ghost"
+              type="button"
+              onClick={() => setEditTarget(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={updateMutation.isPending}>
+              Save
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Permission Editor Modal */}
-      <Modal open={!!permTarget} onClose={() => setPermTarget(null)} title={`Permissions: ${permTarget?.name ?? ""}`} className="max-w-2xl">
+      <Modal
+        open={!!permTarget}
+        onClose={() => setPermTarget(null)}
+        title={`Permissions: ${permTarget?.name ?? ""}`}
+        className="max-w-2xl"
+      >
         <div className="space-y-2 max-h-[60vh] overflow-y-auto">
           {error && <div className="alert alert-error text-sm">{error}</div>}
           {Array.from(grouped.entries()).map(([resource, perms]) => {
-            const selectedCount = perms.filter((p) => selectedPermIds.has(p.id)).length;
+            const selectedCount = perms.filter((p) =>
+              selectedPermIds.has(p.id),
+            ).length;
             return (
               <div key={resource} className="border border-base-300 rounded-lg">
                 <button
                   className="w-full flex items-center gap-2 px-3 py-2 hover:bg-base-200 transition-colors"
                   onClick={() => toggleResource(resource)}
                 >
-                  {expandedRes.has(resource) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                  <span className="font-medium capitalize text-sm">{resource}</span>
-                  <span className="text-xs text-base-content/50 ml-auto">{selectedCount}/{perms.length}</span>
+                  {expandedRes.has(resource) ? (
+                    <ChevronDown className="w-4 h-4" />
+                  ) : (
+                    <ChevronRight className="w-4 h-4" />
+                  )}
+                  <span className="font-medium capitalize text-sm">
+                    {resource}
+                  </span>
+                  <span className="text-xs text-base-content/50 ml-auto">
+                    {selectedCount}/{perms.length}
+                  </span>
                 </button>
                 {expandedRes.has(resource) && (
                   <div className="px-3 pb-2 space-y-0.5">
                     {perms.map((perm) => (
-                      <label key={perm.id} className="flex items-center gap-2 cursor-pointer py-1 px-2 rounded hover:bg-base-200 text-sm">
+                      <label
+                        key={perm.id}
+                        className="flex items-center gap-2 cursor-pointer py-1 px-2 rounded hover:bg-base-200 text-sm"
+                      >
                         <input
                           type="checkbox"
                           className="checkbox checkbox-xs checkbox-primary"
@@ -425,7 +602,11 @@ export default function PermissionsTab() {
                           onChange={() => togglePermission(perm.id)}
                         />
                         <span className="font-mono text-xs">{perm.action}</span>
-                        {perm.description && <span className="text-xs text-base-content/50">{perm.description}</span>}
+                        {perm.description && (
+                          <span className="text-xs text-base-content/50">
+                            {perm.description}
+                          </span>
+                        )}
                       </label>
                     ))}
                   </div>
@@ -435,8 +616,13 @@ export default function PermissionsTab() {
           })}
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="ghost" onClick={() => setPermTarget(null)}>Cancel</Button>
-          <Button onClick={handleSetPermissions} loading={setPermissionsMutation.isPending}>
+          <Button variant="ghost" onClick={() => setPermTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSetPermissions}
+            loading={setPermissionsMutation.isPending}
+          >
             <Check className="w-4 h-4" /> Save Permissions
           </Button>
         </div>

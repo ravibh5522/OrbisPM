@@ -26,23 +26,27 @@ import { TaskTreeRow } from '@/components/task/task-tree-row'
 import { usePermissions } from '@/hooks/use-permissions'
 import { cn } from '@/lib/utils'
 
-import type { Task } from '@/types/task'
+import type { Task } from '@/types/domain'
 ```
 
 ## Styling
-- Tailwind CSS only — NO inline styles, NO CSS modules, NO styled-components
-- Use `cn()` for conditional classes: `cn('base-class', isActive && 'active-class')`
-- Use Shadcn/UI design tokens (colors, spacing, typography)
+- Tailwind CSS 4 only — NO inline styles, NO CSS modules, NO styled-components
+- Use `cn()` (clsx) for conditional classes: `cn('base-class', isActive && 'active-class')`
+- Use DaisyUI 5 component classes: `btn`, `card`, `modal`, `badge`, `tooltip`, etc.
+- Theme: DaisyUI themes (light/dark) — configured in `tailwind.config`
 - Responsive: mobile-first with `sm:`, `md:`, `lg:` breakpoints
 
 ## State Management
 | Need | Solution |
 |------|---------|
-| Server data | React Query (TanStack Query) |
-| Form state | React Hook Form |
-| Client UI state | Zustand (minimal stores) |
+| Server data | TanStack Query v5 (`@tanstack/react-query`) |
+| Form state | React Hook Form + Zod validation |
+| Auth state | Zustand store (`stores/auth-store.ts`) — user, orgs, currentOrg, tokens |
+| Task state (project) | Zustand store (`stores/project-task-store.ts`) — WebSocket-driven maps |
+| Real-time (org) | `useOrgSocket` hook — single org-level WebSocket, request-response + broadcasts |
+| Real-time (project) | `useProjectSocket` hook — wraps org socket with project room join/leave |
+| Permissions | `usePermissions` hook — reads from org socket's effective permissions |
 | URL state | Next.js `searchParams` |
-| Auth state | Context from GoTrue client |
 
 ## Performance
 - Server Components by default — `'use client'` only when needed
@@ -54,7 +58,7 @@ import type { Task } from '@/types/task'
 ## Accessibility
 - All interactive elements: proper `aria-label` or visible label
 - Keyboard navigation: `onKeyDown` handlers for custom interactive components
-- Color contrast: meet WCAG AA (Shadcn/UI handles this by default)
+- Color contrast: meet WCAG AA (DaisyUI themes handle this by default)
 - Focus management: trap focus in modals, restore on close
 
 ## Error Handling

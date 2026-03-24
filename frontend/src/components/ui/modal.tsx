@@ -15,15 +15,13 @@ export function Modal({ open, onClose, title, children, className, actions }: Mo
   if (!open) return null;
 
   return (
-    <dialog className="modal modal-open" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={cn("modal-box", className)}>
+    <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
+      <div className={cn("modal-box shadow-2xl", className)}>
         {title && <h3 className="font-bold text-lg mb-4">{title}</h3>}
         {children}
         {actions && <div className="modal-action">{actions}</div>}
       </div>
-      <form method="dialog" className="modal-backdrop">
-        <button type="button" onClick={onClose}>close</button>
-      </form>
+      <div className="modal-backdrop" style={{ background: "transparent" }} onClick={onClose} />
     </dialog>
   );
 }

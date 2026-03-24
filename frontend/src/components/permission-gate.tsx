@@ -1,6 +1,7 @@
 "use client";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import type { ReactNode } from "react";
 
 /* ═══════════════════════════════════════════════════════
@@ -64,5 +65,28 @@ export function RequireAdmin({ children, fallback }: RequireAdminProps) {
       </>
     );
   }
+  return <>{children}</>;
+}
+
+/* ═══════════════════════════════════════════════════════
+   ProjectPermissionGate — wraps content behind a project-level permission check
+   ═══════════════════════════════════════════════════════ */
+
+interface ProjectPermissionGateProps {
+  projectId: string | undefined;
+  resource: string;
+  action: string;
+  children: ReactNode;
+  fallback?: ReactNode;
+}
+
+export function ProjectPermissionGate({ projectId, resource, action, children, fallback = null }: ProjectPermissionGateProps) {
+  const { can, isLoading } = useProjectPermissions(projectId);
+  const orgPerms = usePermissions();
+
+  if (isLoading || orgPerms.isLoading) return null;
+  // Org owner/admin always has access
+  if (orgPerms.isOwner || orgPerms.isAdmin) return <>{children}</>;
+  if (!can(resource, action)) return <>{fallback}</>;
   return <>{children}</>;
 }

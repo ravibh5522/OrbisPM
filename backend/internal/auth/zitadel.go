@@ -64,39 +64,40 @@ func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, cl
 	c.jwks = NewJWKSCache(jwksURL, c.httpClient, c.externalHost)
 
 	// Connect gRPC via zitadel-go SDK
-	// Use the external domain so Zitadel recognizes the instance,
-	// but route actual gRPC traffic to the internal URL (may differ in Docker setups).
+	// Domain is always from the external issuer (so Zitadel recognises the instance),
+	// but TLS mode and TCP target are driven by the INTERNAL URL — Coolify terminates
+	// TLS externally; the internal Docker connection is always plain HTTP.
 	parsedIssuer, err := url.Parse(issuer)
 	if err != nil {
 		return nil, fmt.Errorf("parse issuer URL: %w", err)
 	}
 	domain := parsedIssuer.Hostname()
 
-	// Choose TLS vs insecure based on issuer scheme
-	var z *zitadel.Zitadel
-	if parsedIssuer.Scheme == "https" {
-		z = zitadel.New(domain) // TLS, port 443
-	} else {
-		port := parsedIssuer.Port()
-		if port == "" {
-			port = "8080"
-		}
-		z = zitadel.New(domain, zitadel.WithInsecure(port))
-	}
-
-	// Parse internal URL to get actual gRPC target (host:port)
+	// Parse internal URL first — this determines the actual gRPC transport security.
 	parsedInternal, err := url.Parse(internalURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse internal URL: %w", err)
 	}
-	grpcTarget := parsedInternal.Host // e.g. "zitadel:8080" or "zitadel.animastuff.fun:443"
-	// If no explicit port in URL (e.g. https://host or http://host), add default port
+	grpcTarget := parsedInternal.Host // e.g. "zitadel:8080"
 	if parsedInternal.Port() == "" {
 		if parsedInternal.Scheme == "https" {
 			grpcTarget = parsedInternal.Hostname() + ":443"
 		} else {
 			grpcTarget = parsedInternal.Hostname() + ":80"
 		}
+	}
+
+	// Use insecure gRPC when the internal URL is plain HTTP (even if external issuer is HTTPS).
+	// Using TLS here would fail because the internal Zitadel container does not terminate TLS.
+	var z *zitadel.Zitadel
+	if parsedInternal.Scheme == "http" {
+		internalPort := parsedInternal.Port()
+		if internalPort == "" {
+			internalPort = "80"
+		}
+		z = zitadel.New(domain, zitadel.WithInsecure(internalPort))
+	} else {
+		z = zitadel.New(domain) // TLS — internal URL is also HTTPS
 	}
 
 	grpcClient, err := zclient.New(ctx, z,
@@ -136,6 +137,7 @@ type TokenResponse struct {
 // UserInfo holds user information.
 type UserInfo struct {
 	ID               string         `json:"id"`
+	InternalID       string         `json:"internal_id,omitempty"` // UUID derived from Zitadel ID for internal use
 	Email            string         `json:"email"`
 	EmailConfirmedAt *string        `json:"email_confirmed_at,omitempty"`
 	Phone            string         `json:"phone,omitempty"`
@@ -1028,6 +1030,153 @@ func (c *ZitadelClient) HealthCheck(ctx context.Context) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("zitadel unhealthy: status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// --- Password Management ---
+
+// ChangePassword changes a user's password (requires old password verification).
+func (c *ZitadelClient) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
+	req := &userv2.SetPasswordRequest{
+		UserId: userID,
+		NewPassword: &userv2.Password{
+			Password:       newPassword,
+			ChangeRequired: false,
+		},
+		Verification: &userv2.SetPasswordRequest_CurrentPassword{
+			CurrentPassword: oldPassword,
+		},
+	}
+	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// AdminResetPassword sets a user's password without requiring the old one (admin action).
+func (c *ZitadelClient) AdminResetPassword(ctx context.Context, userID, newPassword string) error {
+	req := &userv2.SetPasswordRequest{
+		UserId: userID,
+		NewPassword: &userv2.Password{
+			Password:       newPassword,
+			ChangeRequired: true,
+		},
+	}
+	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// RequestPasswordReset initiates a password reset flow via Zitadel.
+// Returns a verification code that should be sent to the user's email.
+func (c *ZitadelClient) RequestPasswordReset(ctx context.Context, userID string) (string, error) {
+	req := &userv2.PasswordResetRequest{
+		UserId: userID,
+		Medium: &userv2.PasswordResetRequest_ReturnCode{
+			ReturnCode: &userv2.ReturnPasswordResetCode{},
+		},
+	}
+	resp, err := c.grpc.UserServiceV2().PasswordReset(ctx, req)
+	if err != nil {
+		return "", c.wrapGRPCError(err)
+	}
+	code := ""
+	if resp.GetVerificationCode() != "" {
+		code = resp.GetVerificationCode()
+	}
+	return code, nil
+}
+
+// ResetPasswordWithCode completes a password reset using a verification code.
+func (c *ZitadelClient) ResetPasswordWithCode(ctx context.Context, userID, code, newPassword string) error {
+	req := &userv2.SetPasswordRequest{
+		UserId: userID,
+		NewPassword: &userv2.Password{
+			Password:       newPassword,
+			ChangeRequired: false,
+		},
+		Verification: &userv2.SetPasswordRequest_VerificationCode{
+			VerificationCode: code,
+		},
+	}
+	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// FindUserByEmail searches for a user by email and returns their Zitadel user ID.
+func (c *ZitadelClient) FindUserByEmail(ctx context.Context, email string) (string, error) {
+	resp, err := c.grpc.UserServiceV2().ListUsers(ctx, &userv2.ListUsersRequest{
+		Query: &objectv2.ListQuery{Limit: 1},
+		Queries: []*userv2.SearchQuery{
+			{
+				Query: &userv2.SearchQuery_EmailQuery{
+					EmailQuery: &userv2.EmailQuery{
+						EmailAddress: email,
+					},
+				},
+			},
+		},
+	})
+	if err != nil {
+		return "", c.wrapGRPCError(err)
+	}
+	if len(resp.GetResult()) == 0 {
+		return "", fmt.Errorf("user not found")
+	}
+	return resp.GetResult()[0].GetUserId(), nil
+}
+
+// DeactivateUser deactivates a Zitadel user account.
+func (c *ZitadelClient) DeactivateUser(ctx context.Context, userID string) error {
+	_, err := c.grpc.ManagementService().DeactivateUser(ctx, &management.DeactivateUserRequest{
+		Id: userID,
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// ReactivateUser reactivates a previously deactivated Zitadel user account.
+func (c *ZitadelClient) ReactivateUser(ctx context.Context, userID string) error {
+	_, err := c.grpc.ManagementService().ReactivateUser(ctx, &management.ReactivateUserRequest{
+		Id: userID,
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// UpdateUserEmail updates a user's email address in Zitadel.
+func (c *ZitadelClient) UpdateUserEmail(ctx context.Context, userID, newEmail string) error {
+	_, err := c.grpc.UserServiceV2().SetEmail(ctx, &userv2.SetEmailRequest{
+		UserId: userID,
+		Email:  newEmail,
+		Verification: &userv2.SetEmailRequest_IsVerified{
+			IsVerified: true,
+		},
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
+	}
+	return nil
+}
+
+// DeleteUser permanently deletes a Zitadel user account.
+func (c *ZitadelClient) DeleteUser(ctx context.Context, userID string) error {
+	_, err := c.grpc.ManagementService().RemoveUser(ctx, &management.RemoveUserRequest{
+		Id: userID,
+	})
+	if err != nil {
+		return c.wrapGRPCError(err)
 	}
 	return nil
 }

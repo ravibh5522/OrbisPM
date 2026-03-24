@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { Button } from "@/components/ui/button";
-import { Play, Pause, StopCircle, Timer, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import type { Task } from "@/types/domain";
+import { Pause, Play, RotateCcw, StopCircle, Timer } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Time Tracking Timer Component
@@ -95,10 +94,14 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
     if (!send) return;
     setSaving(true);
     try {
-      await send("task:update", { task_id: task.id, actual_hours: newHours });
+      await send("task:update", {
+        task_id: task.id,
+        base_version: task.version ?? 0,
+        actual_hours: newHours,
+      });
       onUpdate?.();
     } catch {} finally { setSaving(false); }
-  }, [send, task.id, onUpdate]);
+  }, [send, task.id, task.version, onUpdate]);
 
   const start = useCallback(() => {
     const newState: TimerState = {
@@ -151,108 +154,67 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
   const hasTime = displayMs > 0;
 
   return (
-    <div className="flex flex-col gap-2">
-      {/* Timer display */}
+    <div className="flex flex-col gap-1">
+      {/* Compact timer row */}
       <div
         className={cn(
-          "flex items-center justify-between gap-2 p-3 rounded-lg border",
+          "flex items-center justify-between gap-1.5 px-2 py-1 rounded border text-xs",
           state.isRunning
             ? "border-primary bg-primary/5"
             : "border-base-300 bg-base-100"
         )}
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
           <Timer
             className={cn(
-              "w-5 h-5",
+              "w-3.5 h-3.5 shrink-0",
               state.isRunning ? "text-primary animate-pulse" : "text-base-content/50"
             )}
           />
           <span
             className={cn(
-              "font-mono text-xl",
+              "font-mono text-sm",
               state.isRunning ? "text-primary" : "text-base-content"
             )}
           >
             {formatTime(displayMs)}
           </span>
+          <span className="text-base-content/40 truncate">
+            {(task.actual_hours || 0).toFixed(1)}h
+            {task.estimated_hours ? ` / ${task.estimated_hours}h` : ""}
+          </span>
         </div>
 
-        <div className="flex items-center gap-1">
-          {/* Start/Pause button */}
+        <div className="flex items-center gap-0.5 shrink-0">
           {state.isRunning ? (
-            <Button variant="ghost" size="sm" onClick={pause} title="Pause">
-              <Pause className="w-4 h-4" />
-            </Button>
+            <button className="btn btn-ghost btn-xs btn-square" onClick={pause} title="Pause">
+              <Pause className="w-3 h-3" />
+            </button>
           ) : (
-            <Button
-              variant={hasTime ? "ghost" : "primary"}
-              size="sm"
-              onClick={start}
-              title="Start"
-            >
-              <Play className="w-4 h-4" />
-            </Button>
+            <button className={cn("btn btn-xs btn-square", hasTime ? "btn-ghost" : "btn-primary")} onClick={start} title="Start">
+              <Play className="w-3 h-3" />
+            </button>
           )}
-
-          {/* Stop button (saves to actual_hours) */}
           {hasTime && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={stop}
-              title="Stop and save time"
-              loading={saving}
-              className="text-success"
-            >
-              <StopCircle className="w-4 h-4" />
-            </Button>
+            <button className="btn btn-ghost btn-xs btn-square text-success" onClick={stop} title="Stop & save" disabled={saving}>
+              <StopCircle className="w-3 h-3" />
+            </button>
           )}
-
-          {/* Reset button */}
           {hasTime && !state.isRunning && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={reset}
-              title="Reset (discard time)"
-              className="text-error"
-            >
-              <RotateCcw className="w-4 h-4" />
-            </Button>
+            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={reset} title="Reset">
+              <RotateCcw className="w-3 h-3" />
+            </button>
           )}
         </div>
       </div>
 
-      {/* Current hours display */}
-      <div className="flex items-center justify-between text-sm">
-        <span className="text-base-content/60">Logged</span>
-        <span className="font-mono">
-          {(task.actual_hours || 0).toFixed(2)}h
-          {task.estimated_hours && (
-            <span className="text-base-content/40">
-              {" "}/ {task.estimated_hours}h
-            </span>
-          )}
-        </span>
-      </div>
-
-      {/* Progress bar */}
+      {/* Thin progress bar */}
       {task.estimated_hours && task.estimated_hours > 0 && (
         <progress
-          className="progress progress-primary w-full"
+          className="progress progress-primary w-full h-1"
           value={task.actual_hours || 0}
           max={task.estimated_hours}
         />
-      )}
-
-      {/* Time breakdown info */}
-      {hasTime && (
-        <p className="text-xs text-base-content/50">
-          Session: +{(displayMs / (1000 * 60 * 60)).toFixed(2)}h. Click{" "}
-          <StopCircle className="w-3 h-3 inline-block text-success" /> to save to
-          actual hours.
-        </p>
       )}
     </div>
   );

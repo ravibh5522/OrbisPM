@@ -1,8 +1,7 @@
-import { create } from "zustand";
-import type { AuthUser, Org, OrgMember } from "@/types/domain";
-import { clearAuth, getStoredUser, saveTokens, saveUser, getAccessToken, getRefreshToken, isTokenExpired } from "@/lib/auth";
 import { api } from "@/lib/api";
-import type { AuthTokens } from "@/types/domain";
+import { clearAuth, getAccessToken, getRefreshToken, getStoredUser, isTokenExpired, saveTokens, saveUser } from "@/lib/auth";
+import type { AuthTokens, AuthUser, Org, OrgMember } from "@/types/domain";
+import { create } from "zustand";
 
 interface AuthState {
   user: AuthUser | null;

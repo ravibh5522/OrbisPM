@@ -35,11 +35,6 @@ func (p *RedisPublisher) Publish(ctx context.Context, event domain.DomainEvent) 
 		return fmt.Errorf("publish to %s: %w", channel, err)
 	}
 
-	// Also publish to a wildcard channel for subscribers that want all events
-	if err := p.rdb.Publish(ctx, channelPrefix+"*", data).Err(); err != nil {
-		log.Warn().Err(err).Msg("failed to publish to wildcard channel")
-	}
-
 	log.Debug().Str("type", event.Type).Str("entity_id", event.EntityID).Msg("event published")
 	return nil
 }
@@ -62,13 +57,21 @@ func (s *RedisSubscriber) Subscribe(ctx context.Context, eventType string, handl
 
 	go func() {
 		ch := s.pubsub.Channel()
-		for msg := range ch {
-			var event domain.DomainEvent
-			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-				log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
-				continue
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				var event domain.DomainEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
+					continue
+				}
+				handler(event)
 			}
-			handler(event)
 		}
 	}()
 
@@ -81,13 +84,21 @@ func (s *RedisSubscriber) SubscribeAll(ctx context.Context, handler func(domain.
 
 	go func() {
 		ch := s.pubsub.Channel()
-		for msg := range ch {
-			var event domain.DomainEvent
-			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-				log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
-				continue
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				var event domain.DomainEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
+					continue
+				}
+				handler(event)
 			}
-			handler(event)
 		}
 	}()
 

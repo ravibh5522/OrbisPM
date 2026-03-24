@@ -1,12 +1,12 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
+import { Avatar, Badge, Card, EmptyState, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { PageHeader, Card, LoadingPage, Badge, Avatar, EmptyState } from "@/components/ui/shared";
 import { formatRelative } from "@/lib/utils";
-import { Activity } from "lucide-react";
+import { useAuthStore } from "@/stores/auth-store";
 import type { ActivityLog, OrgMember } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
+import { Activity } from "lucide-react";
 
 const ACTION_COLOR: Record<string, string> = {
   created: "badge-success",
@@ -33,7 +33,23 @@ export default function ActivityPage() {
     staleTime: 5 * 60_000,
   });
 
-  if (isLoading) return <LoadingPage />;
+  if (isLoading) return (
+    <div className="animate-pulse">
+      <div className="h-8 bg-base-300 rounded w-32 mb-2" />
+      <div className="h-4 bg-base-300 rounded w-72 mb-6" />
+      <div className="bg-base-200 rounded-xl border border-base-200 p-4 space-y-4">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-base-300 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <div className="h-4 bg-base-300 rounded w-3/4" />
+              <div className="h-3 bg-base-300 rounded w-1/3" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   const logs = activity?.data || [];
   const members: OrgMember[] = membersData?.data || [];

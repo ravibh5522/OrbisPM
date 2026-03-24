@@ -8,6 +8,8 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -15,10 +17,16 @@ import (
 type TeamHandler struct {
 	teamSvc      *service.TeamService
 	dashboardSvc *service.DashboardService
+	permResolver *service.PermissionResolver
 }
 
 func NewTeamHandler(teamSvc *service.TeamService, dashboardSvc *service.DashboardService) *TeamHandler {
 	return &TeamHandler{teamSvc: teamSvc, dashboardSvc: dashboardSvc}
+}
+
+// SetPermResolver injects the permission resolver.
+func (h *TeamHandler) SetPermResolver(pr *service.PermissionResolver) {
+	h.permResolver = pr
 }
 
 // Routes registers team routes. Mounted under /orgs/{orgId}/teams.
@@ -35,6 +43,9 @@ func (h *TeamHandler) Routes() chi.Router {
 
 		// Dashboard
 		r.Get("/dashboard", h.Dashboard)
+
+		// Permissions
+		r.Get("/my-permissions", h.GetMyPermissions)
 
 		// Members
 		r.Get("/members", h.ListMembers)
@@ -110,7 +121,16 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/teams [get]
 func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-	teams, err := h.teamSvc.ListByOrg(r.Context(), orgID)
+	f := repository.TeamFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		SortBy:    queryStrDefault(r, "sort_by", "name"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	teams, total, err := h.teamSvc.ListByOrgPaginated(r.Context(), orgID, f)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -118,7 +138,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	if teams == nil {
 		teams = []*domain.Team{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: teams, Total: len(teams), Limit: len(teams), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: teams, Total: total, Limit: f.Limit, Offset: f.Offset})
 }
 
 // Update godoc
@@ -196,7 +216,17 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
 		return
 	}
-	members, err := h.teamSvc.ListMembers(r.Context(), teamID)
+	f := repository.MemberFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		Role:      queryStr(r, "role"),
+		SortBy:    queryStrDefault(r, "sort_by", "joined_at"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	members, total, err := h.teamSvc.ListMembersPaginated(r.Context(), teamID, f)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -204,7 +234,7 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	if members == nil {
 		members = []*domain.TeamMember{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: total, Limit: f.Limit, Offset: f.Offset})
 }
 
 type addTeamMemberRequest struct {
@@ -322,7 +352,7 @@ func (h *TeamHandler) UpdateMemberRole(w http.ResponseWriter, r *http.Request) {
 
 // Dashboard godoc
 // @Summary Get team dashboard
-// @Description Returns workload, velocity, and blocker analytics for a team
+// @Description Returns workload, velocity, and blocker analytics for a team (filtered by user's role)
 // @Tags Teams
 // @Produce json
 // @Security BearerAuth
@@ -338,10 +368,96 @@ func (h *TeamHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
 		return
 	}
-	stats, err := h.dashboardSvc.GetTeamDashboard(r.Context(), tid)
+	userID := middleware.UserIDFromCtx(r.Context())
+	stats, err := h.dashboardSvc.GetTeamDashboard(r.Context(), tid, userID)
 	if err != nil {
 		Error(w, r, err)
 		return
 	}
 	JSON(w, http.StatusOK, stats)
+}
+
+// GetMyPermissions godoc
+// @Summary Get my effective permissions for a team
+// @Description Returns the caller's effective role and permissions for a specific team
+// @Tags Teams
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Success 200 {object} map[string]interface{}
+// @Router /orgs/{orgId}/teams/{teamId}/my-permissions [get]
+func (h *TeamHandler) GetMyPermissions(w http.ResponseWriter, r *http.Request) {
+	if h.permResolver == nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "permission resolver not configured"})
+		return
+	}
+	teamID, err := uuidParam(r, "teamId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
+		return
+	}
+	userID := tenant.UserID(r.Context())
+	orgID := middleware.OrgIDFromCtx(r.Context())
+
+	role, perms, err := h.permResolver.GetEffectivePermissions(r.Context(), userID, orgID, domain.ScopeTeam, &teamID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	type permItem struct {
+		Resource string `json:"resource"`
+		Action   string `json:"action"`
+	}
+	items := make([]permItem, 0, len(perms))
+	for _, p := range perms {
+		items = append(items, permItem{Resource: p.Resource, Action: p.Action})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"role":        role,
+		"permissions": items,
+	})
+}
+
+type setManagerRequest struct {
+	ManagerID string `json:"manager_id" validate:"required"`
+}
+
+// SetManager godoc
+// @Summary Set team manager
+// @Description Assign a manager to the team (auto-promotes to team_lead if not already)
+// @Tags Teams
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param teamId path string true "Team ID" format(uuid)
+// @Param body body setManagerRequest true "Manager assignment"
+// @Success 200 {object} swaggerTeam
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/teams/{teamId}/manager [put]
+func (h *TeamHandler) SetManager(w http.ResponseWriter, r *http.Request) {
+	teamID, err := uuidParam(r, "teamId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
+		return
+	}
+	var req setManagerRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	managerID, err := uuid.Parse(req.ManagerID)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid manager_id"})
+		return
+	}
+	team, err := h.teamSvc.SetManager(r.Context(), teamID, &managerID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, team)
 }

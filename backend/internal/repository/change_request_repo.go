@@ -23,6 +23,7 @@ func NewChangeRequestRepo(pool *pgxpool.Pool) TaskChangeRequestRepository {
 func (r *changeRequestRepo) Create(ctx context.Context, tx pgx.Tx, cr *domain.TaskChangeRequest) (*domain.TaskChangeRequest, error) {
 	q := conn(r.pool, tx)
 	var created domain.TaskChangeRequest
+	var reason, reviewNote *string
 	err := q.QueryRow(ctx,
 		`INSERT INTO task_change_requests (org_id, task_id, proposer_id, status, changes, reason)
 		 VALUES ($1, $2, $3, $4, $5, $6)
@@ -30,9 +31,15 @@ func (r *changeRequestRepo) Create(ctx context.Context, tx pgx.Tx, cr *domain.Ta
 		cr.OrgID, cr.TaskID, cr.ProposerID, domain.CRPending, cr.Changes, nilStr(cr.Reason)).Scan(
 		&created.ID, &created.OrgID, &created.TaskID, &created.ProposerID,
 		&created.ReviewerID, &created.Status, &created.Changes,
-		&created.Reason, &created.ReviewNote, &created.CreatedAt, &created.ReviewedAt)
+		&reason, &reviewNote, &created.CreatedAt, &created.ReviewedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create change request: %w", err)
+	}
+	if reason != nil {
+		created.Reason = *reason
+	}
+	if reviewNote != nil {
+		created.ReviewNote = *reviewNote
 	}
 	return &created, nil
 }

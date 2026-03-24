@@ -1,15 +1,24 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { Card, Avatar } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { Building2, Mail, MapPin, Briefcase, Calendar, CheckCircle, Camera } from "lucide-react";
+import { Avatar, Card } from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  Briefcase,
+  Building2,
+  Calendar,
+  Camera,
+  CheckCircle,
+  Mail,
+  MapPin,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 const INDUSTRY_OPTIONS = [
   { value: "", label: "Select industry" },
@@ -79,7 +88,14 @@ export default function OrganisationTab() {
 
   const settings = (currentOrg?.settings || {}) as Record<string, string>;
 
-  const { register, handleSubmit, reset, watch, setValue, formState: { errors, isDirty } } = useForm<OrgSettingsForm>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    setValue,
+    formState: { errors, isDirty },
+  } = useForm<OrgSettingsForm>({
     defaultValues: {
       name: currentOrg?.name || "",
       slug: currentOrg?.slug || "",
@@ -137,6 +153,7 @@ export default function OrganisationTab() {
       qc.invalidateQueries({ queryKey: ["org"] });
       setSuccess("Settings saved successfully");
       setError("");
+      toast.success("Organisation settings saved");
       setTimeout(() => setSuccess(""), 4000);
     },
     onError: (e: Error) => {
@@ -147,6 +164,11 @@ export default function OrganisationTab() {
 
   const logoUrl = watch("logo_url");
   const orgName = watch("name");
+  const slug = watch("slug");
+  const workspaceUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/${slug || currentOrg?.slug || ""}`
+      : `/${slug || currentOrg?.slug || ""}`;
 
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -176,7 +198,11 @@ export default function OrganisationTab() {
 
   return (
     <div>
-      {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
+      {error && (
+        <div className="alert alert-error mb-4 text-sm">
+          <span>{error}</span>
+        </div>
+      )}
       {success && (
         <div className="alert alert-success mb-4 text-sm">
           <CheckCircle className="w-4 h-4" />
@@ -184,7 +210,10 @@ export default function OrganisationTab() {
         </div>
       )}
 
-      <form onSubmit={handleSubmit((data) => updateMutation.mutate(data))} className="space-y-6">
+      <form
+        onSubmit={handleSubmit((data) => updateMutation.mutate(data))}
+        className="space-y-6"
+      >
         {/* Identity */}
         <Card>
           <div className="flex items-center gap-3 mb-5">
@@ -220,12 +249,18 @@ export default function OrganisationTab() {
               />
             </div>
             <div>
-              <p className="font-medium text-sm">{orgName || currentOrg?.name}</p>
+              <p className="font-medium text-sm">
+                {orgName || currentOrg?.name}
+              </p>
               <p className="text-xs text-base-content/50">
                 {currentOrg?.plan ? `Plan: ${currentOrg.plan}` : ""}
-                {currentOrg?.created_at ? ` · Created ${formatDate(currentOrg.created_at)}` : ""}
+                {currentOrg?.created_at
+                  ? ` · Created ${formatDate(currentOrg.created_at)}`
+                  : ""}
               </p>
-              <p className="text-xs text-base-content/40 mt-1">Click logo to upload</p>
+              <p className="text-xs text-base-content/40 mt-1">
+                Click logo to upload
+              </p>
             </div>
           </div>
 
@@ -233,16 +268,22 @@ export default function OrganisationTab() {
             <Input
               label="Organization Name"
               placeholder="Acme Corp"
-              {...register("name", { required: "Name is required", minLength: { value: 2, message: "Min 2 chars" } })}
+              {...register("name", {
+                required: "Name is required",
+                minLength: { value: 2, message: "Min 2 chars" },
+              })}
               error={errors.name?.message}
             />
             <Input
               label="URL Slug"
               placeholder="acme-corp"
-              helperText="Used in your workspace URL"
+              helperText={`Workspace URL: ${workspaceUrl}`}
               {...register("slug", {
                 required: "Slug is required",
-                pattern: { value: /^[a-z0-9]+(?:-[a-z0-9]+)*$/, message: "Lowercase letters, numbers and hyphens only" },
+                pattern: {
+                  value: /^[a-z0-9]+(?:-[a-z0-9]+)*$/,
+                  message: "Lowercase letters, numbers and hyphens only",
+                },
               })}
               error={errors.slug?.message}
             />
@@ -272,10 +313,32 @@ export default function OrganisationTab() {
             <h2 className="font-semibold text-base">Contact Information</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Website" type="url" placeholder="https://yourcompany.com" {...register("website")} />
-            <Input label="Phone" type="tel" placeholder="+1 (555) 000-0000" {...register("phone")} />
-            <Input label="Contact Email" type="email" placeholder="contact@yourcompany.com" helperText="Public contact email" {...register("contact_email")} />
-            <Input label="Support Email" type="email" placeholder="support@yourcompany.com" helperText="Customer support email" {...register("support_email")} />
+            <Input
+              label="Website"
+              type="url"
+              placeholder="https://yourcompany.com"
+              {...register("website")}
+            />
+            <Input
+              label="Phone"
+              type="tel"
+              placeholder="+1 (555) 000-0000"
+              {...register("phone")}
+            />
+            <Input
+              label="Contact Email"
+              type="email"
+              placeholder="contact@yourcompany.com"
+              helperText="Public contact email"
+              {...register("contact_email")}
+            />
+            <Input
+              label="Support Email"
+              type="email"
+              placeholder="support@yourcompany.com"
+              helperText="Customer support email"
+              {...register("support_email")}
+            />
           </div>
         </Card>
 
@@ -287,10 +350,18 @@ export default function OrganisationTab() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
-              <Input label="Street Address" placeholder="123 Main Street, Suite 100" {...register("address")} />
+              <Input
+                label="Street Address"
+                placeholder="123 Main Street, Suite 100"
+                {...register("address")}
+              />
             </div>
             <Input label="City" placeholder="New York" {...register("city")} />
-            <Input label="Country" placeholder="United States" {...register("country")} />
+            <Input
+              label="Country"
+              placeholder="United States"
+              {...register("country")}
+            />
           </div>
         </Card>
 
@@ -301,9 +372,21 @@ export default function OrganisationTab() {
             <h2 className="font-semibold text-base">Organization Details</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Select label="Industry" options={INDUSTRY_OPTIONS} {...register("industry")} />
-            <Select label="Company Size" options={SIZE_OPTIONS} {...register("size")} />
-            <Select label="Timezone" options={TIMEZONE_OPTIONS} {...register("timezone")} />
+            <Select
+              label="Industry"
+              options={INDUSTRY_OPTIONS}
+              {...register("industry")}
+            />
+            <Select
+              label="Company Size"
+              options={SIZE_OPTIONS}
+              {...register("size")}
+            />
+            <Select
+              label="Timezone"
+              options={TIMEZONE_OPTIONS}
+              {...register("timezone")}
+            />
           </div>
         </Card>
 
@@ -316,30 +399,66 @@ export default function OrganisationTab() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div className="text-center p-3 bg-base-200 rounded-lg">
               <div className="text-xs text-base-content/50 mb-1">Plan</div>
-              <div className="font-semibold capitalize">{currentOrg?.plan || "free"}</div>
+              <div className="font-semibold capitalize">
+                {currentOrg?.plan || "free"}
+              </div>
             </div>
             <div className="text-center p-3 bg-base-200 rounded-lg">
               <div className="text-xs text-base-content/50 mb-1">Org ID</div>
-              <div className="font-mono text-xs truncate">{currentOrg?.id?.slice(0, 12)}…</div>
+              <div className="font-mono text-xs truncate">
+                {currentOrg?.id?.slice(0, 12)}…
+              </div>
             </div>
             <div className="text-center p-3 bg-base-200 rounded-lg">
               <div className="text-xs text-base-content/50 mb-1">Created</div>
-              <div className="text-sm">{currentOrg?.created_at ? formatDate(currentOrg.created_at) : "—"}</div>
+              <div className="text-sm">
+                {currentOrg?.created_at
+                  ? formatDate(currentOrg.created_at)
+                  : "—"}
+              </div>
             </div>
             <div className="text-center p-3 bg-base-200 rounded-lg">
               <div className="text-xs text-base-content/50 mb-1">Updated</div>
-              <div className="text-sm">{currentOrg?.updated_at ? formatDate(currentOrg.updated_at) : "—"}</div>
+              <div className="text-sm">
+                {currentOrg?.updated_at
+                  ? formatDate(currentOrg.updated_at)
+                  : "—"}
+              </div>
             </div>
           </div>
         </Card>
 
-        <div className="flex items-center justify-between py-2">
-          <p className="text-sm text-base-content/50">
-            {isDirty ? "You have unsaved changes" : "All changes are saved"}
-          </p>
-          <Button type="submit" loading={updateMutation.isPending} disabled={!isDirty && !updateMutation.isPending}>
-            Save Changes
-          </Button>
+        <div className="sticky bottom-4 z-10 rounded-2xl border border-base-300 bg-base-100/92 px-4 py-3 shadow-lg backdrop-blur-sm">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-sm font-medium text-base-content">
+                {isDirty
+                  ? "You have unsaved organization updates"
+                  : "Organization details are up to date"}
+              </p>
+              <p className="text-xs text-base-content/50">
+                Keep branding, support contacts, and the workspace URL accurate
+                before launch.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => reset()}
+                disabled={!isDirty || updateMutation.isPending}
+              >
+                Reset
+              </Button>
+              <Button
+                type="submit"
+                loading={updateMutation.isPending}
+                disabled={!isDirty && !updateMutation.isPending}
+              >
+                Save Changes
+              </Button>
+            </div>
+          </div>
         </div>
       </form>
     </div>

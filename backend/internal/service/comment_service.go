@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/hibiken/asynq"
 	"github.com/jackc/pgx/v5"
 	"github.com/rs/zerolog/log"
 
@@ -19,11 +21,12 @@ import (
 var mentionRe = regexp.MustCompile(`@([a-zA-Z0-9._-]+)`)
 
 type CreateCommentParams struct {
-	OrgID    uuid.UUID  `json:"-"`
-	TaskID   uuid.UUID  `json:"-"`
-	UserID   uuid.UUID  `json:"-"`
-	Body     string     `json:"body" validate:"required,min=1"`
-	ParentID *uuid.UUID `json:"parent_id,omitempty"`
+	OrgID     uuid.UUID  `json:"-"`
+	TaskID    uuid.UUID  `json:"-"`
+	UserID    uuid.UUID  `json:"-"`
+	ProjectID uuid.UUID  `json:"-"`
+	Body      string     `json:"body" validate:"required,min=1"`
+	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
 }
 
 type CommentService struct {
@@ -60,13 +63,17 @@ func (s *CommentService) Create(ctx context.Context, params CreateCommentParams)
 	s.enqueueActivity(created.OrgID.String(), "comment", created.ID.String(), "created", created.UserID.String())
 
 	// Parse @mentions and notify mentioned users
-	go s.processMentions(context.Background(), created)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.processMentions(ctx, created, params.ProjectID)
+	}()
 
 	return created, nil
 }
 
 // processMentions extracts @name tokens from the body, resolves them to org members, and sends notifications.
-func (s *CommentService) processMentions(ctx context.Context, comment *domain.Comment) {
+func (s *CommentService) processMentions(ctx context.Context, comment *domain.Comment, projectID uuid.UUID) {
 	matches := mentionRe.FindAllStringSubmatch(comment.Body, -1)
 	if len(matches) == 0 {
 		return
@@ -112,6 +119,7 @@ func (s *CommentService) processMentions(ctx context.Context, comment *domain.Co
 			map[string]any{
 				"task_id":    comment.TaskID.String(),
 				"comment_id": comment.ID.String(),
+				"project_id": projectID.String(),
 			},
 		)
 	}
@@ -119,6 +127,10 @@ func (s *CommentService) processMentions(ctx context.Context, comment *domain.Co
 
 func (s *CommentService) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Comment, error) {
 	return s.commentRepo.ListByTask(ctx, taskID)
+}
+
+func (s *CommentService) ListByTaskPaginated(ctx context.Context, taskID uuid.UUID, limit, offset int) ([]*domain.Comment, int, error) {
+	return s.commentRepo.ListByTaskPaginated(ctx, taskID, limit, offset)
 }
 
 func (s *CommentService) Delete(ctx context.Context, id uuid.UUID) error {
@@ -165,7 +177,8 @@ func (s *CommentService) enqueueNotification(userID, orgID, ntype, title, body s
 		log.Error().Err(err).Msg("build notification task for mention")
 		return
 	}
-	if err := s.workerSrv.Enqueue(task); err != nil {
+	// Delay mention notifications by 5 minutes to batch with nearby task updates
+	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(5*time.Minute)); err != nil {
 		log.Error().Err(err).Msg("enqueue notification task for mention")
 	}
 }

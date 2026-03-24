@@ -1,26 +1,33 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
-import { useProjectTaskStore } from "@/stores/project-task-store";
-import { Badge, Avatar, ConfirmDialog } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
 import {
-  ChevronRight,
+  ChangeRequestToast,
+  PendingReviewBadge,
+} from "@/components/tasks/change-requests";
+import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown";
+import { Button } from "@/components/ui/button";
+import { Avatar, Badge, ConfirmDialog } from "@/components/ui/shared";
+import { cn, formatDate, priorityColor, statusLabel } from "@/lib/utils";
+import { useProjectTaskStore } from "@/stores/project-task-store";
+import type {
+  ProjectMember,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  TaskTree,
+} from "@/types/domain";
+import {
   ChevronDown,
-  Plus,
-  MoreHorizontal,
-  Trash2,
+  ChevronRight,
+  Circle,
   Copy,
   ExternalLink,
-  Circle,
+  MoreHorizontal,
+  Plus,
+  Trash2,
 } from "lucide-react";
-import {
-  priorityColor,
-  statusLabel,
-  formatDate,
-  cn,
-} from "@/lib/utils";
-import type { Task, TaskTree, ProjectMember, TaskStatus, TaskPriority } from "@/types/domain";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Task Tree View — Collapsible hierarchical tree with inline editing
@@ -32,15 +39,27 @@ interface TaskTreeViewProps {
   projectId: string;
   members: ProjectMember[];
   onOpenTask?: (taskId: string) => void;
+  globalFilter?: GlobalFilterState;
 }
 
-export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }: TaskTreeViewProps) {
+export function TaskTreeView({
+  orgId,
+  orgSlug,
+  projectId,
+  members,
+  onOpenTask,
+  globalFilter,
+}: TaskTreeViewProps) {
   const send = useProjectTaskStore((s) => s.send);
   const taskTree = useProjectTaskStore((s) => s.taskTree);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
+  const [pendingReviewResult, setPendingReviewResult] = useState<{
+    pending_review?: boolean;
+    change_request?: any;
+  } | null>(null);
 
   // Fetch tree via WS
   const fetchTree = useCallback(async () => {
@@ -87,39 +106,129 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
     setExpandedIds(new Set());
   }, []);
 
-  const handleUpdate = useCallback(async (taskId: string, data: Partial<Task>) => {
-    if (!send) return;
-    try {
-      await send("task:update", { task_id: taskId, ...data });
-      fetchTree();
-    } catch (e) {
-      console.error("[WS] task:update failed", e);
-    }
-  }, [send, fetchTree]);
+  const handleUpdate = useCallback(
+    async (taskId: string, data: Partial<Task>) => {
+      if (!send) return;
+      try {
+        // Find the task in the tree to get version for optimistic concurrency
+        const findTask = (nodes: TaskTree[]): Task | undefined => {
+          for (const n of nodes) {
+            if (n.task.id === taskId) return n.task;
+            if (n.children) {
+              const found = findTask(n.children);
+              if (found) return found;
+            }
+          }
+          return undefined;
+        };
+        const currentTask = findTask(taskTree);
+        const result = await send("task:update", {
+          task_id: taskId,
+          base_version: currentTask?.version ?? 0,
+          ...data,
+        });
+        // Handle pending review
+        if (result?.pending_review) {
+          setPendingReviewResult(result);
+        }
+        fetchTree();
+      } catch (e) {
+        console.error("[WS] task:update failed", e);
+      }
+    },
+    [send, fetchTree, taskTree],
+  );
 
-  const handleDelete = useCallback(async (taskId: string) => {
-    if (!send) return;
-    setMutating(true);
-    try {
-      await send("task:delete", { task_id: taskId });
-      setDeleteTask(null);
-      fetchTree();
-    } catch (e) {
-      console.error("[WS] task:delete failed", e);
-    } finally {
-      setMutating(false);
-    }
-  }, [send, fetchTree]);
+  const handleDelete = useCallback(
+    async (taskId: string) => {
+      if (!send) return;
+      setMutating(true);
+      try {
+        await send("task:delete", { task_id: taskId });
+        setDeleteTask(null);
+        fetchTree();
+      } catch (e) {
+        console.error("[WS] task:delete failed", e);
+      } finally {
+        setMutating(false);
+      }
+    },
+    [send, fetchTree],
+  );
 
-  const handleDuplicate = useCallback(async (taskId: string) => {
-    if (!send) return;
-    try {
-      await send("task:duplicate", { task_id: taskId });
-      fetchTree();
-    } catch (e) {
-      console.error("[WS] task:duplicate failed", e);
-    }
-  }, [send, fetchTree]);
+  const handleDuplicate = useCallback(
+    async (taskId: string) => {
+      if (!send) return;
+      try {
+        await send("task:duplicate", { task_id: taskId });
+        fetchTree();
+      } catch (e) {
+        console.error("[WS] task:duplicate failed", e);
+      }
+    },
+    [send, fetchTree],
+  );
+
+  const tree = taskTree;
+
+  // Apply global filter recursively (memoized) — must be before any early return
+  const hasFilter = globalFilter && isGlobalFilterActive(globalFilter);
+  const filteredTree = useMemo(() => {
+    const filterTree = (nodes: TaskTree[]): TaskTree[] => {
+      if (!globalFilter || !isGlobalFilterActive(globalFilter)) return nodes;
+      return nodes.reduce<TaskTree[]>((acc, node) => {
+        const t = node.task;
+        let match = true;
+        if (globalFilter.assigneeIds.length > 0) {
+          const ids = t.assignee_ids?.length
+            ? t.assignee_ids
+            : t.assignee_id
+              ? [t.assignee_id]
+              : [];
+          const matchesUnassigned =
+            globalFilter.assigneeIds.includes("") && ids.length === 0;
+          const matchesAny = ids.some((id) =>
+            globalFilter.assigneeIds.includes(id),
+          );
+          if (!matchesUnassigned && !matchesAny) match = false;
+        }
+        if (
+          globalFilter.statuses.length > 0 &&
+          !globalFilter.statuses.includes(t.status)
+        )
+          match = false;
+        if (
+          globalFilter.priorities.length > 0 &&
+          !globalFilter.priorities.includes(t.priority)
+        )
+          match = false;
+        if (globalFilter.labels.length > 0) {
+          if (!t.labels || !t.labels.some((l) => globalFilter.labels.includes(l)))
+            match = false;
+        }
+        if (
+          globalFilter.dueDateFrom &&
+          (!t.due_date || t.due_date < globalFilter.dueDateFrom)
+        )
+          match = false;
+        if (
+          globalFilter.dueDateTo &&
+          (!t.due_date || t.due_date > globalFilter.dueDateTo)
+        )
+          match = false;
+        if (globalFilter.search) {
+          const q = globalFilter.search.toLowerCase();
+          if (!t.title.toLowerCase().includes(q)) match = false;
+        }
+        const filteredChildren = node.children ? filterTree(node.children) : [];
+        if (match || filteredChildren.length > 0) {
+          acc.push({ ...node, children: filteredChildren });
+        }
+        return acc;
+      }, []);
+    };
+    return filterTree(tree);
+  }, [tree, globalFilter]);
 
   if (isLoading) {
     return (
@@ -129,19 +238,29 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
     );
   }
 
-  const tree = taskTree;
-
-  if (tree.length === 0) {
+  if (filteredTree.length === 0) {
     return (
       <div className="text-center py-12 text-base-content/60">
-        <p className="mb-4">No tasks yet. Create your first task to get started.</p>
-        <CreateTaskButton parentId={null} onCreated={fetchTree} />
+        <p className="mb-4">
+          {hasFilter
+            ? "No tasks match the current filters."
+            : "No tasks yet. Create your first task to get started."}
+        </p>
+        {!hasFilter && (
+          <CreateTaskButton parentId={null} onCreated={fetchTree} />
+        )}
       </div>
     );
   }
 
   return (
     <div className="space-y-2">
+      {/* Pending review toast */}
+      <ChangeRequestToast
+        result={pendingReviewResult}
+        onDismiss={() => setPendingReviewResult(null)}
+      />
+
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex gap-2">
@@ -158,7 +277,7 @@ export function TaskTreeView({ orgId, orgSlug, projectId, members, onOpenTask }:
       {/* Tree container */}
       <div className="border border-base-300 rounded-lg bg-base-100">
         <div className="divide-y divide-base-200">
-          {tree.map((node) => (
+          {filteredTree.map((node) => (
             <TreeNode
               key={node.task.id}
               node={node}
@@ -234,106 +353,118 @@ function TreeNode({
     <>
       <div
         className={cn(
-          "relative flex items-center gap-2 px-3 py-2 hover:bg-base-200/50 transition-colors group"
+          "relative flex items-center gap-2 px-3 py-2 hover:bg-base-200/50 transition-colors group",
         )}
         style={{ paddingLeft: `${12 + depth * 24}px` }}
       >
         {/* Content wrapper — opacity is applied HERE, not on the outer row, so the
             dropdown is NOT inside the opacity stacking context and can escape it */}
-        <div className={cn("flex items-center gap-2 flex-1 min-w-0", task.status === "done" && "opacity-60")}>
-        {/* Expand/collapse toggle */}
-        <button
+        <div
           className={cn(
-            "btn btn-ghost btn-xs btn-square",
-            !hasChildren && "invisible"
+            "flex items-center gap-2 flex-1 min-w-0",
+            task.status === "done" && "opacity-60",
           )}
-          onClick={() => toggleExpand(task.id)}
         >
-          {isExpanded ? (
-            <ChevronDown className="w-4 h-4" />
-          ) : (
-            <ChevronRight className="w-4 h-4" />
-          )}
-        </button>
-
-        {/* Status indicator */}
-        <StatusDropdown
-          status={task.status}
-          onChange={(status) => onUpdate(task.id, { status })}
-        />
-
-        {/* Title — click to expand/collapse if has children */}
-        <button
-          onClick={() => {
-            if (hasChildren) {
-              toggleExpand(task.id);
-            } else if (onOpenTask) {
-              onOpenTask(task.id);
-            }
-          }}
-          className="flex-1 min-w-0 truncate font-medium hover:text-primary hover:underline text-left"
-        >
-          {task.title}
-        </button>
-
-        {/* Labels */}
-        {task.labels && task.labels.length > 0 && (
-          <div className="flex gap-1">
-            {task.labels.slice(0, 2).map((label) => (
-              <span
-                key={label}
-                className="badge badge-sm badge-outline"
-              >
-                {label}
-              </span>
-            ))}
-            {task.labels.length > 2 && (
-              <span className="badge badge-sm badge-ghost">
-                +{task.labels.length - 2}
-              </span>
+          {/* Expand/collapse toggle */}
+          <button
+            className={cn(
+              "btn btn-ghost btn-xs btn-square",
+              !hasChildren && "invisible",
             )}
-          </div>
-        )}
+            onClick={() => toggleExpand(task.id)}
+          >
+            {isExpanded ? (
+              <ChevronDown className="w-4 h-4" />
+            ) : (
+              <ChevronRight className="w-4 h-4" />
+            )}
+          </button>
 
-        {/* Priority */}
-        <PriorityDropdown
-          priority={task.priority}
-          onChange={(priority) => onUpdate(task.id, { priority })}
-        />
-
-        {/* Due date */}
-        {task.due_date && (
-          <span className="text-xs text-base-content/60 whitespace-nowrap">
-            {formatDate(task.due_date)}
-          </span>
-        )}
-
-        {/* Assignee */}
-        {assignee && (
-          <Avatar
-            src={assignee.avatar_url}
-            name={assignee.display_name || assignee.email}
-            size="sm"
+          {/* Status indicator */}
+          <StatusDropdown
+            status={task.status}
+            onChange={(status) => onUpdate(task.id, { status })}
           />
-        )}
 
-        {/* Child count indicator */}
-        {hasChildren && (
-          <span className="badge badge-ghost badge-sm">
-            {children!.length}
-          </span>
-        )}
+          {/* Title — click to expand/collapse if has children */}
+          <button
+            onClick={() => {
+              if (hasChildren) {
+                toggleExpand(task.id);
+              } else if (onOpenTask) {
+                onOpenTask(task.id);
+              }
+            }}
+            className="flex-1 min-w-0 truncate font-medium hover:text-primary hover:underline text-left"
+          >
+            {task.title}
+          </button>
 
-        </div>{/* end content wrapper */}
+          {/* Labels */}
+          {task.labels && task.labels.length > 0 && (
+            <div className="flex gap-1">
+              {task.labels.slice(0, 2).map((label) => (
+                <span key={label} className="badge badge-sm badge-outline">
+                  {label}
+                </span>
+              ))}
+              {task.labels.length > 2 && (
+                <span className="badge badge-sm badge-ghost">
+                  +{task.labels.length - 2}
+                </span>
+              )}
+            </div>
+          )}
+
+          {/* Priority */}
+          <PriorityDropdown
+            priority={task.priority}
+            onChange={(priority) => onUpdate(task.id, { priority })}
+          />
+
+          {/* Pending review */}
+          {task.review_status === "pending" && <PendingReviewBadge count={1} />}
+
+          {/* Due date */}
+          {task.due_date && (
+            <span className="text-xs text-base-content/60 whitespace-nowrap">
+              {formatDate(task.due_date)}
+            </span>
+          )}
+
+          {/* Assignee */}
+          {assignee && (
+            <Avatar
+              src={assignee.avatar_url}
+              name={assignee.display_name || assignee.email}
+              size="sm"
+            />
+          )}
+
+          {/* Child count indicator */}
+          {hasChildren && (
+            <span className="badge badge-ghost badge-sm">
+              {children!.length}
+            </span>
+          )}
+        </div>
+        {/* end content wrapper */}
 
         {/* Actions dropdown */}
         <div className="dropdown dropdown-end opacity-0 group-hover:opacity-100 transition-opacity">
-          <div tabIndex={0} role="button" className="btn btn-ghost btn-xs btn-square">
+          <div
+            tabIndex={0}
+            role="button"
+            className="btn btn-ghost btn-xs btn-square"
+          >
             <MoreHorizontal className="w-4 h-4" />
           </div>
-          <ul tabIndex={0} className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-44 border border-base-200">
+          <ul
+            tabIndex={0}
+            className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200"
+          >
             <li>
-              <a onClick={() => onOpenTask ? onOpenTask(task.id) : undefined}>
+              <a onClick={() => (onOpenTask ? onOpenTask(task.id) : undefined)}>
                 <ExternalLink className="w-4 h-4" /> Open
               </a>
             </li>
@@ -395,18 +526,25 @@ function StatusDropdown({
 
   return (
     <div className="dropdown">
-      <div tabIndex={0} role="button" className="btn btn-ghost btn-xs btn-square">
+      <div
+        tabIndex={0}
+        role="button"
+        className="btn btn-ghost btn-xs btn-square"
+      >
         <Circle
           className={cn(
             "w-4 h-4",
             status === "todo" && "text-base-content/40",
             status === "in_progress" && "text-info fill-info",
             status === "done" && "text-success fill-success",
-            status === "blocked" && "text-error fill-error"
+            status === "blocked" && "text-error fill-error",
           )}
         />
       </div>
-      <ul tabIndex={0} className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100 rounded-box w-32 border border-base-200">
+      <ul
+        tabIndex={0}
+        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-32 border border-base-200"
+      >
         {statuses.map((s) => (
           <li key={s}>
             <a
@@ -419,7 +557,7 @@ function StatusDropdown({
                   s === "todo" && "text-base-content/40",
                   s === "in_progress" && "text-info fill-info",
                   s === "done" && "text-success fill-success",
-                  s === "blocked" && "text-error fill-error"
+                  s === "blocked" && "text-error fill-error",
                 )}
               />
               {statusLabel(s)}
@@ -449,7 +587,10 @@ function PriorityDropdown({
           {priority}
         </Badge>
       </div>
-      <ul tabIndex={0} className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100 rounded-box w-28 border border-base-200">
+      <ul
+        tabIndex={0}
+        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-28 border border-base-200"
+      >
         {priorities.map((p) => (
           <li key={p}>
             <a
@@ -502,7 +643,8 @@ function CreateTaskButton({
   if (!isOpen) {
     return (
       <Button size="sm" onClick={() => setIsOpen(true)}>
-        <Plus className="w-4 h-4 mr-1" /> {parentId ? "Add Subtask" : "Add Task"}
+        <Plus className="w-4 h-4 mr-1" />{" "}
+        {parentId ? "Add Subtask" : "Add Task"}
       </Button>
     );
   }
@@ -533,7 +675,14 @@ function CreateTaskButton({
       >
         Create
       </Button>
-      <Button variant="ghost" size="sm" onClick={() => { setTitle(""); setIsOpen(false); }}>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => {
+          setTitle("");
+          setIsOpen(false);
+        }}
+      >
         Cancel
       </Button>
     </div>

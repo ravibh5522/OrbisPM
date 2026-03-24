@@ -1,0 +1,31 @@
+[Unit]
+Description=OrbisPM Auto-Deploy Daemon
+Documentation=https://github.com/ravibh5522/Project
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=ravi
+WorkingDirectory=/home/ravi/Project
+
+# Run in daemon mode — deploys immediately on start, then polls every 60s for new commits
+ExecStart=/home/ravi/Project/scripts/auto-deploy.sh --daemon 60
+
+Restart=on-failure
+RestartSec=30s
+
+# Docker builds can take several minutes — allow enough time
+TimeoutStartSec=600s
+# Give containers time to stop cleanly on shutdown
+TimeoutStopSec=120s
+KillMode=process
+
+# Log to journald (view with: journalctl -u orbispm-autodeploy -f)
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=orbispm-deploy
+
+[Install]
+WantedBy=multi-user.target

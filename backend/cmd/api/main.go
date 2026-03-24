@@ -1,11 +1,11 @@
 // @title OrbisPM API
 // @version 1.0
 // @description OrbisPM — AI-native project management platform API.
-// @termsOfService https://orbispm.dev/terms
+// @termsOfService https://orbisom.live/terms
 //
 // @contact.name OrbisPM Support
-// @contact.url https://orbispm.dev/support
-// @contact.email support@orbispm.dev
+// @contact.url https://orbisom.live/support
+// @contact.email support@orbispm.in
 //
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
@@ -87,6 +87,7 @@ import (
 	_ "github.com/orbispm/orbispm/docs"
 
 	"github.com/orbispm/orbispm/internal/auth"
+	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/config"
 	"github.com/orbispm/orbispm/internal/email"
 	"github.com/orbispm/orbispm/internal/eventbus"
@@ -122,9 +123,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse database url")
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	poolCfg.MaxConns = 50
+	poolCfg.MinConns = 5
 	poolCfg.MaxConnLifetime = 30 * time.Minute
+	poolCfg.MaxConnIdleTime = 5 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
@@ -151,6 +153,13 @@ func main() {
 		log.Info().Msg("connected to Redis")
 	}
 
+	// --- Cache Manager (Redis-backed task cache) ---
+	var cacheManager *cache.Manager
+	if cfg.CacheEnabled {
+		cacheManager = cache.NewManager(rdb)
+		log.Info().Msg("Redis cache manager enabled")
+	}
+
 	// --- Zitadel Auth Client (gRPC + OIDC) ---
 	zitadelClient, err := auth.NewZitadelClient(ctx, cfg.ZitadelIssuer, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, cfg.ZitadelClientID)
 	if err != nil {
@@ -160,7 +169,7 @@ func main() {
 
 	// --- MinIO Storage Client (best-effort) ---
 	var storageClient *storage.Client
-	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOUseSSL)
+	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to init MinIO storage (continuing without file storage)")
 	} else {
@@ -237,6 +246,12 @@ func main() {
 	projectTeamRepo := repository.NewProjectTeamRepo(pool)
 	changeReqRepo := repository.NewChangeRequestRepo(pool)
 
+	// --- Repositories (Announcements) ---
+	announcementRepo := repository.NewAnnouncementRepo(pool)
+
+	// --- Repositories (Analytics) ---
+	analyticsRepo := repository.NewAnalyticsRepo(pool)
+
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
@@ -257,22 +272,36 @@ func main() {
 	apikeySvc := service.NewAPIKeyService(apikeyRepo, txm)
 	importSvc := service.NewImportService(importJobRepo, taskRepo, txm)
 	billingSvc := service.NewBillingService(planRepo, subRepo, txm)
-	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, txm)
+	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, projectMemberRepo, orgMemberRepo, txm)
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
+
+	// --- Services (Announcements) ---
+	announcementSvc := service.NewAnnouncementService(announcementRepo, orgMemberRepo, txm, workerSrv, publisher)
+
+	// --- Services (Analytics) ---
+	analyticsSvc := service.NewAnalyticsService(analyticsRepo, taskRepo, projectRepo, orgMemberRepo, txm, workerSrv)
 
 	// --- Services (RBAC / Review) ---
 	permSvc := service.NewPermissionService(permRepo, roleRepo, orgRepo, txm)
 	permResolver := service.NewPermissionResolver(orgMemberRepo, teamMemberRepo, projectMemberRepo, projectTeamRepo, roleRepo, orgRepo)
-	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, txm, workerSrv, publisher)
-	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, txm, workerSrv, publisher)
+	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, teamMemberRepo, taskRepo, txm, workerSrv, publisher)
+	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, projectRepo, txm, workerSrv, publisher)
 
 	// Inject review deps into task service + project service
 	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
+	taskSvc.SetCache(cacheManager)
+	taskSvc.SetMembershipRepo(projectMemberRepo)
 	projectSvc.SetProjectTeamRepo(projectTeamRepo)
+	projectSvc.SetTaskRepo(taskRepo)
+	projectSvc.SetTeamMemberRepo(teamMemberRepo)
+	projectSvc.SetRoleRepo(roleRepo)
+	teamSvc.SetProjectDeps(projectTeamRepo, projectMemberRepo, taskRepo)
+	teamSvc.SetRoleRepo(roleRepo)
+	orgSvc.SetRoleRepo(roleRepo)
 
 	// --- Handlers (existing) ---
-	orgHandler := handler.NewOrgHandler(orgSvc)
+	orgHandler := handler.NewOrgHandler(orgSvc, zitadelClient)
 	teamHandler := handler.NewTeamHandler(teamSvc, dashboardSvc)
 	projectHandler := handler.NewProjectHandler(projectSvc, dashboardSvc)
 	taskHandler := handler.NewTaskHandler(taskSvc)
@@ -283,8 +312,24 @@ func main() {
 	notifHandler := handler.NewNotificationHandler(notifSvc)
 	healthHandler := handler.NewHealthHandler(pool, rdb)
 
+	// Inject permission resolver into handlers
+	permResolver.SetPermRepo(permRepo)
+	permResolver.SetCache(cacheManager)
+	projectHandler.SetPermResolver(permResolver)
+	teamHandler.SetPermResolver(permResolver)
+
+	// --- Email service config (used by auth handler and worker) ---
+	emailServiceURL := os.Getenv("EMAIL_SERVICE_URL")
+	if emailServiceURL == "" {
+		emailServiceURL = "http://email-service:8050"
+	}
+	emailServiceAPIKey := os.Getenv("EMAIL_SERVICE_API_KEY")
+	if emailServiceAPIKey == "" {
+		emailServiceAPIKey = "email-service-dev-key"
+	}
+
 	// --- Handlers (new) ---
-	authHandler := handler.NewAuthHandler(zitadelClient, pool)
+	authHandler := handler.NewAuthHandler(zitadelClient, pool, emailServiceURL, emailServiceAPIKey, cfg.FrontendURL)
 	// Backfill public.users cache from Zitadel so member/project queries show names/emails
 	go authHandler.BackfillUserProfiles(ctx)
 
@@ -312,6 +357,15 @@ func main() {
 	contactRepo := repository.NewContactRepo(pool)
 	contactHandler := handler.NewContactHandler(contactRepo)
 
+	// --- Handlers (Announcements) ---
+	announcementHandler := handler.NewAnnouncementHandler(announcementSvc)
+
+	// --- Handlers (Analytics) ---
+	analyticsHandler := handler.NewAnalyticsHandler(analyticsSvc)
+
+	// --- Handlers (Email Templates) ---
+	emailTemplateHandler := handler.NewEmailTemplateHandler()
+
 	// --- Handlers (RBAC / Review) ---
 	permHandler := handler.NewPermissionHandler(permSvc)
 	projectTeamHandler := handler.NewProjectTeamHandler(projectTeamSvc)
@@ -334,11 +388,12 @@ func main() {
 	r := chi.NewRouter()
 
 	// Global middleware
-	corsHandler := middleware.NewCORSHandler(cfg.FrontendURL)
+	corsHandler := middleware.NewCORSHandler(cfg.AllowedOrigins)
 	r.Use(corsHandler.Handler)
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recovery)
+	r.Use(middleware.Compress)
 	r.Use(rateLimiter.Handler)
 	r.Use(middleware.Metrics)
 	r.Use(middleware.CacheControl)
@@ -407,6 +462,11 @@ func main() {
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireOrgMember(pool))
 
+					// Permission check shorthand
+					prm := func(scope, paramName, resource, action string) func(http.Handler) http.Handler {
+						return middleware.PermissionResolverMiddleware(permResolver, scope, paramName, resource, action)
+					}
+
 					r.Get("/me", orgHandler.GetMyMembership)
 					r.Get("/members", orgHandler.ListMembers)
 
@@ -414,7 +474,24 @@ func main() {
 					r.Mount("/permissions", permHandler.CombinedRoutes(pool))
 
 					// Teams
-					r.Mount("/teams", teamHandler.Routes())
+					r.Route("/teams", func(r chi.Router) {
+						r.With(prm("org", "", "teams", "create")).Post("/", teamHandler.Create)
+						r.With(prm("org", "", "teams", "read")).Get("/", teamHandler.List)
+
+						r.Route("/{teamId}", func(r chi.Router) {
+							r.With(prm("team", "teamId", "team", "read")).Get("/", teamHandler.Get)
+							r.With(prm("team", "teamId", "team", "update")).Patch("/", teamHandler.Update)
+							r.With(prm("team", "teamId", "team", "delete")).Delete("/", teamHandler.Delete)
+							r.With(prm("team", "teamId", "team", "read")).Get("/dashboard", teamHandler.Dashboard)
+							r.With(prm("team", "teamId", "team", "read")).Get("/my-permissions", teamHandler.GetMyPermissions)
+							r.With(prm("team", "teamId", "team", "read")).Mount("/analytics", analyticsHandler.TeamAnalyticsRoutes())
+							r.With(prm("team", "teamId", "team", "update")).Put("/manager", teamHandler.SetManager)
+							r.With(prm("team", "teamId", "team", "read")).Get("/members", teamHandler.ListMembers)
+							r.With(prm("team", "teamId", "members", "manage")).Post("/members", teamHandler.AddMember)
+							r.With(prm("team", "teamId", "members", "manage")).Patch("/members/{userId}", teamHandler.UpdateMemberRole)
+							r.With(prm("team", "teamId", "members", "manage")).Delete("/members/{userId}", teamHandler.RemoveMember)
+						})
+					})
 
 					// Activity
 					r.Mount("/activity", activityHandler.Routes())
@@ -424,6 +501,9 @@ func main() {
 
 					// Dashboard
 					r.Mount("/dashboard", dashboardHandler.Routes())
+
+					// Analytics
+					r.Mount("/analytics", analyticsHandler.Routes())
 
 					// Notification Preferences
 					r.Mount("/notification-preferences", notifPrefHandler.Routes())
@@ -435,6 +515,24 @@ func main() {
 
 					// Org-level WebSocket (replaces SSE + per-project WS)
 					r.Get("/ws", wsHandler.ServeWS)
+
+					// Announcements
+					r.Route("/announcements", func(r chi.Router) {
+						r.With(prm("org", "", "announcements", "create")).Post("/", announcementHandler.Create)
+						r.With(prm("org", "", "announcements", "read")).Get("/", announcementHandler.List)
+						r.With(prm("org", "", "announcements", "read")).Get("/unread-count", announcementHandler.UnreadCount)
+						r.Route("/{announcementId}", func(r chi.Router) {
+							r.With(prm("org", "", "announcements", "read")).Get("/", announcementHandler.Get)
+							r.With(prm("org", "", "announcements", "update")).Patch("/", announcementHandler.Update)
+							r.With(prm("org", "", "announcements", "delete")).Delete("/", announcementHandler.Delete)
+							r.Post("/read", announcementHandler.MarkRead)
+						})
+					})
+
+					// Email templates (proxy to email service)
+					r.Route("/email-templates", func(r chi.Router) {
+						r.With(prm("org", "", "settings", "read")).Mount("/", emailTemplateHandler.Routes())
+					})
 
 					// Change request review actions (org-level)
 					r.Mount("/change-requests", changeReqHandler.ReviewRoutes())
@@ -454,17 +552,23 @@ func main() {
 
 					// Projects
 					r.Route("/projects", func(r chi.Router) {
-						r.Post("/", projectHandler.Create)
-						r.Get("/", projectHandler.List)
+						r.With(prm("org", "", "projects", "create")).Post("/", projectHandler.Create)
+						r.With(prm("org", "", "projects", "read")).Get("/", projectHandler.List)
 
 						r.Route("/{projectId}", func(r chi.Router) {
-							r.Get("/", projectHandler.Get)
-							r.Patch("/", projectHandler.Update)
-							r.Delete("/", projectHandler.Delete)
-							r.Get("/members", projectHandler.ListMembers)
-							r.Post("/members", projectHandler.AddMember)
-							r.Delete("/members/{userId}", projectHandler.RemoveMember)
-							r.Get("/dashboard", projectHandler.Dashboard)
+							r.With(prm("project", "projectId", "project", "read")).Get("/", projectHandler.Get)
+							r.With(prm("project", "projectId", "project", "update")).Patch("/", projectHandler.Update)
+							r.With(prm("project", "projectId", "project", "delete")).Delete("/", projectHandler.Delete)
+							r.With(prm("project", "projectId", "project", "read")).Get("/members", projectHandler.ListMembers)
+							r.With(prm("project", "projectId", "members", "manage")).Post("/members", projectHandler.AddMember)
+							r.With(prm("project", "projectId", "members", "manage")).Patch("/members/{userId}", projectHandler.UpdateMemberRole)
+							r.With(prm("project", "projectId", "members", "manage")).Delete("/members/{userId}", projectHandler.RemoveMember)
+							r.With(prm("project", "projectId", "project", "read")).Get("/members/{userId}/preview", projectHandler.PreviewRemoveMember)
+							r.With(prm("project", "projectId", "project", "read")).Get("/dashboard", projectHandler.Dashboard)
+							r.With(prm("project", "projectId", "project", "read")).Get("/my-permissions", projectHandler.GetMyPermissions)
+
+							// Project analytics
+							r.With(prm("project", "projectId", "project", "read")).Mount("/analytics", analyticsHandler.ProjectAnalyticsRoutes())
 
 							// Project teams (multi-team)
 							r.Mount("/teams", projectTeamHandler.Routes())
@@ -477,22 +581,22 @@ func main() {
 
 							// Tasks
 							r.Route("/tasks", func(r chi.Router) {
-								r.Post("/", taskHandler.Create)
-								r.Get("/", taskHandler.List)
-								r.Get("/tree", taskHandler.ListTree)               // project-level tree (must be before /{taskId})
-								r.Get("/export", taskHandler.Export)               // CSV export (must be before /{taskId})
-								r.Get("/calendar.ics", taskHandler.CalendarExport) // iCal export (must be before /{taskId})
-								r.Post("/bulk", taskHandler.BulkUpdate)            // must be before /{taskId}
-								r.Patch("/reorder", taskHandler.Reorder)           // must be before /{taskId}
+								r.With(prm("project", "projectId", "tasks", "create")).Post("/", taskHandler.Create)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/", taskHandler.List)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/tree", taskHandler.ListTree)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/export", taskHandler.Export)
+								r.With(prm("project", "projectId", "tasks", "read")).Get("/calendar.ics", taskHandler.CalendarExport)
+								r.With(prm("project", "projectId", "tasks", "update")).Post("/bulk", taskHandler.BulkUpdate)
+								r.With(prm("project", "projectId", "tasks", "update")).Patch("/reorder", taskHandler.Reorder)
 
 								r.Route("/{taskId}", func(r chi.Router) {
-									r.Get("/", taskHandler.Get)
-									r.Patch("/", taskHandler.Update)
-									r.Delete("/", taskHandler.Delete)
-									r.Get("/tree", taskHandler.GetTree)
-									r.Post("/submit-review", taskHandler.SubmitForReview)
-									r.Post("/complete", taskHandler.MarkComplete)
-									r.Post("/duplicate", taskHandler.Duplicate)
+									r.With(prm("project", "projectId", "tasks", "read")).Get("/", taskHandler.Get)
+									r.With(prm("project", "projectId", "tasks", "update")).Patch("/", taskHandler.Update)
+									r.With(prm("project", "projectId", "tasks", "delete")).Delete("/", taskHandler.Delete)
+									r.With(prm("project", "projectId", "tasks", "read")).Get("/tree", taskHandler.GetTree)
+									r.With(prm("project", "projectId", "tasks", "update")).Post("/submit-review", taskHandler.SubmitForReview)
+									r.With(prm("project", "projectId", "tasks", "update")).Post("/complete", taskHandler.MarkComplete)
+									r.With(prm("project", "projectId", "tasks", "create")).Post("/duplicate", taskHandler.Duplicate)
 
 									// Task sub-resources
 									r.Mount("/checklists", checklistHandler.Routes())
@@ -526,9 +630,15 @@ func main() {
 		Enabled:  cfg.SMTPEnabled,
 	})
 	workerHandlers := &worker.Handlers{
-		Pool:        pool,
-		EmailSender: emailSender,
-		FrontendURL: cfg.FrontendURL,
+		Pool:               pool,
+		EmailSender:        emailSender,
+		FrontendURL:        cfg.FrontendURL,
+		Cache:              cacheManager,
+		TxManager:          txm,
+		MeiliURL:           cfg.MeiliURL,
+		MeiliMasterKey:     cfg.MeiliMasterKey,
+		EmailServiceURL:    emailServiceURL,
+		EmailServiceAPIKey: emailServiceAPIKey,
 	}
 	workerMux := asynq.NewServeMux()
 	workerHandlers.RegisterAll(workerMux)

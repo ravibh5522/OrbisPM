@@ -42,7 +42,16 @@ def load_dotenv(path=None):
                 os.environ[key] = value
 
 
-load_dotenv()
+_env_arg = sys.argv[1] if len(sys.argv) > 1 else None
+if _env_arg:
+    load_dotenv(_env_arg)
+else:
+    # Try .env.local first, then .env
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if os.path.isfile(os.path.join(_root, ".env.local")):
+        load_dotenv(os.path.join(_root, ".env.local"))
+    else:
+        load_dotenv()
 
 ZITADEL_DOMAIN = os.environ.get("ZITADEL_EXTERNAL_DOMAIN", "localhost")
 ZITADEL_PORT = os.environ.get("ZITADEL_MAPPED_PORT", "8081")
@@ -61,6 +70,15 @@ REDIRECT_URI = f"{FRONTEND_URL}/auth/callback"
 
 # Use a real browser User-Agent (Zitadel fingerprints UA and rejects mismatches)
 BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+# Full browser headers — Zitadel fingerprints the entire header set
+BROWSER_HEADERS = [
+    ("User-Agent", BROWSER_UA),
+    ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
+    ("Accept-Language", "en-US,en;q=0.9"),
+    ("Accept-Encoding", "identity"),
+    ("Connection", "keep-alive"),
+    ("Upgrade-Insecure-Requests", "1"),
+]
 
 # Override cookie policy to send Secure cookies over HTTP (for local dev)
 _cookie_policy = http_cookiejar.DefaultCookiePolicy()
@@ -88,13 +106,13 @@ opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(cookiejar),
     RewriteHTTPSRedirectHandler(),
 )
-opener.addheaders = [("User-Agent", BROWSER_UA)]
+opener.addheaders = BROWSER_HEADERS
 
 no_redirect_opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(cookiejar),
     NoRedirectHandler(),
 )
-no_redirect_opener.addheaders = [("User-Agent", BROWSER_UA)]
+no_redirect_opener.addheaders = BROWSER_HEADERS
 
 def api_call(method, path, data=None, token=None, content_type="application/json"):
     url = f"{ZITADEL_URL}{path}"
@@ -146,10 +164,14 @@ def get_init_pat_from_logs():
     import subprocess
     print("Trying to extract init PAT from Zitadel container logs...")
     try:
-        result = subprocess.run(
-            ["docker", "logs", "orbispm-zitadel-api-1"],
-            capture_output=True, text=True, timeout=10
-        )
+        # Try common container name patterns
+        for container_name in ["orbispm-zitadel-1", "orbispm-zitadel-api-1", "zitadel"]:
+            result = subprocess.run(
+                ["docker", "logs", container_name],
+                capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0 and result.stdout:
+                break
         combined = result.stdout + result.stderr
 
         # The PAT appears as a raw token after the 03_default_instance migration.
@@ -528,13 +550,30 @@ def main():
         sys.exit(1)
     time.sleep(5)  # Extra delay for Zitadel to finish projection setup
 
+    # Strategy 0: use existing ZITADEL_SERVICE_TOKEN from env if it already works
+    existing_token = os.environ.get("ZITADEL_SERVICE_TOKEN", "")
+    init_pat = None
+    machine_user_id = None
+    if existing_token:
+        print("Testing existing ZITADEL_SERVICE_TOKEN from env...")
+        test = api_call("POST", "/management/v1/users/_search", {
+            "queries": [{"userNameQuery": {"userName": "backend-service", "method": "TEXT_QUERY_METHOD_EQUALS"}}]
+        }, existing_token)
+        if test is not None:
+            print("  Existing token is valid!")
+            init_pat = existing_token
+            machine_user_id = test["result"][0]["id"] if test.get("result") else None
+        else:
+            print("  Existing token invalid, will try to get a new one...")
+
     # Strategy 1: get the init-generated machine user PAT from Docker logs.
     # Zitadel creates this PAT for ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE
     # and the token value appears in startup logs.
     # If we get it, use it directly as the service token (skip admin OIDC flow).
-    init_pat = get_init_pat_from_logs()
+    if not init_pat:
+        init_pat = get_init_pat_from_logs()
 
-    if init_pat:
+    if init_pat and init_pat != existing_token:
         print("Using machine user PAT from init logs as service token...")
         # Verify it works against the management API
         test = api_call("POST", "/management/v1/users/_search", {
@@ -607,7 +646,13 @@ def main():
     print()
 
     # Update .env file with Zitadel tokens
-    env_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env")
+    _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    if _env_arg and os.path.isfile(_env_arg):
+        env_path = _env_arg
+    elif os.path.isfile(os.path.join(_root, ".env.local")):
+        env_path = os.path.join(_root, ".env.local")
+    else:
+        env_path = os.path.join(_root, ".env")
     if os.path.isfile(env_path):
         with open(env_path, "r") as f:
             content = f.read()

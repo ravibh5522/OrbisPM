@@ -59,6 +59,12 @@ const BUILT_IN_PERMISSIONS: Record<string, Record<string, OrgRole[]>> = {
     read: ["owner", "admin"],
     manage: ["owner", "admin"],
   },
+  announcements: {
+    create: ["owner", "admin"],
+    read: ["owner", "admin", "member", "viewer"],
+    update: ["owner", "admin"],
+    delete: ["owner", "admin"],
+  },
 };
 
 function hasBuiltInPermission(role: OrgRole, resource: string, action: string): boolean {

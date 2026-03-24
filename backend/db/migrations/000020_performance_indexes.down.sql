@@ -1,0 +1,12 @@
+DROP INDEX IF EXISTS idx_project_members_project;
+DROP INDEX IF EXISTS idx_project_members_user;
+DROP INDEX IF EXISTS idx_project_members_source_team;
+DROP INDEX IF EXISTS idx_team_members_team;
+DROP INDEX IF EXISTS idx_team_members_user;
+DROP INDEX IF EXISTS idx_org_members_org_user;
+DROP INDEX IF EXISTS idx_org_members_user;
+DROP INDEX IF EXISTS idx_project_teams_project;
+DROP INDEX IF EXISTS idx_project_teams_team;
+DROP INDEX IF EXISTS idx_announcement_reads_user;
+DROP INDEX IF EXISTS idx_task_dependencies_depends_on;
+DROP INDEX IF EXISTS idx_task_watchers_user;

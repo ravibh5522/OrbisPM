@@ -1,20 +1,20 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "next/navigation";
-import { useAuthStore } from "@/stores/auth-store";
+import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { PageHeader, Card, Badge, LoadingPage, EmptyState } from "@/components/ui/shared";
-import { priorityColor, statusLabel, formatRelative, formatDate } from "@/lib/utils";
-import {
-  ListTodo,
-  Clock,
-  AlertTriangle,
-  CheckCircle,
-  Circle,
-  Loader2,
-} from "lucide-react";
+import { formatDate, formatRelative, priorityColor, statusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { Task, TaskStatus } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
+import {
+    AlertTriangle,
+    CheckCircle,
+    Circle,
+    Clock,
+    ListTodo,
+    Loader2,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
 
 export default function MyTasksPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -28,7 +28,22 @@ export default function MyTasksPage() {
     enabled: !!orgId,
   });
 
-  if (isLoading) return <LoadingPage />;
+  if (isLoading) return (
+    <div className="animate-pulse">
+      <div className="h-8 bg-base-300 rounded w-36 mb-2" />
+      <div className="h-4 bg-base-300 rounded w-52 mb-6" />
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-20 bg-base-200 rounded-lg border border-base-200" />
+        ))}
+      </div>
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-40 bg-base-200 rounded-xl border border-base-200" />
+        ))}
+      </div>
+    </div>
+  );
 
   const tasks = myTasks?.data || [];
   const total = myTasks?.total || 0;

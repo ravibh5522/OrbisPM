@@ -1,30 +1,179 @@
 # ============================================================
-# OrbisPM — Main Docker Compose
+# OrbisPM — Single Docker Compose
 # ============================================================
-# All configuration comes from .env (auto-loaded by Compose).
 #
-# External services (configured in .env):
-#   - PostgreSQL  → 35.207.238.251:9000
-#   - Redis       → 35.207.238.251:9001
-#   - MinIO       → external HTTPS endpoint
+# Local dev  : docker compose --env-file .env.local --profile local up -d
+# Production : docker compose --env-file .env.production up -d
 #
-# Local services:
-#   - docker-compose.zitadel.yml   → Zitadel v4 (API + Login + Proxy)
+# Profiles:
+#   local — postgres, redis, minio, zitadel, mailpit (local Docker infra).
+#            Skip in production; remote cloud services used instead.
 #
-# Horizontal scaling:
-#   Set API_REPLICAS=N in .env to run N API instances.
-#   Kong automatically load-balances via Docker DNS.
+# Ports exposed:
+#   8000  Kong  (API / WS / NocoDB / mail UI all route through here)
+#   3000  Frontend
+#   9000  MinIO local only — browser needs direct access for presigned URLs
 # ============================================================
-
-# include:
-#   - docker-compose.zitadel.yaml
 
 services:
+  # ══════════════════════════════════════════════════════════
+  # LOCAL INFRASTRUCTURE  (profile: local)
+  # ══════════════════════════════════════════════════════════
+
+  postgres:
+    profiles: [local]
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+      POSTGRES_DB: ${POSTGRES_DB:-orbispmdev}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-orbispmdev}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    profiles: [local, prod]
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    profiles: [local]
+    image: minio/minio:latest
+    restart: unless-stopped
+    ports:
+      - "9000:9000" # browser needs direct access for presigned URL downloads
+    expose:
+      - "9001" # console — internal only
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+    volumes:
+      - miniodata:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  zitadel:
+    profiles: [local, prod]
+    image: ghcr.io/zitadel/zitadel:v4.12.1
+    restart: unless-stopped
+    user: "0"
+    command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-MasterkeyNeedsToHave32Characters}" --config /zitadel-config.yaml
+    ports:
+      - "8081:8080" # always bind 8081; in prod Coolify proxies 443→8081
+    environment:
+      ZITADEL_PORT: 8080
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN:-localhost}
+      ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNAL_PORT:-8081}
+      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNAL_SECURE:-false}"
+      ZITADEL_TLS_ENABLED: "false"
+
+      ZITADEL_DATABASE_POSTGRES_HOST: ${POSTGRES_HOST:-postgres}
+      ZITADEL_DATABASE_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      ZITADEL_DATABASE_POSTGRES_DATABASE: ${POSTGRES_DB:-orbispmdev}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: ${POSTGRES_USER:-postgres}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${POSTGRES_PASSWORD:-}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_USER_USERNAME: ${POSTGRES_USER:-postgres}
+      ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${POSTGRES_PASSWORD:-}
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: disable
+      ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 20
+      ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 5
+
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USER:-admin@orbispm.local}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "${ZITADEL_ADMIN_PASSWORD:-Admin123!}"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_ORG_NAME:-OrbisPM}
+      ZITADEL_FIRSTINSTANCE_INSTANCENAME: ${ZITADEL_INSTANCE_NAME:-OrbisPM}
+      ZITADEL_FIRSTINSTANCE_DEFAULTLANGUAGE: en
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: ${ZITADEL_MACHINE_USERNAME:-backend-service}
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: "${ZITADEL_MACHINE_NAME:-OrbisPM Backend}"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "${ZITADEL_MACHINE_PAT_EXPIRY:-2030-01-01T00:00:00Z}"
+
+      ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: "true"
+      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "redis:6379"
+      ZITADEL_CACHES_INSTANCE_CONNECTOR: redis
+      ZITADEL_CACHES_MILESTONES_CONNECTOR: redis
+      ZITADEL_CACHES_ORGANIZATION_CONNECTOR: redis
+
+      ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: "false"
+      ZITADEL_LOG_LEVEL: ${ZITADEL_LOG_LEVEL:-info}
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./zitadel-config.yaml:/zitadel-config.yaml:ro
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 10s
+      timeout: 30s
+      retries: 30
+      start_period: 120s
+
+  nats:
+    profiles: [local, prod]
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    command: ["--jetstream", "--store_dir=/data", "-m", "8222"]
+    expose:
+      - "4222"
+      - "8222"
+    volumes:
+      - natsdata:/data
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  mailpit:
+    profiles: [local]
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    environment:
+      MP_WEBROOT: /mail/
+    expose:
+      - "8025" # web UI — access via Kong at /mail
+      - "1025" # SMTP — internal only
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:8025/api/v1/info"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ══════════════════════════════════════════════════════════
+  # APPLICATION SERVICES  (always on)
+  # ══════════════════════════════════════════════════════════
+
   meilisearch:
     image: getmeili/meilisearch:v1.7
     restart: unless-stopped
-    ports:
-      - "${MEILI_PORT:-7700}:7700"
+    expose:
+      - "7700"
     environment:
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterkey-for-dev-only}
       MEILI_NO_ANALYTICS: "true"
@@ -36,59 +185,59 @@ services:
       timeout: 5s
       retries: 5
 
-  mailpit:
-    image: axllent/mailpit:latest
-    restart: unless-stopped
-    ports:
-      - "${MAILPIT_UI_PORT:-8025}:8025"
-      - "${MAILPIT_SMTP_PORT:-1025}:1025"
-    healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8025/api/v1/info"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   api:
     build:
-      context: ./backend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     deploy:
       replicas: ${API_REPLICAS:-1}
     expose:
-      - "${API_PORT:-8080}"
+      - "8080"
     environment:
       PORT: ${API_PORT:-8080}
       ENV: ${APP_ENV:-development}
-      DATABASE_URL: "postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}?sslmode=${POSTGRES_SSL_MODE:-disable}"
-      REDIS_URL: "redis://${REDIS_USERNAME:-default}:${REDIS_PASSWORD}@${REDIS_HOST}:${REDIS_PORT}/0"
-      ZITADEL_DOMAIN: "${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
-      ZITADEL_ISSUER: "https://${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
-      ZITADEL_INTERNAL_URL: "https://${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
-      ZITADEL_SERVICE_TOKEN: ${ZITADEL_SERVICE_TOKEN:-}
-      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      ZITADEL_DOMAIN: ${ZITADEL_DOMAIN:?ZITADEL_DOMAIN required}
+      ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
+      ZITADEL_INTERNAL_URL: ${ZITADEL_INTERNAL_URL:-http://zitadel:8080}
+      ZITADEL_SERVICE_TOKEN: ${ZITADEL_SERVICE_TOKEN:?ZITADEL_SERVICE_TOKEN required}
+      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:?ZITADEL_CLIENT_ID required}
       JWT_SECRET: ${JWT_SECRET:-orbispm-dev-jwt-secret-32chars!!}
-      MINIO_ENDPOINT: "${MINIO_ENDPOINT}"
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY required}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
       MINIO_BUCKET: ${MINIO_BUCKET:-orbispm}
-      MINIO_USE_SSL: "${MINIO_USE_SSL:-true}"
-      MINIO_PUBLIC_URL: "${MINIO_SERVER_URL}/${MINIO_BUCKET:-orbispm}"
-      MEILI_URL: "http://${MEILI_HOST:-meilisearch}:7700"
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL required}
+      MEILI_URL: "http://meilisearch:7700"
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterkey-for-dev-only}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       BASE_URL: ${BASE_URL:-http://localhost:8000}
       SMTP_HOST: ${SMTP_HOST:-mailpit}
-      SMTP_PORT: "${SMTP_PORT:-1025}"
+      SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_FROM: ${SMTP_FROM:-noreply@orbispm.local}
-      SMTP_ENABLED: "${SMTP_ENABLED:-true}"
-      RATE_LIMIT_PER_MINUTE: "${RATE_LIMIT_PER_MINUTE:-100}"
-      RATE_LIMIT_BURST: "${RATE_LIMIT_BURST:-20}"
+      SMTP_ENABLED: ${SMTP_ENABLED:-true}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-100}
+      RATE_LIMIT_BURST: ${RATE_LIMIT_BURST:-20}
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
-      STRIPE_ENABLED: "${STRIPE_ENABLED:-false}"
-    extra_hosts:
-      - "zitadel.animastuff.fun:35.207.238.251"
+      STRIPE_ENABLED: ${STRIPE_ENABLED:-false}
+    depends_on:
+      meilisearch:
+        condition: service_healthy
+      # optional — only present when running with --profile local
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      zitadel:
+        condition: service_healthy
+        required: false
 
   kong:
     build:
@@ -107,23 +256,101 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
-    extra_hosts:
-      - "zitadel.animastuff.fun:35.207.238.251"
     depends_on:
       - api
-      - nocodb
+      - messaging-service
 
-  nocodb:
-    image: nocodb/nocodb:latest
+  email-service:
+    build:
+      context: ./email-service
+      dockerfile: Dockerfile
     restart: unless-stopped
-    ports:
-      - "${NOCODB_PORT:-8082}:8080"
+    expose:
+      - "8050"
     environment:
-      NC_DB: "pg://${POSTGRES_HOST}:${POSTGRES_PORT}?u=${POSTGRES_USER}&p=${POSTGRES_PASSWORD}&d=${POSTGRES_DB}"
-      NC_PUBLIC_URL: "${BASE_URL:-http://localhost:8000}/db"
-      NC_DISABLE_TELE: "true"
-    volumes:
-      - nocodbdata:/usr/app/data
+      EMAIL_SMTP_HOST: ${SMTP_HOST:-mailpit}
+      EMAIL_SMTP_PORT: ${SMTP_PORT:-1025}
+      EMAIL_SMTP_USER: ${SMTP_USER:-}
+      EMAIL_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_SMTP_FROM: ${SMTP_FROM:-noreply@orbispm.local}
+      EMAIL_SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      EMAIL_REDIS_URL: ${EMAIL_REDIS_URL:?EMAIL_REDIS_URL required}
+      EMAIL_API_KEY: ${EMAIL_SERVICE_API_KEY:-email-service-dev-key}
+      EMAIL_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8050/api/v1/email/health')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+
+  email-worker:
+    build:
+      context: ./email-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    command: ["arq", "app.services.queue.WorkerSettings"]
+    environment:
+      EMAIL_SMTP_HOST: ${SMTP_HOST:-mailpit}
+      EMAIL_SMTP_PORT: ${SMTP_PORT:-1025}
+      EMAIL_SMTP_USER: ${SMTP_USER:-}
+      EMAIL_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_SMTP_FROM: ${SMTP_FROM:-noreply@orbispm.local}
+      EMAIL_SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      EMAIL_REDIS_URL: ${EMAIL_REDIS_URL:?EMAIL_REDIS_URL required}
+      EMAIL_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      redis:
+        condition: service_healthy
+        required: false
+
+  messaging-service:
+    build:
+      context: ./messaging-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8082"
+    environment:
+      PORT: ${MSG_PORT:-8082}
+      ENV: ${APP_ENV:-development}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispmdev}?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
+      ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
+      ZITADEL_INTERNAL_URL: ${ZITADEL_INTERNAL_URL:-http://zitadel:8080}
+      ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:?ZITADEL_CLIENT_ID required}
+      ZITADEL_SERVICE_TOKEN: ${ZITADEL_SERVICE_TOKEN:-}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY required}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-orbispm-chat}
+      MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
+      MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL required}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    depends_on:
+      nats:
+        condition: service_healthy
+        required: false
+      postgres:
+        condition: service_healthy
+        required: false
+      redis:
+        condition: service_healthy
+        required: false
+      zitadel:
+        condition: service_healthy
+        required: false
 
   frontend:
     build:
@@ -132,16 +359,16 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
-        NEXT_PUBLIC_ZITADEL_ISSUER: "https://${ZITADEL_EXTERNAL_DOMAIN:-zitadel.animastuff.fun}"
-        NEXT_PUBLIC_ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:-}
         NEXT_PUBLIC_APP_NAME: ${APP_NAME:-OrbisPM}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
-      - api
       - kong
 
 volumes:
+  pgdata:
+  redisdata:
+  miniodata:
   meilidata:
-  nocodbdata:
+  natsdata:
