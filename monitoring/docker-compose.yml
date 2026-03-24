@@ -1,0 +1,49 @@
+# =======================================================
+# OrbisPM Monitoring Stack — Master Docker Compose
+# =======================================================
+# Includes all monitoring microservices
+# Local:      docker compose --env-file ../.env.local -f monitoring/docker-compose.yml up -d
+# Production: docker compose --env-file ../.env.production -f monitoring/docker-compose.yml up -d
+# Env source: root-level .env.local / .env.production (no monitoring/.env)
+
+name: orbispm-monitoring
+
+include:
+  - path: collector-service/docker-compose.yml
+  - path: tracing-service/docker-compose.yml
+  - path: log-aggregator-service/docker-compose.yml
+  - path: dashboard-service/docker-compose.yml
+  - path: alerting-service/docker-compose.yml
+  - path: analytics-db/docker-compose.yml
+  - path: super-admin-service/docker-compose.yml
+
+networks:
+  # Internal monitoring network
+  monitoring:
+    driver: bridge
+
+  # Connect to main OrbisPM network (external)
+  orbispm_default:
+    external: false
+
+volumes:
+  # Prometheus data
+  prometheus-data:
+
+  # Tempo trace storage
+  tempo-data:
+
+  # Loki log storage
+  loki-data:
+
+  # Grafana dashboards and settings
+  grafana-data:
+
+  # ClickHouse analytics data
+  clickhouse-data:
+
+  # ClickHouse logs
+  clickhouse-logs:
+
+  # Alertmanager data
+  alertmanager-data:

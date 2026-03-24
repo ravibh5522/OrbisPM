@@ -1,0 +1,154 @@
+# =======================================================
+# OpenTelemetry Collector Configuration
+# =======================================================
+# Receives metrics, traces, logs from OrbisPM services
+# Exports to Prometheus, Tempo, Loki
+
+receivers:
+  # OTLP receiver for OTel SDK instrumented services
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "0.0.0.0:4317"
+      http:
+        endpoint: "0.0.0.0:4318"
+
+  # Prometheus scrape receiver (for pulling metrics)
+  prometheus:
+    config:
+      scrape_configs:
+        - job_name: 'otel-collector'
+          scrape_interval: 15s
+          static_configs:
+            - targets: ['localhost:8888']
+
+processors:
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 400
+    spike_limit_mib: 100
+
+  # Batch processor for efficient export
+  batch:
+    timeout: 200ms
+    send_batch_size: 8192
+    send_batch_max_size: 16384
+
+  # Add environment labels
+  attributes/env:
+    actions:
+      - key: environment
+        value: ${env:ENV}
+        action: upsert
+      - key: service.namespace
+        value: orbispm
+        action: upsert
+
+  # Filter out health check and metrics endpoint traces
+  filter/healthcheck:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["http.target"] == "/health"'
+        - 'attributes["http.target"] == "/ready"'
+        - 'attributes["http.target"] == "/metrics"'
+        - 'attributes["http.route"] == "/health"'
+        - 'attributes["http.route"] == "/ready"'
+
+  # Tail-based sampling for traces
+  # Keep all errors, slow requests, and sample 10% of the rest
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 100
+    expected_new_traces_per_sec: 100
+    policies:
+      # Always keep error traces
+      - name: error-traces
+        type: status_code
+        status_code:
+          status_codes: [ERROR]
+      # Always keep slow traces (>1s)
+      - name: slow-traces
+        type: latency
+        latency:
+          threshold_ms: 1000
+      # Sample 10% of remaining traces
+      - name: probabilistic
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+  # Resource detection
+  resourcedetection:
+    detectors: [env, docker]
+    timeout: 5s
+    override: false
+
+exporters:
+  # Export metrics to Prometheus
+  prometheusremotewrite:
+    endpoint: "http://prometheus:9090/api/v1/write"
+    resource_to_telemetry_conversion:
+      enabled: true
+
+  # Export traces to Tempo
+  otlp/tempo:
+    endpoint: "tempo:4317"
+    tls:
+      insecure: true
+
+  # Export logs to Loki
+  loki:
+    endpoint: "http://loki:3100/loki/api/v1/push"
+    default_labels_enabled:
+      exporter: false
+      job: true
+
+  # Debug exporter for troubleshooting
+  debug:
+    verbosity: basic
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: "0.0.0.0:13133"
+
+  # Performance profiler
+  pprof:
+    endpoint: "0.0.0.0:1777"
+
+  # zPages for debugging
+  zpages:
+    endpoint: "0.0.0.0:55679"
+
+service:
+  extensions: [health_check, pprof, zpages]
+
+  pipelines:
+    # Metrics pipeline
+    metrics:
+      receivers: [otlp, prometheus]
+      processors: [memory_limiter, resourcedetection, attributes/env, batch]
+      exporters: [prometheusremotewrite]
+
+    # Traces pipeline
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, attributes/env, filter/healthcheck, tail_sampling, batch]
+      exporters: [otlp/tempo]
+
+    # Logs pipeline
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, attributes/env, batch]
+      exporters: [loki]
+
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: "0.0.0.0:8888"

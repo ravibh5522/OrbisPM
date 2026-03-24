@@ -1,0 +1,167 @@
+# =======================================================
+# Collector Service — OTel Collector + Prometheus + Exporters
+# =======================================================
+
+services:
+  # OpenTelemetry Collector — Central telemetry gateway
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: orbispm-otel-collector
+    command: ["--config=/etc/otelcol-contrib/otel-config.yml"]
+    volumes:
+      - ./otel-collector:/etc/otelcol-contrib:ro
+    environment:
+      - ENV=${ENV:-development}
+    # Internal only — no host port mapping
+    expose:
+      - "4317" # gRPC
+      - "4318" # HTTP
+      - "8888" # Metrics
+    networks:
+      - monitoring
+      - orbispm_default
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/otelcol-contrib",
+          "validate",
+          "--config=/etc/otelcol-contrib/config.yaml",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus — Metrics storage and alerting
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: orbispm-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${PROMETHEUS_RETENTION_TIME:-15d}
+      - --storage.tsdb.retention.size=${PROMETHEUS_RETENTION_SIZE:-10GB}
+      - --web.enable-lifecycle
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
+    volumes:
+      - ./prometheus:/etc/prometheus:ro
+      - prometheus-data:/prometheus
+    # Internal only — no host port mapping
+    expose:
+      - "9090"
+    networks:
+      - monitoring
+      - orbispm_default
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - otel-collector
+
+  # PostgreSQL Exporter — DB metrics for Prometheus
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: orbispm-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=disable"
+    # Internal only — no host port mapping
+    expose:
+      - "9187"
+    networks:
+      - monitoring
+      - orbispm_default
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    restart: unless-stopped
+
+  # Redis Exporter — Redis metrics for Prometheus
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.58.0
+    container_name: orbispm-redis-exporter
+    environment:
+      REDIS_ADDR: "redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD:-}"
+    # Internal only — no host port mapping
+    expose:
+      - "9121"
+    networks:
+      - monitoring
+      - orbispm_default
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    restart: unless-stopped
+
+  # Node Exporter — Host system metrics
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: orbispm-node-exporter
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    # Internal only — no host port mapping
+    expose:
+      - "9100"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 64m
+    restart: unless-stopped
+
+  # cAdvisor — Container metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
+    container_name: orbispm-cadvisor
+    privileged: true
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    # Internal only — no host port mapping
+    expose:
+      - "8080"
+    networks:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    external: false
+    name: orbispm-monitoring_monitoring
+  orbispm_default:
+    external: false
+
+volumes:
+  prometheus-data:
+    external: false
+    name: orbispm-monitoring_prometheus-data

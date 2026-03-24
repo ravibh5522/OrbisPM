@@ -1,0 +1,16 @@
+# =======================================================
+# Grafana Dashboards Provisioning
+# =======================================================
+
+apiVersion: 1
+
+providers:
+  - name: OrbisPM
+    folder: OrbisPM
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: true

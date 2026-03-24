@@ -1,0 +1,140 @@
+# =======================================================
+# Prometheus Recording Rules
+# =======================================================
+# Pre-computed metrics for faster dashboard queries
+
+groups:
+  - name: orbispm_recording
+    interval: 15s
+    rules:
+      # HTTP Request Rate (5m average)
+      - record: job:http_requests:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job)
+
+      # HTTP Request Rate by status code
+      - record: job:http_requests_by_status:rate5m
+        expr: sum(rate(http_requests_total[5m])) by (job, status_code)
+
+      # HTTP Error Rate (5xx responses)
+      - record: job:http_errors:rate5m
+        expr: sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (job)
+
+      # HTTP Error Percentage
+      - record: job:http_error_percentage:rate5m
+        expr: |
+          (job:http_errors:rate5m / job:http_requests:rate5m) * 100
+
+      # Request Latency P50
+      - record: job:http_request_duration:p50
+        expr: histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+      # Request Latency P90
+      - record: job:http_request_duration:p90
+        expr: histogram_quantile(0.90, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+      # Request Latency P95
+      - record: job:http_request_duration:p95
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+      # Request Latency P99
+      - record: job:http_request_duration:p99
+        expr: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, job))
+
+      # Average Request Duration
+      - record: job:http_request_duration:avg
+        expr: |
+          sum(rate(http_request_duration_seconds_sum[5m])) by (job)
+          /
+          sum(rate(http_request_duration_seconds_count[5m])) by (job)
+
+      # In-flight Requests
+      - record: job:http_requests_in_flight:current
+        expr: sum(http_requests_in_flight) by (job)
+
+  - name: database_recording
+    interval: 30s
+    rules:
+      # Active DB Connections
+      - record: db:pool_active_connections:current
+        expr: db_pool_active_connections
+
+      # Idle DB Connections
+      - record: db:pool_idle_connections:current
+        expr: db_pool_idle_connections
+
+      # DB Connection Pool Utilization
+      - record: db:pool_utilization:percentage
+        expr: |
+          (db_pool_active_connections / db_pool_max_connections) * 100
+
+      # DB Query Duration P95
+      - record: db:query_duration:p95
+        expr: histogram_quantile(0.95, sum(rate(db_query_duration_seconds_bucket[5m])) by (le))
+
+  - name: redis_recording
+    interval: 15s
+    rules:
+      # Redis Memory Usage
+      - record: redis:memory_used:bytes
+        expr: redis_memory_used_bytes
+
+      # Redis Memory Utilization
+      - record: redis:memory_utilization:percentage
+        expr: |
+          (redis_memory_used_bytes / redis_memory_max_bytes) * 100
+
+      # Redis Operations Rate
+      - record: redis:commands:rate5m
+        expr: sum(rate(redis_commands_total[5m]))
+
+      # Redis Hit Rate
+      - record: redis:hit_rate:percentage
+        expr: |
+          (rate(redis_keyspace_hits_total[5m]) / 
+          (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m]))) * 100
+
+  - name: system_recording
+    interval: 15s
+    rules:
+      # CPU Usage
+      - record: node:cpu_utilization:percentage
+        expr: |
+          (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100
+
+      # Memory Usage
+      - record: node:memory_utilization:percentage
+        expr: |
+          ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100
+
+      # Disk Usage
+      - record: node:disk_utilization:percentage
+        expr: |
+          ((node_filesystem_size_bytes - node_filesystem_avail_bytes) / node_filesystem_size_bytes) * 100
+
+      # Network Receive Rate
+      - record: node:network_receive:rate5m
+        expr: sum(rate(node_network_receive_bytes_total[5m]))
+
+      # Network Transmit Rate
+      - record: node:network_transmit:rate5m
+        expr: sum(rate(node_network_transmit_bytes_total[5m]))
+
+  - name: container_recording
+    interval: 15s
+    rules:
+      # Container CPU Usage
+      - record: container:cpu_usage:percentage
+        expr: |
+          sum(rate(container_cpu_usage_seconds_total{name=~"orbispm.*"}[5m])) by (name) * 100
+
+      # Container Memory Usage
+      - record: container:memory_usage:bytes
+        expr: container_memory_usage_bytes{name=~"orbispm.*"}
+
+      # Container Network Receive
+      - record: container:network_receive:rate5m
+        expr: sum(rate(container_network_receive_bytes_total{name=~"orbispm.*"}[5m])) by (name)
+
+      # Container Network Transmit
+      - record: container:network_transmit:rate5m
+        expr: sum(rate(container_network_transmit_bytes_total{name=~"orbispm.*"}[5m])) by (name)

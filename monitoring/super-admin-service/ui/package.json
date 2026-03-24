@@ -1,0 +1,35 @@
+{
+  "name": "orbispm-super-admin-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --port 3004",
+    "build": "next build",
+    "start": "next start --port 3004",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "next": "15.3.2",
+    "next": "15.5.12",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.2.1",
+    "lucide-react": "^0.513.0",
+    "@tanstack/react-query": "^5.28.4",
+    "recharts": "^2.12.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "@types/node": "^22.15.17",
+    "@types/react": "^19.1.4",
+    "@types/react-dom": "^19.1.5",
+    "eslint": "^9.27.0",
+    "eslint-config-next": "15.3.2",
+    "eslint-config-next": "15.5.12",
+    "@tailwindcss/postcss": "^4.1.6",
+    "tailwindcss": "^4.1.6",
+    "postcss": "^8.5.3",
+    "daisyui": "^5.0.35"
+  }
+}

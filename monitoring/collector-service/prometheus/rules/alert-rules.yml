@@ -1,0 +1,248 @@
+# =======================================================
+# Prometheus Alert Rules
+# =======================================================
+# Infrastructure and service alerts
+
+groups:
+  - name: service_health
+    rules:
+      # Service is down
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service {{ $labels.job }} is down"
+          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 1 minute."
+
+      # High error rate (>5% of requests returning 5xx)
+      - alert: HighErrorRate
+        expr: (job:http_errors:rate5m / job:http_requests:rate5m) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High error rate in {{ $labels.job }}"
+          description: "{{ $labels.job }} is returning >5% errors. Current: {{ $value | printf \"%.2f\" }}%"
+
+      # High latency P95 (>2 seconds)
+      - alert: HighLatencyP95
+        expr: job:http_request_duration:p95 > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High P95 latency in {{ $labels.job }}"
+          description: "P95 latency is above 2 seconds. Current: {{ $value | printf \"%.2f\" }}s"
+
+      # High latency P99 (>5 seconds)
+      - alert: HighLatencyP99
+        expr: job:http_request_duration:p99 > 5
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical P99 latency in {{ $labels.job }}"
+          description: "P99 latency is above 5 seconds. Current: {{ $value | printf \"%.2f\" }}s"
+
+      # No requests received (potential routing issue)
+      - alert: NoRequestsReceived
+        expr: sum(rate(http_requests_total[5m])) by (job) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "No requests to {{ $labels.job }}"
+          description: "{{ $labels.job }} has not received any requests for 5 minutes."
+
+  - name: system_health
+    rules:
+      # High CPU usage
+      - alert: HighCPU
+        expr: node:cpu_utilization:percentage > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU utilization is above 85%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Critical CPU usage
+      - alert: CriticalCPU
+        expr: node:cpu_utilization:percentage > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical CPU usage"
+          description: "CPU utilization is above 95%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # High memory usage
+      - alert: HighMemory
+        expr: node:memory_utilization:percentage > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage"
+          description: "Memory utilization is above 80%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Critical memory usage
+      - alert: CriticalMemory
+        expr: node:memory_utilization:percentage > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Critical memory usage"
+          description: "Memory utilization is above 95%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Disk space low
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes / node_filesystem_size_bytes) < 0.15
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk space low on {{ $labels.device }}"
+          description: "Available disk space is below 15%. Current: {{ $value | printf \"%.1f\" }}%"
+
+  - name: database_health
+    rules:
+      # Database connections high
+      - alert: DBConnectionsHigh
+        expr: db:pool_utilization:percentage > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Database connection pool nearly exhausted"
+          description: "DB connection pool utilization is above 90%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Database connections warning
+      - alert: DBConnectionsWarning
+        expr: db:pool_utilization:percentage > 75
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database connection pool utilization high"
+          description: "DB connection pool utilization is above 75%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Database query latency high
+      - alert: DBQueryLatencyHigh
+        expr: db:query_duration:p95 > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Database query latency high"
+          description: "P95 database query duration is above 1 second. Current: {{ $value | printf \"%.2f\" }}s"
+
+      # PostgreSQL exporter down
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter is down"
+          description: "Cannot scrape PostgreSQL metrics. Database may be unavailable."
+
+  - name: redis_health
+    rules:
+      # Redis memory high
+      - alert: RedisMemoryHigh
+        expr: redis:memory_utilization:percentage > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis memory usage high"
+          description: "Redis memory utilization is above 80%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Redis memory critical
+      - alert: RedisMemoryCritical
+        expr: redis:memory_utilization:percentage > 95
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis memory usage critical"
+          description: "Redis memory utilization is above 95%. Current: {{ $value | printf \"%.1f\" }}%"
+
+      # Redis exporter down
+      - alert: RedisExporterDown
+        expr: up{job="redis-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis exporter is down"
+          description: "Cannot scrape Redis metrics. Redis may be unavailable."
+
+      # Redis hit rate low
+      - alert: RedisHitRateLow
+        expr: redis:hit_rate:percentage < 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis cache hit rate low"
+          description: "Redis hit rate is below 50%. Current: {{ $value | printf \"%.1f\" }}%. Consider reviewing cache keys."
+
+  - name: container_health
+    rules:
+      # Container restarting
+      - alert: ContainerRestarting
+        expr: increase(container_start_time_seconds{name=~"orbispm.*"}[5m]) > 1
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is restarting"
+          description: "Container has restarted {{ $value | printf \"%.0f\" }} times in the last 5 minutes."
+
+      # Container high memory
+      - alert: ContainerHighMemory
+        expr: |
+          (container_memory_usage_bytes{name=~"orbispm.*"} / 
+          container_spec_memory_limit_bytes{name=~"orbispm.*"}) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} memory high"
+          description: "Container is using more than 85% of its memory limit."
+
+  - name: monitoring_health
+    rules:
+      # Dead man's switch - this alert should always fire
+      # If Alertmanager doesn't receive it, something is wrong
+      - alert: DeadMansSwitch
+        expr: vector(1)
+        labels:
+          severity: none
+        annotations:
+          summary: "Dead man's switch"
+          description: "This is a heartbeat alert. If you don't see this, Prometheus or Alertmanager is down."
+
+      # Prometheus config reload failed
+      - alert: PrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Prometheus config reload failed"
+          description: "Prometheus failed to reload its configuration."
+
+      # OTel Collector dropped data
+      - alert: OTelCollectorDroppedData
+        expr: rate(otelcol_processor_dropped_metric_points[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "OTel Collector dropping data"
+          description: "OTel Collector is dropping metric points. Check memory limits."
