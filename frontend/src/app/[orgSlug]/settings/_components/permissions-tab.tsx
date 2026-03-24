@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 /* ─── Team → Project Role Map ─── */
 
@@ -217,6 +218,7 @@ export default function PermissionsTab() {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setShowCreate(false);
       setError("");
+      toast.success("Role created");
     },
     onError: (err: Error) =>
       setError(err instanceof ApiError ? err.message : "Failed to create role"),
@@ -244,6 +246,7 @@ export default function PermissionsTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setDeleteTarget(null);
+      toast.success("Role deleted");
     },
   });
 
@@ -254,6 +257,7 @@ export default function PermissionsTab() {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setPermTarget(null);
       setError("");
+      toast.success("Permissions updated");
     },
     onError: (err: Error) =>
       setError(

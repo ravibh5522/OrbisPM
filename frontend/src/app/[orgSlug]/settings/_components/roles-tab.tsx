@@ -1,23 +1,54 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input, Textarea } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { Plus, Shield, Trash2, Pencil, Check, X, MoreHorizontal, Eye } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import {
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+} from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import type { CustomRole } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  Check,
+  Eye,
+  MoreHorizontal,
+  Pencil,
+  Plus,
+  Shield,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useCallback, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 const PERMISSION_CATEGORIES = [
-  { key: "projects", label: "Projects", actions: ["create", "read", "update", "delete", "manage_members"] },
-  { key: "tasks", label: "Tasks", actions: ["create", "read", "update", "delete", "assign", "review"] },
-  { key: "teams", label: "Teams", actions: ["create", "read", "update", "delete", "manage_members"] },
-  { key: "members", label: "Members", actions: ["invite", "read", "update_role", "remove"] },
+  {
+    key: "projects",
+    label: "Projects",
+    actions: ["create", "read", "update", "delete", "manage_members"],
+  },
+  {
+    key: "tasks",
+    label: "Tasks",
+    actions: ["create", "read", "update", "delete", "assign", "review"],
+  },
+  {
+    key: "teams",
+    label: "Teams",
+    actions: ["create", "read", "update", "delete", "manage_members"],
+  },
+  {
+    key: "members",
+    label: "Members",
+    actions: ["invite", "read", "update_role", "remove"],
+  },
   { key: "billing", label: "Billing", actions: ["read", "manage"] },
   { key: "settings", label: "Settings", actions: ["read", "update"] },
 ] as const;
@@ -38,7 +69,9 @@ function buildEmptyPermissions(): Permissions {
   return perms;
 }
 
-function normalizePermissions(raw: Record<string, unknown> | undefined): Permissions {
+function normalizePermissions(
+  raw: Record<string, unknown> | undefined,
+): Permissions {
   const result = buildEmptyPermissions();
   if (!raw) return result;
   for (const cat of PERMISSION_CATEGORIES) {
@@ -55,7 +88,9 @@ function normalizePermissions(raw: Record<string, unknown> | undefined): Permiss
 function countPermissions(perms: Permissions): number {
   let count = 0;
   for (const cat of Object.values(perms)) {
-    for (const val of Object.values(cat)) { if (val) count++; }
+    for (const val of Object.values(cat)) {
+      if (val) count++;
+    }
   }
   return count;
 }
@@ -71,8 +106,12 @@ export default function RolesTab() {
   const [deleteTarget, setDeleteTarget] = useState<CustomRole | null>(null);
   const [editTarget, setEditTarget] = useState<CustomRole | null>(null);
   const [viewTarget, setViewTarget] = useState<CustomRole | null>(null);
-  const [editPerms, setEditPerms] = useState<Permissions>(buildEmptyPermissions());
-  const [createPerms, setCreatePerms] = useState<Permissions>(buildEmptyPermissions());
+  const [editPerms, setEditPerms] = useState<Permissions>(
+    buildEmptyPermissions(),
+  );
+  const [createPerms, setCreatePerms] = useState<Permissions>(
+    buildEmptyPermissions(),
+  );
   const [error, setError] = useState("");
 
   const { data: roles, isLoading } = useQuery({
@@ -85,17 +124,25 @@ export default function RolesTab() {
   const editFormMethods = useForm<RoleForm>();
 
   const togglePerm = useCallback(
-    (setter: React.Dispatch<React.SetStateAction<Permissions>>, category: string, action: string) => {
+    (
+      setter: React.Dispatch<React.SetStateAction<Permissions>>,
+      category: string,
+      action: string,
+    ) => {
       setter((prev) => ({
         ...prev,
         [category]: { ...prev[category], [action]: !prev[category]?.[action] },
       }));
     },
-    []
+    [],
   );
 
   const toggleCategory = useCallback(
-    (setter: React.Dispatch<React.SetStateAction<Permissions>>, category: string, enable: boolean) => {
+    (
+      setter: React.Dispatch<React.SetStateAction<Permissions>>,
+      category: string,
+      enable: boolean,
+    ) => {
       setter((prev) => {
         const cat = PERMISSION_CATEGORIES.find((c) => c.key === category);
         if (!cat) return prev;
@@ -104,20 +151,25 @@ export default function RolesTab() {
         return { ...prev, [category]: actions };
       });
     },
-    []
+    [],
   );
 
   const createMutation = useMutation({
     mutationFn: (data: RoleForm) =>
-      api.customRoles.create(currentOrg!.id, { ...data, permissions: createPerms }),
+      api.customRoles.create(currentOrg!.id, {
+        ...data,
+        permissions: createPerms,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["custom-roles"] });
       setShowCreate(false);
       createFormMethods.reset();
       setCreatePerms(buildEmptyPermissions());
       setError("");
+      toast.success("Role created");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create role"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create role"),
   });
 
   const updateMutation = useMutation({
@@ -132,8 +184,10 @@ export default function RolesTab() {
       setEditTarget(null);
       editFormMethods.reset();
       setError("");
+      toast.success("Role updated");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to update role"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to update role"),
   });
 
   const deleteMutation = useMutation({
@@ -141,6 +195,7 @@ export default function RolesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["custom-roles"] });
       setDeleteTarget(null);
+      toast.success("Role deleted");
     },
   });
 
@@ -161,9 +216,17 @@ export default function RolesTab() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-base-content/60">
-          {roleList.length} custom role{roleList.length !== 1 ? "s" : ""} with granular permissions
+          {roleList.length} custom role{roleList.length !== 1 ? "s" : ""} with
+          granular permissions
         </p>
-        <Button size="sm" onClick={() => { setShowCreate(true); setError(""); setCreatePerms(buildEmptyPermissions()); }}>
+        <Button
+          size="sm"
+          onClick={() => {
+            setShowCreate(true);
+            setError("");
+            setCreatePerms(buildEmptyPermissions());
+          }}
+        >
           <Plus className="w-4 h-4" /> New Role
         </Button>
       </div>
@@ -173,7 +236,11 @@ export default function RolesTab() {
           icon={<Shield className="w-16 h-16" />}
           title="No custom roles"
           description="Create custom roles with granular permissions for your organization"
-          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Role</Button>}
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" /> Create Role
+            </Button>
+          }
         />
       ) : (
         <Card>
@@ -198,31 +265,71 @@ export default function RolesTab() {
                       <td>
                         <div className="flex items-center gap-2">
                           <Shield className="w-4 h-4 text-primary" />
-                          <span className="font-medium text-sm">{role.name}</span>
+                          <span className="font-medium text-sm">
+                            {role.name}
+                          </span>
                         </div>
                       </td>
                       <td>
-                        <span className="text-sm text-base-content/60 line-clamp-1 max-w-xs">{role.description || "—"}</span>
+                        <span className="text-sm text-base-content/60 line-clamp-1 max-w-xs">
+                          {role.description || "—"}
+                        </span>
                       </td>
                       <td>
                         <div className="flex items-center gap-2">
-                          <span className="text-sm font-mono">{count}/{total}</span>
-                          <progress className="progress progress-primary w-20" value={count} max={total} />
+                          <span className="text-sm font-mono">
+                            {count}/{total}
+                          </span>
+                          <progress
+                            className="progress progress-primary w-20"
+                            value={count}
+                            max={total}
+                          />
                         </div>
                       </td>
                       <td>
-                        <span className="text-sm text-base-content/60">{role.created_at ? formatDate(role.created_at) : "—"}</span>
+                        <span className="text-sm text-base-content/60">
+                          {role.created_at ? formatDate(role.created_at) : "—"}
+                        </span>
                       </td>
                       <td>
                         <div className="flex gap-1 justify-end">
                           <div className="dropdown dropdown-end dropdown-left">
-                            <div tabIndex={0} role="button" className="btn btn-ghost btn-xs btn-square">
+                            <div
+                              tabIndex={0}
+                              role="button"
+                              className="btn btn-ghost btn-xs btn-square"
+                            >
                               <MoreHorizontal className="w-4 h-4" />
                             </div>
-                            <ul tabIndex={0} className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200">
-                              <li><button onClick={() => setViewTarget(role)} className="text-sm"><Eye className="w-3.5 h-3.5" /> View</button></li>
-                              <li><button onClick={() => openEdit(role)} className="text-sm"><Pencil className="w-3.5 h-3.5" /> Edit</button></li>
-                              <li><button onClick={() => setDeleteTarget(role)} className="text-sm text-error"><Trash2 className="w-3.5 h-3.5" /> Delete</button></li>
+                            <ul
+                              tabIndex={0}
+                              className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100 rounded-box w-40 border border-base-200"
+                            >
+                              <li>
+                                <button
+                                  onClick={() => setViewTarget(role)}
+                                  className="text-sm"
+                                >
+                                  <Eye className="w-3.5 h-3.5" /> View
+                                </button>
+                              </li>
+                              <li>
+                                <button
+                                  onClick={() => openEdit(role)}
+                                  className="text-sm"
+                                >
+                                  <Pencil className="w-3.5 h-3.5" /> Edit
+                                </button>
+                              </li>
+                              <li>
+                                <button
+                                  onClick={() => setDeleteTarget(role)}
+                                  className="text-sm text-error"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                                </button>
+                              </li>
                             </ul>
                           </div>
                         </div>
@@ -237,37 +344,119 @@ export default function RolesTab() {
       )}
 
       {/* Create Role Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); createFormMethods.reset(); setError(""); }} title="New Custom Role" className="max-w-2xl">
-        {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
-        <form onSubmit={createFormMethods.handleSubmit((data) => createMutation.mutate(data))} className="space-y-5">
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          createFormMethods.reset();
+          setError("");
+        }}
+        title="New Custom Role"
+        className="max-w-2xl"
+      >
+        {error && (
+          <div className="alert alert-error mb-4 text-sm">
+            <span>{error}</span>
+          </div>
+        )}
+        <form
+          onSubmit={createFormMethods.handleSubmit((data) =>
+            createMutation.mutate(data),
+          )}
+          className="space-y-5"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Input label="Role Name" placeholder="Project Manager"
-              {...createFormMethods.register("name", { required: "Name is required" })}
+            <Input
+              label="Role Name"
+              placeholder="Project Manager"
+              {...createFormMethods.register("name", {
+                required: "Name is required",
+              })}
               error={createFormMethods.formState.errors.name?.message}
             />
-            <Textarea label="Description" placeholder="Optional description" {...createFormMethods.register("description")} />
+            <Textarea
+              label="Description"
+              placeholder="Optional description"
+              {...createFormMethods.register("description")}
+            />
           </div>
-          <PermissionEditor perms={createPerms} onChange={setCreatePerms} togglePerm={togglePerm} toggleCategory={toggleCategory} />
+          <PermissionEditor
+            perms={createPerms}
+            onChange={setCreatePerms}
+            togglePerm={togglePerm}
+            toggleCategory={toggleCategory}
+          />
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); createFormMethods.reset(); }}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create Role</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowCreate(false);
+                createFormMethods.reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create Role
+            </Button>
           </div>
         </form>
       </Modal>
 
       {/* Edit Role Modal */}
       {editTarget && (
-        <Modal open onClose={() => { setEditTarget(null); editFormMethods.reset(); setError(""); }} title={`Edit: ${editTarget.name}`} className="max-w-2xl">
-          {error && <div className="alert alert-error mb-4 text-sm"><span>{error}</span></div>}
-          <form onSubmit={editFormMethods.handleSubmit((data) => updateMutation.mutate(data))} className="space-y-5">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Input label="Role Name" {...editFormMethods.register("name", { required: "Name is required" })} error={editFormMethods.formState.errors.name?.message} />
-              <Textarea label="Description" {...editFormMethods.register("description")} />
+        <Modal
+          open
+          onClose={() => {
+            setEditTarget(null);
+            editFormMethods.reset();
+            setError("");
+          }}
+          title={`Edit: ${editTarget.name}`}
+          className="max-w-2xl"
+        >
+          {error && (
+            <div className="alert alert-error mb-4 text-sm">
+              <span>{error}</span>
             </div>
-            <PermissionEditor perms={editPerms} onChange={setEditPerms} togglePerm={togglePerm} toggleCategory={toggleCategory} />
+          )}
+          <form
+            onSubmit={editFormMethods.handleSubmit((data) =>
+              updateMutation.mutate(data),
+            )}
+            className="space-y-5"
+          >
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Input
+                label="Role Name"
+                {...editFormMethods.register("name", {
+                  required: "Name is required",
+                })}
+                error={editFormMethods.formState.errors.name?.message}
+              />
+              <Textarea
+                label="Description"
+                {...editFormMethods.register("description")}
+              />
+            </div>
+            <PermissionEditor
+              perms={editPerms}
+              onChange={setEditPerms}
+              togglePerm={togglePerm}
+              toggleCategory={toggleCategory}
+            />
             <div className="modal-action">
-              <Button type="button" variant="ghost" onClick={() => setEditTarget(null)}>Cancel</Button>
-              <Button type="submit" loading={updateMutation.isPending}>Save Changes</Button>
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => setEditTarget(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" loading={updateMutation.isPending}>
+                Save Changes
+              </Button>
             </div>
           </form>
         </Modal>
@@ -275,12 +464,33 @@ export default function RolesTab() {
 
       {/* View Role Modal */}
       {viewTarget && (
-        <Modal open onClose={() => setViewTarget(null)} title={viewTarget.name} className="max-w-2xl">
-          {viewTarget.description && <p className="text-sm text-base-content/60 mb-4">{viewTarget.description}</p>}
-          <PermissionEditor perms={normalizePermissions(viewTarget.permissions)} readOnly />
+        <Modal
+          open
+          onClose={() => setViewTarget(null)}
+          title={viewTarget.name}
+          className="max-w-2xl"
+        >
+          {viewTarget.description && (
+            <p className="text-sm text-base-content/60 mb-4">
+              {viewTarget.description}
+            </p>
+          )}
+          <PermissionEditor
+            perms={normalizePermissions(viewTarget.permissions)}
+            readOnly
+          />
           <div className="modal-action">
-            <Button variant="ghost" onClick={() => setViewTarget(null)}>Close</Button>
-            <Button onClick={() => { setViewTarget(null); openEdit(viewTarget); }}><Pencil className="w-4 h-4" /> Edit</Button>
+            <Button variant="ghost" onClick={() => setViewTarget(null)}>
+              Close
+            </Button>
+            <Button
+              onClick={() => {
+                setViewTarget(null);
+                openEdit(viewTarget);
+              }}
+            >
+              <Pencil className="w-4 h-4" /> Edit
+            </Button>
           </div>
         </Modal>
       )}
@@ -310,15 +520,25 @@ function PermissionEditor({
 }: {
   perms: Permissions;
   onChange?: React.Dispatch<React.SetStateAction<Permissions>>;
-  togglePerm?: (setter: React.Dispatch<React.SetStateAction<Permissions>>, category: string, action: string) => void;
-  toggleCategory?: (setter: React.Dispatch<React.SetStateAction<Permissions>>, category: string, enable: boolean) => void;
+  togglePerm?: (
+    setter: React.Dispatch<React.SetStateAction<Permissions>>,
+    category: string,
+    action: string,
+  ) => void;
+  toggleCategory?: (
+    setter: React.Dispatch<React.SetStateAction<Permissions>>,
+    category: string,
+    enable: boolean,
+  ) => void;
   readOnly?: boolean;
 }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
         <h4 className="text-sm font-semibold">Permissions</h4>
-        <span className="text-xs text-base-content/50">{countPermissions(perms)} of {totalPermissions()} enabled</span>
+        <span className="text-xs text-base-content/50">
+          {countPermissions(perms)} of {totalPermissions()} enabled
+        </span>
       </div>
       <div className="border border-base-200 rounded-lg divide-y divide-base-200">
         {PERMISSION_CATEGORIES.map((cat) => {
@@ -330,11 +550,21 @@ function PermissionEditor({
             <div key={cat.key} className="p-3">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium capitalize">{cat.label}</span>
-                  <span className="badge badge-xs badge-ghost">{enabledCount}/{cat.actions.length}</span>
+                  <span className="text-sm font-medium capitalize">
+                    {cat.label}
+                  </span>
+                  <span className="badge badge-xs badge-ghost">
+                    {enabledCount}/{cat.actions.length}
+                  </span>
                 </div>
                 {!readOnly && onChange && toggleCategory && (
-                  <button type="button" className="btn btn-xs btn-ghost" onClick={() => toggleCategory(onChange, cat.key, !allEnabled)}>
+                  <button
+                    type="button"
+                    className="btn btn-xs btn-ghost"
+                    onClick={() =>
+                      toggleCategory(onChange, cat.key, !allEnabled)
+                    }
+                  >
                     {allEnabled ? "Revoke All" : "Grant All"}
                   </button>
                 )}
@@ -344,8 +574,15 @@ function PermissionEditor({
                   const enabled = !!catPerms[action];
                   if (readOnly) {
                     return (
-                      <span key={action} className={`badge badge-sm gap-1 ${enabled ? "badge-success" : "badge-ghost badge-outline opacity-40"}`}>
-                        {enabled ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      <span
+                        key={action}
+                        className={`badge badge-sm gap-1 ${enabled ? "badge-success" : "badge-ghost badge-outline opacity-40"}`}
+                      >
+                        {enabled ? (
+                          <Check className="w-3 h-3" />
+                        ) : (
+                          <X className="w-3 h-3" />
+                        )}
                         {action.replace("_", " ")}
                       </span>
                     );
@@ -354,12 +591,27 @@ function PermissionEditor({
                     <label
                       key={action}
                       className={`badge badge-sm gap-1 cursor-pointer select-none transition-colors ${
-                        enabled ? "badge-success" : "badge-ghost badge-outline hover:badge-success hover:badge-outline"
+                        enabled
+                          ? "badge-success"
+                          : "badge-ghost badge-outline hover:badge-success hover:badge-outline"
                       }`}
-                      onClick={() => onChange && togglePerm && togglePerm(onChange, cat.key, action)}
+                      onClick={() =>
+                        onChange &&
+                        togglePerm &&
+                        togglePerm(onChange, cat.key, action)
+                      }
                     >
-                      <input type="checkbox" checked={enabled} readOnly className="hidden" />
-                      {enabled ? <Check className="w-3 h-3" /> : <X className="w-3 h-3" />}
+                      <input
+                        type="checkbox"
+                        checked={enabled}
+                        readOnly
+                        className="hidden"
+                      />
+                      {enabled ? (
+                        <Check className="w-3 h-3" />
+                      ) : (
+                        <X className="w-3 h-3" />
+                      )}
                       {action.replace("_", " ")}
                     </label>
                   );

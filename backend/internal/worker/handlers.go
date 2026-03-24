@@ -48,8 +48,8 @@ func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, 
 	}
 
 	payload := map[string]any{
-		"to":      to,
-		"subject": subject,
+		"to":       to,
+		"subject":  subject,
 		"template": template,
 		"context": map[string]string{
 			"title":        title,
@@ -95,6 +95,9 @@ func (h *Handlers) RegisterAll(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeSearchDelete, h.HandleSearchDelete)
 	mux.HandleFunc(TypeWebhookDeliver, h.HandleWebhookDeliver)
 	mux.HandleFunc(TypeRecurringGenerate, h.HandleRecurringGenerate)
+	mux.HandleFunc(TypeAnalyticsSnapshot, h.HandleAnalyticsSnapshot)
+	mux.HandleFunc(TypeAnalyticsTransition, h.HandleAnalyticsTransition)
+	mux.HandleFunc(TypeGenerateReport, h.HandleGenerateReport)
 	if h.Cache != nil {
 		mux.HandleFunc(TypeDBFlushTask, h.HandleDBFlushTask)
 		mux.HandleFunc(TypeDBFlushProject, h.HandleDBFlushProject)
@@ -552,5 +555,180 @@ func (h *Handlers) HandleDBFlushProject(ctx context.Context, t *asynq.Task) erro
 	}
 
 	log.Debug().Str("project_id", p.ProjectID).Int("flushed", flushed).Int("total_dirty", len(dirtyIDs)).Msg("project flush completed")
+	return nil
+}
+
+// HandleAnalyticsSnapshot takes daily task-status snapshots for all projects in an org.
+func (h *Handlers) HandleAnalyticsSnapshot(ctx context.Context, t *asynq.Task) error {
+	var p AnalyticsSnapshotPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("unmarshal analytics snapshot payload: %w", err)
+	}
+
+	orgID, err := uuid.Parse(p.OrgID)
+	if err != nil {
+		return fmt.Errorf("parse org_id: %w", err)
+	}
+
+	ctx = tenant.SetOrgID(ctx, orgID)
+	analyticsRepo := repository.NewAnalyticsRepo(h.Pool)
+	projectRepo := repository.NewProjectRepo(h.Pool)
+
+	projects, err := projectRepo.ListByOrg(ctx, orgID, nil)
+	if err != nil {
+		return fmt.Errorf("list projects for snapshot: %w", err)
+	}
+
+	today := time.Now().Truncate(24 * time.Hour)
+
+	return h.TxManager.WithTx(ctx, func(tx pgx.Tx) error {
+		for _, proj := range projects {
+			statusMap, err := analyticsRepo.CountTasksByStatusForProject(ctx, proj.ID)
+			if err != nil {
+				log.Warn().Err(err).Str("project_id", proj.ID.String()).Msg("snapshot: failed to count tasks")
+				continue
+			}
+			totalCount := 0
+			for _, c := range statusMap {
+				totalCount += c
+			}
+			_, err = tx.Exec(ctx,
+				`INSERT INTO task_status_snapshots (org_id, project_id, snapshot_date, todo_count, in_progress_count, blocked_count, done_count, total_count)
+				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+				 ON CONFLICT (org_id, project_id, snapshot_date) DO UPDATE SET
+				   todo_count = EXCLUDED.todo_count, in_progress_count = EXCLUDED.in_progress_count,
+				   blocked_count = EXCLUDED.blocked_count, done_count = EXCLUDED.done_count, total_count = EXCLUDED.total_count`,
+				orgID, proj.ID, today, statusMap["todo"], statusMap["in_progress"], statusMap["blocked"], statusMap["done"], totalCount)
+			if err != nil {
+				log.Warn().Err(err).Str("project_id", proj.ID.String()).Msg("snapshot: failed to upsert")
+			}
+		}
+		return nil
+	})
+}
+
+// HandleAnalyticsTransition records a task state transition for analytics tracking.
+func (h *Handlers) HandleAnalyticsTransition(ctx context.Context, t *asynq.Task) error {
+	var p AnalyticsTransitionPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("unmarshal analytics transition payload: %w", err)
+	}
+
+	orgID, err := uuid.Parse(p.OrgID)
+	if err != nil {
+		return fmt.Errorf("parse org_id: %w", err)
+	}
+	taskID, err := uuid.Parse(p.TaskID)
+	if err != nil {
+		return fmt.Errorf("parse task_id: %w", err)
+	}
+	projectID, err := uuid.Parse(p.ProjectID)
+	if err != nil {
+		return fmt.Errorf("parse project_id: %w", err)
+	}
+	actorID, err := uuid.Parse(p.ActorID)
+	if err != nil {
+		return fmt.Errorf("parse actor_id: %w", err)
+	}
+
+	ctx = tenant.SetOrgID(ctx, orgID)
+
+	return h.TxManager.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := tx.Exec(ctx,
+			`INSERT INTO task_state_transitions (org_id, task_id, project_id, from_status, to_status, actor_id)
+			 VALUES ($1, $2, $3, $4, $5, $6)`,
+			orgID, taskID, projectID, p.FromStatus, p.ToStatus, actorID)
+		return err
+	})
+}
+
+// HandleGenerateReport processes a queued report generation task.
+// It collects analytics data for the requested scope and marks the report completed.
+func (h *Handlers) HandleGenerateReport(ctx context.Context, t *asynq.Task) error {
+	var p GenerateReportPayload
+	if err := json.Unmarshal(t.Payload(), &p); err != nil {
+		return fmt.Errorf("unmarshal generate report payload: %w", err)
+	}
+
+	reportID, err := uuid.Parse(p.ReportID)
+	if err != nil {
+		return fmt.Errorf("parse report_id: %w", err)
+	}
+	orgID, err := uuid.Parse(p.OrgID)
+	if err != nil {
+		return fmt.Errorf("parse org_id: %w", err)
+	}
+
+	ctx = tenant.SetOrgID(ctx, orgID)
+
+	// Mark as generating
+	_, err = h.Pool.Exec(ctx,
+		`UPDATE performance_reports SET status = 'generating' WHERE id = $1`, reportID)
+	if err != nil {
+		log.Warn().Err(err).Msg("generate report: failed to set generating status")
+	}
+
+	// Collect summary stats for the report
+	analyticsRepo := repository.NewAnalyticsRepo(h.Pool)
+
+	var reportData map[string]any
+	switch p.ScopeType {
+	case "project":
+		scopeID, parseErr := uuid.Parse(p.ScopeID)
+		if parseErr != nil {
+			return fmt.Errorf("parse scope_id: %w", parseErr)
+		}
+		statusMap, _ := analyticsRepo.CountTasksByStatusForProject(ctx, scopeID)
+		velocity, _ := analyticsRepo.GetVelocityTrend(ctx, scopeID, 30)
+		velocityData := make([]map[string]any, 0, len(velocity))
+		for _, v := range velocity {
+			velocityData = append(velocityData, map[string]any{
+				"date": v.Date, "completed": v.Completed, "created": v.Created,
+			})
+		}
+		reportData = map[string]any{
+			"scope_type":   "project",
+			"scope_id":     p.ScopeID,
+			"report_type":  p.ReportType,
+			"task_status":  statusMap,
+			"velocity":     velocityData,
+			"generated_at": time.Now().UTC().Format(time.RFC3339),
+		}
+	default: // org-level
+		statusMap, _ := analyticsRepo.CountTasksByStatusForOrg(ctx, orgID)
+		velocity, _ := analyticsRepo.GetOrgVelocityTrend(ctx, orgID, 30)
+		velocityData := make([]map[string]any, 0, len(velocity))
+		for _, v := range velocity {
+			velocityData = append(velocityData, map[string]any{
+				"date": v.Date, "completed": v.Completed, "created": v.Created,
+			})
+		}
+		reportData = map[string]any{
+			"scope_type":   "org",
+			"scope_id":     p.OrgID,
+			"report_type":  p.ReportType,
+			"task_status":  statusMap,
+			"velocity":     velocityData,
+			"generated_at": time.Now().UTC().Format(time.RFC3339),
+		}
+	}
+
+	reportJSON, err := json.Marshal(reportData)
+	if err != nil {
+		return fmt.Errorf("marshal report data: %w", err)
+	}
+
+	// Store report data in parameters column and mark completed
+	now := time.Now()
+	_, err = h.Pool.Exec(ctx,
+		`UPDATE performance_reports
+		 SET status = 'completed', generated_at = $2, expires_at = $3, parameters = $4
+		 WHERE id = $1`,
+		reportID, now, now.Add(30*24*time.Hour), string(reportJSON))
+	if err != nil {
+		return fmt.Errorf("update report completed: %w", err)
+	}
+
+	log.Info().Str("report_id", p.ReportID).Str("org_id", p.OrgID).Msg("report generation completed")
 	return nil
 }

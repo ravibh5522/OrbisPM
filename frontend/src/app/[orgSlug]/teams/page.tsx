@@ -3,17 +3,33 @@
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
-import { Avatar, Card, ConfirmDialog, EmptyState, PageHeader } from "@/components/ui/shared";
+import {
+  Avatar,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  PageHeader,
+} from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Role, Team, TeamMember } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, ChevronDown, Plus, Search, Trash2, UserPlus, Users, X } from "lucide-react";
+import {
+  BarChart3,
+  ChevronDown,
+  Plus,
+  Search,
+  Trash2,
+  UserPlus,
+  Users,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 interface TeamForm {
   name: string;
@@ -40,19 +56,30 @@ export default function TeamsPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
   const { data: teamsResponse, isLoading } = useQuery({
-    queryKey: ["teams", currentOrg?.id, debouncedSearch, page, sortBy, sortOrder],
-    queryFn: () => api.teams.list(currentOrg!.id, {
-      limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
-      search: debouncedSearch || undefined,
-      sort_by: sortBy,
-      sort_order: sortOrder,
-    }),
+    queryKey: [
+      "teams",
+      currentOrg?.id,
+      debouncedSearch,
+      page,
+      sortBy,
+      sortOrder,
+    ],
+    queryFn: () =>
+      api.teams.list(currentOrg!.id, {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      }),
     enabled: !!currentOrg,
   });
 
@@ -60,7 +87,12 @@ export default function TeamsPage() {
   const total = teamsResponse?.total || 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
-  const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<TeamForm>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors: formErrors },
+  } = useForm<TeamForm>();
 
   const createMutation = useMutation({
     mutationFn: (data: TeamForm) => api.teams.create(currentOrg!.id, data),
@@ -69,8 +101,10 @@ export default function TeamsPage() {
       setShowCreate(false);
       reset();
       setError("");
+      toast.success("Team created");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create team"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create team"),
   });
 
   const deleteMutation = useMutation({
@@ -78,6 +112,7 @@ export default function TeamsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["teams"] });
       setDeleteTarget(null);
+      toast.success("Team deleted");
     },
   });
 
@@ -93,15 +128,20 @@ export default function TeamsPage() {
 
   const SortButton = ({ col, label }: { col: string; label: string }) => (
     <button
-      className={cn("btn btn-xs btn-ghost gap-0.5", sortBy === col && "btn-active")}
+      className={cn(
+        "btn btn-xs btn-ghost gap-0.5",
+        sortBy === col && "btn-active",
+      )}
       onClick={() => handleSort(col)}
     >
       {label}
-      <ChevronDown className={cn(
-        "w-3 h-3 transition-transform",
-        sortBy === col ? "opacity-100" : "opacity-30",
-        sortBy === col && sortOrder === "asc" && "rotate-180",
-      )} />
+      <ChevronDown
+        className={cn(
+          "w-3 h-3 transition-transform",
+          sortBy === col ? "opacity-100" : "opacity-30",
+          sortBy === col && sortOrder === "asc" && "rotate-180",
+        )}
+      />
     </button>
   );
 
@@ -131,7 +171,10 @@ export default function TeamsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
-            <button className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle" onClick={() => setSearch("")}>
+            <button
+              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
+              onClick={() => setSearch("")}
+            >
               <X className="w-3 h-3" />
             </button>
           )}
@@ -144,37 +187,59 @@ export default function TeamsPage() {
         </div>
 
         <div className="flex-1" />
-        <span className="text-sm text-base-content/50">{total} team{total !== 1 ? "s" : ""}</span>
+        <span className="text-sm text-base-content/50">
+          {total} team{total !== 1 ? "s" : ""}
+        </span>
       </div>
 
       {/* Content */}
       {isLoading ? (
         <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="h-32 bg-base-200 rounded-xl border border-base-200" />
+            <div
+              key={i}
+              className="h-32 bg-base-200 rounded-xl border border-base-200"
+            />
           ))}
         </div>
       ) : teams.length === 0 ? (
         <EmptyState
           icon={<Users className="w-16 h-16" />}
           title={debouncedSearch ? "No matching teams" : "No teams yet"}
-          description={debouncedSearch ? "Try a different search term" : "Create your first team to organize members"}
-          action={
+          description={
             debouncedSearch
-              ? <Button variant="ghost" onClick={() => setSearch("")}>Clear search</Button>
-              : can("teams", "create") ? <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Team</Button> : undefined
+              ? "Try a different search term"
+              : "Create your first team to organize members"
+          }
+          action={
+            debouncedSearch ? (
+              <Button variant="ghost" onClick={() => setSearch("")}>
+                Clear search
+              </Button>
+            ) : can("teams", "create") ? (
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="w-4 h-4" /> Create Team
+              </Button>
+            ) : undefined
           }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {teams.map((team: Team) => (
             <Card key={team.id} compact>
-              <div className="cursor-pointer" onClick={() => setSelectedTeam(team)}>
+              <div
+                className="cursor-pointer"
+                onClick={() => setSelectedTeam(team)}
+              >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-lg truncate">{team.name}</h3>
+                    <h3 className="font-semibold text-lg truncate">
+                      {team.name}
+                    </h3>
                     {team.description && (
-                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">{team.description}</p>
+                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">
+                        {team.description}
+                      </p>
                     )}
                   </div>
                   <div className="flex gap-1 ml-2 shrink-0">
@@ -189,7 +254,10 @@ export default function TeamsPage() {
                     {can("teams", "delete") && (
                       <button
                         className="btn btn-ghost btn-xs btn-square"
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(team); }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteTarget(team);
+                        }}
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
@@ -218,22 +286,39 @@ export default function TeamsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
           <span className="text-sm text-base-content/60">
-            Showing {page * PAGE_SIZE + 1}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            Showing {page * PAGE_SIZE + 1}&ndash;
+            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <div className="join">
-            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(0)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page === 0}
+              onClick={() => setPage(0)}
+            >
               &laquo;
             </button>
-            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
               &lsaquo;
             </button>
             <button className="join-item btn btn-sm">
               Page {page + 1} of {totalPages}
             </button>
-            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
               &rsaquo;
             </button>
-            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage(totalPages - 1)}
+            >
               &raquo;
             </button>
           </div>
@@ -250,9 +335,24 @@ export default function TeamsPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); reset(); setError(""); }} title="New Team">
-        {error && <div className="alert alert-error mb-4"><span>{error}</span></div>}
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          reset();
+          setError("");
+        }}
+        title="New Team"
+      >
+        {error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
+          </div>
+        )}
+        <form
+          onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+          className="space-y-4"
+        >
           <Input
             label="Team Name"
             placeholder="Engineering"
@@ -265,8 +365,19 @@ export default function TeamsPage() {
             {...register("description")}
           />
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowCreate(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create
+            </Button>
           </div>
         </form>
       </Modal>
@@ -283,7 +394,15 @@ export default function TeamsPage() {
   );
 }
 
-function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; onClose: () => void }) {
+function TeamDetailModal({
+  team,
+  orgId,
+  onClose,
+}: {
+  team: Team;
+  orgId: string;
+  onClose: () => void;
+}) {
   const qc = useQueryClient();
   const [addUserId, setAddUserId] = useState("");
   const [addRole, setAddRole] = useState("member");
@@ -304,27 +423,43 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
   });
 
   const addMutation = useMutation({
-    mutationFn: () => api.teamMembers.add(orgId, team.id, { user_id: addUserId, role: addRole }),
+    mutationFn: () =>
+      api.teamMembers.add(orgId, team.id, {
+        user_id: addUserId,
+        role: addRole,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
       setAddUserId("");
       setAddRole("member");
+      toast.success("Member added to team");
     },
   });
 
   const removeMutation = useMutation({
-    mutationFn: (userId: string) => api.teamMembers.remove(orgId, team.id, userId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] }),
+    mutationFn: (userId: string) =>
+      api.teamMembers.remove(orgId, team.id, userId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
+      toast.success("Member removed from team");
+    },
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.teamMembers.update(orgId, team.id, userId, { role }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
+      toast.success("Member role updated");
+    },
   });
 
-  const memberIds = new Set((members?.data || []).map((m: TeamMember) => m.user_id));
-  const availableOrg = (orgMembers?.data || []).filter((m) => !memberIds.has(m.user_id));
+  const memberIds = new Set(
+    (members?.data || []).map((m: TeamMember) => m.user_id),
+  );
+  const availableOrg = (orgMembers?.data || []).filter(
+    (m) => !memberIds.has(m.user_id),
+  );
   const roleOptions = (teamRoles || []).map((r: Role) => ({
     value: r.slug,
     label: r.name + (r.is_system ? "" : " (Custom)"),
@@ -332,26 +467,46 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
 
   return (
     <Modal open onClose={onClose} title={team.name} className="max-w-lg">
-      {team.description && <p className="text-base-content/60 mb-4">{team.description}</p>}
+      {team.description && (
+        <p className="text-base-content/60 mb-4">{team.description}</p>
+      )}
 
-      <h4 className="font-semibold mb-2">Members ({members?.data?.length ?? 0})</h4>
+      <h4 className="font-semibold mb-2">
+        Members ({members?.data?.length ?? 0})
+      </h4>
       {isLoading ? (
         <span className="loading loading-spinner loading-sm" />
-      ) : (!members?.data || members.data.length === 0) ? (
+      ) : !members?.data || members.data.length === 0 ? (
         <p className="text-sm text-base-content/50 mb-4">No members yet</p>
       ) : (
         <ul className="space-y-2 mb-4 max-h-60 overflow-y-auto">
           {members.data.map((m: TeamMember) => (
-            <li key={m.user_id} className="flex items-center gap-2 text-sm group">
-              <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} src={m.avatar_url} size="xs" />
-              <span className="text-xs flex-1 truncate">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
+            <li
+              key={m.user_id}
+              className="flex items-center gap-2 text-sm group"
+            >
+              <Avatar
+                name={m.display_name || m.email || m.user_id.slice(0, 4)}
+                src={m.avatar_url}
+                size="xs"
+              />
+              <span className="text-xs flex-1 truncate">
+                {m.display_name || m.email || m.user_id.slice(0, 12)}
+              </span>
               <select
                 className="select select-ghost select-xs capitalize"
                 value={m.role}
-                onChange={(e) => updateRoleMutation.mutate({ userId: m.user_id, role: e.target.value })}
+                onChange={(e) =>
+                  updateRoleMutation.mutate({
+                    userId: m.user_id,
+                    role: e.target.value,
+                  })
+                }
               >
                 {roleOptions.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
                 ))}
               </select>
               <button
@@ -368,7 +523,10 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
       <div className="divider text-xs">Add Member</div>
       <form
         className="flex gap-2 items-end"
-        onSubmit={(e) => { e.preventDefault(); if (addUserId) addMutation.mutate(); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (addUserId) addMutation.mutate();
+        }}
       >
         <div className="flex-1">
           <select
@@ -378,22 +536,37 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
           >
             <option value="">Select org member...</option>
             {availableOrg.map((m) => (
-              <option key={m.user_id} value={m.user_id}>{m.display_name || m.email || m.user_id.slice(0, 16)}</option>
+              <option key={m.user_id} value={m.user_id}>
+                {m.display_name || m.email || m.user_id.slice(0, 16)}
+              </option>
             ))}
           </select>
         </div>
-        <select className="select select-bordered select-sm" value={addRole} onChange={(e) => setAddRole(e.target.value)}>
+        <select
+          className="select select-bordered select-sm"
+          value={addRole}
+          onChange={(e) => setAddRole(e.target.value)}
+        >
           {roleOptions.map((r) => (
-            <option key={r.value} value={r.value}>{r.label}</option>
+            <option key={r.value} value={r.value}>
+              {r.label}
+            </option>
           ))}
         </select>
-        <Button type="submit" size="sm" loading={addMutation.isPending} disabled={!addUserId}>
+        <Button
+          type="submit"
+          size="sm"
+          loading={addMutation.isPending}
+          disabled={!addUserId}
+        >
           <UserPlus className="w-4 h-4" />
         </Button>
       </form>
 
       <div className="modal-action">
-        <Button variant="ghost" onClick={onClose}>Close</Button>
+        <Button variant="ghost" onClick={onClose}>
+          Close
+        </Button>
       </div>
     </Modal>
   );

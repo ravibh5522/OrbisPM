@@ -9,8 +9,8 @@
 [data-theme="orbis-light"] {
   color-scheme: light;
   --color-base-100: oklch(99% 0 0);
-  --color-base-200: oklch(96% 0.005 250);
-  --color-base-300: oklch(92% 0.01 250);
+  --color-base-200: oklch(93% 0.008 250);
+  --color-base-300: oklch(86% 0.013 250);
   --color-base-content: oklch(20% 0.02 260);
   --color-primary: oklch(50% 0.2 260);
   --color-primary-content: oklch(97% 0.02 260);
@@ -74,9 +74,21 @@
   --depth: 1;
   --noise: 0;
   background-image:
-    radial-gradient(ellipse 70% 50% at 15% 85%, oklch(88% 0.1 270 / 0.5) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 45% at 80% 15%, oklch(90% 0.09 310 / 0.4) 0%, transparent 50%),
-    radial-gradient(ellipse 45% 35% at 50% 55%, oklch(92% 0.08 180 / 0.25) 0%, transparent 45%),
+    radial-gradient(
+      ellipse 70% 50% at 15% 85%,
+      oklch(88% 0.1 270 / 0.5) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 55% 45% at 80% 15%,
+      oklch(90% 0.09 310 / 0.4) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      ellipse 45% 35% at 50% 55%,
+      oklch(92% 0.08 180 / 0.25) 0%,
+      transparent 45%
+    ),
     linear-gradient(
       135deg,
       oklch(93% 0.06 270) 0%,
@@ -151,9 +163,21 @@
 
   /* Nebula gradient — rich colors visible through glass */
   background-image:
-    radial-gradient(ellipse 80% 60% at 10% 90%, oklch(25% 0.12 280 / 0.6) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 50% at 85% 20%, oklch(22% 0.1 200 / 0.5) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 40% at 50% 50%, oklch(20% 0.08 330 / 0.3) 0%, transparent 50%),
+    radial-gradient(
+      ellipse 80% 60% at 10% 90%,
+      oklch(25% 0.12 280 / 0.6) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 60% 50% at 85% 20%,
+      oklch(22% 0.1 200 / 0.5) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 50% 50%,
+      oklch(20% 0.08 330 / 0.3) 0%,
+      transparent 50%
+    ),
     linear-gradient(
       160deg,
       oklch(10% 0.06 280) 0%,
@@ -173,8 +197,8 @@
 [data-theme="orbis-dark"] {
   color-scheme: dark;
   --color-base-100: oklch(20% 0.015 260);
-  --color-base-200: oklch(17% 0.012 258);
-  --color-base-300: oklch(14% 0.01 255);
+  --color-base-200: oklch(26% 0.02 260);
+  --color-base-300: oklch(32% 0.025 262);
   --color-base-content: oklch(92% 0.01 260);
   --color-primary: oklch(65% 0.2 265);
   --color-primary-content: oklch(97% 0.02 265);
@@ -293,7 +317,10 @@
 }
 
 /* ── Glass Light — Buttons: glassy feel ── */
-[data-theme="glass-light"] .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
+[data-theme="glass-light"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
   background-color: oklch(100% 0 0 / 0.5) !important;
   border-color: oklch(0% 0 0 / 0.08) !important;
   backdrop-filter: blur(8px);
@@ -302,7 +329,10 @@
     inset 0 1px 0 oklch(100% 0 0 / 0.5),
     0 1px 4px oklch(0% 0 0 / 0.06) !important;
 }
-[data-theme="glass-light"] .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link):hover {
+[data-theme="glass-light"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link):hover {
   background-color: oklch(100% 0 0 / 0.7) !important;
   border-color: oklch(0% 0 0 / 0.12) !important;
 }
@@ -390,7 +420,13 @@
 }
 
 /* ── Glass Light — Border colors (frosted dark separators) ── */
-[data-theme="glass-light"] :is(.border-base-200, .border-base-300, .divide-base-200 > * + *, .divide-base-300 > * + *) {
+[data-theme="glass-light"]
+  :is(
+    .border-base-200,
+    .border-base-300,
+    .divide-base-200 > * + *,
+    .divide-base-300 > * + *
+  ) {
   border-color: oklch(0% 0 0 / 0.07) !important;
 }
 
@@ -402,16 +438,16 @@
 
 /* ── Glass Light — Bg-base-200/300 as glass tiers ── */
 [data-theme="glass-light"] .bg-base-200 {
-  background-color: oklch(0% 0 0 / 0.03) !important;
+  background-color: oklch(0% 0 0 / 0.07) !important;
 }
 [data-theme="glass-light"] .bg-base-200\/30 {
-  background-color: oklch(0% 0 0 / 0.015) !important;
+  background-color: oklch(0% 0 0 / 0.03) !important;
 }
 [data-theme="glass-light"] .bg-base-200\/50 {
-  background-color: oklch(0% 0 0 / 0.02) !important;
+  background-color: oklch(0% 0 0 / 0.04) !important;
 }
 [data-theme="glass-light"] .bg-base-300 {
-  background-color: oklch(0% 0 0 / 0.04) !important;
+  background-color: oklch(0% 0 0 / 0.1) !important;
 }
 
 /* ── Glass Light — Scrollbar: sleek translucent ── */
@@ -576,7 +612,10 @@
 [data-theme="glass-dark"] .btn {
   text-shadow: none !important;
 }
-[data-theme="glass-dark"] .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
+[data-theme="glass-dark"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link) {
   color: oklch(95% 0.005 270) !important;
   background-color: oklch(100% 0 0 / 0.06) !important;
   border-color: oklch(100% 0 0 / 0.1) !important;
@@ -586,7 +625,10 @@
     inset 0 1px 0 oklch(100% 0 0 / 0.08),
     0 2px 8px oklch(0% 0 0 / 0.2) !important;
 }
-[data-theme="glass-dark"] .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(.btn-error):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link):hover {
+[data-theme="glass-dark"]
+  .btn:not(.btn-primary):not(.btn-secondary):not(.btn-accent):not(
+    .btn-error
+  ):not(.btn-info):not(.btn-success):not(.btn-warning):not(.btn-link):hover {
   background-color: oklch(100% 0 0 / 0.12) !important;
   border-color: oklch(100% 0 0 / 0.15) !important;
 }
@@ -691,7 +733,13 @@
 }
 
 /* ── Glass Dark — Border colors (frosted white separators) ── */
-[data-theme="glass-dark"] :is(.border-base-200, .border-base-300, .divide-base-200 > * + *, .divide-base-300 > * + *) {
+[data-theme="glass-dark"]
+  :is(
+    .border-base-200,
+    .border-base-300,
+    .divide-base-200 > * + *,
+    .divide-base-300 > * + *
+  ) {
   border-color: oklch(100% 0 0 / 0.06) !important;
 }
 
@@ -729,16 +777,16 @@
 
 /* ── Glass Dark — Bg-base-200/300 as glass tiers ── */
 [data-theme="glass-dark"] .bg-base-200 {
-  background-color: oklch(100% 0 0 / 0.03) !important;
+  background-color: oklch(100% 0 0 / 0.08) !important;
 }
 [data-theme="glass-dark"] .bg-base-200\/30 {
-  background-color: oklch(100% 0 0 / 0.02) !important;
+  background-color: oklch(100% 0 0 / 0.04) !important;
 }
 [data-theme="glass-dark"] .bg-base-200\/50 {
-  background-color: oklch(100% 0 0 / 0.03) !important;
+  background-color: oklch(100% 0 0 / 0.05) !important;
 }
 [data-theme="glass-dark"] .bg-base-300 {
-  background-color: oklch(100% 0 0 / 0.02) !important;
+  background-color: oklch(100% 0 0 / 0.1) !important;
 }
 
 /* ── Glass Dark — Scrollbar: sleek translucent ── */
@@ -893,4 +941,166 @@
 [data-theme="glass-dark"] .bg-purple-50,
 [data-theme="glass-dark"] .hover\:bg-purple-50:hover {
   background-color: oklch(72% 0.15 280 / 0.08) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   HOVER VISIBILITY FIXES — Glass themes need transparent overlays
+   (hover:bg-base-* uses var() which gives opaque solid colors
+    that either break glass effect or are invisible on dark bg)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Glass Light — hover uses transparent dark overlay ── */
+[data-theme="glass-light"] .hover\:bg-base-200:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/20:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/40:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/50:hover,
+[data-theme="glass-light"] .hover\:bg-base-200\/60:hover {
+  background-color: oklch(0% 0 0 / 0.08) !important;
+}
+[data-theme="glass-light"] .hover\:bg-base-300:hover,
+[data-theme="glass-light"] .hover\:bg-base-300\/30:hover,
+[data-theme="glass-light"] .hover\:bg-base-300\/40:hover,
+[data-theme="glass-light"] .hover\:bg-base-300\/60:hover {
+  background-color: oklch(0% 0 0 / 0.12) !important;
+}
+[data-theme="glass-light"] .active\:bg-base-200:active,
+[data-theme="glass-light"] .focus\:bg-base-200:focus {
+  background-color: oklch(0% 0 0 / 0.1) !important;
+}
+
+/* ── Glass Dark — hover uses transparent white overlay ── */
+[data-theme="glass-dark"] .hover\:bg-base-200:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/20:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/40:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/50:hover,
+[data-theme="glass-dark"] .hover\:bg-base-200\/60:hover {
+  background-color: oklch(100% 0 0 / 0.1) !important;
+}
+[data-theme="glass-dark"] .hover\:bg-base-300:hover,
+[data-theme="glass-dark"] .hover\:bg-base-300\/30:hover,
+[data-theme="glass-dark"] .hover\:bg-base-300\/40:hover,
+[data-theme="glass-dark"] .hover\:bg-base-300\/60:hover {
+  background-color: oklch(100% 0 0 / 0.14) !important;
+}
+[data-theme="glass-dark"] .active\:bg-base-200:active,
+[data-theme="glass-dark"] .focus\:bg-base-200:focus {
+  background-color: oklch(100% 0 0 / 0.12) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TEXT CONTRAST FIXES — Boost low-opacity muted text in light themes
+   Original /30, /40, /50 values fail WCAG AA for small text
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Orbis Light — boost muted text contrast ── */
+[data-theme="orbis-light"] .text-base-content\/10 {
+  color: oklch(20% 0.02 260 / 0.25) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/20 {
+  color: oklch(20% 0.02 260 / 0.35) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/30 {
+  color: oklch(20% 0.02 260 / 0.48) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/40 {
+  color: oklch(20% 0.02 260 / 0.58) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/50 {
+  color: oklch(20% 0.02 260 / 0.68) !important;
+}
+[data-theme="orbis-light"] .text-base-content\/60 {
+  color: oklch(20% 0.02 260 / 0.78) !important;
+}
+
+/* ── Glass Light — boost muted text contrast ── */
+[data-theme="glass-light"] .text-base-content\/10 {
+  color: oklch(18% 0.02 270 / 0.28) !important;
+}
+[data-theme="glass-light"] .text-base-content\/20 {
+  color: oklch(18% 0.02 270 / 0.38) !important;
+}
+[data-theme="glass-light"] .text-base-content\/30 {
+  color: oklch(18% 0.02 270 / 0.52) !important;
+}
+[data-theme="glass-light"] .text-base-content\/40 {
+  color: oklch(18% 0.02 270 / 0.62) !important;
+}
+[data-theme="glass-light"] .text-base-content\/50 {
+  color: oklch(18% 0.02 270 / 0.7) !important;
+}
+[data-theme="glass-light"] .text-base-content\/60 {
+  color: oklch(18% 0.02 270 / 0.8) !important;
+}
+
+/* ── Orbis Dark — mild boost for the darkest muted levels ── */
+[data-theme="orbis-dark"] .text-base-content\/10 {
+  color: oklch(92% 0.01 260 / 0.35) !important;
+}
+[data-theme="orbis-dark"] .text-base-content\/20 {
+  color: oklch(92% 0.01 260 / 0.48) !important;
+}
+[data-theme="orbis-dark"] .text-base-content\/30 {
+  color: oklch(92% 0.01 260 / 0.58) !important;
+}
+[data-theme="orbis-dark"] .text-base-content\/40 {
+  color: oklch(92% 0.01 260 / 0.68) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BADGE CONTRAST FIXES — badge-ghost needs visible text in all themes
+   ═══════════════════════════════════════════════════════════════ */
+
+[data-theme="orbis-light"] .badge-ghost {
+  background-color: oklch(88% 0.01 250) !important;
+  color: oklch(25% 0.02 260) !important;
+  border-color: oklch(80% 0.01 250) !important;
+}
+[data-theme="glass-light"] .badge-ghost {
+  background-color: oklch(0% 0 0 / 0.07) !important;
+  color: oklch(18% 0.02 270) !important;
+  border-color: oklch(0% 0 0 / 0.12) !important;
+}
+[data-theme="orbis-dark"] .badge-ghost {
+  background-color: oklch(28% 0.02 260) !important;
+  color: oklch(88% 0.01 260) !important;
+  border-color: oklch(32% 0.022 262) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BORDER CONTRAST FIXES — borders need to be visible separators
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Orbis light: border-base-200 needs to be clearly visible on white */
+[data-theme="orbis-light"] .border-base-200,
+[data-theme="orbis-light"] .divide-base-200 > * + * {
+  border-color: oklch(87% 0.012 250) !important;
+}
+[data-theme="orbis-light"] .border-base-300 {
+  border-color: oklch(80% 0.014 250) !important;
+}
+
+/* Orbis dark: borders need to be visible on dark surface */
+[data-theme="orbis-dark"] .border-base-200,
+[data-theme="orbis-dark"] .divide-base-200 > * + * {
+  border-color: oklch(28% 0.02 260) !important;
+}
+[data-theme="orbis-dark"] .border-base-300 {
+  border-color: oklch(32% 0.024 264) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SKELETON / LOADING PLACEHOLDER CONTRAST
+   ═══════════════════════════════════════════════════════════════ */
+
+[data-theme="orbis-light"] .skeleton,
+[data-theme="orbis-light"] .animate-pulse [class*="bg-base-200"],
+[data-theme="orbis-light"] .animate-pulse [class*="bg-base-300"] {
+  --tw-gradient-from: oklch(90% 0.006 250);
+  background-color: oklch(90% 0.006 250) !important;
+}
+[data-theme="orbis-dark"] .skeleton,
+[data-theme="orbis-dark"] .animate-pulse [class*="bg-base-200"],
+[data-theme="orbis-dark"] .animate-pulse [class*="bg-base-300"] {
+  --tw-gradient-from: oklch(28% 0.02 260);
+  background-color: oklch(28% 0.02 260) !important;
 }

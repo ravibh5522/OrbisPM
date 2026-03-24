@@ -20,6 +20,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
 const DEFAULT_TEMPLATES = [
   {
@@ -131,6 +132,7 @@ export default function EmailTemplatesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email-templates"] });
       closeEditor();
+      toast.success("Template saved");
     },
     onError: (e: Error) =>
       setError(e instanceof ApiError ? e.message : "Failed to save template"),
@@ -142,6 +144,7 @@ export default function EmailTemplatesTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["email-templates"] });
       setDeleteTarget(null);
+      toast.success("Template deleted");
     },
   });
 

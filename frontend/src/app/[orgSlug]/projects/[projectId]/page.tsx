@@ -47,6 +47,7 @@ import {
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 const TaskListView = dynamic(
   () =>
@@ -57,7 +58,7 @@ const TaskListView = dynamic(
     loading: () => (
       <div className="h-64 animate-pulse bg-base-200 rounded-lg" />
     ),
-  }
+  },
 );
 
 const ProjectSettings = dynamic(
@@ -69,7 +70,7 @@ const ProjectSettings = dynamic(
     loading: () => (
       <div className="h-64 animate-pulse bg-base-200 rounded-lg" />
     ),
-  }
+  },
 );
 
 export default function ProjectDetailPage({
@@ -482,10 +483,7 @@ export default function ProjectDetailPage({
       {/* Members tab */}
       {activeTab === "members" && (
         <div className="flex-1 overflow-auto">
-          <ProjectMembersSection
-            orgId={currentOrg!.id}
-            projectId={projectId}
-          />
+          <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} />
         </div>
       )}
 
@@ -551,7 +549,10 @@ function ProjectMembersSection({
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -568,13 +569,21 @@ function ProjectMembersSection({
 
   // Server-side paginated members query
   const { data: membersResponse, isLoading: membersLoading } = useQuery({
-    queryKey: ["project-members", orgId, projectId, debouncedSearch, filterRole, page],
-    queryFn: () => api.projectMembers.list(orgId, projectId, {
-      limit,
-      offset: page * limit,
-      search: debouncedSearch || undefined,
-      role: filterRole || undefined,
-    }),
+    queryKey: [
+      "project-members",
+      orgId,
+      projectId,
+      debouncedSearch,
+      filterRole,
+      page,
+    ],
+    queryFn: () =>
+      api.projectMembers.list(orgId, projectId, {
+        limit,
+        offset: page * limit,
+        search: debouncedSearch || undefined,
+        role: filterRole || undefined,
+      }),
     enabled: !!orgId,
   });
 
@@ -614,6 +623,7 @@ function ProjectMembersSection({
       qc.invalidateQueries({ queryKey: ["project-members"] });
       setAddUserId("");
       setAddRole("member");
+      toast.success("Member added to project");
     },
   });
 
@@ -628,14 +638,17 @@ function ProjectMembersSection({
       qc.invalidateQueries({ queryKey: ["project-members"] });
       setAddInternalUserId("");
       setAddInternalRole("member");
+      toast.success("Team member added to project");
     },
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.projectMembers.update(orgId, projectId, userId, { role }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["project-members"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project-members"] });
+      toast.success("Member role updated");
+    },
   });
 
   const internalMembers = members.filter((m) => m.source === "team");
@@ -750,7 +763,9 @@ function ProjectMembersSection({
           onClick={() => setShowFilter(!showFilter)}
         >
           <Filter className="w-4 h-4" />
-          {filterRole && <span className="badge badge-xs badge-primary ml-1">1</span>}
+          {filterRole && (
+            <span className="badge badge-xs badge-primary ml-1">1</span>
+          )}
         </button>
       </div>
 
@@ -760,15 +775,26 @@ function ProjectMembersSection({
           <select
             className="select select-bordered select-sm"
             value={filterRole}
-            onChange={(e) => { setFilterRole(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setFilterRole(e.target.value);
+              setPage(0);
+            }}
           >
             <option value="">All roles</option>
             {(projectRoles || []).map((r: Role) => (
-              <option key={r.slug} value={r.slug}>{r.name}</option>
+              <option key={r.slug} value={r.slug}>
+                {r.name}
+              </option>
             ))}
           </select>
           {filterRole && (
-            <button className="btn btn-ghost btn-xs" onClick={() => { setFilterRole(""); setPage(0); }}>
+            <button
+              className="btn btn-ghost btn-xs"
+              onClick={() => {
+                setFilterRole("");
+                setPage(0);
+              }}
+            >
               Clear
             </button>
           )}
@@ -1199,12 +1225,28 @@ function ProjectMembersSection({
       {membersResponse && membersResponse.total > limit && (
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
           <span className="text-sm text-base-content/60">
-            Showing {membersResponse.offset + 1}–{Math.min(membersResponse.offset + limit, membersResponse.total)} of {membersResponse.total}
+            Showing {membersResponse.offset + 1}–
+            {Math.min(membersResponse.offset + limit, membersResponse.total)} of{" "}
+            {membersResponse.total}
           </span>
           <div className="join">
-            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>«</button>
-            <button className="join-item btn btn-sm">Page {page + 1} of {Math.ceil(membersResponse.total / limit)}</button>
-            <button className="join-item btn btn-sm" disabled={(page + 1) * limit >= membersResponse.total} onClick={() => setPage(p => p + 1)}>»</button>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              «
+            </button>
+            <button className="join-item btn btn-sm">
+              Page {page + 1} of {Math.ceil(membersResponse.total / limit)}
+            </button>
+            <button
+              className="join-item btn btn-sm"
+              disabled={(page + 1) * limit >= membersResponse.total}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              »
+            </button>
           </div>
         </div>
       )}
@@ -1234,7 +1276,10 @@ function ProjectTeamsSection({
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -1247,7 +1292,12 @@ function ProjectTeamsSection({
   // Paginated search for available teams (only when link dialog is open)
   const { data: allTeams, isLoading: teamsLoading } = useQuery({
     queryKey: ["teams", orgId, debouncedSearch, page],
-    queryFn: () => api.teams.list(orgId, { search: debouncedSearch || undefined, limit, offset: page * limit }),
+    queryFn: () =>
+      api.teams.list(orgId, {
+        search: debouncedSearch || undefined,
+        limit,
+        offset: page * limit,
+      }),
     enabled: !!orgId && showLink,
   });
 
@@ -1274,6 +1324,7 @@ function ProjectTeamsSection({
       setShowLink(false);
       setSearch("");
       setPage(0);
+      toast.success("Team linked to project");
     },
   });
 
@@ -1290,6 +1341,7 @@ function ProjectTeamsSection({
       qc.invalidateQueries({ queryKey: ["project-members"] });
       setUnlinkTeamId(null);
       setReassignTo("");
+      toast.success("Team unlinked from project");
     },
   });
 
@@ -1334,7 +1386,11 @@ function ProjectTeamsSection({
           </div>
           <Button
             size="sm"
-            onClick={() => { setShowLink(!showLink); setSearch(""); setPage(0); }}
+            onClick={() => {
+              setShowLink(!showLink);
+              setSearch("");
+              setPage(0);
+            }}
             variant={showLink ? "secondary" : "primary"}
           >
             <Link2 className="w-4 h-4 mr-1" />{" "}
@@ -1377,7 +1433,9 @@ function ProjectTeamsSection({
               </div>
             ) : (
               <span className="text-sm text-base-content/50">
-                {debouncedSearch ? "No teams match your search." : "All teams are already linked to this project."}
+                {debouncedSearch
+                  ? "No teams match your search."
+                  : "All teams are already linked to this project."}
               </span>
             )}
             {/* Pagination controls for link dialog */}
@@ -1387,9 +1445,23 @@ function ProjectTeamsSection({
                   {allTeams.total} teams total
                 </span>
                 <div className="join">
-                  <button className="join-item btn btn-xs" disabled={page === 0} onClick={() => setPage(p => p - 1)}>«</button>
-                  <button className="join-item btn btn-xs">Page {page + 1}</button>
-                  <button className="join-item btn btn-xs" disabled={(page + 1) * limit >= allTeams.total} onClick={() => setPage(p => p + 1)}>»</button>
+                  <button
+                    className="join-item btn btn-xs"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    «
+                  </button>
+                  <button className="join-item btn btn-xs">
+                    Page {page + 1}
+                  </button>
+                  <button
+                    className="join-item btn btn-xs"
+                    disabled={(page + 1) * limit >= allTeams.total}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    »
+                  </button>
                 </div>
               </div>
             )}
@@ -1413,7 +1485,9 @@ function ProjectTeamsSection({
                 <button
                   className="btn btn-ghost btn-xs btn-circle"
                   onClick={() => handleUnlinkClick(pt.team_id)}
-                  disabled={unlinkMutation.isPending || (linkedTeams?.length || 0) <= 1}
+                  disabled={
+                    unlinkMutation.isPending || (linkedTeams?.length || 0) <= 1
+                  }
                   title={
                     (linkedTeams?.length || 0) <= 1
                       ? "Cannot unlink the last team"

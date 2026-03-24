@@ -22,6 +22,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/messaging-service/internal/config"
+	"github.com/orbispm/messaging-service/internal/eventbus"
 	"github.com/orbispm/messaging-service/internal/handler"
 	mw "github.com/orbispm/messaging-service/internal/middleware"
 	natspkg "github.com/orbispm/messaging-service/internal/nats"
@@ -133,6 +134,9 @@ func main() {
 		log.Info().Msg("redis connected for presence")
 	}
 
+	// ─── Redis Event Publisher (forwards chat events to backend OrgHub) ──
+	redisEventPublisher := eventbus.NewRedisPublisher(rdb)
+
 	// ─── Presence Service ─────────────────────
 	presenceSvc := service.NewPresenceService(rdb, 60*time.Second)
 
@@ -177,7 +181,7 @@ func main() {
 	messageSvc := service.NewMessageService(
 		txManager, messageRepo, memberRepo, channelRepo,
 		reactionRepo, attachmentRepo, pinRepo, bookmarkRepo, publisher, cfg.EditWindowMinutes,
-		uploadSvc,
+		uploadSvc, redisEventPublisher,
 	)
 
 	// ─── Sidebar Service ──────────────────────

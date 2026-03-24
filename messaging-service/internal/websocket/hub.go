@@ -103,6 +103,7 @@ func NewChatHub() *ChatHub {
 func (h *ChatHub) HandleEvent(event domain.DomainEvent) {
 	orgID, err := uuid.Parse(event.OrgID)
 	if err != nil {
+		log.Warn().Str("org_id", event.OrgID).Msg("chat hub: invalid org_id in event")
 		return
 	}
 	channelID, _ := uuid.Parse(event.ChannelID)
@@ -112,6 +113,20 @@ func (h *ChatHub) HandleEvent(event domain.DomainEvent) {
 	if event.Payload != nil {
 		if d, ok := event.Payload["data"]; ok {
 			payloadData = d
+		}
+	}
+
+	// Inject channel_id and entity_id into map payloads for frontend routing
+	if pm, ok := payloadData.(map[string]any); ok {
+		if event.ChannelID != "" {
+			if _, exists := pm["channel_id"]; !exists {
+				pm["channel_id"] = event.ChannelID
+			}
+		}
+		if event.EntityID != "" {
+			if _, exists := pm["entity_id"]; !exists {
+				pm["entity_id"] = event.EntityID
+			}
 		}
 	}
 
@@ -126,8 +141,17 @@ func (h *ChatHub) HandleEvent(event domain.DomainEvent) {
 	}
 
 	if channelID != uuid.Nil {
+		log.Debug().
+			Str("type", event.Type).
+			Str("org_id", event.OrgID).
+			Str("channel_id", event.ChannelID).
+			Msg("chat hub: broadcasting to channel")
 		h.BroadcastChannel(orgID, channelID, msg, nil)
 	} else {
+		log.Debug().
+			Str("type", event.Type).
+			Str("org_id", event.OrgID).
+			Msg("chat hub: broadcasting to org")
 		h.BroadcastOrg(orgID, msg, nil)
 	}
 }
@@ -200,6 +224,7 @@ func (h *ChatHub) BroadcastOrg(orgID uuid.UUID, msg WSMessage, exclude *ChatConn
 		select {
 		case conn.send <- data:
 		default:
+			log.Warn().Str("user_id", conn.UserID.String()).Str("action", msg.Action).Msg("chat: BroadcastOrg send buffer full, dropping message")
 		}
 	}
 }
@@ -223,6 +248,7 @@ func (h *ChatHub) BroadcastChannel(orgID, channelID uuid.UUID, msg WSMessage, ex
 		select {
 		case conn.send <- data:
 		default:
+			log.Warn().Str("user_id", conn.UserID.String()).Str("action", msg.Action).Str("channel_id", channelID.String()).Msg("chat: BroadcastChannel send buffer full, dropping message")
 		}
 	}
 }

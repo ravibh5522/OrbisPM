@@ -4,19 +4,35 @@ import { PermissionGate } from "@/components/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
-import { Card, ConfirmDialog, EmptyState, PageHeader } from "@/components/ui/shared";
+import {
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  PageHeader,
+} from "@/components/ui/shared";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Project, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity, Calendar, ChevronDown, FolderKanban, LayoutGrid,
-  Plus, Search, SlidersHorizontal, Table2, Trash2, Users, X,
+  Activity,
+  Calendar,
+  ChevronDown,
+  FolderKanban,
+  LayoutGrid,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Table2,
+  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 interface ProjectForm {
   name: string;
@@ -48,21 +64,34 @@ export default function ProjectsPage() {
 
   // Debounce search
   useEffect(() => {
-    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
     return () => clearTimeout(t);
   }, [search]);
 
   const { data: projectsResponse, isLoading } = useQuery({
-    queryKey: ["projects", currentOrg?.id, debouncedSearch, page, sortBy, sortOrder, statusFilter, teamFilter],
-    queryFn: () => api.projects.list(currentOrg!.id, {
-      limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
-      search: debouncedSearch || undefined,
-      status: statusFilter || undefined,
-      team_id: teamFilter || undefined,
-      sort_by: sortBy,
-      sort_order: sortOrder,
-    }),
+    queryKey: [
+      "projects",
+      currentOrg?.id,
+      debouncedSearch,
+      page,
+      sortBy,
+      sortOrder,
+      statusFilter,
+      teamFilter,
+    ],
+    queryFn: () =>
+      api.projects.list(currentOrg!.id, {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        status: statusFilter || undefined,
+        team_id: teamFilter || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      }),
     enabled: !!currentOrg,
   });
 
@@ -79,14 +108,25 @@ export default function ProjectsPage() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const teamList = teamsResponse?.data || [];
 
-  const { register, handleSubmit, reset, formState: { errors: formErrors }, watch, setValue } = useForm<ProjectForm>({
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors: formErrors },
+    watch,
+    setValue,
+  } = useForm<ProjectForm>({
     defaultValues: { team_ids: [] },
   });
   const selectedTeamIds = watch("team_ids") || [];
 
   const createMutation = useMutation({
     mutationFn: (data: ProjectForm) => {
-      const teamIds = data.team_ids?.length ? data.team_ids : data.team_id ? [data.team_id] : [];
+      const teamIds = data.team_ids?.length
+        ? data.team_ids
+        : data.team_id
+          ? [data.team_id]
+          : [];
       return api.projects.create(currentOrg!.id, {
         name: data.name,
         description: data.description,
@@ -99,8 +139,10 @@ export default function ProjectsPage() {
       setShowCreate(false);
       reset();
       setError("");
+      toast.success("Project created");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create project"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create project"),
   });
 
   const deleteMutation = useMutation({
@@ -108,6 +150,7 @@ export default function ProjectsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       setDeleteTarget(null);
+      toast.success("Project deleted");
     },
   });
 
@@ -131,14 +174,19 @@ export default function ProjectsPage() {
   };
 
   const SortIcon = ({ col }: { col: string }) => (
-    <ChevronDown className={cn(
-      "w-3 h-3 inline ml-0.5 transition-transform",
-      sortBy === col ? "opacity-100" : "opacity-30",
-      sortBy === col && sortOrder === "asc" && "rotate-180",
-    )} />
+    <ChevronDown
+      className={cn(
+        "w-3 h-3 inline ml-0.5 transition-transform",
+        sortBy === col ? "opacity-100" : "opacity-30",
+        sortBy === col && sortOrder === "asc" && "rotate-180",
+      )}
+    />
   );
 
-  const teamOptions = teamList.map((t: Team) => ({ value: t.id, label: t.name }));
+  const teamOptions = teamList.map((t: Team) => ({
+    value: t.id,
+    label: t.name,
+  }));
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-8rem)]">
@@ -166,32 +214,54 @@ export default function ProjectsPage() {
             onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
-            <button className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle" onClick={() => setSearch("")}>
+            <button
+              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
+              onClick={() => setSearch("")}
+            >
               <X className="w-3 h-3" />
             </button>
           )}
         </div>
 
         <button
-          className={cn("btn btn-sm gap-1", showFilters ? "btn-primary" : "btn-ghost")}
+          className={cn(
+            "btn btn-sm gap-1",
+            showFilters ? "btn-primary" : "btn-ghost",
+          )}
           onClick={() => setShowFilters(!showFilters)}
         >
           <SlidersHorizontal className="w-4 h-4" />
           Filters
           {activeFilterCount > 0 && (
-            <span className="badge badge-xs badge-secondary">{activeFilterCount}</span>
+            <span className="badge badge-xs badge-secondary">
+              {activeFilterCount}
+            </span>
           )}
         </button>
 
         <div className="flex-1" />
 
-        <span className="text-sm text-base-content/50">{total} project{total !== 1 ? "s" : ""}</span>
+        <span className="text-sm text-base-content/50">
+          {total} project{total !== 1 ? "s" : ""}
+        </span>
 
         <div className="join">
-          <button className={cn("btn btn-sm join-item", viewMode === "table" && "btn-active")} onClick={() => setViewMode("table")}>
+          <button
+            className={cn(
+              "btn btn-sm join-item",
+              viewMode === "table" && "btn-active",
+            )}
+            onClick={() => setViewMode("table")}
+          >
             <Table2 className="w-4 h-4" />
           </button>
-          <button className={cn("btn btn-sm join-item", viewMode === "grid" && "btn-active")} onClick={() => setViewMode("grid")}>
+          <button
+            className={cn(
+              "btn btn-sm join-item",
+              viewMode === "grid" && "btn-active",
+            )}
+            onClick={() => setViewMode("grid")}
+          >
             <LayoutGrid className="w-4 h-4" />
           </button>
         </div>
@@ -201,11 +271,16 @@ export default function ProjectsPage() {
       {showFilters && (
         <div className="flex items-center gap-3 mb-3 p-3 bg-base-200 rounded-lg">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium whitespace-nowrap">Status:</span>
+            <span className="text-sm font-medium whitespace-nowrap">
+              Status:
+            </span>
             <select
               className="select select-bordered select-sm"
               value={statusFilter}
-              onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
             >
               <option value="">All</option>
               <option value="active">Active</option>
@@ -218,11 +293,16 @@ export default function ProjectsPage() {
             <select
               className="select select-bordered select-sm max-w-[200px]"
               value={teamFilter}
-              onChange={(e) => { setTeamFilter(e.target.value); setPage(0); }}
+              onChange={(e) => {
+                setTeamFilter(e.target.value);
+                setPage(0);
+              }}
             >
               <option value="">All teams</option>
               {teamList.map((t: Team) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
               ))}
             </select>
           </div>
@@ -238,18 +318,35 @@ export default function ProjectsPage() {
       {isLoading ? (
         <div className="animate-pulse space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-14 bg-base-200 rounded-lg border border-base-200" />
+            <div
+              key={i}
+              className="h-14 bg-base-200 rounded-lg border border-base-200"
+            />
           ))}
         </div>
       ) : projects.length === 0 ? (
         <EmptyState
           icon={<FolderKanban className="w-16 h-16" />}
-          title={debouncedSearch || statusFilter || teamFilter ? "No matching projects" : "No projects yet"}
-          description={debouncedSearch || statusFilter || teamFilter ? "Try adjusting your search or filters" : "Create your first project to get started"}
-          action={
+          title={
             debouncedSearch || statusFilter || teamFilter
-              ? <Button variant="ghost" onClick={clearFilters}>Clear filters</Button>
-              : <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Project</Button>
+              ? "No matching projects"
+              : "No projects yet"
+          }
+          description={
+            debouncedSearch || statusFilter || teamFilter
+              ? "Try adjusting your search or filters"
+              : "Create your first project to get started"
+          }
+          action={
+            debouncedSearch || statusFilter || teamFilter ? (
+              <Button variant="ghost" onClick={clearFilters}>
+                Clear filters
+              </Button>
+            ) : (
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="w-4 h-4" /> Create Project
+              </Button>
+            )
           }
         />
       ) : viewMode === "table" ? (
@@ -258,33 +355,56 @@ export default function ProjectsPage() {
             <table className="table w-full">
               <thead>
                 <tr>
-                  <th className="cursor-pointer select-none" onClick={() => handleSort("name")}>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("name")}
+                  >
                     Project Name <SortIcon col="name" />
                   </th>
                   <th>Description</th>
-                  <th className="cursor-pointer select-none" onClick={() => handleSort("status")}>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("status")}
+                  >
                     Status <SortIcon col="status" />
                   </th>
-                  <th><Users className="w-3.5 h-3.5 inline mr-1" />Teams</th>
-                  <th className="cursor-pointer select-none" onClick={() => handleSort("created_at")}>
-                    <Calendar className="w-3.5 h-3.5 inline mr-1" />Created <SortIcon col="created_at" />
+                  <th>
+                    <Users className="w-3.5 h-3.5 inline mr-1" />
+                    Teams
                   </th>
-                  <th className="cursor-pointer select-none" onClick={() => handleSort("updated_at")}>
-                    <Activity className="w-3.5 h-3.5 inline mr-1" />Updated <SortIcon col="updated_at" />
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("created_at")}
+                  >
+                    <Calendar className="w-3.5 h-3.5 inline mr-1" />
+                    Created <SortIcon col="created_at" />
+                  </th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("updated_at")}
+                  >
+                    <Activity className="w-3.5 h-3.5 inline mr-1" />
+                    Updated <SortIcon col="updated_at" />
                   </th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {projects.map((project: Project) => {
-                  const projectTeams = teamList.filter((t: Team) =>
-                    t.id === project.team_id || (project.team_ids && project.team_ids.includes(t.id))
+                  const projectTeams = teamList.filter(
+                    (t: Team) =>
+                      t.id === project.team_id ||
+                      (project.team_ids && project.team_ids.includes(t.id)),
                   );
                   return (
                     <tr
                       key={project.id}
                       className="hover cursor-pointer"
-                      onClick={() => router.push(`/${currentOrg!.slug}/projects/${project.id}`)}
+                      onClick={() =>
+                        router.push(
+                          `/${currentOrg!.slug}/projects/${project.id}`,
+                        )
+                      }
                     >
                       <td>
                         <div className="flex items-center gap-2">
@@ -298,30 +418,56 @@ export default function ProjectsPage() {
                         </span>
                       </td>
                       <td>
-                        <span className={cn(
-                          "badge badge-sm",
-                          project.status === "active" ? "badge-success" :
-                          project.status === "archived" ? "badge-ghost" : "badge-info"
-                        )}>
+                        <span
+                          className={cn(
+                            "badge badge-sm",
+                            project.status === "active"
+                              ? "badge-success"
+                              : project.status === "archived"
+                                ? "badge-ghost"
+                                : "badge-info",
+                          )}
+                        >
                           {statusLabel(project.status)}
                         </span>
                       </td>
                       <td>
                         <div className="flex flex-wrap gap-1">
-                          {projectTeams.length > 0 ? projectTeams.map((t: Team) => (
-                            <span key={t.id} className="badge badge-sm badge-outline gap-1">
-                              <Users className="w-2.5 h-2.5" />
-                              {t.name}
+                          {projectTeams.length > 0 ? (
+                            projectTeams.map((t: Team) => (
+                              <span
+                                key={t.id}
+                                className="badge badge-sm badge-outline gap-1"
+                              >
+                                <Users className="w-2.5 h-2.5" />
+                                {t.name}
+                              </span>
+                            ))
+                          ) : (
+                            <span className="text-base-content/40 text-sm">
+                              {"\u2014"}
                             </span>
-                          )) : <span className="text-base-content/40 text-sm">{"\u2014"}</span>}
+                          )}
                         </div>
                       </td>
-                      <td className="text-sm text-base-content/60">{formatDate(project.created_at)}</td>
-                      <td className="text-sm text-base-content/60">{project.updated_at ? formatDate(project.updated_at) : "\u2014"}</td>
+                      <td className="text-sm text-base-content/60">
+                        {formatDate(project.created_at)}
+                      </td>
+                      <td className="text-sm text-base-content/60">
+                        {project.updated_at
+                          ? formatDate(project.updated_at)
+                          : "\u2014"}
+                      </td>
                       <td>
-                        <div className="flex gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
+                        <div
+                          className="flex gap-1 justify-end"
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <PermissionGate resource="projects" action="delete">
-                            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={() => setDeleteTarget(project)}>
+                            <button
+                              className="btn btn-ghost btn-xs btn-square text-error"
+                              onClick={() => setDeleteTarget(project)}
+                            >
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </PermissionGate>
@@ -338,29 +484,48 @@ export default function ProjectsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {projects.map((project: Project) => (
             <Card key={project.id} compact>
-              <div className="cursor-pointer" onClick={() => router.push(`/${currentOrg!.slug}/projects/${project.id}`)}>
+              <div
+                className="cursor-pointer"
+                onClick={() =>
+                  router.push(`/${currentOrg!.slug}/projects/${project.id}`)
+                }
+              >
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-semibold text-lg">{project.name}</h3>
                     {project.description && (
-                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">{project.description}</p>
+                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">
+                        {project.description}
+                      </p>
                     )}
                   </div>
-                  <div className={`badge badge-sm ${project.status === "active" ? "badge-success" : project.status === "archived" ? "badge-ghost" : "badge-info"}`}>
+                  <div
+                    className={`badge badge-sm ${project.status === "active" ? "badge-success" : project.status === "archived" ? "badge-ghost" : "badge-info"}`}
+                  >
                     {statusLabel(project.status)}
                   </div>
                 </div>
-                {(project.member_count || project.task_count) ? (
+                {project.member_count || project.task_count ? (
                   <div className="flex gap-3 mt-2 text-xs text-base-content/50">
-                    {project.member_count != null && <span>{project.member_count} members</span>}
-                    {project.task_count != null && <span>{project.task_count} tasks</span>}
+                    {project.member_count != null && (
+                      <span>{project.member_count} members</span>
+                    )}
+                    {project.task_count != null && (
+                      <span>{project.task_count} tasks</span>
+                    )}
                   </div>
                 ) : null}
                 <div className="flex items-center justify-between mt-3 text-sm text-base-content/50">
                   <span>Created {formatDate(project.created_at)}</span>
-                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    className="flex gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <PermissionGate resource="projects" action="delete">
-                      <button className="btn btn-ghost btn-xs btn-square" onClick={() => setDeleteTarget(project)}>
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        onClick={() => setDeleteTarget(project)}
+                      >
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </PermissionGate>
@@ -376,22 +541,39 @@ export default function ProjectsPage() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
           <span className="text-sm text-base-content/60">
-            Showing {page * PAGE_SIZE + 1}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+            Showing {page * PAGE_SIZE + 1}&ndash;
+            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
           </span>
           <div className="join">
-            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(0)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page === 0}
+              onClick={() => setPage(0)}
+            >
               &laquo;
             </button>
-            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
               &lsaquo;
             </button>
             <button className="join-item btn btn-sm">
               Page {page + 1} of {totalPages}
             </button>
-            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
               &rsaquo;
             </button>
-            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>
+            <button
+              className="join-item btn btn-sm"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage(totalPages - 1)}
+            >
               &raquo;
             </button>
           </div>
@@ -399,9 +581,24 @@ export default function ProjectsPage() {
       )}
 
       {/* Create Modal */}
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); reset(); setError(""); }} title="New Project">
-        {error && <div className="alert alert-error mb-4"><span>{error}</span></div>}
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          reset();
+          setError("");
+        }}
+        title="New Project"
+      >
+        {error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
+          </div>
+        )}
+        <form
+          onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+          className="space-y-4"
+        >
           <Input
             label="Project Name"
             placeholder="My Project"
@@ -422,10 +619,17 @@ export default function ProjectsPage() {
           />
           {teamOptions.length > 1 && (
             <div>
-              <label className="label"><span className="label-text font-medium">Additional Teams (optional)</span></label>
+              <label className="label">
+                <span className="label-text font-medium">
+                  Additional Teams (optional)
+                </span>
+              </label>
               <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                 {teamOptions.map((t: { value: string; label: string }) => (
-                  <label key={t.value} className="flex items-center gap-2 p-2 rounded border border-base-300 cursor-pointer hover:bg-base-200">
+                  <label
+                    key={t.value}
+                    className="flex items-center gap-2 p-2 rounded border border-base-300 cursor-pointer hover:bg-base-200"
+                  >
                     <input
                       type="checkbox"
                       className="checkbox checkbox-sm checkbox-primary"
@@ -433,7 +637,9 @@ export default function ProjectsPage() {
                       onChange={(e) => {
                         const ids = e.target.checked
                           ? [...selectedTeamIds, t.value]
-                          : selectedTeamIds.filter((id: string) => id !== t.value);
+                          : selectedTeamIds.filter(
+                              (id: string) => id !== t.value,
+                            );
                         setValue("team_ids", ids);
                       }}
                     />
@@ -441,12 +647,25 @@ export default function ProjectsPage() {
                   </label>
                 ))}
               </div>
-              <p className="text-xs text-base-content/50 mt-1">Check teams to link this project to multiple teams</p>
+              <p className="text-xs text-base-content/50 mt-1">
+                Check teams to link this project to multiple teams
+              </p>
             </div>
           )}
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowCreate(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create
+            </Button>
           </div>
         </form>
       </Modal>

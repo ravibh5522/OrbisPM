@@ -2,68 +2,118 @@
 
 import { Avatar, Badge } from "@/components/ui/shared";
 import { cn, priorityColor, statusColor, statusLabel } from "@/lib/utils";
-import type { ProjectMember, Task, TaskPriority, TaskStatus } from "@/types/domain";
+import type {
+  ProjectMember,
+  Task,
+  TaskPriority,
+  TaskStatus,
+} from "@/types/domain";
 import {
-    CalendarDays,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    Layers,
-    Repeat,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  Layers,
+  Repeat,
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 import {
-    formatDateRange,
-    formatDayHeader,
-    formatMonthYear,
-    formatWeekRange,
-    getDateRange,
-    getDayGrid,
-    getMonthGridWithStrips,
-    getWeekdayLabels,
-    getWeekGrid,
-    navigateDate,
-    sortTasksByPriority,
-    type CalendarGroupBy,
-    type CalendarViewMode,
-    type MonthWeekRow,
-    type TaskStrip
+  aggregateProjectTimelines,
+  aggregateTeamTimelines,
+  formatDateRange,
+  formatDayHeader,
+  formatMonthYear,
+  formatWeekRange,
+  getDateRange,
+  getDayGrid,
+  getMonthGridWithStrips,
+  getMonthGridWithTimelineStrips,
+  getWeekdayLabels,
+  getWeekGrid,
+  navigateDate,
+  sortTasksByPriority,
+  TIMELINE_COLORS,
+  type CalendarDay,
+  type CalendarGroupBy,
+  type CalendarViewMode,
+  type MonthWeekRow,
+  type TaskStrip,
+  type TimelineEntry,
+  type TimelineStrip,
 } from "./calendar-utils";
 
-/* ── Priority-based strip colors ── */
-function stripBg(priority: TaskPriority): string {
-  switch (priority) {
-    case "critical": return "bg-error/80 text-error-content";
-    case "high": return "bg-warning/80 text-warning-content";
-    case "medium": return "bg-info/70 text-info-content";
-    case "low": return "bg-base-300 text-base-content";
+/* ── Status-first, priority-secondary strip colors ── */
+// Status drives the hue (what action is needed?), priority drives urgency for todo tasks.
+function stripBg(priority: TaskPriority, status: TaskStatus): string {
+  switch (status) {
+    case "done":
+      // Completed — green, slightly muted so it reads as "past"
+      return "bg-success/80 text-success-content";
+    case "in_progress":
+      // Actively being worked on — vivid primary blue
+      return "bg-primary text-primary-content";
+    case "in_review":
+      // Waiting on review — secondary violet/indigo
+      return "bg-secondary text-secondary-content";
+    case "blocked":
+      // Blocked — always full-opacity red to demand attention
+      return "bg-error text-error-content";
+    case "cancelled":
+      // Cancelled — neutral, faded
+      return "bg-neutral/60 text-neutral-content";
+    case "todo":
+    default:
+      // Not started yet — use priority to signal urgency
+      switch (priority) {
+        case "critical":
+          return "bg-error text-error-content";
+        case "high":
+          return "bg-warning text-warning-content";
+        case "medium":
+          return "bg-info text-info-content";
+        case "low":
+          return "bg-accent/80 text-accent-content";
+      }
   }
 }
 
-function stripBorder(status: TaskStatus): string {
-  switch (status) {
-    case "done": return "ring-1 ring-success/60";
-    case "in_progress": return "ring-1 ring-info/60";
-    case "blocked": return "ring-1 ring-error/60";
-    default: return "ring-1 ring-base-content/10";
-  }
+function stripBorder(priority: TaskPriority, status: TaskStatus): string {
+  // Blocked tasks get an extra emphasis ring
+  if (status === "blocked") return "ring-2 ring-error/60 ring-offset-0";
+  // done tasks are slightly de-emphasised
+  if (status === "done") return "opacity-75";
+  // critical priority on non-blocked tasks gets a subtle white inner ring
+  if (priority === "critical") return "ring-1 ring-white/20";
+  return "";
 }
 
 function priorityDot(priority: TaskPriority): string {
   switch (priority) {
-    case "critical": return "bg-error";
-    case "high": return "bg-warning";
-    case "medium": return "bg-info";
-    case "low": return "bg-base-content/30";
+    case "critical":
+      return "bg-error";
+    case "high":
+      return "bg-warning";
+    case "medium":
+      return "bg-info";
+    case "low":
+      return "bg-accent";
   }
 }
 
 function statusRing(status: TaskStatus): string {
   switch (status) {
-    case "done": return "border-l-success";
-    case "in_progress": return "border-l-info";
-    case "blocked": return "border-l-error";
-    default: return "border-l-base-content/20";
+    case "done":
+      return "border-l-success";
+    case "in_progress":
+      return "border-l-primary";
+    case "in_review":
+      return "border-l-secondary";
+    case "blocked":
+      return "border-l-error";
+    case "cancelled":
+      return "border-l-neutral";
+    default:
+      return "border-l-info";
   }
 }
 
@@ -78,17 +128,18 @@ function StripBar({
   const { task, startCol, span, lane, clippedStart, clippedEnd } = strip;
   const left = `${(startCol / 7) * 100}%`;
   const width = `${(span / 7) * 100}%`;
-  const top = `${lane * 22 + 20}px`; // 20px offset for day number row
+  const top = `${lane * 24 + 22}px`; // 22px offset for day number row
 
   return (
     <button
       className={cn(
-        "absolute h-[18px] text-[10px] leading-[18px] px-1.5 truncate z-10",
-        "cursor-pointer transition-all hover:brightness-90 hover:shadow-sm",
-        stripBg(task.priority),
-        stripBorder(task.status),
+        "absolute h-[20px] text-[11px] leading-[20px] px-1.5 truncate z-10",
+        "cursor-pointer transition-all hover:brightness-110 hover:shadow-md shadow-sm",
+        "font-medium",
+        stripBg(task.priority, task.status),
+        stripBorder(task.priority, task.status),
         clippedStart ? "rounded-l-none" : "rounded-l-md",
-        clippedEnd ? "rounded-r-none" : "rounded-r-md"
+        clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
       style={{ left, width, top }}
       title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
@@ -113,7 +164,8 @@ function TaskCard({
   members?: ProjectMember[];
 }) {
   const assignee = members?.find(
-    (m) => m.user_id === task.assignee_id || task.assignee_ids?.includes(m.user_id)
+    (m) =>
+      m.user_id === task.assignee_id || task.assignee_ids?.includes(m.user_id),
   );
 
   return (
@@ -123,14 +175,18 @@ function TaskCard({
         onClick?.(task);
       }}
       className={cn(
-        "w-full text-left p-2 rounded-lg border-l-3 bg-base-100 border border-base-200",
-        "hover:shadow-md transition-all cursor-pointer group",
-        statusRing(task.status)
+        "w-full text-left p-2.5 rounded-lg border-l-3 bg-base-100 border border-base-200/80",
+        "shadow-sm hover:shadow-md transition-all cursor-pointer group",
+        statusRing(task.status),
       )}
     >
       <div className="flex items-start justify-between gap-1">
-        <span className="text-sm font-medium truncate flex-1">{task.title}</span>
-        {task.recurrence_rule && <Repeat className="w-3 h-3 text-base-content/40 flex-shrink-0 mt-0.5" />}
+        <span className="text-sm font-medium truncate flex-1">
+          {task.title}
+        </span>
+        {task.recurrence_rule && (
+          <Repeat className="w-3 h-3 text-base-content/40 flex-shrink-0 mt-0.5" />
+        )}
       </div>
       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
         <Badge variant={priorityColor(task.priority)} className="badge-xs">
@@ -140,7 +196,9 @@ function TaskCard({
           {statusLabel(task.status)}
         </Badge>
         {task.labels?.map((l) => (
-          <span key={l} className="badge badge-xs badge-outline">{l}</span>
+          <span key={l} className="badge badge-xs badge-outline">
+            {l}
+          </span>
         ))}
       </div>
       {task.start_date && task.due_date && (
@@ -171,7 +229,7 @@ function TaskCard({
 }
 
 /* ── Month Week Row with strips ── */
-const MAX_VISIBLE_LANES = 3;
+const MAX_VISIBLE_LANES = 5;
 
 function MonthWeekRowView({
   row,
@@ -184,8 +242,8 @@ function MonthWeekRowView({
   onClickTask?: (task: Task) => void;
   onClickDay?: (date: Date) => void;
 }) {
-  // Fixed row height: day number (22px) + MAX_VISIBLE_LANES * 22px + overflow row (18px) + padding
-  const rowH = 22 + MAX_VISIBLE_LANES * 22 + 18 + 4;
+  // Fixed row height: day number (22px) + MAX_VISIBLE_LANES * 24px + overflow row (18px) + padding
+  const rowH = 22 + MAX_VISIBLE_LANES * 24 + 18 + 4;
 
   // Only show strips in visible lanes
   const visibleStrips = row.strips.filter((s) => s.lane < MAX_VISIBLE_LANES);
@@ -206,17 +264,17 @@ function MonthWeekRowView({
         <div
           key={col}
           className={cn(
-            "border border-base-200 px-1 pt-0.5 cursor-pointer hover:bg-base-200/30 transition-colors overflow-hidden",
-            !day.isCurrentMonth && "opacity-40",
-            day.isToday && "ring-2 ring-primary ring-inset"
+            "border border-base-200/60 px-1 pt-0.5 cursor-pointer hover:bg-base-200/20 transition-colors overflow-hidden",
+            !day.isCurrentMonth && "opacity-30",
+            day.isToday && "ring-2 ring-primary ring-inset bg-primary/5",
           )}
           style={{ height: `${rowH}px` }}
           onClick={() => onClickDay?.(day.date)}
         >
           <span
             className={cn(
-              "text-xs font-medium w-5 h-5 flex items-center justify-center rounded-full",
-              day.isToday && "bg-primary text-primary-content"
+              "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full",
+              day.isToday && "bg-primary text-primary-content",
             )}
           >
             {day.date.getDate()}
@@ -224,9 +282,12 @@ function MonthWeekRowView({
           {/* "+N more" indicator at bottom of cell */}
           {hiddenPerCol[col] > 0 && (
             <div
-              className="absolute bottom-0.5 text-[10px] font-medium text-primary hover:text-primary/80 cursor-pointer z-20"
+              className="absolute bottom-1 text-[10px] font-semibold text-primary hover:underline cursor-pointer z-20"
               style={{ left: `calc(${(col / 7) * 100}% + 4px)` }}
-              onClick={(e) => { e.stopPropagation(); onClickDay?.(day.date); }}
+              onClick={(e) => {
+                e.stopPropagation();
+                onClickDay?.(day.date);
+              }}
             >
               +{hiddenPerCol[col]} more
             </div>
@@ -236,7 +297,100 @@ function MonthWeekRowView({
 
       {/* Strip overlay — only visible lanes */}
       {visibleStrips.map((strip, i) => (
-        <StripBar key={`${strip.task.id}-${i}`} strip={strip} onClick={onClickTask} />
+        <StripBar
+          key={`${strip.task.id}-${i}`}
+          strip={strip}
+          onClick={onClickTask}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ── Timeline Strip Bar for project/team month grid ── */
+function TimelineStripBar({
+  strip,
+  onClick,
+}: {
+  strip: TimelineStrip;
+  onClick?: (entry: TimelineEntry) => void;
+}) {
+  const { entry, startCol, span, lane, clippedStart, clippedEnd } = strip;
+  const left = `${(startCol / 7) * 100}%`;
+  const width = `${(span / 7) * 100}%`;
+  const top = `${lane * 28 + 24}px`;
+  const colorClass = TIMELINE_COLORS[entry.colorIndex % TIMELINE_COLORS.length];
+
+  return (
+    <button
+      className={cn(
+        "absolute h-[24px] text-[11px] leading-[24px] px-2 truncate z-10",
+        "cursor-pointer transition-all hover:brightness-110 hover:shadow-md",
+        "font-medium shadow-sm",
+        colorClass,
+        clippedStart ? "rounded-l-none" : "rounded-l-md",
+        clippedEnd ? "rounded-r-none" : "rounded-r-md",
+      )}
+      style={{ left, width, top }}
+      title={`${entry.title} — ${entry.taskCount} task${entry.taskCount !== 1 ? "s" : ""}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(entry);
+      }}
+    >
+      {entry.title}
+      <span className="ml-1 opacity-75 text-[10px]">({entry.taskCount})</span>
+    </button>
+  );
+}
+
+/* ── Timeline month row ── */
+const MAX_TIMELINE_LANES = 8;
+
+function TimelineWeekRowView({
+  row,
+  onClickEntry,
+}: {
+  row: { days: CalendarDay[]; strips: TimelineStrip[] };
+  onClickEntry?: (entry: TimelineEntry) => void;
+}) {
+  const maxLane = row.strips.reduce((max, s) => Math.max(max, s.lane), -1);
+  const lanesUsed = Math.min(maxLane + 1, MAX_TIMELINE_LANES);
+  const rowH = 24 + lanesUsed * 28 + 8;
+
+  const visibleStrips = row.strips.filter((s) => s.lane < MAX_TIMELINE_LANES);
+
+  return (
+    <div
+      className="grid grid-cols-7 relative"
+      style={{ height: `${Math.max(rowH, 52)}px` }}
+    >
+      {row.days.map((day, col) => (
+        <div
+          key={col}
+          className={cn(
+            "border border-base-200/40 px-1 pt-0.5 transition-colors overflow-hidden",
+            !day.isCurrentMonth && "opacity-25",
+            day.isToday && "ring-2 ring-primary ring-inset bg-primary/5",
+          )}
+          style={{ height: `${Math.max(rowH, 52)}px` }}
+        >
+          <span
+            className={cn(
+              "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full",
+              day.isToday && "bg-primary text-primary-content",
+            )}
+          >
+            {day.date.getDate()}
+          </span>
+        </div>
+      ))}
+      {visibleStrips.map((strip, i) => (
+        <TimelineStripBar
+          key={`${strip.entry.id}-${i}`}
+          strip={strip}
+          onClick={onClickEntry}
+        />
       ))}
     </div>
   );
@@ -245,10 +399,10 @@ function MonthWeekRowView({
 /* ── Group-By section header ── */
 function GroupHeader({ label, count }: { label: string; count: number }) {
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 bg-base-200/50 border-b border-base-200 sticky top-0 z-20">
-      <Layers className="w-3.5 h-3.5 text-base-content/50" />
+    <div className="flex items-center gap-2 px-3 py-2 bg-base-200/40 border-b border-base-200/60 sticky top-0 z-20 backdrop-blur-sm">
+      <Layers className="w-3.5 h-3.5 text-primary/60" />
       <span className="text-sm font-semibold">{label}</span>
-      <span className="text-xs text-base-content/50">({count} tasks)</span>
+      <span className="badge badge-ghost badge-xs">{count} tasks</span>
     </div>
   );
 }
@@ -272,6 +426,8 @@ export interface CalendarViewProps {
   teamNames?: Map<string, string>;
   /** Project→team mapping for team grouping */
   projectTeamMap?: Map<string, string>;
+  /** Callback when timeline entry is clicked (project/team mode) */
+  onTimelineEntryClick?: (entry: TimelineEntry) => void;
 }
 
 export function CalendarView({
@@ -287,36 +443,32 @@ export function CalendarView({
   projectNames,
   teamNames,
   projectTeamMap,
+  onTimelineEntryClick,
 }: CalendarViewProps) {
   const [viewDate, setViewDate] = useState(new Date());
   const [mode, setMode] = useState<CalendarViewMode>(defaultMode);
   const weekdays = getWeekdayLabels();
 
-  // Group tasks
-  const grouped = useMemo(() => {
-    if (groupBy === "none") return [{ key: "__all__", label: "", tasks }];
+  // Is this a timeline mode (project/team) vs tasks mode?
+  const isTimelineMode = groupBy === "project" || groupBy === "team";
 
-    const groups = new Map<string, Task[]>();
-
-    for (const t of tasks) {
-      let key = "";
-      if (groupBy === "project") {
-        key = t.project_id;
-      } else if (groupBy === "team") {
-        key = projectTeamMap?.get(t.project_id) || "unassigned";
-      }
-      const arr = groups.get(key);
-      if (arr) arr.push(t);
-      else groups.set(key, [t]);
+  // Build timeline entries for project/team modes
+  const timelineEntries = useMemo(() => {
+    if (groupBy === "project" && projectNames) {
+      return aggregateProjectTimelines(tasks, projectNames);
     }
-
-    return Array.from(groups.entries()).map(([key, tasks]) => {
-      let label = key;
-      if (groupBy === "project") label = projectNames?.get(key) || key;
-      else if (groupBy === "team") label = key === "unassigned" ? "No Team" : (teamNames?.get(key) || key);
-      return { key, label, tasks };
-    });
+    if (groupBy === "team" && projectTeamMap && teamNames) {
+      return aggregateTeamTimelines(tasks, projectTeamMap, teamNames);
+    }
+    return [];
   }, [tasks, groupBy, projectNames, teamNames, projectTeamMap]);
+
+  // Group tasks (only used in "none" mode for grouped sections)
+  const grouped = useMemo(() => {
+    // In timeline mode we use a single unified view, not grouped sections
+    if (isTimelineMode) return [{ key: "__timeline__", label: "", tasks }];
+    return [{ key: "__all__", label: "", tasks }];
+  }, [tasks, isTimelineMode]);
 
   const headerText = useMemo(() => {
     if (mode === "month") return formatMonthYear(viewDate);
@@ -324,12 +476,15 @@ export function CalendarView({
     return formatDayHeader(viewDate);
   }, [viewDate, mode]);
 
-  const handleNavigate = useCallback((direction: 1 | -1) => {
-    const next = navigateDate(viewDate, mode, direction);
-    setViewDate(next);
-    const range = getDateRange(next, mode);
-    onRangeChange?.(range.from, range.to, mode);
-  }, [viewDate, mode, onRangeChange]);
+  const handleNavigate = useCallback(
+    (direction: 1 | -1) => {
+      const next = navigateDate(viewDate, mode, direction);
+      setViewDate(next);
+      const range = getDateRange(next, mode);
+      onRangeChange?.(range.from, range.to, mode);
+    },
+    [viewDate, mode, onRangeChange],
+  );
 
   const handleToday = useCallback(() => {
     const today = new Date();
@@ -338,37 +493,60 @@ export function CalendarView({
     onRangeChange?.(range.from, range.to, mode);
   }, [mode, onRangeChange]);
 
-  const handleModeChange = useCallback((newMode: CalendarViewMode) => {
-    setMode(newMode);
-    const range = getDateRange(viewDate, newMode);
-    onRangeChange?.(range.from, range.to, newMode);
-  }, [viewDate, onRangeChange]);
+  const handleModeChange = useCallback(
+    (newMode: CalendarViewMode) => {
+      setMode(newMode);
+      const range = getDateRange(viewDate, newMode);
+      onRangeChange?.(range.from, range.to, newMode);
+    },
+    [viewDate, onRangeChange],
+  );
 
-  const handleDayClick = useCallback((date: Date) => {
-    if (mode === "month") {
-      setViewDate(date);
-      setMode("day");
-      const range = getDateRange(date, "day");
-      onRangeChange?.(range.from, range.to, "day");
-    }
-  }, [mode, onRangeChange]);
+  const handleDayClick = useCallback(
+    (date: Date) => {
+      if (mode === "month") {
+        setViewDate(date);
+        setMode("day");
+        const range = getDateRange(date, "day");
+        onRangeChange?.(range.from, range.to, "day");
+      }
+    },
+    [mode, onRangeChange],
+  );
 
   return (
     <div className={cn("flex flex-col h-full", className)}>
       {/* ── Toolbar ── */}
-      <div className={cn(
-        "flex items-center justify-between gap-2 flex-wrap",
-        compact ? "pb-2" : "pb-3"
-      )}>
-        <div className="flex items-center gap-2">
-          <button className="btn btn-ghost btn-sm btn-square" onClick={() => handleNavigate(-1)}>
-            <ChevronLeft className="w-4 h-4" />
+      <div
+        className={cn(
+          "flex items-center justify-between gap-2 flex-wrap border-b border-base-200/60 bg-base-100",
+          compact ? "pb-2" : "pb-2.5 mb-2",
+        )}
+      >
+        <div className="flex items-center gap-1.5">
+          <div className="join">
+            <button
+              className="join-item btn btn-ghost btn-sm btn-square"
+              onClick={() => handleNavigate(-1)}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button
+              className="join-item btn btn-ghost btn-sm btn-square"
+              onClick={() => handleNavigate(1)}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+          <button className="btn btn-ghost btn-xs" onClick={handleToday}>
+            Today
           </button>
-          <button className="btn btn-ghost btn-sm btn-square" onClick={() => handleNavigate(1)}>
-            <ChevronRight className="w-4 h-4" />
-          </button>
-          <button className="btn btn-ghost btn-sm" onClick={handleToday}>Today</button>
-          <h2 className={cn("font-semibold", compact ? "text-sm" : "text-lg")}>
+          <h2
+            className={cn(
+              "font-semibold ml-1",
+              compact ? "text-sm" : "text-base",
+            )}
+          >
             {headerText}
           </h2>
         </div>
@@ -396,47 +574,229 @@ export function CalendarView({
       {/* ── Calendar Body ── */}
       {!isLoading && (
         <div className="flex-1 min-h-0 overflow-auto">
-          {grouped.map((group) => (
-            <div key={group.key}>
-              {groupBy !== "none" && (
-                <GroupHeader label={group.label} count={group.tasks.length} />
-              )}
+          {isTimelineMode && mode === "month" ? (
+            /* Timeline month grid for project/team modes */
+            <TimelineMonthGridView
+              entries={timelineEntries}
+              viewDate={viewDate}
+              weekdays={weekdays}
+              onClickEntry={onTimelineEntryClick}
+            />
+          ) : isTimelineMode && (mode === "week" || mode === "day") ? (
+            /* Timeline week/day fallback: show entry summary cards */
+            <TimelineSummaryView
+              entries={timelineEntries}
+              viewDate={viewDate}
+              mode={mode}
+              onClickEntry={onTimelineEntryClick}
+            />
+          ) : (
+            /* Normal task views */
+            grouped.map((group) => (
+              <div key={group.key}>
+                {groupBy !== "none" && (
+                  <GroupHeader label={group.label} count={group.tasks.length} />
+                )}
 
-              {/* Month Grid with Strips */}
-              {mode === "month" && (
-                <MonthGridView
-                  tasks={group.tasks}
-                  viewDate={viewDate}
-                  weekdays={weekdays}
-                  onClickTask={onTaskClick}
-                  onClickDay={handleDayClick}
-                />
-              )}
+                {mode === "month" && (
+                  <MonthGridView
+                    tasks={group.tasks}
+                    viewDate={viewDate}
+                    weekdays={weekdays}
+                    onClickTask={onTaskClick}
+                    onClickDay={handleDayClick}
+                  />
+                )}
 
-              {/* Week Grid */}
-              {mode === "week" && (
-                <WeekGridView
-                  tasks={group.tasks}
-                  viewDate={viewDate}
-                  weekdays={weekdays}
-                  onClickTask={onTaskClick}
-                  members={members}
-                />
-              )}
+                {mode === "week" && (
+                  <WeekGridView
+                    tasks={group.tasks}
+                    viewDate={viewDate}
+                    weekdays={weekdays}
+                    onClickTask={onTaskClick}
+                    members={members}
+                  />
+                )}
 
-              {/* Day View */}
-              {mode === "day" && (
-                <DayGridView
-                  tasks={group.tasks}
-                  viewDate={viewDate}
-                  onClickTask={onTaskClick}
-                  members={members}
-                />
-              )}
-            </div>
-          ))}
+                {mode === "day" && (
+                  <DayGridView
+                    tasks={group.tasks}
+                    viewDate={viewDate}
+                    onClickTask={onTaskClick}
+                    members={members}
+                  />
+                )}
+              </div>
+            ))
+          )}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ── Timeline Month Grid sub-component ── */
+function TimelineMonthGridView({
+  entries,
+  viewDate,
+  weekdays,
+  onClickEntry,
+}: {
+  entries: TimelineEntry[];
+  viewDate: Date;
+  weekdays: string[];
+  onClickEntry?: (entry: TimelineEntry) => void;
+}) {
+  const rows = useMemo(
+    () =>
+      getMonthGridWithTimelineStrips(
+        viewDate.getFullYear(),
+        viewDate.getMonth(),
+        entries,
+      ),
+    [viewDate, entries],
+  );
+
+  return (
+    <div className="flex flex-col min-h-0">
+      {/* Legend */}
+      {entries.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap px-2 py-2 border-b border-base-200/40">
+          {/* Deduplicate by title for teams with broken segments */}
+          {Array.from(new Map(entries.map((e) => [e.title, e])).values()).map(
+            (entry) => (
+              <div key={entry.id} className="flex items-center gap-1.5">
+                <div
+                  className={cn(
+                    "w-3 h-3 rounded-sm",
+                    TIMELINE_COLORS[entry.colorIndex % TIMELINE_COLORS.length],
+                  )}
+                />
+                <span className="text-xs text-base-content/70">
+                  {entry.title}
+                </span>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+
+      {/* Weekday headers */}
+      <div className="grid grid-cols-7 border-b border-base-200/60">
+        {weekdays.map((wd) => (
+          <div
+            key={wd}
+            className="text-[10px] font-semibold text-base-content/40 uppercase text-center py-1.5 tracking-wider"
+          >
+            {wd}
+          </div>
+        ))}
+      </div>
+
+      {/* Week rows with timeline strips */}
+      {rows.map((row, i) => (
+        <TimelineWeekRowView key={i} row={row} onClickEntry={onClickEntry} />
+      ))}
+
+      {entries.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+          <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
+          <p className="text-sm font-medium">No timelines to display</p>
+          <p className="text-xs mt-1 text-base-content/30">
+            Tasks need start/due dates to appear as timelines
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Timeline Summary View for week/day mode ── */
+function TimelineSummaryView({
+  entries,
+  viewDate,
+  mode,
+  onClickEntry,
+}: {
+  entries: TimelineEntry[];
+  viewDate: Date;
+  mode: CalendarViewMode;
+  onClickEntry?: (entry: TimelineEntry) => void;
+}) {
+  // Filter entries active during the view period
+  const range = getDateRange(viewDate, mode);
+  const rangeStart = new Date(range.from);
+  const rangeEnd = new Date(range.to);
+  rangeStart.setHours(0, 0, 0, 0);
+  rangeEnd.setHours(23, 59, 59, 999);
+
+  const activeEntries = entries.filter((e) => {
+    return e.endDate >= rangeStart && e.startDate <= rangeEnd;
+  });
+
+  // Deduplicate by title (teams with broken segments)
+  const uniqueEntries = Array.from(
+    new Map(
+      activeEntries.map((e) => [
+        e.title,
+        {
+          ...e,
+          taskCount: activeEntries
+            .filter((ae) => ae.title === e.title)
+            .reduce((sum, ae) => Math.max(sum, ae.taskCount), 0),
+        },
+      ]),
+    ).values(),
+  );
+
+  const formatDate = (d: Date) =>
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return (
+    <div className="max-w-3xl mx-auto py-4">
+      {uniqueEntries.length > 0 && (
+        <div className="text-sm text-base-content/50 mb-3">
+          {uniqueEntries.length} active{" "}
+          {uniqueEntries[0]?.type === "project" ? "project" : "team"}
+          {uniqueEntries.length !== 1 ? "s" : ""}
+        </div>
+      )}
+      <div className="space-y-2">
+        {uniqueEntries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+            <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
+            <p className="text-sm font-medium">No active timelines</p>
+          </div>
+        ) : (
+          uniqueEntries.map((entry) => {
+            const colorClass =
+              TIMELINE_COLORS[entry.colorIndex % TIMELINE_COLORS.length];
+            return (
+              <button
+                key={entry.id}
+                onClick={() => onClickEntry?.(entry)}
+                className="w-full text-left p-3 rounded-xl border border-base-200 bg-base-100
+                  hover:shadow-md transition-all cursor-pointer flex items-center gap-3"
+              >
+                <div
+                  className={cn("w-2 h-10 rounded-full shrink-0", colorClass)}
+                />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">
+                    {entry.title}
+                  </div>
+                  <div className="text-xs text-base-content/50 mt-0.5">
+                    {formatDate(entry.startDate)} → {formatDate(entry.endDate)}
+                  </div>
+                </div>
+                <div className="badge badge-ghost badge-sm shrink-0">
+                  {entry.taskCount} task{entry.taskCount !== 1 ? "s" : ""}
+                </div>
+              </button>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -456,16 +816,24 @@ function MonthGridView({
   onClickDay?: (date: Date) => void;
 }) {
   const rows = useMemo(
-    () => getMonthGridWithStrips(viewDate.getFullYear(), viewDate.getMonth(), tasks),
-    [viewDate, tasks]
+    () =>
+      getMonthGridWithStrips(
+        viewDate.getFullYear(),
+        viewDate.getMonth(),
+        tasks,
+      ),
+    [viewDate, tasks],
   );
 
   return (
     <div className="flex flex-col min-h-0">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-base-200">
+      <div className="grid grid-cols-7 border-b border-base-200/60">
         {weekdays.map((wd) => (
-          <div key={wd} className="text-xs font-semibold text-base-content/60 text-center py-1.5">
+          <div
+            key={wd}
+            className="text-[10px] font-semibold text-base-content/40 uppercase text-center py-1.5 tracking-wider"
+          >
             {wd}
           </div>
         ))}
@@ -501,35 +869,49 @@ function WeekGridView({
   const grid = useMemo(() => getWeekGrid(viewDate, tasks), [viewDate, tasks]);
 
   return (
-    <div className="grid grid-cols-7 gap-2 h-[calc(100vh-200px)]">
+    <div className="grid grid-cols-7 gap-1.5 h-[calc(100vh-220px)]">
       {grid.map((day, i) => {
         const sorted = sortTasksByPriority(day.tasks);
         return (
-          <div key={i} className="flex flex-col min-h-0 border border-base-200 rounded-lg overflow-hidden bg-base-100/50">
-            <div className={cn(
-              "text-center py-2 bg-base-100 z-10 border-b border-base-200 shrink-0",
-              day.isToday && "text-primary font-bold"
-            )}>
-              <div className="text-xs text-base-content/60">{weekdays[i]}</div>
-              <div className={cn(
-                "text-lg font-semibold w-9 h-9 mx-auto flex items-center justify-center rounded-full",
-                day.isToday && "bg-primary text-primary-content"
-              )}>
+          <div
+            key={i}
+            className="flex flex-col min-h-0 border border-base-200/60 rounded-xl overflow-hidden bg-base-100 shadow-sm"
+          >
+            <div
+              className={cn(
+                "text-center py-1.5 bg-base-100 z-10 border-b border-base-200/60 shrink-0",
+                day.isToday && "text-primary font-bold",
+              )}
+            >
+              <div className="text-[10px] text-base-content/50 uppercase">
+                {weekdays[i]}
+              </div>
+              <div
+                className={cn(
+                  "text-lg font-semibold w-8 h-8 mx-auto flex items-center justify-center rounded-full",
+                  day.isToday && "bg-primary text-primary-content",
+                )}
+              >
                 {day.date.getDate()}
               </div>
             </div>
-            <div className="flex-1 flex flex-col gap-1.5 p-1 overflow-y-auto min-h-0">
+            <div className="flex-1 flex flex-col gap-1 p-1 overflow-y-auto min-h-0">
               {sorted.map((task) => (
-                <TaskCard key={task.id} task={task} onClick={onClickTask} members={members} />
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onClick={onClickTask}
+                  members={members}
+                />
               ))}
               {sorted.length === 0 && (
                 <div className="flex-1 flex items-center justify-center">
-                  <span className="text-xs text-base-content/30">No tasks</span>
+                  <span className="text-[10px] text-base-content/20">—</span>
                 </div>
               )}
             </div>
             {sorted.length > 0 && (
-              <div className="text-[10px] text-center text-base-content/50 py-0.5 border-t border-base-200 shrink-0">
+              <div className="text-[10px] text-center text-base-content/40 py-0.5 border-t border-base-200/60 shrink-0 bg-base-200/20">
                 {sorted.length} task{sorted.length !== 1 ? "s" : ""}
               </div>
             )}
@@ -555,23 +937,32 @@ function DayGridView({
   const grid = useMemo(() => getDayGrid(viewDate, tasks), [viewDate, tasks]);
 
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto py-2">
       {grid[0] && (
         <>
           {grid[0].tasks.length > 0 && (
-            <div className="text-sm text-base-content/60 mb-2">
-              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""}
+            <div className="text-sm text-base-content/50 mb-3">
+              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""}{" "}
+              scheduled
             </div>
           )}
-          <div className="space-y-2 max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
+          <div className="space-y-2 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
             {grid[0].tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 text-base-content/50">
-                <CalendarDays className="w-12 h-12 mb-2" />
-                <p className="text-sm">No tasks for this day</p>
+              <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+                <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
+                <p className="text-sm font-medium">No tasks for this day</p>
+                <p className="text-xs mt-1 text-base-content/30">
+                  Try navigating to another date
+                </p>
               </div>
             ) : (
               sortTasksByPriority(grid[0].tasks).map((task) => (
-                <TaskCard key={task.id} task={task} onClick={onClickTask} members={members} />
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  onClick={onClickTask}
+                  members={members}
+                />
               ))
             )}
           </div>

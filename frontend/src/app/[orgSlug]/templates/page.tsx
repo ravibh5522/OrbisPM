@@ -1,18 +1,25 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { PageHeader, Card, EmptyState, LoadingPage, ConfirmDialog } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
-import { Input, Textarea } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { Plus, FileText, Trash2, Download, Upload } from "lucide-react";
-import { formatDate } from "@/lib/utils";
-import type { TaskTemplate } from "@/types/domain";
 import { PermissionGate } from "@/components/permission-gate";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/form-fields";
+import { Modal } from "@/components/ui/modal";
+import {
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+  PageHeader,
+} from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
+import { formatDate } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type { TaskTemplate } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Download, FileText, Plus, Trash2, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 interface TemplateForm {
   name: string;
@@ -34,18 +41,29 @@ export default function TemplatesPage() {
     enabled: !!currentOrg,
   });
 
-  const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<TemplateForm>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors: formErrors },
+  } = useForm<TemplateForm>();
 
   const createMutation = useMutation({
     mutationFn: (data: TemplateForm) =>
-      api.templates.create(currentOrg!.id, { ...data, structure: {}, is_shared: true }),
+      api.templates.create(currentOrg!.id, {
+        ...data,
+        structure: {},
+        is_shared: true,
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["templates"] });
       setShowCreate(false);
       reset();
       setError("");
+      toast.success("Template created");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create template"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create template"),
   });
 
   const deleteMutation = useMutation({
@@ -53,6 +71,7 @@ export default function TemplatesPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["templates"] });
       setDeleteTarget(null);
+      toast.success("Template deleted");
     },
   });
 
@@ -85,39 +104,61 @@ export default function TemplatesPage() {
         actions={
           <div className="flex gap-2">
             <PermissionGate resource="projects" action="create">
-              <Button variant="outline" onClick={() => importRef.current?.click()}>
+              <Button
+                variant="outline"
+                onClick={() => importRef.current?.click()}
+              >
                 <Upload className="w-4 h-4" /> Import JSON
               </Button>
               <Button onClick={() => setShowCreate(true)}>
                 <Plus className="w-4 h-4" /> New Template
               </Button>
             </PermissionGate>
-            <input ref={importRef} type="file" accept=".json" className="hidden" onChange={handleImportFile} />
+            <input
+              ref={importRef}
+              type="file"
+              accept=".json"
+              className="hidden"
+              onChange={handleImportFile}
+            />
           </div>
         }
       />
 
-      {(!templates?.data || templates.data.length === 0) ? (
+      {!templates?.data || templates.data.length === 0 ? (
         <EmptyState
           icon={<FileText className="w-16 h-16" />}
           title="No templates yet"
           description="Create templates to quickly scaffold tasks in projects"
-          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Template</Button>}
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" /> Create Template
+            </Button>
+          }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {templates.data.map((tpl: TaskTemplate) => (
             <Card key={tpl.id} compact>
-              <div className="cursor-pointer" onClick={() => setViewTarget(tpl)}>
+              <div
+                className="cursor-pointer"
+                onClick={() => setViewTarget(tpl)}
+              >
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-semibold">{tpl.name}</h3>
                     {tpl.description && (
-                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">{tpl.description}</p>
+                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">
+                        {tpl.description}
+                      </p>
                     )}
                   </div>
                   <div className="flex gap-1">
-                    {tpl.is_shared && <span className="badge badge-xs badge-primary">Shared</span>}
+                    {tpl.is_shared && (
+                      <span className="badge badge-xs badge-primary">
+                        Shared
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-3 text-sm text-base-content/50">
@@ -126,13 +167,19 @@ export default function TemplatesPage() {
                     <button
                       className="btn btn-ghost btn-xs btn-square"
                       title="Export JSON"
-                      onClick={(e) => { e.stopPropagation(); api.templates.export(currentOrg!.id, tpl.id, tpl.name); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        api.templates.export(currentOrg!.id, tpl.id, tpl.name);
+                      }}
                     >
                       <Download className="w-3 h-3" />
                     </button>
                     <button
                       className="btn btn-ghost btn-xs btn-square"
-                      onClick={(e) => { e.stopPropagation(); setDeleteTarget(tpl); }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteTarget(tpl);
+                      }}
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -147,20 +194,43 @@ export default function TemplatesPage() {
       {/* View modal */}
       {viewTarget && (
         <Modal open onClose={() => setViewTarget(null)} title={viewTarget.name}>
-          {viewTarget.description && <p className="text-base-content/60 mb-4">{viewTarget.description}</p>}
+          {viewTarget.description && (
+            <p className="text-base-content/60 mb-4">
+              {viewTarget.description}
+            </p>
+          )}
           <div className="bg-base-200 rounded-lg p-4">
             <h4 className="text-sm font-semibold mb-2">Structure</h4>
-            <pre className="text-xs overflow-auto">{JSON.stringify(viewTarget.structure, null, 2)}</pre>
+            <pre className="text-xs overflow-auto">
+              {JSON.stringify(viewTarget.structure, null, 2)}
+            </pre>
           </div>
           <div className="modal-action">
-            <Button variant="ghost" onClick={() => setViewTarget(null)}>Close</Button>
+            <Button variant="ghost" onClick={() => setViewTarget(null)}>
+              Close
+            </Button>
           </div>
         </Modal>
       )}
 
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); reset(); setError(""); }} title="New Template">
-        {error && <div className="alert alert-error mb-4"><span>{error}</span></div>}
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          reset();
+          setError("");
+        }}
+        title="New Template"
+      >
+        {error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
+          </div>
+        )}
+        <form
+          onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+          className="space-y-4"
+        >
           <Input
             label="Template Name"
             placeholder="Sprint Template"
@@ -173,8 +243,19 @@ export default function TemplatesPage() {
             {...register("description")}
           />
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowCreate(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create
+            </Button>
           </div>
         </form>
       </Modal>

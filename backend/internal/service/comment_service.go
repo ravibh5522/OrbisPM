@@ -63,7 +63,11 @@ func (s *CommentService) Create(ctx context.Context, params CreateCommentParams)
 	s.enqueueActivity(created.OrgID.String(), "comment", created.ID.String(), "created", created.UserID.String())
 
 	// Parse @mentions and notify mentioned users
-	go s.processMentions(context.Background(), created, params.ProjectID)
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.processMentions(ctx, created, params.ProjectID)
+	}()
 
 	return created, nil
 }
@@ -123,6 +127,10 @@ func (s *CommentService) processMentions(ctx context.Context, comment *domain.Co
 
 func (s *CommentService) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Comment, error) {
 	return s.commentRepo.ListByTask(ctx, taskID)
+}
+
+func (s *CommentService) ListByTaskPaginated(ctx context.Context, taskID uuid.UUID, limit, offset int) ([]*domain.Comment, int, error) {
+	return s.commentRepo.ListByTaskPaginated(ctx, taskID, limit, offset)
 }
 
 func (s *CommentService) Delete(ctx context.Context, id uuid.UUID) error {

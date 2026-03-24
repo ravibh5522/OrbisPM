@@ -95,7 +95,12 @@ func (h *CommentHandler) List(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid task id"})
 		return
 	}
-	comments, err := h.commentSvc.ListByTask(r.Context(), taskID)
+	limit := queryInt(r, "limit", 100)
+	offset := queryInt(r, "offset", 0)
+	if limit > 500 {
+		limit = 500
+	}
+	comments, total, err := h.commentSvc.ListByTaskPaginated(r.Context(), taskID, limit, offset)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -103,7 +108,7 @@ func (h *CommentHandler) List(w http.ResponseWriter, r *http.Request) {
 	if comments == nil {
 		comments = []*domain.Comment{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: comments, Total: len(comments), Limit: len(comments), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: comments, Total: total, Limit: limit, Offset: offset})
 }
 
 // Delete godoc

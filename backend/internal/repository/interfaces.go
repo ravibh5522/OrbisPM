@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -171,6 +172,7 @@ type CommentRepository interface {
 	Create(ctx context.Context, tx pgx.Tx, comment *domain.Comment) (*domain.Comment, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Comment, error)
 	ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.Comment, error)
+	ListByTaskPaginated(ctx context.Context, taskID uuid.UUID, limit, offset int) ([]*domain.Comment, int, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 }
 
@@ -344,4 +346,56 @@ type TaskChangeRequestRepository interface {
 	ListByTask(ctx context.Context, taskID uuid.UUID, status *string) ([]*domain.TaskChangeRequest, error)
 	ListByProject(ctx context.Context, projectID uuid.UUID, status *string, limit, offset int) ([]*domain.TaskChangeRequest, int, error)
 	CountPendingByTask(ctx context.Context, taskID uuid.UUID) (int, error)
+}
+
+// --- Analytics ---
+
+type AnalyticsRepository interface {
+	// Events
+	CreateEvent(ctx context.Context, tx pgx.Tx, e *domain.AnalyticsEvent) error
+	ListEvents(ctx context.Context, orgID uuid.UUID, eventType string, from, to time.Time, limit, offset int) ([]*domain.AnalyticsEvent, int, error)
+
+	// Task State Transitions
+	CreateTransition(ctx context.Context, tx pgx.Tx, t *domain.TaskStateTransition) error
+	ListTransitionsByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.TaskStateTransition, error)
+	ListTransitionsByProject(ctx context.Context, projectID uuid.UUID, from, to time.Time) ([]*domain.TaskStateTransition, error)
+
+	// Task Status Snapshots
+	UpsertSnapshot(ctx context.Context, tx pgx.Tx, s *domain.TaskStatusSnapshot) error
+	ListSnapshots(ctx context.Context, projectID uuid.UUID, from, to time.Time) ([]*domain.TaskStatusSnapshot, error)
+
+	// Daily Metrics
+	UpsertDailyMetric(ctx context.Context, tx pgx.Tx, m *domain.DailyMetric) error
+	ListDailyMetrics(ctx context.Context, scopeType string, scopeID uuid.UUID, from, to time.Time) ([]*domain.DailyMetric, error)
+
+	// Weekly Metrics
+	UpsertWeeklyMetric(ctx context.Context, tx pgx.Tx, m *domain.WeeklyMetric) error
+	ListWeeklyMetrics(ctx context.Context, scopeType string, scopeID uuid.UUID, from, to time.Time) ([]*domain.WeeklyMetric, error)
+
+	// Risk Scores
+	UpsertRiskScore(ctx context.Context, tx pgx.Tx, rs *domain.RiskScore) error
+	ListRiskScores(ctx context.Context, orgID uuid.UUID, minLevel string, limit int) ([]*domain.RiskScore, error)
+	GetRiskScore(ctx context.Context, taskID uuid.UUID) (*domain.RiskScore, error)
+
+	// Alerts
+	CreateAlert(ctx context.Context, tx pgx.Tx, a *domain.MetricAlert) error
+	ListActiveAlerts(ctx context.Context, orgID uuid.UUID, limit int) ([]*domain.MetricAlert, error)
+	AcknowledgeAlert(ctx context.Context, tx pgx.Tx, alertID, userID uuid.UUID) error
+
+	// Reports
+	CreateReport(ctx context.Context, tx pgx.Tx, rp *domain.PerformanceReport) (*domain.PerformanceReport, error)
+	UpdateReport(ctx context.Context, tx pgx.Tx, rp *domain.PerformanceReport) error
+	GetReport(ctx context.Context, id uuid.UUID) (*domain.PerformanceReport, error)
+	ListReports(ctx context.Context, orgID uuid.UUID, limit, offset int) ([]*domain.PerformanceReport, int, error)
+
+	// Aggregation queries
+	CountTasksByStatusForOrg(ctx context.Context, orgID uuid.UUID) (map[string]int, error)
+	CountTasksByStatusForProject(ctx context.Context, projectID uuid.UUID) (map[string]int, error)
+	CountCompletedInRange(ctx context.Context, projectID uuid.UUID, from, to time.Time) (int, error)
+	CountCreatedInRange(ctx context.Context, projectID uuid.UUID, from, to time.Time) (int, error)
+	GetAvgCycleTime(ctx context.Context, projectID uuid.UUID, days int) (float64, error)
+	GetOverdueTaskCountForOrg(ctx context.Context, orgID uuid.UUID) (int, error)
+	GetWorkloadByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.WorkloadDistribution, error)
+	GetVelocityTrend(ctx context.Context, projectID uuid.UUID, days int) ([]*domain.VelocityPoint, error)
+	GetOrgVelocityTrend(ctx context.Context, orgID uuid.UUID, days int) ([]*domain.VelocityPoint, error)
 }

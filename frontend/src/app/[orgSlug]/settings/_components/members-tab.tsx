@@ -40,6 +40,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 const ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
@@ -156,6 +157,7 @@ export default function MembersTab() {
       setShowInvite(false);
       inviteForm.reset();
       setError("");
+      toast.success("Member invited");
     },
     onError: (e: Error) =>
       setError(e instanceof ApiError ? e.message : "Failed to invite member"),
@@ -198,6 +200,7 @@ export default function MembersTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setRemoveTarget(null);
+      toast.success("Member removed");
     },
   });
 
@@ -212,8 +215,7 @@ export default function MembersTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setPasswordTarget(null);
-      setActionSuccess("Password reset successfully");
-      setTimeout(() => setActionSuccess(""), 3000);
+      toast.success("Password reset successfully");
     },
     onError: (e: Error) =>
       setError(e instanceof ApiError ? e.message : "Failed to reset password"),
@@ -243,8 +245,7 @@ export default function MembersTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setDeactivateTarget(null);
-      setActionSuccess("Member deactivated");
-      setTimeout(() => setActionSuccess(""), 3000);
+      toast.success("Member deactivated");
     },
     onError: (e: Error) =>
       setError(
@@ -257,8 +258,7 @@ export default function MembersTab() {
       api.members.reactivate(currentOrg!.id, userId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
-      setActionSuccess("Member reactivated");
-      setTimeout(() => setActionSuccess(""), 3000);
+      toast.success("Member reactivated");
     },
     onError: (e: Error) =>
       setError(
@@ -271,8 +271,7 @@ export default function MembersTab() {
       api.members.forceMfa(currentOrg!.id, userId),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
-      setActionSuccess("MFA enforcement enabled");
-      setTimeout(() => setActionSuccess(""), 3000);
+      toast.success("MFA enforcement enabled");
     },
     onError: (e: Error) =>
       setError(e instanceof ApiError ? e.message : "Failed to enforce MFA"),
@@ -284,8 +283,7 @@ export default function MembersTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setDeleteAccountTarget(null);
-      setActionSuccess("Account deleted permanently");
-      setTimeout(() => setActionSuccess(""), 3000);
+      toast.success("Account deleted permanently");
     },
     onError: (e: Error) =>
       setError(e instanceof ApiError ? e.message : "Failed to delete account"),

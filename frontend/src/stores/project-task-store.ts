@@ -1,16 +1,18 @@
-import { create } from "zustand";
 import type {
-  Task,
-  TaskTree,
   Checklist,
   Comment,
-  TaskDependency,
-  TaskWatcher,
+  Task,
   TaskChangeRequest,
-  TaskUpdateResult,
+  TaskDependency,
+  TaskTree,
+  TaskWatcher,
 } from "@/types/domain";
+import { create } from "zustand";
 
-export type WsSendFn = (action: string, payload?: Record<string, any>) => Promise<any>;
+export type WsSendFn = (
+  action: string,
+  payload?: Record<string, any>,
+) => Promise<any>;
 
 interface ProjectTaskState {
   // Connection
@@ -56,7 +58,11 @@ interface ProjectTaskState {
   // Sub-resources
   setChecklists: (taskId: string, items: Checklist[]) => void;
   addChecklist: (taskId: string, item: Checklist) => void;
-  updateChecklist: (taskId: string, id: string, changes: Partial<Checklist>) => void;
+  updateChecklist: (
+    taskId: string,
+    id: string,
+    changes: Partial<Checklist>,
+  ) => void;
   removeChecklist: (taskId: string, id: string) => void;
 
   setComments: (taskId: string, items: Comment[]) => void;
@@ -110,6 +116,32 @@ const INITIAL: Pick<
   watchers: new Map(),
   changeRequests: new Map(),
 };
+
+// ─── Tree update helpers ────────────────────────
+
+function updateTreeNodes(nodes: TaskTree[], task: Task): TaskTree[] {
+  return nodes.map((node) => {
+    const updated: TaskTree = {
+      ...node,
+      task: node.task.id === task.id ? task : node.task,
+    };
+    if (node.children?.length) {
+      updated.children = updateTreeNodes(node.children, task);
+    }
+    return updated;
+  });
+}
+
+function removeTreeNode(nodes: TaskTree[], taskId: string): TaskTree[] {
+  return nodes
+    .filter((node) => node.task.id !== taskId)
+    .map((node) => ({
+      ...node,
+      children: node.children?.length
+        ? removeTreeNode(node.children, taskId)
+        : node.children,
+    }));
+}
 
 export const useProjectTaskStore = create<ProjectTaskState>((set, get) => ({
   ...INITIAL,
@@ -201,7 +233,11 @@ export const useProjectTaskStore = create<ProjectTaskState>((set, get) => ({
           m.set(key, next);
         }
       }
-      return { tasks: m };
+
+      // Also update taskTree so tree/board views stay in sync
+      const taskTree = updateTreeNodes(s.taskTree, task);
+
+      return { tasks: m, taskTree };
     }),
 
   removeTask: (taskId) =>
@@ -213,7 +249,11 @@ export const useProjectTaskStore = create<ProjectTaskState>((set, get) => ({
           m.set(key, filtered);
         }
       }
-      return { tasks: m };
+
+      // Also remove from taskTree
+      const taskTree = removeTreeNode(s.taskTree, taskId);
+
+      return { tasks: m, taskTree };
     }),
 
   bulkUpsertTasks: (tasks) => {

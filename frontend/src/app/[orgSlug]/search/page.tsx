@@ -2,7 +2,12 @@
 
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import {
+  formatRelative,
+  priorityColor,
+  statusColor,
+  statusLabel,
+} from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Project, Task } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
@@ -36,7 +41,8 @@ export default function SearchPage() {
 
   const { data: projectResults, isFetching: projectsFetching } = useQuery({
     queryKey: ["search-projects", currentOrg?.id, searchTerm],
-    queryFn: () => api.search.projects(currentOrg!.id, searchTerm, SEARCH_LIMIT),
+    queryFn: () =>
+      api.search.projects(currentOrg!.id, searchTerm, SEARCH_LIMIT),
     enabled: !!currentOrg && searchTerm.length >= 2,
   });
 
@@ -95,12 +101,28 @@ export default function SearchPage() {
         </div>
       )}
 
+      {!searchTerm && !isFetching && (
+        <div className="text-center py-16">
+          <SearchIcon className="w-16 h-16 text-base-content/15 mx-auto mb-4" />
+          <p className="text-lg font-medium text-base-content/40">
+            Search across your workspace
+          </p>
+          <p className="text-sm text-base-content/30 mt-1">
+            Find tasks and projects by name, description, or ID
+          </p>
+        </div>
+      )}
+
       {searchTerm && !isFetching && (
         <div>
           <p className="text-sm text-base-content/50 mb-4">
-            {totalResults} result{totalResults !== 1 ? "s" : ""} for &quot;{searchTerm}&quot;
-            {(tasks.length >= SEARCH_LIMIT || projects.length >= SEARCH_LIMIT) && (
-              <span className="ml-1">(showing first {SEARCH_LIMIT} per category)</span>
+            {totalResults} result{totalResults !== 1 ? "s" : ""} for &quot;
+            {searchTerm}&quot;
+            {(tasks.length >= SEARCH_LIMIT ||
+              projects.length >= SEARCH_LIMIT) && (
+              <span className="ml-1">
+                (showing first {SEARCH_LIMIT} per category)
+              </span>
             )}
           </p>
 
@@ -115,7 +137,8 @@ export default function SearchPage() {
               {projects.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-base-content/70 mb-2 flex items-center gap-2">
-                    <FolderKanban className="w-4 h-4" /> Projects ({projects.length})
+                    <FolderKanban className="w-4 h-4" /> Projects (
+                    {projects.length})
                   </h3>
                   <Card>
                     <div className="overflow-x-auto">
@@ -132,11 +155,21 @@ export default function SearchPage() {
                             <tr
                               key={project.id}
                               className="hover cursor-pointer"
-                              onClick={() => router.push(`/${orgSlug}/projects/${project.id}`)}
+                              onClick={() =>
+                                router.push(
+                                  `/${orgSlug}/projects/${project.id}`,
+                                )
+                              }
                             >
                               <td className="font-medium">{project.name}</td>
-                              <td><Badge variant={statusColor(project.status)}>{statusLabel(project.status)}</Badge></td>
-                              <td className="text-sm text-base-content/60">{formatRelative(project.created_at)}</td>
+                              <td>
+                                <Badge variant={statusColor(project.status)}>
+                                  {statusLabel(project.status)}
+                                </Badge>
+                              </td>
+                              <td className="text-sm text-base-content/60">
+                                {formatRelative(project.created_at)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -170,16 +203,29 @@ export default function SearchPage() {
                               key={task.id}
                               className="hover cursor-pointer"
                               onClick={() =>
-                                router.push(`/${orgSlug}/projects/${task.project_id}?task=${task.id}`)
+                                router.push(
+                                  `/${orgSlug}/projects/${task.project_id}?task=${task.id}`,
+                                )
                               }
                             >
                               <td className="font-medium">{task.title}</td>
-                              <td><Badge variant={statusColor(task.status)}>{statusLabel(task.status)}</Badge></td>
-                              <td><Badge variant={priorityColor(task.priority)}>{statusLabel(task.priority)}</Badge></td>
-                              <td className="text-sm text-base-content/60">
-                                {projectNameMap.get(task.project_id) || task.project_id.slice(0, 8)}
+                              <td>
+                                <Badge variant={statusColor(task.status)}>
+                                  {statusLabel(task.status)}
+                                </Badge>
                               </td>
-                              <td className="text-sm text-base-content/60">{formatRelative(task.created_at)}</td>
+                              <td>
+                                <Badge variant={priorityColor(task.priority)}>
+                                  {statusLabel(task.priority)}
+                                </Badge>
+                              </td>
+                              <td className="text-sm text-base-content/60">
+                                {projectNameMap.get(task.project_id) ||
+                                  task.project_id.slice(0, 8)}
+                              </td>
+                              <td className="text-sm text-base-content/60">
+                                {formatRelative(task.created_at)}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

@@ -81,6 +81,12 @@ func (c *Consumer) Start(ctx context.Context) error {
 
 		c.handler(event)
 
+		log.Debug().
+			Str("type", event.Type).
+			Str("org_id", event.OrgID).
+			Str("channel_id", event.ChannelID).
+			Msg("NATS event received and dispatched")
+
 		if err := msg.Ack(); err != nil {
 			log.Error().Err(err).Msg("failed to ack message")
 		}

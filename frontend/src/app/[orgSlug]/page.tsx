@@ -1,32 +1,70 @@
 "use client";
 
+import { AreaChartSkeleton } from "@/components/charts/chart-skeleton";
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
+import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { api } from "@/lib/api";
 import { cn, formatRelative, priorityColor, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { DashboardStats, Project } from "@/types/domain";
+import type {
+  DashboardAnalytics,
+  DashboardStats,
+  MetricAlert,
+  Project,
+} from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
+  Bell,
   CheckCircle2,
   Clock,
   FolderKanban,
   ListTodo,
+  ShieldAlert,
   TrendingUp,
-  Users2
+  Users2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 
 const DonutChart = dynamic(
-  () => import("@/components/charts/donut-chart").then((mod) => ({ default: mod.DonutChart })),
+  () =>
+    import("@/components/charts/donut-chart").then((mod) => ({
+      default: mod.DonutChart,
+    })),
   {
     ssr: false,
     loading: () => (
       <div className="h-32 animate-pulse bg-base-200 rounded-lg" />
     ),
-  }
+  },
+);
+
+const AreaChartWidget = dynamic(
+  () =>
+    import("@/components/charts/area-chart").then((mod) => ({
+      default: mod.AreaChartWidget,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[200px] animate-pulse bg-base-200 rounded-lg" />
+    ),
+  },
+);
+
+const HealthRing = dynamic(
+  () =>
+    import("@/components/charts/health-ring").then((mod) => ({
+      default: mod.HealthRing,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[120px] w-[120px] animate-pulse bg-base-200 rounded-full mx-auto" />
+    ),
+  },
 );
 
 const STATUS_COLORS: Record<string, string> = {
@@ -46,10 +84,27 @@ const PRIORITY_COLORS: Record<string, string> = {
   none: "#94a3b8",
 };
 
-function MiniStat({ label, value, icon, color, sub }: { label: string; value: number; icon: React.ReactNode; color: string; sub?: string }) {
+function MiniStat({
+  label,
+  value,
+  icon,
+  color,
+  sub,
+}: {
+  label: string;
+  value: number;
+  icon: React.ReactNode;
+  color: string;
+  sub?: string;
+}) {
   return (
     <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 shadow-sm glass-card">
-      <div className={cn("flex items-center justify-center w-9 h-9 rounded-lg", color)}>
+      <div
+        className={cn(
+          "flex items-center justify-center w-9 h-9 rounded-lg",
+          color,
+        )}
+      >
         {icon}
       </div>
       <div className="min-w-0">
@@ -60,7 +115,6 @@ function MiniStat({ label, value, icon, color, sub }: { label: string; value: nu
     </div>
   );
 }
-
 
 export default function DashboardPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -79,33 +133,54 @@ export default function DashboardPage() {
     enabled: !!currentOrg,
   });
 
-  if (isLoading || !stats) return (
-    <div className="animate-pulse">
-      <div className="h-8 bg-base-300 rounded w-48 mb-2" />
-      <div className="h-4 bg-base-300 rounded w-64 mb-6" />
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div key={i} className="h-20 bg-base-200 rounded-xl border border-base-200" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-48 bg-base-200 rounded-xl border border-base-200" />
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="lg:col-span-2 h-64 bg-base-200 rounded-xl border border-base-200" />
-        <div className="lg:col-span-3 h-64 bg-base-200 rounded-xl border border-base-200" />
-      </div>
-    </div>
-  );
+  const { data: analytics, isLoading: analyticsLoading } =
+    useQuery<DashboardAnalytics>({
+      queryKey: ["analytics-dashboard", currentOrg?.id],
+      queryFn: () => api.analytics.dashboard(currentOrg!.id),
+      enabled: !!currentOrg,
+    });
 
-  const statusData = Object.entries(stats.tasks_by_status || {}).map(([k, v]) => ({ name: k, value: v }));
-  const priorityData = Object.entries(stats.tasks_by_priority || {}).map(([k, v]) => ({ name: k, value: v }));
+  if (isLoading || !stats)
+    return (
+      <div className="animate-pulse">
+        <div className="h-8 bg-base-300 rounded w-48 mb-2" />
+        <div className="h-4 bg-base-300 rounded w-64 mb-6" />
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-20 bg-base-200 rounded-xl border border-base-200"
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-48 bg-base-200 rounded-xl border border-base-200"
+            />
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+          <div className="lg:col-span-2 h-64 bg-base-200 rounded-xl border border-base-200" />
+          <div className="lg:col-span-3 h-64 bg-base-200 rounded-xl border border-base-200" />
+        </div>
+      </div>
+    );
+
+  const statusData = Object.entries(stats.tasks_by_status || {}).map(
+    ([k, v]) => ({ name: k, value: v }),
+  );
+  const priorityData = Object.entries(stats.tasks_by_priority || {}).map(
+    ([k, v]) => ({ name: k, value: v }),
+  );
   const projectList = projects?.data || [];
-  const completedTasks = (stats.tasks_by_status?.done || 0);
-  const inProgress = (stats.tasks_by_status?.in_progress || 0);
-  const completionPct = stats.total_tasks > 0 ? Math.round((completedTasks / stats.total_tasks) * 100) : 0;
+  const completedTasks = stats.tasks_by_status?.done || 0;
+  const inProgress = stats.tasks_by_status?.in_progress || 0;
+  const completionPct =
+    stats.total_tasks > 0
+      ? Math.round((completedTasks / stats.total_tasks) * 100)
+      : 0;
 
   return (
     <div>
@@ -114,43 +189,223 @@ export default function DashboardPage() {
         description={`Overview of ${currentOrg?.name}`}
         actions={
           currentMembership ? (
-            <span className="badge badge-outline badge-sm capitalize">{currentMembership.role}</span>
+            <span className="badge badge-outline badge-sm capitalize">
+              {currentMembership.role}
+            </span>
           ) : undefined
         }
       />
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-        <MiniStat label="Projects" value={stats.total_projects} icon={<FolderKanban className="w-5 h-5 text-primary-content" />} color="bg-primary" />
-        <MiniStat label="Total Tasks" value={stats.total_tasks} icon={<ListTodo className="w-5 h-5 text-secondary-content" />} color="bg-secondary" />
-        <MiniStat label="In Progress" value={inProgress} icon={<TrendingUp className="w-5 h-5 text-info-content" />} color="bg-info" />
-        <MiniStat label="Completed" value={completedTasks} icon={<CheckCircle2 className="w-5 h-5 text-success-content" />} color="bg-success" sub={`${completionPct}% done`} />
-        <MiniStat label="Teams" value={stats.total_teams} icon={<Users2 className="w-5 h-5 text-accent-content" />} color="bg-accent" />
-        <MiniStat label="Overdue" value={stats.overdue_tasks} icon={<AlertTriangle className="w-5 h-5 text-error-content" />} color="bg-error" />
+        <MiniStat
+          label="Projects"
+          value={stats.total_projects}
+          icon={<FolderKanban className="w-5 h-5 text-primary-content" />}
+          color="bg-primary"
+        />
+        <MiniStat
+          label="Total Tasks"
+          value={stats.total_tasks}
+          icon={<ListTodo className="w-5 h-5 text-secondary-content" />}
+          color="bg-secondary"
+        />
+        <MiniStat
+          label="In Progress"
+          value={inProgress}
+          icon={<TrendingUp className="w-5 h-5 text-info-content" />}
+          color="bg-info"
+        />
+        <MiniStat
+          label="Completed"
+          value={completedTasks}
+          icon={<CheckCircle2 className="w-5 h-5 text-success-content" />}
+          color="bg-success"
+          sub={`${completionPct}% done`}
+        />
+        <MiniStat
+          label="Teams"
+          value={stats.total_teams}
+          icon={<Users2 className="w-5 h-5 text-accent-content" />}
+          color="bg-accent"
+        />
+        <MiniStat
+          label="Overdue"
+          value={stats.overdue_tasks}
+          icon={<AlertTriangle className="w-5 h-5 text-error-content" />}
+          color="bg-error"
+        />
       </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card title="Task Status" compact>
-          <DonutChart data={statusData} colors={STATUS_COLORS} title="By Status" />
+          <DonutChart
+            data={statusData}
+            colors={STATUS_COLORS}
+            title="By Status"
+          />
         </Card>
         <Card title="Task Priority" compact>
-          <DonutChart data={priorityData} colors={PRIORITY_COLORS} title="By Priority" />
+          <DonutChart
+            data={priorityData}
+            colors={PRIORITY_COLORS}
+            title="By Priority"
+          />
         </Card>
         {/* Completion overview */}
         <Card title="Completion" compact>
           <div className="flex flex-col items-center justify-center h-full py-4 gap-3">
-            <div className="radial-progress text-primary" style={{ "--value": completionPct, "--size": "5rem", "--thickness": "6px" } as React.CSSProperties} role="progressbar">
+            <div
+              className="radial-progress text-primary"
+              style={
+                {
+                  "--value": completionPct,
+                  "--size": "5rem",
+                  "--thickness": "6px",
+                } as React.CSSProperties
+              }
+              role="progressbar"
+            >
               <span className="text-lg font-bold">{completionPct}%</span>
             </div>
             <div className="text-center">
-              <p className="text-sm font-medium">{completedTasks} of {stats.total_tasks} tasks done</p>
-              <p className="text-xs text-base-content/50">{stats.total_members} members • {stats.total_teams} teams</p>
+              <p className="text-sm font-medium">
+                {completedTasks} of {stats.total_tasks} tasks done
+              </p>
+              <p className="text-xs text-base-content/50">
+                {stats.total_members} members • {stats.total_teams} teams
+              </p>
             </div>
             <div className="w-full mt-2">
-              <progress className="progress progress-primary w-full" value={completedTasks} max={stats.total_tasks || 1} />
+              <progress
+                className="progress progress-primary w-full"
+                value={completedTasks}
+                max={stats.total_tasks || 1}
+              />
             </div>
           </div>
+        </Card>
+      </div>
+
+      {/* Analytics row — Health + Velocity + Alerts */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+        {/* Health Score */}
+        <Card title="Organization Health" compact>
+          {analyticsLoading || !analytics ? (
+            <div className="animate-pulse flex flex-col items-center py-4 gap-4">
+              <div className="w-[120px] h-[120px] rounded-full bg-base-300" />
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 w-full px-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex justify-between gap-2">
+                    <div className="h-3 rounded bg-base-300 w-16" />
+                    <div className="h-3 rounded bg-base-300 w-8" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center py-4 relative">
+              <HealthRing score={analytics.health.overall} size={120} />
+              <div className="grid grid-cols-2 gap-x-6 gap-y-1 mt-4 text-xs">
+                <div className="flex justify-between gap-2">
+                  <span className="text-base-content/60">Velocity</span>
+                  <span className="font-semibold">
+                    {Math.round(analytics.health.velocity_trend)}%
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-base-content/60">Completion</span>
+                  <span className="font-semibold">
+                    {Math.round(analytics.health.completion_rate)}%
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-base-content/60">Blocked</span>
+                  <span className="font-semibold">
+                    {Math.round(analytics.health.blocked_ratio)}%
+                  </span>
+                </div>
+                <div className="flex justify-between gap-2">
+                  <span className="text-base-content/60">Overdue</span>
+                  <span className="font-semibold">
+                    {Math.round(analytics.health.overdue_ratio)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+
+        {/* Velocity Trend */}
+        <Card title="Velocity Trend" compact>
+          {analyticsLoading || !analytics ? (
+            <AreaChartSkeleton height={180} />
+          ) : (
+            <AreaChartWidget
+              data={analytics.velocity}
+              dataKey="completed"
+              secondaryKey="created"
+              color="#22c55e"
+              secondaryColor="#3b82f6"
+              height={180}
+            />
+          )}
+        </Card>
+
+        {/* Alerts & Warnings */}
+        <Card title="Active Warnings" compact>
+          {analyticsLoading || !analytics ? (
+            <div className="animate-pulse space-y-2 py-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-start gap-2 p-2 rounded-lg bg-base-200"
+                >
+                  <div className="w-4 h-4 rounded bg-base-300 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-1">
+                    <div className="h-3 rounded bg-base-300 w-3/4" />
+                    <div className="h-2.5 rounded bg-base-300 w-full" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : analytics.warnings.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-8">
+              <CheckCircle2 className="w-8 h-8 text-success mb-2" />
+              <p className="text-sm text-base-content/60">No active alerts</p>
+            </div>
+          ) : (
+            <VirtualScrollList<MetricAlert>
+              items={analytics.warnings}
+              itemHeight={56}
+              containerHeight={200}
+              renderItem={(alert) => (
+                <div
+                  className={cn(
+                    "flex items-start gap-2 p-2 rounded-lg text-xs mb-1",
+                    alert.severity === "critical"
+                      ? "bg-error/10 text-error"
+                      : alert.severity === "warning"
+                        ? "bg-warning/10 text-warning"
+                        : "bg-info/10 text-info",
+                  )}
+                >
+                  {alert.severity === "critical" ? (
+                    <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <Bell className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-medium truncate">{alert.title}</p>
+                    <p className="text-[10px] opacity-70 truncate">
+                      {alert.description}
+                    </p>
+                  </div>
+                </div>
+              )}
+            />
+          )}
         </Card>
       </div>
 
@@ -160,12 +415,23 @@ export default function DashboardPage() {
         <div className="lg:col-span-2">
           <Card title="Projects" compact>
             {projectList.length === 0 ? (
-              <p className="text-base-content/50 text-sm py-4">No projects yet</p>
+              <div className="text-center py-8">
+                <FolderKanban className="w-10 h-10 text-base-content/15 mx-auto mb-2" />
+                <p className="text-base-content/50 text-sm">No projects yet</p>
+                <Link
+                  href={`/${orgSlug}/projects`}
+                  className="btn btn-primary btn-sm mt-3"
+                >
+                  Create project
+                </Link>
+              </div>
             ) : (
-              <div className="space-y-2">
-                {projectList.slice(0, 5).map((p: Project) => (
+              <VirtualScrollList<Project>
+                items={projectList}
+                itemHeight={52}
+                containerHeight={280}
+                renderItem={(p) => (
                   <Link
-                    key={p.id}
                     href={`/${orgSlug}/projects/${p.id}`}
                     className="flex items-center gap-3 p-2.5 rounded-lg hover:bg-base-200/60 transition-colors group"
                   >
@@ -174,17 +440,22 @@ export default function DashboardPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{p.name}</p>
-                      <p className="text-[11px] text-base-content/40 capitalize">{p.status}</p>
+                      <p className="text-[11px] text-base-content/40 capitalize">
+                        {p.status}
+                      </p>
                     </div>
                     <ArrowRight className="w-3.5 h-3.5 text-base-content/30 opacity-0 group-hover:opacity-100 transition-opacity" />
                   </Link>
-                ))}
-                {projectList.length > 5 && (
-                  <Link href={`/${orgSlug}/projects`} className="block text-center py-2 text-xs link link-primary">
-                    View all {projectList.length} projects
-                  </Link>
                 )}
-              </div>
+                emptyState={
+                  <div className="text-center py-8">
+                    <FolderKanban className="w-10 h-10 text-base-content/15 mx-auto mb-2" />
+                    <p className="text-base-content/50 text-sm">
+                      No projects yet
+                    </p>
+                  </div>
+                }
+              />
             )}
           </Card>
         </div>
@@ -192,29 +463,44 @@ export default function DashboardPage() {
         {/* Recent Tasks */}
         <div className="lg:col-span-3">
           <Card title="Recent Tasks" compact>
-            {(!stats.recent_tasks || stats.recent_tasks.length === 0) ? (
-              <p className="text-base-content/50 text-sm py-4">No recent tasks</p>
+            {!stats.recent_tasks || stats.recent_tasks.length === 0 ? (
+              <div className="text-center py-8">
+                <ListTodo className="w-10 h-10 text-base-content/15 mx-auto mb-2" />
+                <p className="text-base-content/50 text-sm">No recent tasks</p>
+              </div>
             ) : (
-              <div className="space-y-1.5">
-                {stats.recent_tasks.slice(0, 8).map((task) => (
+              <VirtualScrollList<(typeof stats.recent_tasks)[0]>
+                items={stats.recent_tasks}
+                itemHeight={44}
+                containerHeight={300}
+                renderItem={(task) => (
                   <Link
-                    key={task.id}
                     href={`/${orgSlug}/projects/${task.project_id}/tasks/${task.id}`}
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-base-200/60 transition-colors"
                   >
                     <span
                       className="w-2 h-2 rounded-full flex-shrink-0"
-                      style={{ backgroundColor: STATUS_COLORS[task.status] || "#94a3b8" }}
+                      style={{
+                        backgroundColor:
+                          STATUS_COLORS[task.status] || "#94a3b8",
+                      }}
                     />
-                    <span className="flex-1 text-sm truncate">{task.title}</span>
-                    <Badge variant={priorityColor(task.priority)} className="text-[10px]">{statusLabel(task.priority)}</Badge>
+                    <span className="flex-1 text-sm truncate">
+                      {task.title}
+                    </span>
+                    <Badge
+                      variant={priorityColor(task.priority)}
+                      className="text-[10px]"
+                    >
+                      {statusLabel(task.priority)}
+                    </Badge>
                     <span className="text-[11px] text-base-content/40 flex items-center gap-1 flex-shrink-0">
                       <Clock className="w-3 h-3" />
                       {formatRelative(task.created_at)}
                     </span>
                   </Link>
-                ))}
-              </div>
+                )}
+              />
             )}
           </Card>
         </div>
