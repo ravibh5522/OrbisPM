@@ -58,12 +58,16 @@ services:
     image: minio/minio:latest
     restart: unless-stopped
     ports:
-      - "9000:9000" # browser needs direct access for presigned URL downloads
-    expose:
-      - "9001" # console — internal only
+      - "9000:9000" # S3 API — browser needs direct access for presigned URLs
+      - "9001:9001" # Console — exposed so Cloudflare tunnel (host-based) can reach it
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin123}
+      # Required when MinIO is behind a reverse proxy / Cloudflare tunnel.
+      # Without these MinIO generates pre-signed URLs using the internal
+      # Docker network address (172.18.x.x:9000) which is unreachable externally.
+      MINIO_SERVER_URL: ${MINIO_SERVER_URL:-}
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_CONSOLE_URL:-}
     volumes:
       - miniodata:/data
     command: server /data --console-address ":9001"
