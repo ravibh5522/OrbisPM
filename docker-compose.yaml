@@ -236,7 +236,6 @@ services:
         required: false
       redis:
         condition: service_healthy
-        required: false
       zitadel:
         condition: service_healthy
         required: false
@@ -293,7 +292,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-        required: false
 
   email-worker:
     build:
@@ -313,7 +311,6 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-        required: false
 
   messaging-service:
     build:
@@ -343,13 +340,11 @@ services:
     depends_on:
       nats:
         condition: service_healthy
-        required: false
       postgres:
         condition: service_healthy
         required: false
       redis:
         condition: service_healthy
-        required: false
       zitadel:
         condition: service_healthy
         required: false

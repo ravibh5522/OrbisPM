@@ -19,17 +19,15 @@ type Publisher struct {
 }
 
 // NewPublisher creates a new NATS JetStream publisher and ensures the stream exists.
+// It retries stream creation with backoff to tolerate JetStream initialisation lag
+// (e.g. file-storage recovery on a freshly-started NATS container).
 func NewPublisher(nc *nats.Conn) (*Publisher, error) {
 	js, err := jetstream.New(nc)
 	if err != nil {
 		return nil, fmt.Errorf("create jetstream context: %w", err)
 	}
 
-	// Create or update the CHAT stream
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	_, err = js.CreateOrUpdateStream(ctx, jetstream.StreamConfig{
+	streamCfg := jetstream.StreamConfig{
 		Name:        domain.NatsStreamName,
 		Description: "OrbisPM chat events",
 		Subjects:    []string{domain.NatsSubjectChat + ".>"},
@@ -37,9 +35,31 @@ func NewPublisher(nc *nats.Conn) (*Publisher, error) {
 		MaxAge:      24 * time.Hour,
 		Storage:     jetstream.FileStorage,
 		Replicas:    1,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create/update stream: %w", err)
+	}
+
+	const maxAttempts = 10
+	backoff := 2 * time.Second
+	var lastErr error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		_, lastErr = js.CreateOrUpdateStream(ctx, streamCfg)
+		cancel()
+		if lastErr == nil {
+			break
+		}
+		log.Warn().
+			Err(lastErr).
+			Int("attempt", attempt).
+			Int("max", maxAttempts).
+			Dur("retry_in", backoff).
+			Msg("NATS JetStream not ready, retrying...")
+		time.Sleep(backoff)
+		if backoff < 30*time.Second {
+			backoff *= 2
+		}
+	}
+	if lastErr != nil {
+		return nil, fmt.Errorf("create/update stream: %w", lastErr)
 	}
 
 	log.Info().Str("stream", domain.NatsStreamName).Msg("NATS JetStream stream ready")
