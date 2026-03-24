@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
 const EMPTY_MEMBERS: ChatChannelMember[] = [];
 
@@ -173,6 +174,7 @@ export function ChannelDetails() {
       qc.invalidateQueries({
         queryKey: ["chat-channel-members", activeChannelId],
       });
+      toast.success("Member removed");
     },
   });
 
@@ -316,6 +318,7 @@ function MemberItem({
       qc.invalidateQueries({
         queryKey: ["chat-channel-members", channelId],
       });
+      toast.success("Role updated");
     },
   });
 
@@ -403,6 +406,7 @@ function DetailsAddMemberSearch({
       qc.invalidateQueries({
         queryKey: ["chat-channel-members", channelId],
       });
+      toast.success("Member added");
     },
   });
 

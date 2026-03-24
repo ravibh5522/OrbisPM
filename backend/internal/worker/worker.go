@@ -11,16 +11,19 @@ import (
 
 // Task type constants.
 const (
-	TypeActivityLog       = "activity:log"
-	TypeNotification      = "notification:send"
-	TypeSearchIndex       = "search:index"
-	TypeSearchDelete      = "search:delete"
-	TypeWebhookDeliver    = "webhook:deliver"
-	TypeImportProcess     = "import:process"
-	TypeExportGenerate    = "export:generate"
-	TypeRecurringGenerate = "recurring:generate"
-	TypeDBFlushTask       = "db:flush-task"
-	TypeDBFlushProject    = "db:flush-project"
+	TypeActivityLog         = "activity:log"
+	TypeNotification        = "notification:send"
+	TypeSearchIndex         = "search:index"
+	TypeSearchDelete        = "search:delete"
+	TypeWebhookDeliver      = "webhook:deliver"
+	TypeImportProcess       = "import:process"
+	TypeExportGenerate      = "export:generate"
+	TypeRecurringGenerate   = "recurring:generate"
+	TypeDBFlushTask         = "db:flush-task"
+	TypeDBFlushProject      = "db:flush-project"
+	TypeAnalyticsSnapshot   = "analytics:snapshot"
+	TypeAnalyticsTransition = "analytics:transition"
+	TypeGenerateReport      = "analytics:generate-report"
 )
 
 // ActivityLogPayload holds data for creating an activity log entry.
@@ -80,6 +83,21 @@ type DBFlushTaskPayload struct {
 // DBFlushProjectPayload holds data for flushing all dirty tasks in a project.
 type DBFlushProjectPayload struct {
 	ProjectID string `json:"project_id"`
+}
+
+// AnalyticsSnapshotPayload holds data for the daily analytics snapshot job.
+type AnalyticsSnapshotPayload struct {
+	OrgID string `json:"org_id"`
+}
+
+// AnalyticsTransitionPayload holds data for recording a task state transition.
+type AnalyticsTransitionPayload struct {
+	OrgID      string `json:"org_id"`
+	TaskID     string `json:"task_id"`
+	ProjectID  string `json:"project_id"`
+	ActorID    string `json:"actor_id"`
+	FromStatus string `json:"from_status"`
+	ToStatus   string `json:"to_status"`
 }
 
 // --- Task creators ---
@@ -154,6 +172,42 @@ func NewDBFlushProjectTask(p DBFlushProjectPayload) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeDBFlushProject, data), nil
+}
+
+// NewAnalyticsSnapshotTask creates a task for the daily analytics snapshot.
+func NewAnalyticsSnapshotTask(p AnalyticsSnapshotPayload) (*asynq.Task, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeAnalyticsSnapshot, data), nil
+}
+
+// NewAnalyticsTransitionTask creates a task for recording a task state transition.
+func NewAnalyticsTransitionTask(p AnalyticsTransitionPayload) (*asynq.Task, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeAnalyticsTransition, data), nil
+}
+
+// GenerateReportPayload holds data for generating a performance report.
+type GenerateReportPayload struct {
+	ReportID   string `json:"report_id"`
+	OrgID      string `json:"org_id"`
+	ScopeType  string `json:"scope_type"`
+	ScopeID    string `json:"scope_id"`
+	ReportType string `json:"report_type"`
+}
+
+// NewGenerateReportTask creates a task for generating a performance report.
+func NewGenerateReportTask(p GenerateReportPayload) (*asynq.Task, error) {
+	data, err := json.Marshal(p)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewTask(TypeGenerateReport, data), nil
 }
 
 // Server wraps asynq server and client for background job processing.

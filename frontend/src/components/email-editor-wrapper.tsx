@@ -1,8 +1,18 @@
 "use client";
 
-import { Editor } from "@tinymce/tinymce-react";
+import dynamic from "next/dynamic";
 import { useCallback, useRef, useState } from "react";
 import type { Editor as TinyMCEEditor } from "tinymce";
+
+const Editor = dynamic(
+  () => import("@tinymce/tinymce-react").then((mod) => ({ default: mod.Editor })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-64 animate-pulse bg-base-200 rounded-lg" />
+    ),
+  }
+);
 
 /**
  * Merge tags available in every email template.

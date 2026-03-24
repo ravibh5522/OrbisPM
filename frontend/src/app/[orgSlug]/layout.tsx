@@ -1,15 +1,17 @@
 "use client";
 
-import { Avatar } from "@/components/ui/shared";
+import { Avatar, ConnectionBadge } from "@/components/ui/shared";
 import { useRequireAuth } from "@/hooks/use-auth-guard";
 import { useOrgSocket } from "@/hooks/use-org-socket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useProjectTaskStore } from "@/stores/project-task-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
 import type { OrgRole } from "@/types/domain";
 import {
   Activity,
+  BarChart3,
   Bell,
   Building2,
   CalendarDays,
@@ -82,6 +84,11 @@ function getSidebarItems(orgSlug: string): NavItem[] {
       href: `/${orgSlug}/activity`,
       label: "Activity",
       icon: <Activity className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/performance`,
+      label: "Performance",
+      icon: <BarChart3 className="w-5 h-5" />,
     },
     {
       href: `/${orgSlug}/notifications`,
@@ -296,7 +303,7 @@ function Sidebar() {
                     )}
                   >
                     {item.label.length > 7
-                      ? item.label.slice(0, 7) + ".."
+                      ? item.label.slice(0, 7) + "…"
                       : item.label}
                   </span>
                 </Link>
@@ -366,7 +373,7 @@ function Sidebar() {
                         )}
                       >
                         {item.label.length > 7
-                          ? item.label.slice(0, 7) + ".."
+                          ? item.label.slice(0, 7) + "…"
                           : item.label}
                       </span>
                     </Link>
@@ -454,6 +461,8 @@ function Sidebar() {
 
 function TopBar() {
   const { sidebarCollapsed, breadcrumb, setMobileMenuOpen } = useUIStore();
+  const currentOrg = useAuthStore((s) => s.currentOrg);
+  const connected = useProjectTaskStore((s) => s.connected);
   const router = useRouter();
 
   return (
@@ -470,22 +479,44 @@ function TopBar() {
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* Breadcrumb / project name */}
-      {breadcrumb && (
-        <div className="flex items-center gap-2 min-w-0">
-          {breadcrumb.backHref && (
-            <button
-              className="btn btn-ghost btn-xs btn-square flex-shrink-0"
-              onClick={() => router.push(breadcrumb.backHref!)}
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-          )}
-          <span className="text-sm font-semibold truncate">
-            {breadcrumb.label}
-          </span>
-        </div>
-      )}
+      <div className="flex min-w-0 items-center gap-3">
+        {breadcrumb ? (
+          <div className="flex items-center gap-2 min-w-0">
+            {breadcrumb.backHref && (
+              <button
+                className="btn btn-ghost btn-xs btn-square flex-shrink-0"
+                onClick={() => router.push(breadcrumb.backHref!)}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+            )}
+            <div className="min-w-0">
+              <div className="text-xs uppercase tracking-[0.18em] text-base-content/40">
+                {currentOrg?.name || "Workspace"}
+              </div>
+              <span className="text-sm font-semibold truncate block">
+                {breadcrumb.label}
+              </span>
+            </div>
+          </div>
+        ) : (
+          <div className="min-w-0">
+            <div className="text-xs uppercase tracking-[0.18em] text-base-content/40">
+              Workspace
+            </div>
+            <span className="text-sm font-semibold truncate block">
+              {currentOrg?.name || "Organization"}
+            </span>
+          </div>
+        )}
+
+        <ConnectionBadge
+          connected={connected}
+          connectedLabel="Live sync"
+          disconnectedLabel="Sync reconnecting"
+          className="hidden md:inline-flex"
+        />
+      </div>
 
       <div className="flex-1" />
 

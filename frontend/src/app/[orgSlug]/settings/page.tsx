@@ -1,5 +1,6 @@
 "use client";
 
+import { PageHeader } from "@/components/ui/shared";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { OrgRole } from "@/types/domain";
@@ -12,20 +13,32 @@ import {
   Users,
   Webhook,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+
+import dynamic from "next/dynamic";
 
 import ApiKeysTab from "./_components/api-keys-tab";
 import BillingTab from "./_components/billing-tab";
-import EmailTemplatesTab from "./_components/email-templates-tab";
 import MembersTab from "./_components/members-tab";
 import OrganisationTab from "./_components/organisation-tab";
 import PermissionsTab from "./_components/permissions-tab";
 import WebhooksTab from "./_components/webhooks-tab";
 
+const EmailTemplatesTab = dynamic(
+  () => import("./_components/email-templates-tab"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-96 animate-pulse bg-base-200 rounded-lg" />
+    ),
+  },
+);
+
 interface TabDef {
   key: string;
   label: string;
+  description: string;
   icon: React.ReactNode;
   roles: OrgRole[];
   component: React.ComponentType;
@@ -35,6 +48,7 @@ const TABS: TabDef[] = [
   {
     key: "organisation",
     label: "Organisation",
+    description: "Brand, profile, billing identity, and workspace details.",
     icon: <Building2 className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: OrganisationTab,
@@ -42,6 +56,7 @@ const TABS: TabDef[] = [
   {
     key: "members",
     label: "Members",
+    description: "Manage who can access the workspace and what they can do.",
     icon: <Users className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: MembersTab,
@@ -49,6 +64,7 @@ const TABS: TabDef[] = [
   {
     key: "billing",
     label: "Billing",
+    description: "Review plan details, limits, and commercial controls.",
     icon: <CreditCard className="w-4 h-4" />,
     roles: ["owner", "billing_admin"],
     component: BillingTab,
@@ -56,6 +72,8 @@ const TABS: TabDef[] = [
   {
     key: "permissions",
     label: "Roles & Permissions",
+    description:
+      "Define access models across organisation, team, and project scopes.",
     icon: <Shield className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: PermissionsTab,
@@ -63,6 +81,7 @@ const TABS: TabDef[] = [
   {
     key: "webhooks",
     label: "Webhooks",
+    description: "Connect OrbisPM events to your downstream systems.",
     icon: <Webhook className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: WebhooksTab,
@@ -70,6 +89,8 @@ const TABS: TabDef[] = [
   {
     key: "api-keys",
     label: "API Keys",
+    description:
+      "Create and rotate machine access without exposing raw secrets again.",
     icon: <KeyRound className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: ApiKeysTab,
@@ -77,6 +98,8 @@ const TABS: TabDef[] = [
   {
     key: "email-templates",
     label: "Email Templates",
+    description:
+      "Customize outbound transactional messaging and notifications.",
     icon: <Mail className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: EmailTemplatesTab,
@@ -85,6 +108,8 @@ const TABS: TabDef[] = [
 
 export default function SettingsPage() {
   const { currentMembership } = useAuthStore();
+  const pathname = usePathname();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const userRole = currentMembership?.role as OrgRole | undefined;
 
@@ -98,6 +123,14 @@ export default function SettingsPage() {
     visibleTabs[0]?.key ||
     "organisation";
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  useEffect(() => {
+    const nextTab =
+      visibleTabs.find((t) => t.key === tabParam)?.key || visibleTabs[0]?.key;
+    if (nextTab && nextTab !== activeTab) {
+      setActiveTab(nextTab);
+    }
+  }, [activeTab, tabParam, visibleTabs]);
 
   const currentTab =
     visibleTabs.find((t) => t.key === activeTab) || visibleTabs[0];
@@ -119,15 +152,32 @@ export default function SettingsPage() {
 
   const TabContent = currentTab.component;
 
+  const handleTabChange = (tabKey: string) => {
+    setActiveTab(tabKey);
+    const next = new URLSearchParams(searchParams.toString());
+    next.set("tab", tabKey);
+    router.replace(`${pathname}?${next.toString()}`, { scroll: false });
+  };
+
   return (
     <div>
+      <PageHeader
+        title="Settings"
+        description={currentTab.description}
+        actions={
+          <span className="badge badge-outline badge-sm">
+            {currentTab.label}
+          </span>
+        }
+      />
+
       {/* Tab bar */}
-      <div className="border-b border-base-200 mb-6">
+      <div className="sticky top-0 z-10 mb-6 border-b border-base-200 bg-base-100/85 backdrop-blur-sm">
         <div className="flex gap-1 overflow-x-auto pb-px -mb-px">
           {visibleTabs.map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => handleTabChange(tab.key)}
               className={cn(
                 "flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors",
                 activeTab === tab.key

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 interface AnnouncementForm {
   title: string;
@@ -195,6 +196,7 @@ export function ProjectAnnouncements({
       setShowCreate(false);
       reset();
       setError("");
+      toast.success("Announcement created");
     },
     onError: (e: Error) =>
       setError(
@@ -223,6 +225,7 @@ export function ProjectAnnouncements({
       setEditTarget(null);
       resetEdit();
       setError("");
+      toast.success("Announcement updated");
     },
     onError: (e: Error) =>
       setError(
@@ -251,6 +254,7 @@ export function ProjectAnnouncements({
     onSettled: () => {
       qc.invalidateQueries({ queryKey });
       setDeleteTarget(null);
+      toast.success("Announcement deleted");
     },
   });
 

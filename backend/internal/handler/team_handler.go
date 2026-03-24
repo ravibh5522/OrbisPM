@@ -9,6 +9,7 @@ import (
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -120,7 +121,16 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/teams [get]
 func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-	teams, err := h.teamSvc.ListByOrg(r.Context(), orgID)
+	f := repository.TeamFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		SortBy:    queryStrDefault(r, "sort_by", "name"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	teams, total, err := h.teamSvc.ListByOrgPaginated(r.Context(), orgID, f)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -128,7 +138,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	if teams == nil {
 		teams = []*domain.Team{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: teams, Total: len(teams), Limit: len(teams), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: teams, Total: total, Limit: f.Limit, Offset: f.Offset})
 }
 
 // Update godoc
@@ -206,7 +216,17 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid team id"})
 		return
 	}
-	members, err := h.teamSvc.ListMembers(r.Context(), teamID)
+	f := repository.MemberFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		Role:      queryStr(r, "role"),
+		SortBy:    queryStrDefault(r, "sort_by", "joined_at"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	members, total, err := h.teamSvc.ListMembersPaginated(r.Context(), teamID, f)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -214,7 +234,7 @@ func (h *TeamHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	if members == nil {
 		members = []*domain.TeamMember{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: total, Limit: f.Limit, Offset: f.Offset})
 }
 
 type addTeamMemberRequest struct {

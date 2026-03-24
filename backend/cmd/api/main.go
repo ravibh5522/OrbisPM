@@ -123,9 +123,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse database url")
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	poolCfg.MaxConns = 50
+	poolCfg.MinConns = 5
 	poolCfg.MaxConnLifetime = 30 * time.Minute
+	poolCfg.MaxConnIdleTime = 5 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
@@ -248,6 +249,9 @@ func main() {
 	// --- Repositories (Announcements) ---
 	announcementRepo := repository.NewAnnouncementRepo(pool)
 
+	// --- Repositories (Analytics) ---
+	analyticsRepo := repository.NewAnalyticsRepo(pool)
+
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
@@ -274,6 +278,9 @@ func main() {
 
 	// --- Services (Announcements) ---
 	announcementSvc := service.NewAnnouncementService(announcementRepo, orgMemberRepo, txm, workerSrv, publisher)
+
+	// --- Services (Analytics) ---
+	analyticsSvc := service.NewAnalyticsService(analyticsRepo, taskRepo, projectRepo, orgMemberRepo, txm, workerSrv)
 
 	// --- Services (RBAC / Review) ---
 	permSvc := service.NewPermissionService(permRepo, roleRepo, orgRepo, txm)
@@ -307,6 +314,7 @@ func main() {
 
 	// Inject permission resolver into handlers
 	permResolver.SetPermRepo(permRepo)
+	permResolver.SetCache(cacheManager)
 	projectHandler.SetPermResolver(permResolver)
 	teamHandler.SetPermResolver(permResolver)
 
@@ -352,6 +360,9 @@ func main() {
 	// --- Handlers (Announcements) ---
 	announcementHandler := handler.NewAnnouncementHandler(announcementSvc)
 
+	// --- Handlers (Analytics) ---
+	analyticsHandler := handler.NewAnalyticsHandler(analyticsSvc)
+
 	// --- Handlers (Email Templates) ---
 	emailTemplateHandler := handler.NewEmailTemplateHandler()
 
@@ -382,6 +393,7 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recovery)
+	r.Use(middleware.Compress)
 	r.Use(rateLimiter.Handler)
 	r.Use(middleware.Metrics)
 	r.Use(middleware.CacheControl)
@@ -472,6 +484,7 @@ func main() {
 							r.With(prm("team", "teamId", "team", "delete")).Delete("/", teamHandler.Delete)
 							r.With(prm("team", "teamId", "team", "read")).Get("/dashboard", teamHandler.Dashboard)
 							r.With(prm("team", "teamId", "team", "read")).Get("/my-permissions", teamHandler.GetMyPermissions)
+							r.With(prm("team", "teamId", "team", "read")).Mount("/analytics", analyticsHandler.TeamAnalyticsRoutes())
 							r.With(prm("team", "teamId", "team", "update")).Put("/manager", teamHandler.SetManager)
 							r.With(prm("team", "teamId", "team", "read")).Get("/members", teamHandler.ListMembers)
 							r.With(prm("team", "teamId", "members", "manage")).Post("/members", teamHandler.AddMember)
@@ -488,6 +501,9 @@ func main() {
 
 					// Dashboard
 					r.Mount("/dashboard", dashboardHandler.Routes())
+
+					// Analytics
+					r.Mount("/analytics", analyticsHandler.Routes())
 
 					// Notification Preferences
 					r.Mount("/notification-preferences", notifPrefHandler.Routes())
@@ -550,6 +566,9 @@ func main() {
 							r.With(prm("project", "projectId", "project", "read")).Get("/members/{userId}/preview", projectHandler.PreviewRemoveMember)
 							r.With(prm("project", "projectId", "project", "read")).Get("/dashboard", projectHandler.Dashboard)
 							r.With(prm("project", "projectId", "project", "read")).Get("/my-permissions", projectHandler.GetMyPermissions)
+
+							// Project analytics
+							r.With(prm("project", "projectId", "project", "read")).Mount("/analytics", analyticsHandler.ProjectAnalyticsRoutes())
 
 							// Project teams (multi-team)
 							r.Mount("/teams", projectTeamHandler.Routes())

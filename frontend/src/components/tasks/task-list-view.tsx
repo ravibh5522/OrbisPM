@@ -89,9 +89,19 @@ export function TaskListView({
   const [sortOrder, setSortOrder] = useState<SortDir>("desc");
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterPriority, setFilterPriority] = useState<string>("");
+  const [searchInput, setSearchInput] = useState<string>("");
   const [searchText, setSearchText] = useState<string>("");
   const [page, setPage] = useState(0);
   const limit = 25;
+
+  // Debounce search input: apply after 300ms of inactivity
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setSearchText(searchInput.trim());
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   /* ── Modal state ── */
   const [showCreate, setShowCreate] = useState(false);
@@ -331,11 +341,11 @@ export function TaskListView({
   const clearFilters = () => {
     setFilterStatus("");
     setFilterPriority("");
-    setSearchText("");
+    setSearchInput("");
     setPage(0);
   };
 
-  const hasFilters = filterStatus || filterPriority || searchText;
+  const hasFilters = filterStatus || filterPriority || searchInput;
 
   return (
     <div className="space-y-3">
@@ -430,10 +440,9 @@ export function TaskListView({
             type="text"
             placeholder="Search tasks…"
             className="input input-bordered input-sm w-full pl-9"
-            value={searchText}
+            value={searchInput}
             onChange={(e) => {
-              setSearchText(e.target.value);
-              setPage(0);
+              setSearchInput(e.target.value);
             }}
           />
         </div>

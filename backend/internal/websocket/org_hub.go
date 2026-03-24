@@ -191,6 +191,7 @@ func (h *OrgHub) BroadcastOrg(orgID uuid.UUID, msg WSMessage, exclude *OrgConn) 
 		select {
 		case conn.send <- data:
 		default:
+			log.Warn().Str("user_id", conn.UserID.String()).Str("action", msg.Action).Msg("ws: BroadcastOrg send buffer full, dropping message")
 		}
 	}
 }
@@ -216,6 +217,7 @@ func (h *OrgHub) BroadcastProject(orgID, projectID uuid.UUID, msg WSMessage, exc
 		select {
 		case conn.send <- data:
 		default:
+			log.Warn().Str("user_id", conn.UserID.String()).Str("action", msg.Action).Msg("ws: BroadcastProject send buffer full, dropping message")
 		}
 	}
 }

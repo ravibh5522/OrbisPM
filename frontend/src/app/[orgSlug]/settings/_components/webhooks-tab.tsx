@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
-import { api, ApiError } from "@/lib/api";
-import { Card, EmptyState, LoadingPage, Badge, ConfirmDialog } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
-import { Modal } from "@/components/ui/modal";
 import { Input } from "@/components/ui/form-fields";
-import { useForm } from "react-hook-form";
-import { Plus, Webhook as WebhookIcon, Trash2 } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import {
+  Badge,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+} from "@/components/ui/shared";
+import { api, ApiError } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth-store";
 import type { Webhook } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Plus, Trash2, Webhook as WebhookIcon } from "lucide-react";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 interface WebhookForm {
   url: string;
@@ -31,13 +38,21 @@ export default function WebhooksTab() {
     enabled: !!currentOrg,
   });
 
-  const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<WebhookForm>();
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors: formErrors },
+  } = useForm<WebhookForm>();
 
   const createMutation = useMutation({
     mutationFn: (data: WebhookForm) =>
       api.webhooks.create(currentOrg!.id, {
         url: data.url,
-        events: data.events.split(",").map((e) => e.trim()).filter(Boolean),
+        events: data.events
+          .split(",")
+          .map((e) => e.trim())
+          .filter(Boolean),
         secret: data.secret || undefined,
         is_active: true,
       }),
@@ -46,8 +61,10 @@ export default function WebhooksTab() {
       setShowCreate(false);
       reset();
       setError("");
+      toast.success("Webhook created");
     },
-    onError: (e: Error) => setError(e instanceof ApiError ? e.message : "Failed to create webhook"),
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to create webhook"),
   });
 
   const deleteMutation = useMutation({
@@ -55,6 +72,7 @@ export default function WebhooksTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["webhooks"] });
       setDeleteTarget(null);
+      toast.success("Webhook deleted");
     },
   });
 
@@ -66,7 +84,9 @@ export default function WebhooksTab() {
     <div>
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-base-content/60">Receive events via HTTP callbacks</p>
+        <p className="text-sm text-base-content/60">
+          Receive events via HTTP callbacks
+        </p>
         <Button size="sm" onClick={() => setShowCreate(true)}>
           <Plus className="w-4 h-4" /> New Webhook
         </Button>
@@ -77,7 +97,11 @@ export default function WebhooksTab() {
           icon={<WebhookIcon className="w-16 h-16" />}
           title="No webhooks configured"
           description="Add webhooks to receive real-time event notifications"
-          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Add Webhook</Button>}
+          action={
+            <Button onClick={() => setShowCreate(true)}>
+              <Plus className="w-4 h-4" /> Add Webhook
+            </Button>
+          }
         />
       ) : (
         <div className="space-y-3">
@@ -87,17 +111,24 @@ export default function WebhooksTab() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-sm">{wh.url}</span>
-                    <Badge variant={wh.is_active ? "badge-success" : "badge-ghost"}>
+                    <Badge
+                      variant={wh.is_active ? "badge-success" : "badge-ghost"}
+                    >
                       {wh.is_active ? "Active" : "Inactive"}
                     </Badge>
                   </div>
                   <div className="flex gap-1 mt-1">
                     {wh.events.map((ev) => (
-                      <span key={ev} className="badge badge-xs badge-outline">{ev}</span>
+                      <span key={ev} className="badge badge-xs badge-outline">
+                        {ev}
+                      </span>
                     ))}
                   </div>
                 </div>
-                <button className="btn btn-ghost btn-sm btn-square" onClick={() => setDeleteTarget(wh)}>
+                <button
+                  className="btn btn-ghost btn-sm btn-square"
+                  onClick={() => setDeleteTarget(wh)}
+                >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -106,21 +137,62 @@ export default function WebhooksTab() {
         </div>
       )}
 
-      <Modal open={showCreate} onClose={() => { setShowCreate(false); reset(); setError(""); }} title="New Webhook">
-        {error && <div className="alert alert-error mb-4"><span>{error}</span></div>}
-        <form onSubmit={handleSubmit((data) => createMutation.mutate(data))} className="space-y-4">
-          <Input label="URL" placeholder="https://example.com/webhook"
-            {...register("url", { required: "URL is required" })}
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          reset();
+          setError("");
+        }}
+        title="New Webhook"
+      >
+        {error && (
+          <div className="alert alert-error mb-4">
+            <span>{error}</span>
+          </div>
+        )}
+        <form
+          onSubmit={handleSubmit((data) => createMutation.mutate(data))}
+          className="space-y-4"
+        >
+          <Input
+            label="URL"
+            placeholder="https://example.com/webhook"
+            {...register("url", {
+              required: "URL is required",
+              pattern: {
+                value: /^https?:\/\/.+/,
+                message: "Must be a valid HTTP(S) URL",
+              },
+            })}
             error={formErrors.url?.message}
           />
-          <Input label="Events" placeholder="task.created, task.updated" helperText="Comma-separated event types"
+          <Input
+            label="Events"
+            placeholder="task.created, task.updated"
+            helperText="Comma-separated event types"
             {...register("events", { required: "At least one event required" })}
             error={formErrors.events?.message}
           />
-          <Input label="Secret" placeholder="Optional signing secret" {...register("secret")} />
+          <Input
+            label="Secret"
+            placeholder="Optional signing secret"
+            {...register("secret")}
+          />
           <div className="modal-action">
-            <Button type="button" variant="ghost" onClick={() => { setShowCreate(false); reset(); }}>Cancel</Button>
-            <Button type="submit" loading={createMutation.isPending}>Create</Button>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => {
+                setShowCreate(false);
+                reset();
+              }}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" loading={createMutation.isPending}>
+              Create
+            </Button>
           </div>
         </form>
       </Modal>

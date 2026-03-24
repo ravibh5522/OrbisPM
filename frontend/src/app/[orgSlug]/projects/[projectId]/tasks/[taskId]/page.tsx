@@ -7,38 +7,63 @@ import { useAuthStore } from "@/stores/auth-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 
-
-import { RichTextEditor, RichTextViewer } from "@/components/editor/rich-text-editor";
-import { ChangeRequestToast, TaskChangeRequests } from "@/components/tasks/change-requests";
+import {
+  RichTextEditor,
+  RichTextViewer,
+} from "@/components/editor/rich-text-editor";
+import {
+  ChangeRequestToast,
+  TaskChangeRequests,
+} from "@/components/tasks/change-requests";
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { PresenceIndicator } from "@/components/ui/presence-indicator";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
-import { cn, formatDate, formatRelative, priorityColor, statusColor, statusLabel } from "@/lib/utils";
-import type { Attachment, Checklist, Comment, OrgMember, Task, TaskDependency, TaskPriority, TaskRule, TaskStatus, TaskUpdateResult, TaskWatcher } from "@/types/domain";
 import {
-    ArrowLeft,
-    Calendar,
-    Check,
-    CheckSquare,
-    Clock,
-    Download,
-    Eye,
-    EyeOff,
-    FileText,
-    Image as ImageIcon,
-    Link2,
-    Paperclip,
-    Pencil,
-    Plus,
-    Send,
-    Shield,
-    Square,
-    Tag,
-    Trash2,
-    Upload,
-    X,
+  cn,
+  formatDate,
+  formatRelative,
+  priorityColor,
+  statusColor,
+  statusLabel,
+} from "@/lib/utils";
+import type {
+  Attachment,
+  Checklist,
+  Comment,
+  OrgMember,
+  Task,
+  TaskDependency,
+  TaskPriority,
+  TaskRule,
+  TaskStatus,
+  TaskUpdateResult,
+  TaskWatcher,
+} from "@/types/domain";
+import {
+  ArrowLeft,
+  Calendar,
+  Check,
+  CheckSquare,
+  Clock,
+  Download,
+  Eye,
+  EyeOff,
+  FileText,
+  Image as ImageIcon,
+  Link2,
+  Paperclip,
+  Pencil,
+  Plus,
+  Send,
+  Shield,
+  Square,
+  Tag,
+  Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 
 /* ─── helpers ─── */
@@ -58,12 +83,20 @@ function useMemberMap(orgId: string) {
   return { members, memberMap: map };
 }
 
-function memberLabel(id: string | null | undefined, members: OrgMember[]): string {
+function memberLabel(
+  id: string | null | undefined,
+  members: OrgMember[],
+): string {
   if (!id) return "Unassigned";
   const m = members.find((x) => x.user_id === id);
-  return m ? (m.display_name || m.email || m.user_id.slice(0, 8) + "…") : id.slice(0, 8) + "…";
+  return m
+    ? m.display_name || m.email || m.user_id.slice(0, 8) + "…"
+    : id.slice(0, 8) + "…";
 }
-function memberAvatarUrl(id: string | null | undefined, members: OrgMember[]): string | undefined {
+function memberAvatarUrl(
+  id: string | null | undefined,
+  members: OrgMember[],
+): string | undefined {
   if (!id) return undefined;
   const m = members.find((x) => x.user_id === id);
   return m?.avatar_url || undefined;
@@ -131,22 +164,32 @@ export default function TaskDetailPage({
   });
 
   // ── Mutations ──
-  const [pendingReviewResult, setPendingReviewResult] = useState<TaskUpdateResult | null>(null);
+  const [pendingReviewResult, setPendingReviewResult] =
+    useState<TaskUpdateResult | null>(null);
   const updateTaskMutation = useMutation({
-    mutationFn: (data: Partial<Task>) => api.tasks.update(orgId, projectId, taskId, data),
+    mutationFn: (data: Partial<Task>) =>
+      api.tasks.update(orgId, projectId, taskId, data),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["task", orgId, projectId, taskId] });
       qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["change-requests", orgId, projectId, taskId] });
+      qc.invalidateQueries({
+        queryKey: ["change-requests", orgId, projectId, taskId],
+      });
       // Show toast if some changes are pending review
-      if (result && typeof result === "object" && "pending_review" in result && result.pending_review) {
+      if (
+        result &&
+        typeof result === "object" &&
+        "pending_review" in result &&
+        result.pending_review
+      ) {
         setPendingReviewResult(result as TaskUpdateResult);
       }
     },
   });
 
   const patchField = useCallback(
-    (field: string, value: unknown) => updateTaskMutation.mutate({ [field]: value } as Partial<Task>),
+    (field: string, value: unknown) =>
+      updateTaskMutation.mutate({ [field]: value } as Partial<Task>),
     [updateTaskMutation],
   );
 
@@ -167,60 +210,103 @@ export default function TaskDetailPage({
           resourceId={taskId}
           currentUserId={user?.id || ""}
           currentUserName={user?.user_metadata?.name as string | undefined}
-          currentUserAvatar={user?.user_metadata?.avatar_url as string | undefined}
+          currentUserAvatar={
+            user?.user_metadata?.avatar_url as string | undefined
+          }
         />
       </div>
 
       {/* Pending review toast */}
-      <ChangeRequestToast result={pendingReviewResult} onDismiss={() => setPendingReviewResult(null)} />
+      <ChangeRequestToast
+        result={pendingReviewResult}
+        onDismiss={() => setPendingReviewResult(null)}
+      />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Main content ── */}
         <div className="lg:col-span-2 space-y-6">
           {/* Editable title + description */}
-          <TaskHeaderCard task={task} onPatch={patchField} isPending={updateTaskMutation.isPending} />
+          <TaskHeaderCard
+            task={task}
+            onPatch={patchField}
+            isPending={updateTaskMutation.isPending}
+          />
 
           {/* Quick status + priority */}
           <div className="space-y-2">
             <div className="flex gap-2 flex-wrap items-center">
-              <span className="text-xs font-semibold uppercase text-base-content/50 w-16">Status</span>
-              {(["todo", "in_progress", "done", "blocked"] as TaskStatus[]).map((s) => (
-                <button
-                  key={s}
-                  className={cn("btn btn-xs", task.status === s ? "btn-primary" : "btn-outline")}
-                  onClick={() => patchField("status", s)}
-                  disabled={updateTaskMutation.isPending || !canEdit}
-                >
-                  {statusLabel(s)}
-                </button>
-              ))}
+              <span className="text-xs font-semibold uppercase text-base-content/50 w-16">
+                Status
+              </span>
+              {(["todo", "in_progress", "done", "blocked"] as TaskStatus[]).map(
+                (s) => (
+                  <button
+                    key={s}
+                    className={cn(
+                      "btn btn-xs",
+                      task.status === s ? "btn-primary" : "btn-outline",
+                    )}
+                    onClick={() => patchField("status", s)}
+                    disabled={updateTaskMutation.isPending || !canEdit}
+                  >
+                    {statusLabel(s)}
+                  </button>
+                ),
+              )}
             </div>
             <div className="flex gap-2 flex-wrap items-center">
-              <span className="text-xs font-semibold uppercase text-base-content/50 w-16">Priority</span>
-              {(["critical", "high", "medium", "low"] as TaskPriority[]).map((p) => (
-                <button
-                  key={p}
-                  className={cn("btn btn-xs", task.priority === p ? "btn-secondary" : "btn-outline")}
-                  onClick={() => patchField("priority", p)}
-                  disabled={updateTaskMutation.isPending || !canEdit}
-                >
-                  {statusLabel(p)}
-                </button>
-              ))}
+              <span className="text-xs font-semibold uppercase text-base-content/50 w-16">
+                Priority
+              </span>
+              {(["critical", "high", "medium", "low"] as TaskPriority[]).map(
+                (p) => (
+                  <button
+                    key={p}
+                    className={cn(
+                      "btn btn-xs",
+                      task.priority === p ? "btn-secondary" : "btn-outline",
+                    )}
+                    onClick={() => patchField("priority", p)}
+                    disabled={updateTaskMutation.isPending || !canEdit}
+                  >
+                    {statusLabel(p)}
+                  </button>
+                ),
+              )}
             </div>
           </div>
 
           {/* Labels editor */}
-          <LabelsEditor labels={task.labels || []} onSave={(labels) => patchField("labels", labels)} />
+          <LabelsEditor
+            labels={task.labels || []}
+            onSave={(labels) => patchField("labels", labels)}
+          />
 
           {/* Checklists */}
-          <ChecklistSection orgId={orgId} projectId={projectId} taskId={taskId} items={checklists?.data || []} />
+          <ChecklistSection
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            items={checklists?.data || []}
+          />
 
           {/* Comments */}
-          <CommentsSection orgId={orgId} projectId={projectId} taskId={taskId} items={comments?.data || []} userId={user?.id || ""} members={members} />
+          <CommentsSection
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            items={comments?.data || []}
+            userId={user?.id || ""}
+            members={members}
+          />
 
           {/* Attachments */}
-          <AttachmentsSection orgId={orgId} projectId={projectId} taskId={taskId} items={attachments?.data || []} />
+          <AttachmentsSection
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            items={attachments?.data || []}
+          />
         </div>
 
         {/* ── Sidebar ── */}
@@ -236,7 +322,10 @@ export default function TaskDetailPage({
                 avatarSrc={memberAvatarUrl(task.assignee_id, members)}
                 options={[
                   { value: "", label: "Unassigned" },
-                  ...members.map((m) => ({ value: m.user_id, label: m.display_name || m.email || m.user_id.slice(0, 12) })),
+                  ...members.map((m) => ({
+                    value: m.user_id,
+                    label: m.display_name || m.email || m.user_id.slice(0, 12),
+                  })),
                 ]}
                 onSave={(v) => patchField("assignee_id", v || null)}
               />
@@ -248,18 +337,39 @@ export default function TaskDetailPage({
                 avatarSrc={memberAvatarUrl(task.reporter_id, members)}
                 options={[
                   { value: "", label: "None" },
-                  ...members.map((m) => ({ value: m.user_id, label: m.display_name || m.email || m.user_id.slice(0, 12) })),
+                  ...members.map((m) => ({
+                    value: m.user_id,
+                    label: m.display_name || m.email || m.user_id.slice(0, 12),
+                  })),
                 ]}
                 onSave={(v) => patchField("reporter_id", v || null)}
               />
               {/* Due Date */}
-              <SidebarDate label="Due Date" value={task.due_date || ""} onSave={(v) => patchField("due_date", v || null)} />
+              <SidebarDate
+                label="Due Date"
+                value={task.due_date || ""}
+                onSave={(v) => patchField("due_date", v || null)}
+              />
               {/* Start Date */}
-              <SidebarDate label="Start Date" value={task.start_date || ""} onSave={(v) => patchField("start_date", v || null)} />
+              <SidebarDate
+                label="Start Date"
+                value={task.start_date || ""}
+                onSave={(v) => patchField("start_date", v || null)}
+              />
               {/* Estimated Hours */}
-              <SidebarNumber label="Estimated" suffix="h" value={task.estimated_hours ?? null} onSave={(v) => patchField("estimated_hours", v)} />
+              <SidebarNumber
+                label="Estimated"
+                suffix="h"
+                value={task.estimated_hours ?? null}
+                onSave={(v) => patchField("estimated_hours", v)}
+              />
               {/* Actual Hours */}
-              <SidebarNumber label="Actual" suffix="h" value={task.actual_hours ?? null} onSave={(v) => patchField("actual_hours", v)} />
+              <SidebarNumber
+                label="Actual"
+                suffix="h"
+                value={task.actual_hours ?? null}
+                onSave={(v) => patchField("actual_hours", v)}
+              />
             </div>
 
             {/* Time Tracker */}
@@ -272,10 +382,12 @@ export default function TaskDetailPage({
             {/* Recurrence */}
             <div className="divider my-2"></div>
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium flex items-center gap-2">Repeat</h4>
-              <RecurrenceSelector 
-                value={task.recurrence_rule} 
-                onChange={(rule) => patchField("recurrence_rule", rule)} 
+              <h4 className="text-sm font-medium flex items-center gap-2">
+                Repeat
+              </h4>
+              <RecurrenceSelector
+                value={task.recurrence_rule}
+                onChange={(rule) => patchField("recurrence_rule", rule)}
               />
             </div>
             {task.next_occurrence && (
@@ -299,7 +411,12 @@ export default function TaskDetailPage({
           </Card>
 
           {/* Dependencies */}
-          <DependenciesSection orgId={orgId} projectId={projectId} taskId={taskId} items={dependencies?.data || []} />
+          <DependenciesSection
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            items={dependencies?.data || []}
+          />
 
           {/* Watchers */}
           <WatchersSection
@@ -312,10 +429,20 @@ export default function TaskDetailPage({
           />
 
           {/* Rules */}
-          <RulesSection orgId={orgId} projectId={projectId} taskId={taskId} items={rules?.data || []} />
+          <RulesSection
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            items={rules?.data || []}
+          />
 
           {/* Change Requests */}
-          <TaskChangeRequests orgId={orgId} projectId={projectId} taskId={taskId} members={members} />
+          <TaskChangeRequests
+            orgId={orgId}
+            projectId={projectId}
+            taskId={taskId}
+            members={members}
+          />
         </div>
       </div>
     </div>
@@ -354,24 +481,53 @@ function TaskHeaderCard({
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") { onPatch("title", titleDraft); setEditingTitle(false); }
-              if (e.key === "Escape") { setTitleDraft(task.title); setEditingTitle(false); }
+              if (e.key === "Enter") {
+                onPatch("title", titleDraft);
+                setEditingTitle(false);
+              }
+              if (e.key === "Escape") {
+                setTitleDraft(task.title);
+                setEditingTitle(false);
+              }
             }}
           />
-          <button className="btn btn-sm btn-primary" onClick={() => { onPatch("title", titleDraft); setEditingTitle(false); }} disabled={isPending}>
+          <button
+            className="btn btn-sm btn-primary"
+            onClick={() => {
+              onPatch("title", titleDraft);
+              setEditingTitle(false);
+            }}
+            disabled={isPending}
+          >
             <Check className="w-4 h-4" />
           </button>
-          <button className="btn btn-sm btn-ghost" onClick={() => { setTitleDraft(task.title); setEditingTitle(false); }}>
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => {
+              setTitleDraft(task.title);
+              setEditingTitle(false);
+            }}
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
       ) : (
-        <div className="flex items-start justify-between mb-4 group cursor-pointer" onClick={() => { setTitleDraft(task.title); setEditingTitle(true); }}>
+        <div
+          className="flex items-start justify-between mb-4 group cursor-pointer"
+          onClick={() => {
+            setTitleDraft(task.title);
+            setEditingTitle(true);
+          }}
+        >
           <h1 className="text-2xl font-bold">{task.title}</h1>
           <div className="flex gap-2 items-center">
             <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-60 transition-opacity" />
-            <Badge variant={statusColor(task.status)}>{statusLabel(task.status)}</Badge>
-            <Badge variant={priorityColor(task.priority)}>{statusLabel(task.priority)}</Badge>
+            <Badge variant={statusColor(task.status)}>
+              {statusLabel(task.status)}
+            </Badge>
+            <Badge variant={priorityColor(task.priority)}>
+              {statusLabel(task.priority)}
+            </Badge>
           </div>
         </div>
       )}
@@ -386,19 +542,44 @@ function TaskHeaderCard({
             autoFocus
           />
           <div className="flex gap-2">
-            <button className="btn btn-sm btn-primary" onClick={() => { onPatch("description", descDraft); setEditingDesc(false); }} disabled={isPending}>Save</button>
-            <button className="btn btn-sm btn-ghost" onClick={() => { setDescDraft(task.description || ""); setEditingDesc(false); }}>Cancel</button>
+            <button
+              className="btn btn-sm btn-primary"
+              onClick={() => {
+                onPatch("description", descDraft);
+                setEditingDesc(false);
+              }}
+              disabled={isPending}
+            >
+              Save
+            </button>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => {
+                setDescDraft(task.description || "");
+                setEditingDesc(false);
+              }}
+            >
+              Cancel
+            </button>
           </div>
         </div>
       ) : (
         <div
           className="group cursor-pointer min-h-8 rounded-lg hover:bg-base-200/50 p-2 -mx-2 transition-colors"
-          onClick={() => { setDescDraft(task.description || ""); setEditingDesc(true); }}
+          onClick={() => {
+            setDescDraft(task.description || "");
+            setEditingDesc(true);
+          }}
         >
           {task.description ? (
-            <RichTextViewer content={task.description} className="text-base-content/70" />
+            <RichTextViewer
+              content={task.description}
+              className="text-base-content/70"
+            />
           ) : (
-            <p className="text-base-content/40 italic">Click to add description…</p>
+            <p className="text-base-content/40 italic">
+              Click to add description…
+            </p>
           )}
           <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40 mt-1 transition-opacity" />
         </div>
@@ -409,7 +590,13 @@ function TaskHeaderCard({
 
 /* ─── Labels Tag Editor ─── */
 
-function LabelsEditor({ labels, onSave }: { labels: string[]; onSave: (labels: string[]) => void }) {
+function LabelsEditor({
+  labels,
+  onSave,
+}: {
+  labels: string[];
+  onSave: (labels: string[]) => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -434,7 +621,10 @@ function LabelsEditor({ labels, onSave }: { labels: string[]; onSave: (labels: s
         <Tag className="w-4 h-4 text-base-content/50" />
         <span className="text-sm font-semibold">Labels</span>
         {!editing && (
-          <button className="btn btn-ghost btn-xs" onClick={() => setEditing(true)}>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => setEditing(true)}
+          >
             <Plus className="w-3 h-3" />
           </button>
         )}
@@ -455,7 +645,10 @@ function LabelsEditor({ labels, onSave }: { labels: string[]; onSave: (labels: s
       {editing && (
         <form
           className="flex gap-2 mt-2"
-          onSubmit={(e) => { e.preventDefault(); addLabel(); }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            addLabel();
+          }}
         >
           <input
             ref={inputRef}
@@ -467,8 +660,20 @@ function LabelsEditor({ labels, onSave }: { labels: string[]; onSave: (labels: s
               if (e.key === "Escape") setEditing(false);
             }}
           />
-          <button type="submit" className="btn btn-xs btn-primary" disabled={!input.trim()}>Add</button>
-          <button type="button" className="btn btn-xs btn-ghost" onClick={() => setEditing(false)}>Done</button>
+          <button
+            type="submit"
+            className="btn btn-xs btn-primary"
+            disabled={!input.trim()}
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            className="btn btn-xs btn-ghost"
+            onClick={() => setEditing(false)}
+          >
+            Done
+          </button>
         </form>
       )}
     </Card>
@@ -500,12 +705,17 @@ function SidebarSelect({
         <select
           className="select select-bordered select-xs w-full mt-1"
           value={value}
-          onChange={(e) => { onSave(e.target.value); setEditing(false); }}
+          onChange={(e) => {
+            onSave(e.target.value);
+            setEditing(false);
+          }}
           onBlur={() => setEditing(false)}
           autoFocus
         >
           {options.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
           ))}
         </select>
       ) : (
@@ -612,7 +822,10 @@ function SidebarNumber({
       ) : (
         <div
           className="flex justify-between items-center cursor-pointer hover:bg-base-200 rounded px-1 py-0.5 -mx-1 group"
-          onClick={() => { setDraft(value?.toString() || ""); setEditing(true); }}
+          onClick={() => {
+            setDraft(value?.toString() || "");
+            setEditing(true);
+          }}
         >
           <span>{value != null ? `${value}${suffix}` : "—"}</span>
           <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
@@ -638,10 +851,12 @@ function ChecklistSection({
   const [newTitle, setNewTitle] = useState("");
 
   const createMutation = useMutation({
-    mutationFn: (title: string) => api.checklists.create(orgId, projectId, taskId, { title }),
+    mutationFn: (title: string) =>
+      api.checklists.create(orgId, projectId, taskId, { title }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["checklists"] });
       setNewTitle("");
+      toast.success("Checklist item added");
     },
   });
 
@@ -649,47 +864,80 @@ function ChecklistSection({
     mutationFn: ({ id, is_checked }: { id: string; is_checked: boolean }) =>
       api.checklists.update(orgId, projectId, taskId, id, { is_checked }),
     onMutate: async ({ id, is_checked }) => {
-      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
-      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
-      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          data: old.data.map((item) =>
-            item.id === id ? { ...item, is_checked } : item
-          ),
-        };
+      await qc.cancelQueries({
+        queryKey: ["checklists", orgId, projectId, taskId],
       });
+      const previousChecklists = qc.getQueryData([
+        "checklists",
+        orgId,
+        projectId,
+        taskId,
+      ]);
+      qc.setQueryData(
+        ["checklists", orgId, projectId, taskId],
+        (old: { data: Checklist[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: old.data.map((item) =>
+              item.id === id ? { ...item, is_checked } : item,
+            ),
+          };
+        },
+      );
       return { previousChecklists };
     },
     onError: (_err, _vars, context) => {
       if (context?.previousChecklists) {
-        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
+        qc.setQueryData(
+          ["checklists", orgId, projectId, taskId],
+          context.previousChecklists,
+        );
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
+    onSettled: () =>
+      qc.invalidateQueries({
+        queryKey: ["checklists", orgId, projectId, taskId],
+      }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.checklists.delete(orgId, projectId, taskId, id),
+    mutationFn: (id: string) =>
+      api.checklists.delete(orgId, projectId, taskId, id),
     onMutate: async (id) => {
-      await qc.cancelQueries({ queryKey: ["checklists", orgId, projectId, taskId] });
-      const previousChecklists = qc.getQueryData(["checklists", orgId, projectId, taskId]);
-      qc.setQueryData(["checklists", orgId, projectId, taskId], (old: { data: Checklist[] } | undefined) => {
-        if (!old) return old;
-        return {
-          ...old,
-          data: old.data.filter((item) => item.id !== id),
-        };
+      await qc.cancelQueries({
+        queryKey: ["checklists", orgId, projectId, taskId],
       });
+      const previousChecklists = qc.getQueryData([
+        "checklists",
+        orgId,
+        projectId,
+        taskId,
+      ]);
+      qc.setQueryData(
+        ["checklists", orgId, projectId, taskId],
+        (old: { data: Checklist[] } | undefined) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: old.data.filter((item) => item.id !== id),
+          };
+        },
+      );
       return { previousChecklists };
     },
     onError: (_err, _vars, context) => {
       if (context?.previousChecklists) {
-        qc.setQueryData(["checklists", orgId, projectId, taskId], context.previousChecklists);
+        qc.setQueryData(
+          ["checklists", orgId, projectId, taskId],
+          context.previousChecklists,
+        );
       }
     },
-    onSettled: () => qc.invalidateQueries({ queryKey: ["checklists", orgId, projectId, taskId] }),
+    onSettled: () =>
+      qc.invalidateQueries({
+        queryKey: ["checklists", orgId, projectId, taskId],
+      }),
   });
 
   const total = items.length;
@@ -698,14 +946,23 @@ function ChecklistSection({
   return (
     <Card title={`Checklist ${total > 0 ? `(${checked}/${total})` : ""}`}>
       {total > 0 && (
-        <progress className="progress progress-success w-full mb-3" value={checked} max={total} />
+        <progress
+          className="progress progress-success w-full mb-3"
+          value={checked}
+          max={total}
+        />
       )}
       <ul className="space-y-2">
         {items.map((item) => (
           <li key={item.id} className="flex items-center gap-2 group">
             <button
               className="btn btn-ghost btn-xs btn-square"
-              onClick={() => toggleMutation.mutate({ id: item.id, is_checked: !item.is_checked })}
+              onClick={() =>
+                toggleMutation.mutate({
+                  id: item.id,
+                  is_checked: !item.is_checked,
+                })
+              }
             >
               {item.is_checked ? (
                 <CheckSquare className="w-4 h-4 text-success" />
@@ -713,7 +970,12 @@ function ChecklistSection({
                 <Square className="w-4 h-4" />
               )}
             </button>
-            <span className={cn("flex-1", item.is_checked && "line-through text-base-content/40")}>
+            <span
+              className={cn(
+                "flex-1",
+                item.is_checked && "line-through text-base-content/40",
+              )}
+            >
               {item.title}
             </span>
             <button
@@ -738,7 +1000,12 @@ function ChecklistSection({
           value={newTitle}
           onChange={(e) => setNewTitle(e.target.value)}
         />
-        <Button type="submit" size="sm" disabled={!newTitle.trim()} loading={createMutation.isPending}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!newTitle.trim()}
+          loading={createMutation.isPending}
+        >
           <Plus className="w-4 h-4" />
         </Button>
       </form>
@@ -751,12 +1018,19 @@ function ChecklistSection({
    ═══════════════════════════════════════════════════════ */
 const MENTION_REGEX = /(@[a-zA-Z0-9._-]+)/g;
 
-function MentionText({ body, members }: { body: string; members: OrgMember[] }) {
+function MentionText({
+  body,
+  members,
+}: {
+  body: string;
+  members: OrgMember[];
+}) {
   // Build set of known names for highlighting
   const knownNames = new Set(
     members.flatMap((m) => {
       const names: string[] = [];
-      if (m.display_name) names.push(`@${m.display_name.replace(/\s/g, "").toLowerCase()}`);
+      if (m.display_name)
+        names.push(`@${m.display_name.replace(/\s/g, "").toLowerCase()}`);
       if (m.email) names.push(`@${m.email.split("@")[0].toLowerCase()}`);
       return names;
     }),
@@ -768,7 +1042,10 @@ function MentionText({ body, members }: { body: string; members: OrgMember[] }) 
       {parts.map((part, i) => {
         if (MENTION_REGEX.test(part) && knownNames.has(part.toLowerCase())) {
           return (
-            <span key={i} className="bg-primary/15 text-primary font-medium rounded px-0.5">
+            <span
+              key={i}
+              className="bg-primary/15 text-primary font-medium rounded px-0.5"
+            >
               {part}
             </span>
           );
@@ -798,14 +1075,16 @@ function MentionInput({
   const [query, setQuery] = useState("");
   const [cursorPos, setCursorPos] = useState(0);
 
-  const suggestions = members.filter((m) => {
-    if (!query) return true;
-    const q = query.toLowerCase();
-    return (
-      (m.display_name && m.display_name.toLowerCase().includes(q)) ||
-      m.email.toLowerCase().includes(q)
-    );
-  }).slice(0, 6);
+  const suggestions = members
+    .filter((m) => {
+      if (!query) return true;
+      const q = query.toLowerCase();
+      return (
+        (m.display_name && m.display_name.toLowerCase().includes(q)) ||
+        m.email.toLowerCase().includes(q)
+      );
+    })
+    .slice(0, 6);
 
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
@@ -827,7 +1106,7 @@ function MentionInput({
   const insertMention = (member: OrgMember) => {
     const name = member.display_name
       ? member.display_name.replace(/\s/g, "")
-      : member.email?.split("@")[0] || 'user';
+      : member.email?.split("@")[0] || "user";
     const textBefore = value.slice(0, cursorPos);
     const atIdx = textBefore.lastIndexOf("@");
     const before = value.slice(0, atIdx);
@@ -872,10 +1151,18 @@ function MentionInput({
                 insertMention(m);
               }}
             >
-              <Avatar name={m.display_name || m.email} src={m.avatar_url} size="xs" />
+              <Avatar
+                name={m.display_name || m.email}
+                src={m.avatar_url}
+                size="xs"
+              />
               <div className="truncate">
-                <span className="font-medium">{m.display_name || m.email?.split("@")[0] || 'User'}</span>
-                <span className="text-xs text-base-content/50 ml-1">{m.email}</span>
+                <span className="font-medium">
+                  {m.display_name || m.email?.split("@")[0] || "User"}
+                </span>
+                <span className="text-xs text-base-content/50 ml-1">
+                  {m.email}
+                </span>
               </div>
             </button>
           ))}
@@ -905,16 +1192,22 @@ function CommentsSection({
   const [body, setBody] = useState("");
 
   const createMutation = useMutation({
-    mutationFn: (b: string) => api.comments.create(orgId, projectId, taskId, { body: b }),
+    mutationFn: (b: string) =>
+      api.comments.create(orgId, projectId, taskId, { body: b }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["comments"] });
       setBody("");
+      toast.success("Comment added");
     },
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.comments.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["comments"] }),
+    mutationFn: (id: string) =>
+      api.comments.delete(orgId, projectId, taskId, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comments"] });
+      toast.success("Comment deleted");
+    },
   });
 
   return (
@@ -922,11 +1215,19 @@ function CommentsSection({
       <div className="space-y-4 mb-4">
         {items.map((comment) => (
           <div key={comment.id} className="flex gap-3 group">
-            <Avatar name={memberLabel(comment.user_id, members)} src={memberAvatarUrl(comment.user_id, members)} size="sm" />
+            <Avatar
+              name={memberLabel(comment.user_id, members)}
+              src={memberAvatarUrl(comment.user_id, members)}
+              size="sm"
+            />
             <div className="flex-1">
               <div className="flex items-center gap-2 mb-1">
-                <span className="font-medium text-sm">{memberLabel(comment.user_id, members)}</span>
-                <span className="text-xs text-base-content/50">{formatRelative(comment.created_at)}</span>
+                <span className="font-medium text-sm">
+                  {memberLabel(comment.user_id, members)}
+                </span>
+                <span className="text-xs text-base-content/50">
+                  {formatRelative(comment.created_at)}
+                </span>
                 {comment.user_id === userId && (
                   <button
                     className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
@@ -954,7 +1255,12 @@ function CommentsSection({
           members={members}
           placeholder="Add a comment... (use @ to mention)"
         />
-        <Button type="submit" size="sm" disabled={!body.trim()} loading={createMutation.isPending}>
+        <Button
+          type="submit"
+          size="sm"
+          disabled={!body.trim()}
+          loading={createMutation.isPending}
+        >
           <Send className="w-4 h-4" />
         </Button>
       </form>
@@ -976,12 +1282,20 @@ function AttachmentsSection({
 }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
-  const [preview, setPreview] = useState<{ url: string; mime: string; name: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    url: string;
+    mime: string;
+    name: string;
+  } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.attachments.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["attachments"] }),
+    mutationFn: (id: string) =>
+      api.attachments.delete(orgId, projectId, taskId, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["attachments"] });
+      toast.success("Attachment deleted");
+    },
   });
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1000,7 +1314,12 @@ function AttachmentsSection({
   const handleDownload = async (att: Attachment) => {
     try {
       setLoadingId(att.id);
-      const res = await api.attachments.download(orgId, projectId, taskId, att.id);
+      const res = await api.attachments.download(
+        orgId,
+        projectId,
+        taskId,
+        att.id,
+      );
       window.open(res.download_url, "_blank");
     } catch {
       // silently fail
@@ -1012,8 +1331,17 @@ function AttachmentsSection({
   const handlePreview = async (att: Attachment) => {
     try {
       setLoadingId(att.id);
-      const res = await api.attachments.download(orgId, projectId, taskId, att.id);
-      setPreview({ url: res.download_url, mime: att.mime_type, name: att.filename });
+      const res = await api.attachments.download(
+        orgId,
+        projectId,
+        taskId,
+        att.id,
+      );
+      setPreview({
+        url: res.download_url,
+        mime: att.mime_type,
+        name: att.filename,
+      });
     } catch {
       // silently fail
     } finally {
@@ -1046,11 +1374,16 @@ function AttachmentsSection({
 
                 {/* File info */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium truncate" title={att.filename}>
+                  <p
+                    className="text-sm font-medium truncate"
+                    title={att.filename}
+                  >
                     {att.filename}
                   </p>
                   <p className="text-xs text-base-content/50">
-                    {(att.file_size / 1024).toFixed(1)} KB &middot; {att.mime_type.split("/")[1]?.toUpperCase() || att.mime_type}
+                    {(att.file_size / 1024).toFixed(1)} KB &middot;{" "}
+                    {att.mime_type.split("/")[1]?.toUpperCase() ||
+                      att.mime_type}
                   </p>
                 </div>
 
@@ -1089,13 +1422,21 @@ function AttachmentsSection({
         <label className="btn btn-outline btn-sm gap-1">
           <Upload className="w-4 h-4" />
           {uploading ? "Uploading..." : "Upload File"}
-          <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
+          <input
+            type="file"
+            className="hidden"
+            onChange={handleUpload}
+            disabled={uploading}
+          />
         </label>
       </Card>
 
       {/* Preview Modal / Lightbox */}
       {preview && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setPreview(null)}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setPreview(null)}
+        >
           <div
             className="relative bg-base-100 rounded-lg shadow-xl max-w-4xl max-h-[90vh] w-full overflow-hidden"
             onClick={(e) => e.stopPropagation()}
@@ -1112,19 +1453,33 @@ function AttachmentsSection({
                 >
                   <Download className="w-3 h-3" /> Open
                 </a>
-                <button className="btn btn-ghost btn-xs btn-square" onClick={() => setPreview(null)}>
+                <button
+                  className="btn btn-ghost btn-xs btn-square"
+                  onClick={() => setPreview(null)}
+                >
                   <X className="w-4 h-4" />
                 </button>
               </div>
             </div>
             {/* Content */}
-            <div className="flex items-center justify-center overflow-auto p-4" style={{ maxHeight: "calc(90vh - 56px)" }}>
+            <div
+              className="flex items-center justify-center overflow-auto p-4"
+              style={{ maxHeight: "calc(90vh - 56px)" }}
+            >
               {isImage(preview.mime) && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={preview.url} alt={preview.name} className="max-w-full max-h-[75vh] object-contain rounded" />
+                <img
+                  src={preview.url}
+                  alt={preview.name}
+                  className="max-w-full max-h-[75vh] object-contain rounded"
+                />
               )}
               {isPDF(preview.mime) && (
-                <iframe src={preview.url} className="w-full h-[75vh] rounded" title={preview.name} />
+                <iframe
+                  src={preview.url}
+                  className="w-full h-[75vh] rounded"
+                  title={preview.name}
+                />
               )}
             </div>
           </div>
@@ -1158,12 +1513,17 @@ function DependenciesSection({
       qc.invalidateQueries({ queryKey: ["dependencies"] });
       setDepId("");
       setAdding(false);
+      toast.success("Dependency added");
     },
   });
 
   const removeMutation = useMutation({
-    mutationFn: (depOnId: string) => api.dependencies.remove(orgId, projectId, taskId, depOnId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["dependencies"] }),
+    mutationFn: (depOnId: string) =>
+      api.dependencies.remove(orgId, projectId, taskId, depOnId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["dependencies"] });
+      toast.success("Dependency removed");
+    },
   });
 
   return (
@@ -1173,9 +1533,14 @@ function DependenciesSection({
       )}
       <ul className="space-y-2 mb-2">
         {items.map((dep) => (
-          <li key={dep.depends_on_id} className="flex items-center gap-2 text-sm group">
+          <li
+            key={dep.depends_on_id}
+            className="flex items-center gap-2 text-sm group"
+          >
             <Link2 className="w-3 h-3" />
-            <span className="font-mono text-xs">{dep.depends_on_id.slice(0, 8)}</span>
+            <span className="font-mono text-xs">
+              {dep.depends_on_id.slice(0, 8)}
+            </span>
             <Badge variant="badge-ghost">{dep.type.replace("_", " ")}</Badge>
             <button
               className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 ml-auto"
@@ -1191,7 +1556,11 @@ function DependenciesSection({
           className="space-y-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (depId.trim()) addMutation.mutate({ depends_on_id: depId.trim(), type: depType });
+            if (depId.trim())
+              addMutation.mutate({
+                depends_on_id: depId.trim(),
+                type: depType,
+              });
           }}
         >
           <input
@@ -1211,12 +1580,27 @@ function DependenciesSection({
             <option value="related_to">Related to</option>
           </select>
           <div className="flex gap-1">
-            <button type="submit" className="btn btn-xs btn-primary" disabled={!depId.trim()}>Add</button>
-            <button type="button" className="btn btn-xs btn-ghost" onClick={() => setAdding(false)}>Cancel</button>
+            <button
+              type="submit"
+              className="btn btn-xs btn-primary"
+              disabled={!depId.trim()}
+            >
+              Add
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={() => setAdding(false)}
+            >
+              Cancel
+            </button>
           </div>
         </form>
       ) : (
-        <button className="btn btn-ghost btn-xs gap-1" onClick={() => setAdding(true)}>
+        <button
+          className="btn btn-ghost btn-xs gap-1"
+          onClick={() => setAdding(true)}
+        >
           <Plus className="w-3 h-3" /> Add Dependency
         </button>
       )}
@@ -1247,12 +1631,16 @@ function RulesSection({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["rules"] });
       setAdding(false);
+      toast.success("Rule added");
     },
   });
 
   const removeMutation = useMutation({
     mutationFn: (id: string) => api.rules.delete(orgId, projectId, taskId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["rules"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["rules"] });
+      toast.success("Rule removed");
+    },
   });
 
   return (
@@ -1293,16 +1681,32 @@ function RulesSection({
             <option value="no_blockers">No blockers</option>
           </select>
           <label className="flex items-center gap-2 text-xs">
-            <input type="checkbox" className="checkbox checkbox-xs" checked={required} onChange={(e) => setRequired(e.target.checked)} />
+            <input
+              type="checkbox"
+              className="checkbox checkbox-xs"
+              checked={required}
+              onChange={(e) => setRequired(e.target.checked)}
+            />
             Required
           </label>
           <div className="flex gap-1">
-            <button type="submit" className="btn btn-xs btn-primary">Add</button>
-            <button type="button" className="btn btn-xs btn-ghost" onClick={() => setAdding(false)}>Cancel</button>
+            <button type="submit" className="btn btn-xs btn-primary">
+              Add
+            </button>
+            <button
+              type="button"
+              className="btn btn-xs btn-ghost"
+              onClick={() => setAdding(false)}
+            >
+              Cancel
+            </button>
           </div>
         </form>
       ) : (
-        <button className="btn btn-ghost btn-xs gap-1" onClick={() => setAdding(true)}>
+        <button
+          className="btn btn-ghost btn-xs gap-1"
+          onClick={() => setAdding(true)}
+        >
           <Plus className="w-3 h-3" /> Add Rule
         </button>
       )}
@@ -1333,12 +1737,18 @@ function WatchersSection({
 
   const watchMutation = useMutation({
     mutationFn: () => api.watchers.watch(orgId, projectId, taskId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchers", orgId, projectId, taskId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: ["watchers", orgId, projectId, taskId],
+      }),
   });
 
   const unwatchMutation = useMutation({
     mutationFn: () => api.watchers.unwatch(orgId, projectId, taskId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchers", orgId, projectId, taskId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({
+        queryKey: ["watchers", orgId, projectId, taskId],
+      }),
   });
 
   const pending = watchMutation.isPending || unwatchMutation.isPending;
@@ -1346,13 +1756,24 @@ function WatchersSection({
   return (
     <Card title="Watchers">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-base-content/60">{watchers.length} watching</span>
+        <span className="text-sm text-base-content/60">
+          {watchers.length} watching
+        </span>
         <button
-          className={cn("btn btn-sm gap-1", isWatching ? "btn-primary" : "btn-outline")}
+          className={cn(
+            "btn btn-sm gap-1",
+            isWatching ? "btn-primary" : "btn-outline",
+          )}
           disabled={pending}
-          onClick={() => (isWatching ? unwatchMutation.mutate() : watchMutation.mutate())}
+          onClick={() =>
+            isWatching ? unwatchMutation.mutate() : watchMutation.mutate()
+          }
         >
-          {isWatching ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+          {isWatching ? (
+            <EyeOff className="w-3.5 h-3.5" />
+          ) : (
+            <Eye className="w-3.5 h-3.5" />
+          )}
           {isWatching ? "Unwatch" : "Watch"}
         </button>
       </div>
@@ -1361,7 +1782,11 @@ function WatchersSection({
           {watchers.map((w) => {
             const m = members.find((x) => x.user_id === w.user_id);
             return (
-              <div key={w.user_id} className="tooltip" data-tip={m?.display_name || m?.email || w.user_id.slice(0, 8)}>
+              <div
+                key={w.user_id}
+                className="tooltip"
+                data-tip={m?.display_name || m?.email || w.user_id.slice(0, 8)}
+              >
                 <Avatar
                   name={m?.display_name || m?.email || "?"}
                   src={m?.avatar_url}

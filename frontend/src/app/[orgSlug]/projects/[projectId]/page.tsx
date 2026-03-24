@@ -3,7 +3,6 @@
 import { CalendarView, getDateRange } from "@/components/calendar";
 import { ProjectAnnouncements } from "@/components/projects/project-announcements";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
-import { ProjectSettings } from "@/components/projects/project-settings";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import {
@@ -14,7 +13,6 @@ import {
   type GlobalFilterState,
 } from "@/components/tasks/global-filter-dropdown";
 import { TaskColumns } from "@/components/tasks/task-columns";
-import { TaskListView } from "@/components/tasks/task-list-view";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
 import { Button } from "@/components/ui/button";
 import { Avatar, Card } from "@/components/ui/shared";
@@ -37,15 +35,43 @@ import {
   List,
   ListTodo,
   Megaphone,
+  Search,
   Settings,
   Trash2,
   Unlink,
   Upload,
   UserPlus,
   Users,
+  X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+
+const TaskListView = dynamic(
+  () =>
+    import("@/components/tasks/task-list-view").then((mod) => ({
+      default: mod.TaskListView,
+    })),
+  {
+    loading: () => (
+      <div className="h-64 animate-pulse bg-base-200 rounded-lg" />
+    ),
+  },
+);
+
+const ProjectSettings = dynamic(
+  () =>
+    import("@/components/projects/project-settings").then((mod) => ({
+      default: mod.ProjectSettings,
+    })),
+  {
+    loading: () => (
+      <div className="h-64 animate-pulse bg-base-200 rounded-lg" />
+    ),
+  },
+);
 
 export default function ProjectDetailPage({
   params,
@@ -457,11 +483,7 @@ export default function ProjectDetailPage({
       {/* Members tab */}
       {activeTab === "members" && (
         <div className="flex-1 overflow-auto">
-          <ProjectMembersSection
-            orgId={currentOrg!.id}
-            projectId={projectId}
-            members={members?.data || []}
-          />
+          <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} />
         </div>
       )}
 
@@ -508,16 +530,31 @@ export default function ProjectDetailPage({
 function ProjectMembersSection({
   orgId,
   projectId,
-  members,
 }: {
   orgId: string;
   projectId: string;
-  members: ProjectMember[];
 }) {
   const qc = useQueryClient();
   const [subTab, setSubTab] = useState<"internal" | "external">("internal");
   const [addUserId, setAddUserId] = useState("");
   const [addRole, setAddRole] = useState("member");
+
+  // Search, filter, pagination state
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterRole, setFilterRole] = useState("");
+  const [page, setPage] = useState(0);
+  const [showFilter, setShowFilter] = useState(false);
+  const limit = 15;
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
 
   // Internal tab — add member from a linked team
   const [addInternalTeamId, setAddInternalTeamId] = useState("");
@@ -529,6 +566,28 @@ function ProjectMembersSection({
   const [removeTaskCount, setRemoveTaskCount] = useState<number | null>(null);
   const [removeReassignTo, setRemoveReassignTo] = useState("");
   const [removeLoading, setRemoveLoading] = useState(false);
+
+  // Server-side paginated members query
+  const { data: membersResponse, isLoading: membersLoading } = useQuery({
+    queryKey: [
+      "project-members",
+      orgId,
+      projectId,
+      debouncedSearch,
+      filterRole,
+      page,
+    ],
+    queryFn: () =>
+      api.projectMembers.list(orgId, projectId, {
+        limit,
+        offset: page * limit,
+        search: debouncedSearch || undefined,
+        role: filterRole || undefined,
+      }),
+    enabled: !!orgId,
+  });
+
+  const members = membersResponse?.data || [];
 
   const { data: orgMembers } = useQuery({
     queryKey: ["org-members", orgId],
@@ -561,9 +620,10 @@ function ProjectMembersSection({
         role: addRole,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["project-members"] });
       setAddUserId("");
       setAddRole("member");
+      toast.success("Member added to project");
     },
   });
 
@@ -575,17 +635,20 @@ function ProjectMembersSection({
         source_team_id: addInternalTeamId,
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["project-members"] });
       setAddInternalUserId("");
       setAddInternalRole("member");
+      toast.success("Team member added to project");
     },
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: string }) =>
       api.projectMembers.update(orgId, projectId, userId, { role }),
-    onSuccess: () =>
-      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["project-members"] });
+      toast.success("Member role updated");
+    },
   });
 
   const internalMembers = members.filter((m) => m.source === "team");
@@ -622,7 +685,6 @@ function ProjectMembersSection({
 
   // For external add: org members NOT in any linked team AND not already project members
   const linkedTeamMemberIds = new Set<string>();
-  // We only have the selected team's members loaded; for a full filter we check internalMembers
   for (const m of internalMembers) {
     linkedTeamMemberIds.add(m.user_id);
   }
@@ -663,8 +725,7 @@ function ProjectMembersSection({
         removeTarget.user_id,
         removeReassignTo || undefined,
       );
-      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
-      // Also invalidate team members if the removed member was team-sourced
+      qc.invalidateQueries({ queryKey: ["project-members"] });
       if (removeTarget.source === "team" && removeTarget.source_team_id) {
         qc.invalidateQueries({
           queryKey: ["team-members", orgId, removeTarget.source_team_id],
@@ -685,6 +746,61 @@ function ProjectMembersSection({
 
   return (
     <div className="space-y-4">
+      {/* Search bar + filter button */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <input
+            type="text"
+            placeholder="Search members..."
+            className="input input-bordered input-sm w-full pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button
+          className={`btn btn-sm ${showFilter ? "btn-primary" : "btn-ghost"}`}
+          onClick={() => setShowFilter(!showFilter)}
+        >
+          <Filter className="w-4 h-4" />
+          {filterRole && (
+            <span className="badge badge-xs badge-primary ml-1">1</span>
+          )}
+        </button>
+      </div>
+
+      {showFilter && (
+        <div className="mb-4 p-3 bg-base-200 rounded-lg flex items-center gap-3">
+          <span className="text-sm font-medium">Role:</span>
+          <select
+            className="select select-bordered select-sm"
+            value={filterRole}
+            onChange={(e) => {
+              setFilterRole(e.target.value);
+              setPage(0);
+            }}
+          >
+            <option value="">All roles</option>
+            {(projectRoles || []).map((r: Role) => (
+              <option key={r.slug} value={r.slug}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          {filterRole && (
+            <button
+              className="btn btn-ghost btn-xs"
+              onClick={() => {
+                setFilterRole("");
+                setPage(0);
+              }}
+            >
+              Clear
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Sub-tabs */}
       <div role="tablist" className="tabs tabs-bordered">
         <button
@@ -704,6 +820,13 @@ function ProjectMembersSection({
           {externalMembers.length})
         </button>
       </div>
+
+      {/* Loading state */}
+      {membersLoading && (
+        <div className="flex justify-center py-4">
+          <div className="loading loading-spinner" />
+        </div>
+      )}
 
       {/* ── Removal confirmation dialog ── */}
       {removeTarget && (
@@ -782,7 +905,7 @@ function ProjectMembersSection({
       )}
 
       {/* Internal tab — members added from linked teams */}
-      {subTab === "internal" && (
+      {subTab === "internal" && !membersLoading && (
         <>
           {/* Add Internal Member form */}
           <Card>
@@ -955,7 +1078,7 @@ function ProjectMembersSection({
       )}
 
       {/* External tab — directly-added members with add/remove/role */}
-      {subTab === "external" && (
+      {subTab === "external" && !membersLoading && (
         <>
           <Card>
             <h3 className="font-semibold mb-1">Add External Member</h3>
@@ -1097,6 +1220,36 @@ function ProjectMembersSection({
           </Card>
         </>
       )}
+
+      {/* Pagination controls */}
+      {membersResponse && membersResponse.total > limit && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
+          <span className="text-sm text-base-content/60">
+            Showing {membersResponse.offset + 1}–
+            {Math.min(membersResponse.offset + limit, membersResponse.total)} of{" "}
+            {membersResponse.total}
+          </span>
+          <div className="join">
+            <button
+              className="join-item btn btn-sm"
+              disabled={page === 0}
+              onClick={() => setPage((p) => p - 1)}
+            >
+              «
+            </button>
+            <button className="join-item btn btn-sm">
+              Page {page + 1} of {Math.ceil(membersResponse.total / limit)}
+            </button>
+            <button
+              className="join-item btn btn-sm"
+              disabled={(page + 1) * limit >= membersResponse.total}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              »
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1115,15 +1268,36 @@ function ProjectTeamsSection({
   const [unlinkTeamId, setUnlinkTeamId] = useState<string | null>(null);
   const [reassignTo, setReassignTo] = useState<string>("");
 
+  // Search and pagination for the link-team dialog
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const limit = 10;
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   const { data: linkedTeams, isLoading } = useQuery({
     queryKey: ["project-teams", orgId, projectId],
     queryFn: () => api.projectTeams.list(orgId, projectId),
     enabled: !!orgId,
   });
 
+  // Paginated search for available teams (only when link dialog is open)
   const { data: allTeams, isLoading: teamsLoading } = useQuery({
-    queryKey: ["teams", orgId],
-    queryFn: () => api.teams.list(orgId),
+    queryKey: ["teams", orgId, debouncedSearch, page],
+    queryFn: () =>
+      api.teams.list(orgId, {
+        search: debouncedSearch || undefined,
+        limit,
+        offset: page * limit,
+      }),
     enabled: !!orgId && showLink,
   });
 
@@ -1146,8 +1320,11 @@ function ProjectTeamsSection({
       api.projectTeams.link(orgId, projectId, teamIds),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["project-members"] });
       setShowLink(false);
+      setSearch("");
+      setPage(0);
+      toast.success("Team linked to project");
     },
   });
 
@@ -1161,9 +1338,10 @@ function ProjectTeamsSection({
     }) => api.projectTeams.unlink(orgId, projectId, teamId, reassignTo),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
-      qc.invalidateQueries({ queryKey: ["project-members", orgId, projectId] });
+      qc.invalidateQueries({ queryKey: ["project-members"] });
       setUnlinkTeamId(null);
       setReassignTo("");
+      toast.success("Team unlinked from project");
     },
   });
 
@@ -1208,7 +1386,11 @@ function ProjectTeamsSection({
           </div>
           <Button
             size="sm"
-            onClick={() => setShowLink(!showLink)}
+            onClick={() => {
+              setShowLink(!showLink);
+              setSearch("");
+              setPage(0);
+            }}
             variant={showLink ? "secondary" : "primary"}
           >
             <Link2 className="w-4 h-4 mr-1" />{" "}
@@ -1218,7 +1400,15 @@ function ProjectTeamsSection({
 
         {showLink && (
           <div className="mb-4 p-3 bg-base-200 rounded-lg">
-            <p className="text-sm font-medium mb-2">Select teams to link:</p>
+            <div className="flex items-center gap-2 mb-2">
+              <input
+                type="text"
+                placeholder="Search teams..."
+                className="input input-bordered input-sm flex-1"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
             {teamsLoading ? (
               <div className="flex justify-center py-2">
                 <div className="loading loading-spinner loading-sm" />
@@ -1243,8 +1433,37 @@ function ProjectTeamsSection({
               </div>
             ) : (
               <span className="text-sm text-base-content/50">
-                All teams are already linked to this project.
+                {debouncedSearch
+                  ? "No teams match your search."
+                  : "All teams are already linked to this project."}
               </span>
+            )}
+            {/* Pagination controls for link dialog */}
+            {allTeams && allTeams.total > limit && (
+              <div className="flex items-center justify-between mt-3">
+                <span className="text-xs text-base-content/60">
+                  {allTeams.total} teams total
+                </span>
+                <div className="join">
+                  <button
+                    className="join-item btn btn-xs"
+                    disabled={page === 0}
+                    onClick={() => setPage((p) => p - 1)}
+                  >
+                    «
+                  </button>
+                  <button className="join-item btn btn-xs">
+                    Page {page + 1}
+                  </button>
+                  <button
+                    className="join-item btn btn-xs"
+                    disabled={(page + 1) * limit >= allTeams.total}
+                    onClick={() => setPage((p) => p + 1)}
+                  >
+                    »
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1258,46 +1477,27 @@ function ProjectTeamsSection({
             No teams linked yet
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Team</th>
-                  <th>Linked</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {linkedTeams.map((pt: ProjectTeam) => (
-                  <tr key={pt.team_id}>
-                    <td className="font-medium">
-                      {pt.team_name || pt.team_id.slice(0, 12)}
-                    </td>
-                    <td className="text-sm text-base-content/60">
-                      {pt.added_at
-                        ? new Date(pt.added_at).toLocaleDateString()
-                        : "—"}
-                    </td>
-                    <td>
-                      <button
-                        className="btn btn-ghost btn-xs text-error"
-                        onClick={() => handleUnlinkClick(pt.team_id)}
-                        disabled={
-                          unlinkMutation.isPending || linkedTeams.length <= 1
-                        }
-                        title={
-                          linkedTeams.length <= 1
-                            ? "Cannot unlink the last team"
-                            : "Unlink team"
-                        }
-                      >
-                        <Unlink className="w-3 h-3" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="flex flex-wrap gap-2 items-center">
+            {linkedTeams.map((pt: ProjectTeam) => (
+              <div key={pt.team_id} className="badge badge-lg gap-1 pr-1">
+                <Users className="w-3 h-3" />
+                {pt.team_name || pt.team_id.slice(0, 8)}
+                <button
+                  className="btn btn-ghost btn-xs btn-circle"
+                  onClick={() => handleUnlinkClick(pt.team_id)}
+                  disabled={
+                    unlinkMutation.isPending || (linkedTeams?.length || 0) <= 1
+                  }
+                  title={
+                    (linkedTeams?.length || 0) <= 1
+                      ? "Cannot unlink the last team"
+                      : "Unlink team"
+                  }
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
           </div>
         )}
       </Card>

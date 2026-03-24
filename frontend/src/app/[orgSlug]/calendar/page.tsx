@@ -1,17 +1,17 @@
 "use client";
 
 import {
-    AppliedFilterChips,
-    calendarFilterCount,
-    CalendarFilterDropdown,
-    CalendarView,
-    EMPTY_CALENDAR_FILTER,
-    getDateRange,
-    GroupBySelector,
-    isCalendarFilterActive,
-    type CalendarFilterState,
-    type CalendarGroupBy,
-    type CalendarViewMode,
+  AppliedFilterChips,
+  calendarFilterCount,
+  CalendarFilterDropdown,
+  CalendarView,
+  EMPTY_CALENDAR_FILTER,
+  getDateRange,
+  GroupBySelector,
+  isCalendarFilterActive,
+  type CalendarFilterState,
+  type CalendarGroupBy,
+  type CalendarViewMode,
 } from "@/components/calendar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -110,7 +110,8 @@ export default function OrgCalendarPage({
         const proj = projects.find((p) => p.id === id);
         if (!proj) return false;
         if (proj.team_id && filter.teamIds.includes(proj.team_id)) return true;
-        if (proj.team_ids?.some((tid) => filter.teamIds.includes(tid))) return true;
+        if (proj.team_ids?.some((tid) => filter.teamIds.includes(tid)))
+          return true;
         return false;
       });
     }
@@ -144,14 +145,18 @@ export default function OrgCalendarPage({
 
       return p.toString();
     },
-    [dateRange, filter.statuses, filter.priorities, filter.assigneeIds, filter.labels, filter.parentTaskId]
+    [
+      dateRange,
+      filter.statuses,
+      filter.priorities,
+      filter.assigneeIds,
+      filter.labels,
+      filter.parentTaskId,
+    ],
   );
 
   // Fetch tasks from all target projects in parallel
-  const {
-    data: allTasksData,
-    isLoading: tasksLoading,
-  } = useQuery({
+  const { data: allTasksData, isLoading: tasksLoading } = useQuery({
     queryKey: [
       "calendar-tasks",
       orgId,
@@ -168,8 +173,10 @@ export default function OrgCalendarPage({
       if (targetProjectIds.length === 0) return [] as Task[];
       const results = await Promise.all(
         targetProjectIds.map((pid) =>
-          api.tasks.list(orgId, pid, buildParams(pid)).then((r) => r.data || [])
-        )
+          api.tasks
+            .list(orgId, pid, buildParams(pid))
+            .then((r) => r.data || []),
+        ),
       );
       return results.flat();
     },
@@ -194,14 +201,18 @@ export default function OrgCalendarPage({
   // Root-level tasks for parent filter
   const rootTasks = useMemo(
     () => calendarTasks.filter((t) => !t.parent_task_id && t.depth === 0),
-    [calendarTasks]
+    [calendarTasks],
   );
 
   const handleRangeChange = useCallback(
-    (from: string, to: string, _mode: CalendarViewMode) => {
-      setDateRange({ from, to });
+    (from: string, _to: string, _mode: CalendarViewMode) => {
+      // Always fetch the full month grid range so week/day views
+      // still have all tasks loaded (avoids blank day view bug).
+      const midDate = new Date(from);
+      const monthRange = getDateRange(midDate, "month");
+      setDateRange(monthRange);
     },
-    []
+    [],
   );
 
   const handleTaskClick = useCallback(
@@ -210,19 +221,21 @@ export default function OrgCalendarPage({
         window.location.href = `/${currentOrg.slug}/projects/${task.project_id}?task=${task.id}`;
       }
     },
-    [currentOrg]
+    [currentOrg],
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden bg-base-100">
       {/* Header bar */}
-      <div className="flex items-center justify-between gap-2 pb-2 flex-wrap">
+      <div className="flex items-center justify-between gap-2 pb-3 flex-wrap">
         <div className="flex items-center gap-2">
           <CalendarDays className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-semibold">Calendar</h1>
-          <span className="text-sm text-base-content/50">
-            {calendarTasks.length} task{calendarTasks.length !== 1 ? "s" : ""}
-          </span>
+          {calendarTasks.length > 0 && (
+            <span className="badge badge-ghost badge-sm">
+              {calendarTasks.length} task{calendarTasks.length !== 1 ? "s" : ""}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -234,7 +247,7 @@ export default function OrgCalendarPage({
             <button
               className={cn(
                 "btn btn-sm gap-1",
-                isCalendarFilterActive(filter) ? "btn-primary" : "btn-ghost"
+                isCalendarFilterActive(filter) ? "btn-primary" : "btn-ghost",
               )}
               onClick={() => setShowFilter((p) => !p)}
             >
@@ -247,15 +260,23 @@ export default function OrgCalendarPage({
               )}
             </button>
             {showFilter && (
-              <CalendarFilterDropdown
-                filter={filter}
-                projects={projects}
-                teams={teams}
-                members={members}
-                tasks={calendarTasks}
-                onChange={setFilter}
-                onClose={() => setShowFilter(false)}
-              />
+              <>
+                {/* Invisible backdrop to intercept clicks outside the filter panel */}
+                <div
+                  className="fixed inset-0 z-[99]"
+                  onClick={() => setShowFilter(false)}
+                />
+                <CalendarFilterDropdown
+                  filter={filter}
+                  projects={projects}
+                  teams={teams}
+                  members={members}
+                  tasks={calendarTasks}
+                  onChange={setFilter}
+                  onClose={() => setShowFilter(false)}
+                  groupBy={groupBy}
+                />
+              </>
             )}
           </div>
         </div>

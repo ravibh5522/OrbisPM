@@ -33,6 +33,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
+import { toast } from "sonner";
 
 const TIMEZONE_OPTIONS = [
   { value: "", label: "Select timezone" },
@@ -333,12 +334,10 @@ function AppearanceTab() {
       await api.auth.updateUser({
         data: { theme: themeValue },
       });
-      useAuthStore
-        .getState()
-        .updateUser({
-          ...user!,
-          user_metadata: { ...user?.user_metadata, theme: themeValue },
-        });
+      useAuthStore.getState().updateUser({
+        ...user!,
+        user_metadata: { ...user?.user_metadata, theme: themeValue },
+      });
       qc.invalidateQueries({ queryKey: ["profile"] });
       setSuccess("Theme saved!");
       setTimeout(() => setSuccess(""), 3000);
@@ -601,6 +600,7 @@ export default function ProfilePage() {
       qc.invalidateQueries({ queryKey: ["org-members"] });
       setProfileSuccess("Profile updated successfully");
       setProfileError("");
+      toast.success("Profile updated");
       setTimeout(() => setProfileSuccess(""), 4000);
     },
     onError: (e: Error) => {
@@ -789,6 +789,7 @@ export default function ProfilePage() {
       setOldPassword("");
       setNewPassword("");
       setConfirmNewPassword("");
+      toast.success("Password changed");
     },
     onError: (e: Error) => {
       setSecError(

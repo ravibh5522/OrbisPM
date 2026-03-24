@@ -57,13 +57,21 @@ func (s *RedisSubscriber) Subscribe(ctx context.Context, eventType string, handl
 
 	go func() {
 		ch := s.pubsub.Channel()
-		for msg := range ch {
-			var event domain.DomainEvent
-			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-				log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
-				continue
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				var event domain.DomainEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
+					continue
+				}
+				handler(event)
 			}
-			handler(event)
 		}
 	}()
 
@@ -76,13 +84,21 @@ func (s *RedisSubscriber) SubscribeAll(ctx context.Context, handler func(domain.
 
 	go func() {
 		ch := s.pubsub.Channel()
-		for msg := range ch {
-			var event domain.DomainEvent
-			if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
-				log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
-				continue
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-ch:
+				if !ok {
+					return
+				}
+				var event domain.DomainEvent
+				if err := json.Unmarshal([]byte(msg.Payload), &event); err != nil {
+					log.Error().Err(err).Str("channel", msg.Channel).Msg("failed to unmarshal event")
+					continue
+				}
+				handler(event)
 			}
-			handler(event)
 		}
 	}()
 

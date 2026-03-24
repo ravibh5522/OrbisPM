@@ -47,7 +47,7 @@ function getMonthGridStart(year: number, month: number): Date {
 export function getMonthGridWithStrips(
   year: number,
   month: number,
-  tasks: Task[]
+  tasks: Task[],
 ): MonthWeekRow[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -85,7 +85,11 @@ export function getMonthGridWithStrips(
 }
 
 /** Lay out task strips for a 7-day row */
-function layoutStrips(tasks: Task[], rowStart: Date, rowEnd: Date): TaskStrip[] {
+function layoutStrips(
+  tasks: Task[],
+  rowStart: Date,
+  rowEnd: Date,
+): TaskStrip[] {
   const rowStartMs = rowStart.getTime();
   const rowEndMs = rowEnd.getTime();
   const dayMs = 86400000;
@@ -121,7 +125,8 @@ function layoutStrips(tasks: Task[], rowStart: Date, rowEnd: Date): TaskStrip[] 
     taskStart.setHours(0, 0, 0, 0);
     taskEnd.setHours(0, 0, 0, 0);
 
-    if (taskEnd.getTime() < rowStartMs || taskStart.getTime() > rowEndMs) continue;
+    if (taskEnd.getTime() < rowStartMs || taskStart.getTime() > rowEndMs)
+      continue;
 
     const clippedStart = taskStart.getTime() < rowStartMs;
     const clippedEnd = taskEnd.getTime() > rowEndMs;
@@ -158,7 +163,7 @@ function layoutStrips(tasks: Task[], rowStart: Date, rowEnd: Date): TaskStrip[] 
     while (true) {
       if (!lanes[lane]) lanes[lane] = [];
       const conflict = lanes[lane].some(
-        ([s, e]) => !(c.endCol < s || c.startCol > e)
+        ([s, e]) => !(c.endCol < s || c.startCol > e),
       );
       if (!conflict) break;
       lane++;
@@ -178,7 +183,11 @@ function layoutStrips(tasks: Task[], rowStart: Date, rowEnd: Date): TaskStrip[] 
 }
 
 /* ── Flat month grid (backward compat) ── */
-export function getMonthGrid(year: number, month: number, tasks: Task[]): CalendarDay[] {
+export function getMonthGrid(
+  year: number,
+  month: number,
+  tasks: Task[],
+): CalendarDay[] {
   const rows = getMonthGridWithStrips(year, month, tasks);
   return rows.flatMap((r) => r.days);
 }
@@ -211,12 +220,14 @@ export function getDayGrid(date: Date, tasks: Task[]): CalendarDay[] {
   today.setHours(0, 0, 0, 0);
   const tasksByDate = buildTaskDateMap(tasks);
   const dateKey = toDateKey(date);
-  return [{
-    date: new Date(date),
-    isCurrentMonth: true,
-    isToday: date.getTime() === today.getTime(),
-    tasks: tasksByDate.get(dateKey) || [],
-  }];
+  return [
+    {
+      date: new Date(date),
+      isCurrentMonth: true,
+      isToday: date.getTime() === today.getTime(),
+      tasks: tasksByDate.get(dateKey) || [],
+    },
+  ];
 }
 
 /* ── Date -> Task[] map (place task on each day it spans) ── */
@@ -279,11 +290,17 @@ export function formatWeekRange(date: Date): string {
 
 export function formatDayHeader(date: Date): string {
   return date.toLocaleDateString("en-US", {
-    weekday: "long", month: "long", day: "numeric", year: "numeric",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
-export function getDateRange(viewDate: Date, mode: CalendarViewMode): { from: string; to: string } {
+export function getDateRange(
+  viewDate: Date,
+  mode: CalendarViewMode,
+): { from: string; to: string } {
   if (mode === "month") {
     const year = viewDate.getFullYear();
     const month = viewDate.getMonth();
@@ -304,7 +321,11 @@ export function getDateRange(viewDate: Date, mode: CalendarViewMode): { from: st
   return { from: toDateKey(viewDate), to: toDateKey(viewDate) };
 }
 
-export function navigateDate(viewDate: Date, mode: CalendarViewMode, direction: 1 | -1): Date {
+export function navigateDate(
+  viewDate: Date,
+  mode: CalendarViewMode,
+  direction: 1 | -1,
+): Date {
   const d = new Date(viewDate);
   if (mode === "month") d.setMonth(d.getMonth() + direction);
   else if (mode === "week") d.setDate(d.getDate() + 7 * direction);
@@ -317,8 +338,293 @@ export function getWeekdayLabels(): string[] {
 }
 
 export function sortTasksByPriority(tasks: Task[]): Task[] {
-  const order: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3 };
-  return [...tasks].sort((a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9));
+  const order: Record<string, number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
+  return [...tasks].sort(
+    (a, b) => (order[a.priority] ?? 9) - (order[b.priority] ?? 9),
+  );
+}
+
+/* ── Timeline entry for project/team aggregated view ── */
+export interface TimelineEntry {
+  id: string;
+  title: string;
+  startDate: Date;
+  endDate: Date;
+  taskCount: number;
+  type: "project" | "team";
+  /** Index for color assignment */
+  colorIndex: number;
+}
+
+export interface TimelineStrip {
+  entry: TimelineEntry;
+  startCol: number;
+  span: number;
+  lane: number;
+  clippedStart: boolean;
+  clippedEnd: boolean;
+}
+
+export const TIMELINE_COLORS = [
+  "bg-primary text-primary-content",
+  "bg-secondary text-secondary-content",
+  "bg-accent text-accent-content",
+  "bg-info text-info-content",
+  "bg-success text-success-content",
+  "bg-warning text-warning-content",
+  "bg-error text-error-content",
+  "bg-[#6366f1] text-white",
+  "bg-[#8b5cf6] text-white",
+  "bg-[#ec4899] text-white",
+  "bg-[#14b8a6] text-white",
+  "bg-[#f97316] text-white",
+];
+
+/** Aggregate tasks into project timeline entries (merges duplicate project names) */
+export function aggregateProjectTimelines(
+  tasks: Task[],
+  projectNames: Map<string, string>,
+): TimelineEntry[] {
+  // Group tasks by project name (not ID) to merge duplicates
+  const nameTaskMap = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const name =
+      projectNames.get(t.project_id) || `Project ${t.project_id.slice(0, 8)}`;
+    const arr = nameTaskMap.get(name);
+    if (arr) arr.push(t);
+    else nameTaskMap.set(name, [t]);
+  }
+
+  const entries: TimelineEntry[] = [];
+  let colorIndex = 0;
+
+  for (const [name, pTasks] of nameTaskMap) {
+    let minStart: Date | null = null;
+    let maxEnd: Date | null = null;
+
+    for (const t of pTasks) {
+      if (t.start_date) {
+        const sd = new Date(t.start_date);
+        sd.setHours(0, 0, 0, 0);
+        if (!minStart || sd < minStart) minStart = sd;
+      }
+      if (t.due_date) {
+        const dd = new Date(t.due_date);
+        dd.setHours(0, 0, 0, 0);
+        if (!maxEnd || dd > maxEnd) maxEnd = dd;
+      }
+    }
+
+    if (minStart || maxEnd) {
+      entries.push({
+        id: `project-${name}`,
+        title: name,
+        startDate: minStart || maxEnd!,
+        endDate: maxEnd || minStart!,
+        taskCount: pTasks.length,
+        type: "project",
+        colorIndex: colorIndex++,
+      });
+    }
+  }
+
+  return entries;
+}
+
+/** Aggregate tasks into team timeline entries with gap detection (merges duplicate team names) */
+export function aggregateTeamTimelines(
+  tasks: Task[],
+  projectTeamMap: Map<string, string>,
+  teamNames: Map<string, string>,
+): TimelineEntry[] {
+  // Group tasks by team name (not ID) to merge duplicates
+  const nameTaskMap = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const teamId = projectTeamMap.get(t.project_id) || "unassigned";
+    const name =
+      teamId === "unassigned"
+        ? "No Team"
+        : teamNames.get(teamId) || `Team ${teamId.slice(0, 8)}`;
+    const arr = nameTaskMap.get(name);
+    if (arr) arr.push(t);
+    else nameTaskMap.set(name, [t]);
+  }
+
+  const entries: TimelineEntry[] = [];
+  let colorIndex = 0;
+
+  for (const [teamName, tTasks] of nameTaskMap) {
+    const ranges: { start: Date; end: Date }[] = [];
+    for (const t of tTasks) {
+      if (!t.start_date && !t.due_date) continue;
+      let start: Date;
+      let end: Date;
+      if (t.start_date && t.due_date) {
+        start = new Date(t.start_date);
+        end = new Date(t.due_date);
+        if (start > end) [start, end] = [end, start];
+      } else {
+        const d = new Date((t.due_date || t.start_date)!);
+        start = d;
+        end = d;
+      }
+      start.setHours(0, 0, 0, 0);
+      end.setHours(0, 0, 0, 0);
+      ranges.push({ start, end });
+    }
+
+    if (ranges.length === 0) continue;
+
+    ranges.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+    // Merge overlapping/adjacent ranges (allow 2-day gap to merge)
+    const merged: { start: Date; end: Date }[] = [];
+    let current = {
+      start: new Date(ranges[0].start),
+      end: new Date(ranges[0].end),
+    };
+    for (let i = 1; i < ranges.length; i++) {
+      const r = ranges[i];
+      const gapMs = r.start.getTime() - current.end.getTime();
+      if (gapMs <= 2 * 86400000) {
+        if (r.end > current.end) current.end = new Date(r.end);
+      } else {
+        merged.push(current);
+        current = { start: new Date(r.start), end: new Date(r.end) };
+      }
+    }
+    merged.push(current);
+
+    const ci = colorIndex++;
+
+    for (let i = 0; i < merged.length; i++) {
+      entries.push({
+        id: `team-${teamName}-${i}`,
+        title: teamName,
+        startDate: merged[i].start,
+        endDate: merged[i].end,
+        taskCount: tTasks.length,
+        type: "team",
+        colorIndex: ci,
+      });
+    }
+  }
+
+  return entries;
+}
+
+/** Layout timeline entries as strips for a 7-day row */
+export function layoutTimelineStrips(
+  entries: TimelineEntry[],
+  rowStart: Date,
+  rowEnd: Date,
+): TimelineStrip[] {
+  const rowStartMs = rowStart.getTime();
+  const rowEndMs = rowEnd.getTime();
+  const dayMs = 86400000;
+
+  type Candidate = {
+    entry: TimelineEntry;
+    startCol: number;
+    endCol: number;
+    clippedStart: boolean;
+    clippedEnd: boolean;
+  };
+
+  const candidates: Candidate[] = [];
+  for (const entry of entries) {
+    const taskStartMs = entry.startDate.getTime();
+    const taskEndMs = entry.endDate.getTime();
+    if (taskEndMs < rowStartMs || taskStartMs > rowEndMs) continue;
+
+    const clippedStart = taskStartMs < rowStartMs;
+    const clippedEnd = taskEndMs > rowEndMs;
+
+    const visibleStart = clippedStart ? rowStart : entry.startDate;
+    const visibleEnd = clippedEnd ? rowEnd : entry.endDate;
+    const startCol = Math.round((visibleStart.getTime() - rowStartMs) / dayMs);
+    const endCol = Math.round((visibleEnd.getTime() - rowStartMs) / dayMs);
+
+    candidates.push({
+      entry,
+      startCol: Math.max(0, Math.min(6, startCol)),
+      endCol: Math.max(0, Math.min(6, endCol)),
+      clippedStart,
+      clippedEnd,
+    });
+  }
+
+  candidates.sort((a, b) => {
+    const spanA = a.endCol - a.startCol;
+    const spanB = b.endCol - b.startCol;
+    if (spanA !== spanB) return spanB - spanA;
+    return a.startCol - b.startCol;
+  });
+
+  const strips: TimelineStrip[] = [];
+  const lanes: [number, number][][] = [];
+
+  for (const c of candidates) {
+    let lane = 0;
+    for (;;) {
+      if (!lanes[lane]) lanes[lane] = [];
+      const conflict = lanes[lane].some(
+        ([s, e]) => !(c.endCol < s || c.startCol > e),
+      );
+      if (!conflict) break;
+      lane++;
+    }
+    lanes[lane].push([c.startCol, c.endCol]);
+    strips.push({
+      entry: c.entry,
+      startCol: c.startCol,
+      span: c.endCol - c.startCol + 1,
+      lane,
+      clippedStart: c.clippedStart,
+      clippedEnd: c.clippedEnd,
+    });
+  }
+
+  return strips;
+}
+
+/** Month grid with timeline strips for project/team view */
+export function getMonthGridWithTimelineStrips(
+  year: number,
+  month: number,
+  entries: TimelineEntry[],
+): { days: CalendarDay[]; strips: TimelineStrip[] }[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const gridStart = getMonthGridStart(year, month);
+
+  const allDays: CalendarDay[] = [];
+  for (let i = 0; i < 42; i++) {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + i);
+    allDays.push({
+      date: new Date(date),
+      isCurrentMonth: date.getMonth() === month,
+      isToday: date.getTime() === today.getTime(),
+      tasks: [],
+    });
+  }
+
+  const rows: { days: CalendarDay[]; strips: TimelineStrip[] }[] = [];
+  for (let r = 0; r < 6; r++) {
+    const days = allDays.slice(r * 7, r * 7 + 7);
+    const rowStart = days[0].date;
+    const rowEnd = days[6].date;
+    const strips = layoutTimelineStrips(entries, rowStart, rowEnd);
+    rows.push({ days, strips });
+  }
+
+  return rows;
 }
 
 /** Extract unique values from tasks for auto-generated filter options */
@@ -345,8 +651,12 @@ export function extractFilterOptions(tasks: Task[]) {
 }
 
 /** Format date range for a task strip tooltip */
-export function formatDateRange(start?: string | null, end?: string | null): string {
-  const fmt = (s: string) => new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+export function formatDateRange(
+  start?: string | null,
+  end?: string | null,
+): string {
+  const fmt = (s: string) =>
+    new Date(s).toLocaleDateString("en-US", { month: "short", day: "numeric" });
   if (start && end) return `${fmt(start)} → ${fmt(end)}`;
   if (start) return `From ${fmt(start)}`;
   if (end) return `Due ${fmt(end)}`;

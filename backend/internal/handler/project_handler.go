@@ -9,6 +9,7 @@ import (
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -122,14 +123,18 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/projects [get]
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-
-	// Optional team_id filter
-	var teamFilter *uuid.UUID
-	if tid := queryUUID(r, "team_id"); tid != nil {
-		teamFilter = tid
+	f := repository.ProjectFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		Status:    queryStr(r, "status"),
+		TeamID:    queryUUID(r, "team_id"),
+		SortBy:    queryStrDefault(r, "sort_by", "name"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
 	}
-
-	projects, err := h.projectSvc.ListByOrg(r.Context(), orgID, teamFilter)
+	projects, total, err := h.projectSvc.ListByOrgPaginated(r.Context(), orgID, f)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -137,7 +142,7 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	if projects == nil {
 		projects = []*domain.Project{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: projects, Total: len(projects), Limit: len(projects), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: projects, Total: total, Limit: f.Limit, Offset: f.Offset})
 }
 
 // Update godoc
@@ -215,7 +220,9 @@ func (h *ProjectHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
 		return
 	}
-	members, err := h.projectSvc.ListMembers(r.Context(), projectID)
+	limit := queryInt(r, "limit", 20)
+	offset := queryInt(r, "offset", 0)
+	members, total, err := h.projectSvc.ListMembersPaginated(r.Context(), projectID, limit, offset)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -223,7 +230,7 @@ func (h *ProjectHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	if members == nil {
 		members = []*domain.ProjectMember{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: total, Limit: limit, Offset: offset})
 }
 
 type addProjectMemberRequest struct {

@@ -52,6 +52,8 @@ export interface Project {
   description?: string;
   status: ProjectStatus;
   settings?: Record<string, unknown>;
+  member_count?: number;
+  task_count?: number;
   created_at: string;
   updated_at: string;
 }
@@ -714,4 +716,179 @@ export interface Announcement {
   updated_at: string;
   read_count: number;
   unread: boolean;
+}
+
+// ═══════════════════════════════════════════════════════
+// Analytics & Performance Types
+// ═══════════════════════════════════════════════════════
+
+export interface VelocityPoint {
+  [key: string]: unknown;
+  date: string;
+  completed: number;
+  created: number;
+}
+
+export interface CFDPoint {
+  date: string;
+  todo: number;
+  in_progress: number;
+  blocked: number;
+  done: number;
+}
+
+export interface HealthScore {
+  overall: number;
+  velocity_trend: number;
+  blocked_ratio: number;
+  overdue_ratio: number;
+  completion_rate: number;
+  estimate_accuracy: number;
+}
+
+export interface WorkloadDistribution {
+  user_id: string;
+  display_name: string;
+  task_count: number;
+  done_count: number;
+  overdue_count: number;
+  story_points: number;
+}
+
+export interface BurndownPoint {
+  [key: string]: unknown;
+  date: string;
+  remaining: number;
+  ideal: number;
+}
+
+export interface CycleTimeStats {
+  mean: number;
+  median: number;
+  p75: number;
+  p90: number;
+  p95: number;
+  std_dev: number;
+}
+
+export interface LeadTimeStats {
+  mean: number;
+  median: number;
+  p75: number;
+  p90: number;
+}
+
+export interface ThroughputStats {
+  daily_avg: number;
+  weekly_avg: number;
+  trend: number;
+}
+
+export interface RiskScore {
+  id: string;
+  task_id: string;
+  risk_level: "low" | "medium" | "high" | "critical";
+  risk_score: number;
+  factors: Record<string, unknown>;
+  predicted_completion?: string | null;
+  updated_at: string;
+}
+
+export interface MetricAlert {
+  id: string;
+  org_id: string;
+  alert_type: string;
+  severity: "info" | "warning" | "critical";
+  scope_type: string;
+  scope_id: string;
+  title: string;
+  description: string;
+  data?: Record<string, unknown>;
+  acknowledged_at?: string | null;
+  acknowledged_by?: string | null;
+  created_at: string;
+}
+
+export interface PerformanceReport {
+  id: string;
+  org_id: string;
+  report_type: string;
+  scope_type: string;
+  scope_id: string;
+  parameters: Record<string, unknown>;
+  status: "pending" | "generating" | "completed" | "failed";
+  storage_path?: string;
+  generated_by: string;
+  generated_at?: string | null;
+  expires_at?: string | null;
+  created_at: string;
+}
+
+export interface ProjectHealthSummary {
+  project_id: string;
+  project_name: string;
+  health_score: number;
+  task_count: number;
+  done_count: number;
+  overdue_count: number;
+  velocity: number;
+}
+
+export interface DashboardPredictions {
+  completion_forecast?: string | null;
+  velocity_forecast: number;
+  risk_task_count: number;
+}
+
+export interface DashboardAnalytics {
+  health: HealthScore;
+  velocity: VelocityPoint[];
+  predictions: DashboardPredictions;
+  warnings: MetricAlert[];
+  top_risk_tasks: RiskScore[];
+  workload_balance: WorkloadDistribution[];
+  completion_trend: VelocityPoint[];
+}
+
+export interface OrgAnalytics {
+  health: HealthScore;
+  velocity: VelocityPoint[];
+  project_health: ProjectHealthSummary[];
+  workload: WorkloadDistribution[];
+  active_alerts: MetricAlert[];
+  total_tasks: number;
+  completed_tasks: number;
+  overdue_tasks: number;
+  avg_cycle_time: number;
+}
+
+export interface ProjectAnalytics {
+  health: HealthScore;
+  velocity: VelocityPoint[];
+  cfd: CFDPoint[];
+  burndown: BurndownPoint[];
+  cycle_time: CycleTimeStats;
+  lead_time: LeadTimeStats;
+  throughput: ThroughputStats;
+  workload: WorkloadDistribution[];
+  risk_tasks: RiskScore[];
+  estimate_accuracy: number;
+  completion_forecast?: string | null;
+}
+
+export interface TeamAnalytics {
+  health: HealthScore;
+  velocity: VelocityPoint[];
+  workload: WorkloadDistribution[];
+  projects: ProjectHealthSummary[];
+}
+
+export interface MemberAnalytics {
+  tasks_completed: number;
+  tasks_created: number;
+  avg_cycle_time: number;
+  velocity: VelocityPoint[];
+  completion_rate: number;
+  overdue_tasks: number;
+  active_tasks: number;
 }

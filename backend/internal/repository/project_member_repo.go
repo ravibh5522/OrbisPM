@@ -79,6 +79,62 @@ func (r *projectMemberRepo) ListByProject(ctx context.Context, projectID uuid.UU
 	return members, rows.Err()
 }
 
+func (r *projectMemberRepo) GetByProjectAndUser(ctx context.Context, projectID, userID uuid.UUID) (*domain.ProjectMember, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''),
+		        m.role, m.source, m.source_team_id, COALESCE(t.name, ''), m.joined_at
+		 FROM project_members m
+		 LEFT JOIN users u ON u.id = m.user_id
+		 LEFT JOIN teams t ON t.id = m.source_team_id
+		 WHERE m.project_id = $1 AND m.user_id = $2`, projectID, userID)
+	var m domain.ProjectMember
+	err := row.Scan(&m.ProjectID, &m.UserID, &m.Email, &m.DisplayName, &m.AvatarURL,
+		&m.Role, &m.Source, &m.SourceTeamID, &m.SourceTeamName, &m.JoinedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (r *projectMemberRepo) ListByProjectPaginated(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]*domain.ProjectMember, int, error) {
+	// Count total
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM project_members WHERE project_id = $1`, projectID).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count project members: %w", err)
+	}
+
+	if limit <= 0 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT m.project_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.display_name, ''), COALESCE(u.avatar_url, ''),
+		        m.role, m.source, m.source_team_id, COALESCE(t.name, ''), m.joined_at
+		 FROM project_members m
+		 LEFT JOIN users u ON u.id = m.user_id
+		 LEFT JOIN teams t ON t.id = m.source_team_id
+		 WHERE m.project_id = $1 ORDER BY m.joined_at
+		 LIMIT $2 OFFSET $3`, projectID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var members []*domain.ProjectMember
+	for rows.Next() {
+		var m domain.ProjectMember
+		if err := rows.Scan(&m.ProjectID, &m.UserID, &m.Email, &m.DisplayName, &m.AvatarURL,
+			&m.Role, &m.Source, &m.SourceTeamID, &m.SourceTeamName, &m.JoinedAt); err != nil {
+			return nil, 0, err
+		}
+		members = append(members, &m)
+	}
+	return members, total, rows.Err()
+}
+
 func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error) {
 	// All members are now explicitly stored in project_members (no more auto-inheritance via UNION).
 	rows, err := r.pool.Query(ctx,

@@ -26,6 +26,7 @@ import {
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 /* ─── Types ─────────────────────────────────────────── */
 
@@ -505,6 +506,7 @@ function TeamChannelPanel({
       qc.invalidateQueries({
         queryKey: ["channel-members", primaryChannelId],
       });
+      toast.success("Member removed");
     },
   });
 
@@ -624,6 +626,7 @@ function GroupMemberPanel({ channel }: { channel: ChatChannel }) {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["channel-members", channel.id] });
+      toast.success("Member removed");
     },
   });
 
@@ -704,6 +707,7 @@ function MemberRow({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["channel-members", channelId] });
+      toast.success("Role updated");
     },
   });
 
@@ -791,6 +795,7 @@ function AddMemberSearch({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["channel-members", channelId] });
+      toast.success("Member added");
     },
   });
 

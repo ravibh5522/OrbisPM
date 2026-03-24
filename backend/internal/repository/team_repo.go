@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -91,6 +92,82 @@ func (r *teamRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Te
 		teams = append(teams, t)
 	}
 	return teams, rows.Err()
+}
+
+func (r *teamRepo) ListByOrgPaginated(ctx context.Context, orgID uuid.UUID, f TeamFilter) ([]*domain.Team, int, error) {
+	where := []string{"t.org_id = $1"}
+	args := []any{orgID}
+	argIdx := 2
+
+	if f.Search != nil && *f.Search != "" {
+		where = append(where, fmt.Sprintf("(t.name ILIKE $%d OR t.description ILIKE $%d)", argIdx, argIdx))
+		args = append(args, "%"+*f.Search+"%")
+		argIdx++
+	}
+
+	whereClause := strings.Join(where, " AND ")
+
+	// Count
+	var total int
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM teams t WHERE %s`, whereClause)
+	if err := r.pool.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count teams: %w", err)
+	}
+
+	// Sort
+	orderClause := "t.name ASC"
+	allowedSortCols := map[string]string{
+		"name":         "t.name",
+		"member_count": "member_count",
+		"created_at":   "t.created_at",
+	}
+	if f.SortBy != "" {
+		if col, ok := allowedSortCols[f.SortBy]; ok {
+			dir := "ASC"
+			if f.SortOrder == "desc" {
+				dir = "DESC"
+			}
+			orderClause = fmt.Sprintf("%s %s", col, dir)
+		}
+	}
+
+	limit := f.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := f.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	query := fmt.Sprintf(
+		`SELECT t.id, t.org_id, t.name, t.description, t.manager_id,
+		        t.is_auto_managed, t.auto_source, t.auto_source_id,
+		        t.created_at, t.updated_at,
+		        COALESCE(u.display_name, '') AS manager_name,
+		        (SELECT count(*) FROM team_members tm WHERE tm.team_id = t.id)::int AS member_count
+		 FROM teams t
+		 LEFT JOIN users u ON u.id = t.manager_id
+		 WHERE %s
+		 ORDER BY %s
+		 LIMIT $%d OFFSET $%d`, whereClause, orderClause, argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.pool.Query(ctx, query, args...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list teams paginated: %w", err)
+	}
+	defer rows.Close()
+
+	var teams []*domain.Team
+	for rows.Next() {
+		t, err := scanTeamFullRow(rows)
+		if err != nil {
+			return nil, 0, err
+		}
+		teams = append(teams, t)
+	}
+	return teams, total, rows.Err()
 }
 
 func (r *teamRepo) SetManager(ctx context.Context, tx pgx.Tx, teamID uuid.UUID, managerID *uuid.UUID) error {

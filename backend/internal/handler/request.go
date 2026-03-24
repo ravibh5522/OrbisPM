@@ -44,6 +44,15 @@ func queryInt(r *http.Request, name string, defaultVal int) int {
 	return v
 }
 
+// queryStrDefault extracts a string from query params with a default.
+func queryStrDefault(r *http.Request, name, defaultVal string) string {
+	s := r.URL.Query().Get(name)
+	if s == "" {
+		return defaultVal
+	}
+	return s
+}
+
 // queryStr extracts a string from query params.
 func queryStr(r *http.Request, name string) *string {
 	s := r.URL.Query().Get(name)

@@ -71,6 +71,32 @@ func (r *commentRepo) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*doma
 	return comments, rows.Err()
 }
 
+func (r *commentRepo) ListByTaskPaginated(ctx context.Context, taskID uuid.UUID, limit, offset int) ([]*domain.Comment, int, error) {
+	var total int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM comments WHERE task_id = $1`, taskID).Scan(&total)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, org_id, task_id, user_id, body, parent_id, created_at, updated_at
+		 FROM comments WHERE task_id = $1 ORDER BY created_at LIMIT $2 OFFSET $3`, taskID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var comments []*domain.Comment
+	for rows.Next() {
+		var c domain.Comment
+		if err := rows.Scan(&c.ID, &c.OrgID, &c.TaskID, &c.UserID, &c.Body, &c.ParentID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, 0, err
+		}
+		comments = append(comments, &c)
+	}
+	return comments, total, rows.Err()
+}
+
 func (r *commentRepo) Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error {
 	q := conn(r.pool, tx)
 	_, err := q.Exec(ctx, `DELETE FROM comments WHERE id = $1`, id)

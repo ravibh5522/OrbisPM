@@ -27,7 +27,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Task Tree View — Collapsible hierarchical tree with inline editing
@@ -169,6 +169,67 @@ export function TaskTreeView({
     [send, fetchTree],
   );
 
+  const tree = taskTree;
+
+  // Apply global filter recursively (memoized) — must be before any early return
+  const hasFilter = globalFilter && isGlobalFilterActive(globalFilter);
+  const filteredTree = useMemo(() => {
+    const filterTree = (nodes: TaskTree[]): TaskTree[] => {
+      if (!globalFilter || !isGlobalFilterActive(globalFilter)) return nodes;
+      return nodes.reduce<TaskTree[]>((acc, node) => {
+        const t = node.task;
+        let match = true;
+        if (globalFilter.assigneeIds.length > 0) {
+          const ids = t.assignee_ids?.length
+            ? t.assignee_ids
+            : t.assignee_id
+              ? [t.assignee_id]
+              : [];
+          const matchesUnassigned =
+            globalFilter.assigneeIds.includes("") && ids.length === 0;
+          const matchesAny = ids.some((id) =>
+            globalFilter.assigneeIds.includes(id),
+          );
+          if (!matchesUnassigned && !matchesAny) match = false;
+        }
+        if (
+          globalFilter.statuses.length > 0 &&
+          !globalFilter.statuses.includes(t.status)
+        )
+          match = false;
+        if (
+          globalFilter.priorities.length > 0 &&
+          !globalFilter.priorities.includes(t.priority)
+        )
+          match = false;
+        if (globalFilter.labels.length > 0) {
+          if (!t.labels || !t.labels.some((l) => globalFilter.labels.includes(l)))
+            match = false;
+        }
+        if (
+          globalFilter.dueDateFrom &&
+          (!t.due_date || t.due_date < globalFilter.dueDateFrom)
+        )
+          match = false;
+        if (
+          globalFilter.dueDateTo &&
+          (!t.due_date || t.due_date > globalFilter.dueDateTo)
+        )
+          match = false;
+        if (globalFilter.search) {
+          const q = globalFilter.search.toLowerCase();
+          if (!t.title.toLowerCase().includes(q)) match = false;
+        }
+        const filteredChildren = node.children ? filterTree(node.children) : [];
+        if (match || filteredChildren.length > 0) {
+          acc.push({ ...node, children: filteredChildren });
+        }
+        return acc;
+      }, []);
+    };
+    return filterTree(tree);
+  }, [tree, globalFilter]);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -176,65 +237,6 @@ export function TaskTreeView({
       </div>
     );
   }
-
-  const tree = taskTree;
-
-  // Apply global filter recursively
-  const filterTree = (nodes: TaskTree[]): TaskTree[] => {
-    if (!globalFilter || !isGlobalFilterActive(globalFilter)) return nodes;
-    return nodes.reduce<TaskTree[]>((acc, node) => {
-      const t = node.task;
-      let match = true;
-      if (globalFilter.assigneeIds.length > 0) {
-        const ids = t.assignee_ids?.length
-          ? t.assignee_ids
-          : t.assignee_id
-            ? [t.assignee_id]
-            : [];
-        const matchesUnassigned =
-          globalFilter.assigneeIds.includes("") && ids.length === 0;
-        const matchesAny = ids.some((id) =>
-          globalFilter.assigneeIds.includes(id),
-        );
-        if (!matchesUnassigned && !matchesAny) match = false;
-      }
-      if (
-        globalFilter.statuses.length > 0 &&
-        !globalFilter.statuses.includes(t.status)
-      )
-        match = false;
-      if (
-        globalFilter.priorities.length > 0 &&
-        !globalFilter.priorities.includes(t.priority)
-      )
-        match = false;
-      if (globalFilter.labels.length > 0) {
-        if (!t.labels || !t.labels.some((l) => globalFilter.labels.includes(l)))
-          match = false;
-      }
-      if (
-        globalFilter.dueDateFrom &&
-        (!t.due_date || t.due_date < globalFilter.dueDateFrom)
-      )
-        match = false;
-      if (
-        globalFilter.dueDateTo &&
-        (!t.due_date || t.due_date > globalFilter.dueDateTo)
-      )
-        match = false;
-      if (globalFilter.search) {
-        const q = globalFilter.search.toLowerCase();
-        if (!t.title.toLowerCase().includes(q)) match = false;
-      }
-      const filteredChildren = node.children ? filterTree(node.children) : [];
-      if (match || filteredChildren.length > 0) {
-        acc.push({ ...node, children: filteredChildren });
-      }
-      return acc;
-    }, []);
-  };
-  const hasFilter = globalFilter && isGlobalFilterActive(globalFilter);
-  const filteredTree = filterTree(tree);
 
   if (filteredTree.length === 0) {
     return (

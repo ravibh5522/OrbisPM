@@ -26,6 +26,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, GripVertical, Plus, Shield, Trash2, X } from "lucide-react";
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 
 /* ═══════════════════════════════════════════════════════
    Project Settings — Custom Task Statuses
@@ -80,6 +81,7 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
       setHasChanges(false);
+      toast.success("Task statuses saved");
     },
   });
 
@@ -380,6 +382,7 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
       setHasChanges(false);
+      toast.success("Project settings saved");
     },
   });
 

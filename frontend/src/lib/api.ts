@@ -136,7 +136,9 @@ async function request<T>(
   }
 
   const method = options.method || "GET";
-  console.log(`[API] ${method} ${path}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[API] ${method} ${path}`);
+  }
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -144,7 +146,9 @@ async function request<T>(
   });
 
   if (res.status === 204) {
-    console.log(`[API] ${method} ${path} → 204 (no content)`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[API] ${method} ${path} → 204 (no content)`);
+    }
     return undefined as T;
   }
 
@@ -170,15 +174,19 @@ async function request<T>(
     } catch {
       // ignore parse error
     }
-    console.error(
-      `[API] ${method} ${path} → ${res.status} ERROR: ${msg}`,
-      detail || "",
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.error(
+        `[API] ${method} ${path} → ${res.status} ERROR: ${msg}`,
+        detail || "",
+      );
+    }
     throw new ApiError(res.status, msg, detail);
   }
 
   const data = await res.json();
-  console.log(`[API] ${method} ${path} → ${res.status}`, data);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[API] ${method} ${path} → ${res.status}`, data);
+  }
   return data;
 }
 
@@ -239,6 +247,7 @@ import type {
   AuthTokens,
   BackupCodesResponse,
   BillingPlan,
+  CFDPoint,
   ChatBookmark,
   ChatChannel,
   ChatChannelMember,
@@ -247,23 +256,30 @@ import type {
   Checklist,
   Comment,
   CustomRole,
+  DashboardAnalytics,
   DashboardStats,
   EffectiveMember,
   IDPInfo,
   IDPStartResponse,
   ImportJob,
+  MemberAnalytics,
+  MetricAlert,
   MFAStatus,
   Notification,
   NotificationPreference,
   OIDCAuthorizeResponse,
   Org,
+  OrgAnalytics,
   OrgMember,
   OrgSubscription,
+  PerformanceReport,
   Permission,
   Project,
+  ProjectAnalytics,
   ProjectDashboardStats,
   ProjectMember,
   ProjectTeam,
+  RiskScore,
   Role,
   ScopePermissionsResponse,
   Task,
@@ -275,10 +291,12 @@ import type {
   TaskUpdateResult,
   TaskWatcher,
   Team,
+  TeamAnalytics,
   TeamDashboardStats,
   TeamMember,
   TOTPRegistration,
   UnlinkPreview,
+  VelocityPoint,
   Webhook,
 } from "@/types/domain";
 
@@ -568,8 +586,28 @@ export const api = {
 
   // Teams
   teams: {
-    list: (orgId: string) =>
-      get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams`),
+    list: (
+      orgId: string,
+      params?: {
+        limit?: number;
+        offset?: number;
+        search?: string;
+        sort_by?: string;
+        sort_order?: string;
+      },
+    ) =>
+      get<ListResponse<Team>>(
+        `${V1}/orgs/${orgId}/teams${
+          params
+            ? "?" +
+              new URLSearchParams(
+                Object.entries(params)
+                  .filter(([_, v]) => v != null)
+                  .map(([k, v]) => [k, String(v)]),
+              ).toString()
+            : ""
+        }`,
+      ),
     get: (orgId: string, id: string) =>
       get<Team>(`${V1}/orgs/${orgId}/teams/${id}`),
     create: (orgId: string, data: { name: string; description?: string }) =>
@@ -588,9 +626,29 @@ export const api = {
 
   // Team members
   teamMembers: {
-    list: (orgId: string, teamId: string) =>
+    list: (
+      orgId: string,
+      teamId: string,
+      params?: {
+        limit?: number;
+        offset?: number;
+        search?: string;
+        role?: string;
+        sort_by?: string;
+        sort_order?: string;
+      },
+    ) =>
       get<ListResponse<TeamMember>>(
-        `${V1}/orgs/${orgId}/teams/${teamId}/members`,
+        `${V1}/orgs/${orgId}/teams/${teamId}/members${
+          params
+            ? "?" +
+              new URLSearchParams(
+                Object.entries(params)
+                  .filter(([_, v]) => v != null)
+                  .map(([k, v]) => [k, String(v)]),
+              ).toString()
+            : ""
+        }`,
       ),
     add: (
       orgId: string,
@@ -613,9 +671,29 @@ export const api = {
 
   // Projects
   projects: {
-    list: (orgId: string, teamId?: string) =>
+    list: (
+      orgId: string,
+      params?: {
+        limit?: number;
+        offset?: number;
+        search?: string;
+        status?: string;
+        team_id?: string;
+        sort_by?: string;
+        sort_order?: string;
+      },
+    ) =>
       get<ListResponse<Project>>(
-        `${V1}/orgs/${orgId}/projects${teamId ? `?team_id=${teamId}` : ""}`,
+        `${V1}/orgs/${orgId}/projects${
+          params
+            ? "?" +
+              new URLSearchParams(
+                Object.entries(params)
+                  .filter(([_, v]) => v != null)
+                  .map(([k, v]) => [k, String(v)]),
+              ).toString()
+            : ""
+        }`,
       ),
     get: (orgId: string, id: string) =>
       get<Project>(`${V1}/orgs/${orgId}/projects/${id}`),
@@ -644,9 +722,27 @@ export const api = {
 
   // Project members
   projectMembers: {
-    list: (orgId: string, projId: string) =>
+    list: (
+      orgId: string,
+      projId: string,
+      params?: {
+        limit?: number;
+        offset?: number;
+        search?: string;
+        role?: string;
+      },
+    ) =>
       get<ListResponse<ProjectMember>>(
-        `${V1}/orgs/${orgId}/projects/${projId}/members`,
+        `${V1}/orgs/${orgId}/projects/${projId}/members${
+          params
+            ? "?" +
+              new URLSearchParams(
+                Object.entries(params)
+                  .filter(([_, v]) => v != null)
+                  .map(([k, v]) => [k, String(v)]),
+              ).toString()
+            : ""
+        }`,
       ),
     add: (
       orgId: string,
@@ -1042,6 +1138,72 @@ export const api = {
       get<ListResponse<Task>>(
         `${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`,
       ),
+  },
+
+  // Analytics & Performance
+  analytics: {
+    dashboard: (orgId: string, days = 30) =>
+      get<DashboardAnalytics>(
+        `${V1}/orgs/${orgId}/analytics/dashboard?days=${days}`,
+      ),
+    org: (orgId: string, days = 30) =>
+      get<OrgAnalytics>(`${V1}/orgs/${orgId}/analytics/org?days=${days}`),
+    project: (orgId: string, projectId: string, days = 30) =>
+      get<ProjectAnalytics>(
+        `${V1}/orgs/${orgId}/projects/${projectId}/analytics?days=${days}`,
+      ),
+    projectVelocity: (orgId: string, projectId: string, days = 90) =>
+      get<VelocityPoint[]>(
+        `${V1}/orgs/${orgId}/projects/${projectId}/analytics/velocity?days=${days}`,
+      ),
+    projectCFD: (orgId: string, projectId: string, days = 30) =>
+      get<CFDPoint[]>(
+        `${V1}/orgs/${orgId}/projects/${projectId}/analytics/cfd?days=${days}`,
+      ),
+    team: (orgId: string, teamId: string, days = 30) =>
+      get<TeamAnalytics>(
+        `${V1}/orgs/${orgId}/teams/${teamId}/analytics?days=${days}`,
+      ),
+    member: (orgId: string, userId: string, days = 30) =>
+      get<MemberAnalytics>(
+        `${V1}/orgs/${orgId}/analytics/members/${userId}?days=${days}`,
+      ),
+    velocity: (orgId: string, days = 90) =>
+      get<VelocityPoint[]>(
+        `${V1}/orgs/${orgId}/analytics/velocity?days=${days}`,
+      ),
+    alerts: (orgId: string) =>
+      get<MetricAlert[]>(`${V1}/orgs/${orgId}/analytics/alerts`),
+    acknowledgeAlert: (orgId: string, alertId: string) =>
+      post<void>(
+        `${V1}/orgs/${orgId}/analytics/alerts/${alertId}/acknowledge`,
+        {},
+      ),
+    risks: (orgId: string) =>
+      get<RiskScore[]>(`${V1}/orgs/${orgId}/analytics/risks`),
+    reports: {
+      list: (orgId: string) =>
+        get<ListResponse<PerformanceReport>>(
+          `${V1}/orgs/${orgId}/analytics/reports`,
+        ),
+      create: (
+        orgId: string,
+        params: {
+          report_type: string;
+          scope_type: string;
+          scope_id: string;
+          parameters?: Record<string, unknown>;
+        },
+      ) =>
+        post<PerformanceReport>(
+          `${V1}/orgs/${orgId}/analytics/reports`,
+          params,
+        ),
+      get: (orgId: string, reportId: string) =>
+        get<PerformanceReport>(
+          `${V1}/orgs/${orgId}/analytics/reports/${reportId}`,
+        ),
+    },
   },
 
   // Presence (real-time indicators)

@@ -28,6 +28,7 @@ export function useChatSocket(orgId: string | undefined) {
   const retryRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const unmountedRef = useRef(false);
+  const connGenRef = useRef(0);
   const store = useChatStore;
 
   const send = useCallback(
@@ -63,16 +64,24 @@ export function useChatSocket(orgId: string | undefined) {
       wsRef.current = null;
     }
 
+    // Track connection generation to prevent stale onclose handlers
+    const gen = ++connGenRef.current;
+
     const wsUrl = `${API_BASE.replace(/^http/, "ws")}/ws/chat?token=${encodeURIComponent(token)}&org_id=${orgId}`;
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      if (connGenRef.current !== gen) {
+        ws.close();
+        return;
+      }
       retryRef.current = 0;
       store.getState().setConnected(true);
       store.getState().setWs(ws);
     };
 
     ws.onmessage = (event) => {
+      if (connGenRef.current !== gen) return;
       try {
         const msg = JSON.parse(event.data);
         handleMessage(msg, pendingRef.current);
@@ -82,6 +91,8 @@ export function useChatSocket(orgId: string | undefined) {
     };
 
     ws.onclose = () => {
+      // Ignore stale connection close events
+      if (connGenRef.current !== gen) return;
       store.getState().setConnected(false);
       store.getState().setWs(null);
       wsRef.current = null;
@@ -211,9 +222,53 @@ function handleMessage(
       store.setTyping(t.channel_id, t.user_id, false);
       break;
     }
-    case "event:reaction.added":
+    case "event:reaction.added": {
+      const r = payload as {
+        channel_id?: string;
+        entity_id?: string;
+        emoji?: string;
+        user_id?: string;
+      };
+      if (r.channel_id && r.entity_id && r.emoji && r.user_id) {
+        const messages = store.messages.get(r.channel_id);
+        const target = messages?.find((m) => m.id === r.entity_id);
+        if (target) {
+          const reactions = [...(target.reactions ?? [])];
+          const existing = reactions.find((rx) => rx.emoji === r.emoji);
+          if (existing) {
+            if (!existing.users.includes(r.user_id)) {
+              existing.users = [...existing.users, r.user_id];
+              existing.count += 1;
+            }
+          } else {
+            reactions.push({ emoji: r.emoji, count: 1, users: [r.user_id] });
+          }
+          store.updateMessage(r.channel_id, { ...target, reactions });
+        }
+      }
+      break;
+    }
     case "event:reaction.removed": {
-      // Refetch messages for simplicity since reaction data is complex
+      const r = payload as {
+        channel_id?: string;
+        entity_id?: string;
+        emoji?: string;
+        user_id?: string;
+      };
+      if (r.channel_id && r.entity_id && r.emoji && r.user_id) {
+        const messages = store.messages.get(r.channel_id);
+        const target = messages?.find((m) => m.id === r.entity_id);
+        if (target) {
+          let reactions = [...(target.reactions ?? [])];
+          const existing = reactions.find((rx) => rx.emoji === r.emoji);
+          if (existing) {
+            existing.users = existing.users.filter((u) => u !== r.user_id);
+            existing.count = Math.max(0, existing.count - 1);
+            reactions = reactions.filter((rx) => rx.count > 0);
+          }
+          store.updateMessage(r.channel_id, { ...target, reactions });
+        }
+      }
       break;
     }
     default:

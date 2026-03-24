@@ -155,7 +155,11 @@ func (h *TaskHandler) ListTree(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
 		return
 	}
-	tasks, err := h.taskSvc.ListTreeByProject(r.Context(), projectID)
+	limit := queryInt(r, "limit", 500)
+	if limit > 2000 {
+		limit = 2000 // hard cap
+	}
+	tasks, err := h.taskSvc.ListTreeByProjectLight(r.Context(), projectID, limit)
 	if err != nil {
 		Error(w, r, err)
 		return

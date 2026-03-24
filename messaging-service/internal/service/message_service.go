@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/messaging-service/internal/domain"
+	"github.com/orbispm/messaging-service/internal/eventbus"
 	natspkg "github.com/orbispm/messaging-service/internal/nats"
 	"github.com/orbispm/messaging-service/internal/pkg/tenant"
 	"github.com/orbispm/messaging-service/internal/repository"
@@ -21,17 +22,18 @@ type Presigner interface {
 
 // MessageService handles message business logic.
 type MessageService struct {
-	txMgr       *repository.TxManager
-	messageR    repository.MessageRepository
-	memberR     repository.ChannelMemberRepository
-	channelR    repository.ChannelRepository
-	reactionR   repository.ReactionRepository
-	attachmentR repository.AttachmentRepository
-	pinR        repository.PinRepository
-	bookmarkR   repository.BookmarkRepository
-	publisher   *natspkg.Publisher
-	editWindow  time.Duration
-	presigner   Presigner
+	txMgr          *repository.TxManager
+	messageR       repository.MessageRepository
+	memberR        repository.ChannelMemberRepository
+	channelR       repository.ChannelRepository
+	reactionR      repository.ReactionRepository
+	attachmentR    repository.AttachmentRepository
+	pinR           repository.PinRepository
+	bookmarkR      repository.BookmarkRepository
+	publisher      *natspkg.Publisher
+	redisPublisher *eventbus.RedisPublisher
+	editWindow     time.Duration
+	presigner      Presigner
 }
 
 // NewMessageService creates a new MessageService.
@@ -47,19 +49,21 @@ func NewMessageService(
 	publisher *natspkg.Publisher,
 	editWindowMinutes int,
 	presigner Presigner,
+	redisPublisher *eventbus.RedisPublisher,
 ) *MessageService {
 	return &MessageService{
-		txMgr:       txMgr,
-		messageR:    messageR,
-		memberR:     memberR,
-		channelR:    channelR,
-		reactionR:   reactionR,
-		attachmentR: attachmentR,
-		pinR:        pinR,
-		bookmarkR:   bookmarkR,
-		publisher:   publisher,
-		editWindow:  time.Duration(editWindowMinutes) * time.Minute,
-		presigner:   presigner,
+		txMgr:          txMgr,
+		messageR:       messageR,
+		memberR:        memberR,
+		channelR:       channelR,
+		reactionR:      reactionR,
+		attachmentR:    attachmentR,
+		pinR:           pinR,
+		bookmarkR:      bookmarkR,
+		publisher:      publisher,
+		redisPublisher: redisPublisher,
+		editWindow:     time.Duration(editWindowMinutes) * time.Minute,
+		presigner:      presigner,
 	}
 }
 
@@ -488,5 +492,12 @@ func (s *MessageService) publishEvent(ctx context.Context, eventType, channelID,
 
 	if err := s.publisher.Publish(ctx, event); err != nil {
 		log.Error().Err(err).Str("type", eventType).Msg("failed to publish event")
+	}
+
+	// Also publish to Redis so the backend OrgHub broadcasts to all org members
+	if s.redisPublisher != nil {
+		if err := s.redisPublisher.Publish(ctx, event); err != nil {
+			log.Error().Err(err).Str("type", eventType).Msg("failed to publish event to Redis")
+		}
 	}
 }

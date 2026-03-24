@@ -242,6 +242,10 @@ func (s *ProjectService) ListByOrg(ctx context.Context, orgID uuid.UUID, teamID 
 	return s.projectRepo.ListByOrg(ctx, orgID, tid)
 }
 
+func (s *ProjectService) ListByOrgPaginated(ctx context.Context, orgID uuid.UUID, f repository.ProjectFilter) ([]*domain.Project, int, error) {
+	return s.projectRepo.ListByOrgPaginated(ctx, orgID, f)
+}
+
 // --- Members ---
 
 func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.UUID, role string, sourceTeamID *uuid.UUID) error {
@@ -384,6 +388,10 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 
 func (s *ProjectService) ListMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
 	return s.projectMemberRepo.ListByProject(ctx, projectID)
+}
+
+func (s *ProjectService) ListMembersPaginated(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]*domain.ProjectMember, int, error) {
+	return s.projectMemberRepo.ListByProjectPaginated(ctx, projectID, limit, offset)
 }
 
 // validateRole checks that a role slug is valid for the project scope.

@@ -136,7 +136,7 @@ func (s *TaskService) PreloadProjectCache(ctx context.Context, projectID uuid.UU
 		s.cache.RefreshTTL(ctx, projectID)
 		return
 	}
-	tasks, err := s.taskRepo.ListTreeByProject(ctx, projectID)
+	tasks, err := s.taskRepo.ListTreeByProject(ctx, projectID, 0)
 	if err != nil {
 		log.Warn().Err(err).Str("project_id", projectID.String()).Msg("failed to load tasks for cache preload")
 		return
@@ -400,8 +400,12 @@ func (s *TaskService) Duplicate(ctx context.Context, taskID uuid.UUID) (*domain.
 	return root, nil
 }
 
-func (s *TaskService) ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error) {
-	return s.taskRepo.ListTreeByProject(ctx, projectID)
+func (s *TaskService) ListTreeByProject(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error) {
+	return s.taskRepo.ListTreeByProject(ctx, projectID, limit)
+}
+
+func (s *TaskService) ListTreeByProjectLight(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error) {
+	return s.taskRepo.ListTreeByProjectLight(ctx, projectID, limit)
 }
 
 func (s *TaskService) List(ctx context.Context, projectID uuid.UUID, filter repository.TaskFilter) ([]*domain.Task, int, error) {
