@@ -98,7 +98,7 @@ export default function TeamDashboardPage({
   // Fetch team's projects for calendar
   const { data: teamProjects } = useQuery({
     queryKey: ["projects", orgId, teamId],
-    queryFn: () => api.projects.list(orgId, teamId),
+    queryFn: () => api.projects.list(orgId, { team_id: teamId }),
     enabled: !!orgId && activeTab === "calendar",
   });
 

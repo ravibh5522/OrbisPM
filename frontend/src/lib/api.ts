@@ -136,7 +136,9 @@ async function request<T>(
   }
 
   const method = options.method || "GET";
-  console.log(`[API] ${method} ${path}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[API] ${method} ${path}`);
+  }
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -144,7 +146,9 @@ async function request<T>(
   });
 
   if (res.status === 204) {
-    console.log(`[API] ${method} ${path} → 204 (no content)`);
+    if (process.env.NODE_ENV === "development") {
+      console.log(`[API] ${method} ${path} → 204 (no content)`);
+    }
     return undefined as T;
   }
 
@@ -170,15 +174,19 @@ async function request<T>(
     } catch {
       // ignore parse error
     }
-    console.error(
-      `[API] ${method} ${path} → ${res.status} ERROR: ${msg}`,
-      detail || "",
-    );
+    if (process.env.NODE_ENV === "development") {
+      console.error(
+        `[API] ${method} ${path} → ${res.status} ERROR: ${msg}`,
+        detail || "",
+      );
+    }
     throw new ApiError(res.status, msg, detail);
   }
 
   const data = await res.json();
-  console.log(`[API] ${method} ${path} → ${res.status}`, data);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[API] ${method} ${path} → ${res.status}`, data);
+  }
   return data;
 }
 
@@ -568,8 +576,10 @@ export const api = {
 
   // Teams
   teams: {
-    list: (orgId: string) =>
-      get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams`),
+    list: (orgId: string, params?: { limit?: number; offset?: number; search?: string; sort_by?: string; sort_order?: string }) =>
+      get<ListResponse<Team>>(`${V1}/orgs/${orgId}/teams${params ? '?' + new URLSearchParams(
+        Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)])
+      ).toString() : ''}`),
     get: (orgId: string, id: string) =>
       get<Team>(`${V1}/orgs/${orgId}/teams/${id}`),
     create: (orgId: string, data: { name: string; description?: string }) =>
@@ -588,9 +598,11 @@ export const api = {
 
   // Team members
   teamMembers: {
-    list: (orgId: string, teamId: string) =>
+    list: (orgId: string, teamId: string, params?: { limit?: number; offset?: number; search?: string; role?: string; sort_by?: string; sort_order?: string }) =>
       get<ListResponse<TeamMember>>(
-        `${V1}/orgs/${orgId}/teams/${teamId}/members`,
+        `${V1}/orgs/${orgId}/teams/${teamId}/members${params ? '?' + new URLSearchParams(
+          Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)])
+        ).toString() : ''}`,
       ),
     add: (
       orgId: string,
@@ -613,10 +625,10 @@ export const api = {
 
   // Projects
   projects: {
-    list: (orgId: string, teamId?: string) =>
-      get<ListResponse<Project>>(
-        `${V1}/orgs/${orgId}/projects${teamId ? `?team_id=${teamId}` : ""}`,
-      ),
+    list: (orgId: string, params?: { limit?: number; offset?: number; search?: string; status?: string; team_id?: string; sort_by?: string; sort_order?: string }) =>
+      get<ListResponse<Project>>(`${V1}/orgs/${orgId}/projects${params ? '?' + new URLSearchParams(
+        Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)])
+      ).toString() : ''}`),
     get: (orgId: string, id: string) =>
       get<Project>(`${V1}/orgs/${orgId}/projects/${id}`),
     create: (
@@ -644,9 +656,11 @@ export const api = {
 
   // Project members
   projectMembers: {
-    list: (orgId: string, projId: string) =>
+    list: (orgId: string, projId: string, params?: { limit?: number; offset?: number; search?: string; role?: string }) =>
       get<ListResponse<ProjectMember>>(
-        `${V1}/orgs/${orgId}/projects/${projId}/members`,
+        `${V1}/orgs/${orgId}/projects/${projId}/members${params ? '?' + new URLSearchParams(
+          Object.entries(params).filter(([_, v]) => v != null).map(([k, v]) => [k, String(v)])
+        ).toString() : ''}`,
       ),
     add: (
       orgId: string,

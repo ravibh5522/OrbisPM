@@ -58,3 +58,17 @@ func UserMyTasksKey(orgID, userID uuid.UUID) string {
 func ProjectProgressKey(projectID, taskID uuid.UUID) string {
 	return fmt.Sprintf("%sproject:%s:progress:%s", keyPrefix, projectID, taskID)
 }
+
+// PermissionCacheKey returns the Redis key for a cached permission check result.
+func PermissionCacheKey(userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID, resource, action string) string {
+	sid := "nil"
+	if scopeID != nil {
+		sid = scopeID.String()
+	}
+	return fmt.Sprintf("orbis:perm:%s:%s:%s:%s:%s:%s", userID, orgID, scope, sid, resource, action)
+}
+
+// PermissionInvalidatePattern returns a glob pattern matching all permission keys for a user in an org.
+func PermissionInvalidatePattern(userID, orgID uuid.UUID) string {
+	return fmt.Sprintf("orbis:perm:%s:%s:*", userID, orgID)
+}

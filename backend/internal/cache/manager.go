@@ -36,6 +36,8 @@ const (
 	DefaultTTL = 30 * time.Minute
 	// LockTTL is the max time a preload lock is held.
 	LockTTL = 30 * time.Second
+	// PermissionCacheTTL is the TTL for permission check results.
+	PermissionCacheTTL = 5 * time.Minute
 )
 
 // Manager handles Redis-backed task caching with write-behind support.
@@ -627,3 +629,82 @@ func (m *Manager) PrecomputeAllProgress(ctx context.Context, projectID uuid.UUID
 
 // MaxTaskDepth mirrors domain.MaxTaskDepth for the cache layer (avoid import cycle if needed).
 const MaxTaskDepth = 3
+
+// ─── Permission Caching ──────────────────────────────────────
+
+// CachePermissionResult caches a permission check result.
+func (m *Manager) CachePermissionResult(ctx context.Context, userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID, resource, action string, allowed bool) error {
+	key := PermissionCacheKey(userID, orgID, scope, scopeID, resource, action)
+	val := "0"
+	if allowed {
+		val = "1"
+	}
+	return m.rdb.Set(ctx, key, val, PermissionCacheTTL).Err()
+}
+
+// GetCachedPermission gets a cached permission result. Returns (allowed, found).
+func (m *Manager) GetCachedPermission(ctx context.Context, userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID, resource, action string) (bool, bool) {
+	key := PermissionCacheKey(userID, orgID, scope, scopeID, resource, action)
+	val, err := m.rdb.Get(ctx, key).Result()
+	if err != nil {
+		return false, false
+	}
+	return val == "1", true
+}
+
+// ─── Role Permission Caching ─────────────────────────────────
+
+// RolePermCacheTTL is the TTL for cached role permission lists.
+const RolePermCacheTTL = 10 * time.Minute
+
+// CacheRolePermissions stores the list of permissions for a role.
+func (m *Manager) CacheRolePermissions(ctx context.Context, orgID uuid.UUID, scope, roleSlug string, perms []*domain.Permission) error {
+	key := fmt.Sprintf("orbis:role-perms:%s:%s:%s", orgID, scope, roleSlug)
+	data, err := json.Marshal(perms)
+	if err != nil {
+		return err
+	}
+	return m.rdb.Set(ctx, key, data, RolePermCacheTTL).Err()
+}
+
+// GetCachedRolePermissions retrieves cached permissions for a role.
+func (m *Manager) GetCachedRolePermissions(ctx context.Context, orgID uuid.UUID, scope, roleSlug string) ([]*domain.Permission, bool) {
+	key := fmt.Sprintf("orbis:role-perms:%s:%s:%s", orgID, scope, roleSlug)
+	data, err := m.rdb.Get(ctx, key).Bytes()
+	if err != nil {
+		return nil, false
+	}
+	var perms []*domain.Permission
+	if err := json.Unmarshal(data, &perms); err != nil {
+		return nil, false
+	}
+	return perms, true
+}
+
+// InvalidateRolePermissions clears cached role permissions for an org.
+func (m *Manager) InvalidateRolePermissions(ctx context.Context, orgID uuid.UUID) error {
+	pattern := fmt.Sprintf("orbis:role-perms:%s:*", orgID)
+	iter := m.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+	var keys []string
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+	if len(keys) > 0 {
+		return m.rdb.Del(ctx, keys...).Err()
+	}
+	return nil
+}
+
+// InvalidateUserPermissions clears all cached permissions for a user in an org.
+func (m *Manager) InvalidateUserPermissions(ctx context.Context, userID, orgID uuid.UUID) error {
+	pattern := PermissionInvalidatePattern(userID, orgID)
+	iter := m.rdb.Scan(ctx, 0, pattern, 100).Iterator()
+	var keys []string
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+	if len(keys) > 0 {
+		return m.rdb.Del(ctx, keys...).Err()
+	}
+	return nil
+}

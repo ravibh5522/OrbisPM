@@ -6,6 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/repository"
 )
@@ -19,6 +20,7 @@ type PermissionResolver struct {
 	roleRepo          repository.RoleRepository
 	orgRepo           repository.OrgRepository
 	permRepo          repository.PermissionRepository
+	cache             *cache.Manager // optional, nil = no caching
 }
 
 func NewPermissionResolver(
@@ -43,6 +45,28 @@ func NewPermissionResolver(
 // scope: "org", "team", "project"
 // scopeID: the team or project UUID (ignored for org scope)
 func (r *PermissionResolver) HasPermission(ctx context.Context, userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID, resource, action string) (bool, error) {
+	// Check cache first
+	if r.cache != nil {
+		if allowed, found := r.cache.GetCachedPermission(ctx, userID, orgID, scope, scopeID, resource, action); found {
+			return allowed, nil
+		}
+	}
+
+	result, err := r.resolvePermission(ctx, userID, orgID, scope, scopeID, resource, action)
+	if err != nil {
+		return false, err
+	}
+
+	// Cache the definitive result
+	if r.cache != nil {
+		_ = r.cache.CachePermissionResult(ctx, userID, orgID, scope, scopeID, resource, action, result)
+	}
+
+	return result, nil
+}
+
+// resolvePermission performs the actual DB-backed permission resolution.
+func (r *PermissionResolver) resolvePermission(ctx context.Context, userID, orgID uuid.UUID, scope string, scopeID *uuid.UUID, resource, action string) (bool, error) {
 	// 1. Check org membership
 	orgMember, err := r.orgMemberRepo.Get(ctx, orgID, userID)
 	if err != nil {
@@ -63,67 +87,53 @@ func (r *PermissionResolver) HasPermission(ctx context.Context, userID, orgID uu
 
 	// 2. If project-scoped, check project-level first
 	if scope == domain.ScopeProject && scopeID != nil {
-		// Check direct project membership
-		members, err := r.projectMemberRepo.ListByProject(ctx, *scopeID)
+		// Check direct project membership (single targeted query instead of listing all members)
+		member, err := r.projectMemberRepo.GetByProjectAndUser(ctx, *scopeID, userID)
 		if err == nil {
-			for _, m := range members {
-				if m.UserID == userID {
-					has, err := r.roleHasPermission(ctx, orgID, domain.ScopeProject, m.Role, resource, action)
-					if err != nil {
-						return false, err
-					}
-					if has {
-						return true, nil
-					}
-					break
-				}
+			has, err := r.roleHasPermission(ctx, orgID, domain.ScopeProject, member.Role, resource, action)
+			if err != nil {
+				return false, err
+			}
+			if has {
+				return true, nil
 			}
 		}
 
-		// Check inherited through project_teams
+		// Check inherited through project_teams (single query per team instead of listing all members)
 		projectTeams, err := r.projectTeamRepo.ListByProject(ctx, *scopeID)
 		if err == nil {
 			roleMap, _ := r.getTeamProjectRoleMap(ctx, orgID)
 			for _, pt := range projectTeams {
-				teamMembers, err := r.teamMemberRepo.ListByTeam(ctx, pt.TeamID)
+				tm, err := r.teamMemberRepo.GetByTeamAndUser(ctx, pt.TeamID, userID)
 				if err != nil {
 					continue
 				}
-				for _, tm := range teamMembers {
-					if tm.UserID == userID {
-						// Map team role to project role
-						projectRole, ok := roleMap[tm.Role]
-						if !ok {
-							continue
-						}
-						has, err := r.roleHasPermission(ctx, orgID, domain.ScopeProject, projectRole, resource, action)
-						if err != nil {
-							return false, err
-						}
-						if has {
-							return true, nil
-						}
-					}
+				// Map team role to project role
+				projectRole, ok := roleMap[tm.Role]
+				if !ok {
+					continue
+				}
+				has, err := r.roleHasPermission(ctx, orgID, domain.ScopeProject, projectRole, resource, action)
+				if err != nil {
+					return false, err
+				}
+				if has {
+					return true, nil
 				}
 			}
 		}
 	}
 
-	// 3. If team-scoped, check team-level
+	// 3. If team-scoped, check team-level (single targeted query instead of listing all members)
 	if scope == domain.ScopeTeam && scopeID != nil {
-		teamMembers, err := r.teamMemberRepo.ListByTeam(ctx, *scopeID)
+		tm, err := r.teamMemberRepo.GetByTeamAndUser(ctx, *scopeID, userID)
 		if err == nil {
-			for _, tm := range teamMembers {
-				if tm.UserID == userID {
-					has, err := r.roleHasPermission(ctx, orgID, domain.ScopeTeam, tm.Role, resource, action)
-					if err != nil {
-						return false, err
-					}
-					if has {
-						return true, nil
-					}
-					break
-				}
+			has, err := r.roleHasPermission(ctx, orgID, domain.ScopeTeam, tm.Role, resource, action)
+			if err != nil {
+				return false, err
+			}
+			if has {
+				return true, nil
 			}
 		}
 	}
@@ -155,44 +165,32 @@ func (r *PermissionResolver) GetEffectiveRole(ctx context.Context, userID, orgID
 	}
 
 	if scope == domain.ScopeProject && scopeID != nil {
-		// Direct membership
-		members, err := r.projectMemberRepo.ListByProject(ctx, *scopeID)
+		// Direct membership (single targeted query)
+		member, err := r.projectMemberRepo.GetByProjectAndUser(ctx, *scopeID, userID)
 		if err == nil {
-			for _, m := range members {
-				if m.UserID == userID {
-					return m.Role, nil
-				}
-			}
+			return member.Role, nil
 		}
 
-		// Inherited via teams
+		// Inherited via teams (single query per team)
 		projectTeams, err := r.projectTeamRepo.ListByProject(ctx, *scopeID)
 		if err == nil {
 			roleMap, _ := r.getTeamProjectRoleMap(ctx, orgID)
 			for _, pt := range projectTeams {
-				teamMembers, err := r.teamMemberRepo.ListByTeam(ctx, pt.TeamID)
+				tm, err := r.teamMemberRepo.GetByTeamAndUser(ctx, pt.TeamID, userID)
 				if err != nil {
 					continue
 				}
-				for _, tm := range teamMembers {
-					if tm.UserID == userID {
-						if mapped, ok := roleMap[tm.Role]; ok {
-							return mapped, nil
-						}
-					}
+				if mapped, ok := roleMap[tm.Role]; ok {
+					return mapped, nil
 				}
 			}
 		}
 	}
 
 	if scope == domain.ScopeTeam && scopeID != nil {
-		teamMembers, err := r.teamMemberRepo.ListByTeam(ctx, *scopeID)
+		tm, err := r.teamMemberRepo.GetByTeamAndUser(ctx, *scopeID, userID)
 		if err == nil {
-			for _, tm := range teamMembers {
-				if tm.UserID == userID {
-					return tm.Role, nil
-				}
-			}
+			return tm.Role, nil
 		}
 	}
 
@@ -210,6 +208,21 @@ func (r *PermissionResolver) GetEffectiveRole(ctx context.Context, userID, orgID
 
 // roleHasPermission checks if a role (by slug) has a specific permission.
 func (r *PermissionResolver) roleHasPermission(ctx context.Context, orgID uuid.UUID, scope, roleSlug, resource, action string) (bool, error) {
+	// Try cache first
+	if r.cache != nil {
+		if perms, found := r.cache.GetCachedRolePermissions(ctx, orgID, scope, roleSlug); found {
+			for _, p := range perms {
+				if p.Resource == resource && p.Action == action {
+					return true, nil
+				}
+				if p.Action == action && p.Resource == "*" {
+					return true, nil
+				}
+			}
+			return false, nil
+		}
+	}
+
 	role, err := r.roleRepo.GetBySlug(ctx, orgID, scope, roleSlug)
 	if err != nil {
 		return false, nil // Role not found in DB, deny
@@ -218,6 +231,11 @@ func (r *PermissionResolver) roleHasPermission(ctx context.Context, orgID uuid.U
 	perms, err := r.roleRepo.GetPermissions(ctx, role.ID)
 	if err != nil {
 		return false, err
+	}
+
+	// Cache the result
+	if r.cache != nil {
+		_ = r.cache.CacheRolePermissions(ctx, orgID, scope, roleSlug, perms)
 	}
 
 	for _, p := range perms {
@@ -290,4 +308,9 @@ func (r *PermissionResolver) getAllPermissionsForScope(ctx context.Context, scop
 // SetPermRepo injects the permission repo for GetEffectivePermissions.
 func (r *PermissionResolver) SetPermRepo(pr repository.PermissionRepository) {
 	r.permRepo = pr
+}
+
+// SetCache injects an optional cache manager for permission result caching.
+func (r *PermissionResolver) SetCache(c *cache.Manager) {
+	r.cache = c
 }

@@ -52,6 +52,8 @@ export interface Project {
   description?: string;
   status: ProjectStatus;
   settings?: Record<string, unknown>;
+  member_count?: number;
+  task_count?: number;
   created_at: string;
   updated_at: string;
 }

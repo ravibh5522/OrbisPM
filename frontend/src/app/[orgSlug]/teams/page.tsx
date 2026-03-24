@@ -6,19 +6,21 @@ import { Modal } from "@/components/ui/modal";
 import { Avatar, Card, ConfirmDialog, EmptyState, PageHeader } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api, ApiError } from "@/lib/api";
-import { formatDate } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Role, Team, TeamMember } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { BarChart3, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { BarChart3, ChevronDown, Plus, Search, Trash2, UserPlus, Users, X } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 interface TeamForm {
   name: string;
   description: string;
 }
+
+const PAGE_SIZE = 18; // 3 cols × 6 rows
 
 export default function TeamsPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -30,18 +32,40 @@ export default function TeamsPage() {
   const [error, setError] = useState("");
   const { can } = usePermissions();
 
-  const { data: teams, isLoading } = useQuery({
-    queryKey: ["teams", currentOrg?.id],
-    queryFn: () => api.teams.list(currentOrg!.id),
+  // Server-side pagination, search, sort
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data: teamsResponse, isLoading } = useQuery({
+    queryKey: ["teams", currentOrg?.id, debouncedSearch, page, sortBy, sortOrder],
+    queryFn: () => api.teams.list(currentOrg!.id, {
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      search: debouncedSearch || undefined,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    }),
     enabled: !!currentOrg,
   });
+
+  const teams = teamsResponse?.data || [];
+  const total = teamsResponse?.total || 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   const { register, handleSubmit, reset, formState: { errors: formErrors } } = useForm<TeamForm>();
 
   const createMutation = useMutation({
     mutationFn: (data: TeamForm) => api.teams.create(currentOrg!.id, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["teams", currentOrg?.id] });
+      qc.invalidateQueries({ queryKey: ["teams"] });
       setShowCreate(false);
       reset();
       setError("");
@@ -52,26 +76,33 @@ export default function TeamsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.teams.delete(currentOrg!.id, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["teams", currentOrg?.id] });
+      qc.invalidateQueries({ queryKey: ["teams"] });
       setDeleteTarget(null);
     },
   });
 
-  if (isLoading) return (
-    <div className="animate-pulse">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="h-8 bg-base-300 rounded w-28 mb-2" />
-          <div className="h-4 bg-base-300 rounded w-52" />
-        </div>
-        <div className="h-10 bg-base-300 rounded w-32" />
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-36 bg-base-200 rounded-xl border border-base-200" />
-        ))}
-      </div>
-    </div>
+  const handleSort = (col: string) => {
+    if (sortBy === col) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      setSortOrder("asc");
+    }
+    setPage(0);
+  };
+
+  const SortButton = ({ col, label }: { col: string; label: string }) => (
+    <button
+      className={cn("btn btn-xs btn-ghost gap-0.5", sortBy === col && "btn-active")}
+      onClick={() => handleSort(col)}
+    >
+      {label}
+      <ChevronDown className={cn(
+        "w-3 h-3 transition-transform",
+        sortBy === col ? "opacity-100" : "opacity-30",
+        sortBy === col && sortOrder === "asc" && "rotate-180",
+      )} />
+    </button>
   );
 
   return (
@@ -88,26 +119,65 @@ export default function TeamsPage() {
         }
       />
 
-      {(!teams?.data || teams.data.length === 0) ? (
+      {/* Search + Sort + Count */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <input
+            type="text"
+            placeholder="Search teams..."
+            className="input input-bordered input-sm w-full pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle" onClick={() => setSearch("")}>
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-base-content/50 mr-1">Sort:</span>
+          <SortButton col="name" label="Name" />
+          <SortButton col="created_at" label="Created" />
+        </div>
+
+        <div className="flex-1" />
+        <span className="text-sm text-base-content/50">{total} team{total !== 1 ? "s" : ""}</span>
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-32 bg-base-200 rounded-xl border border-base-200" />
+          ))}
+        </div>
+      ) : teams.length === 0 ? (
         <EmptyState
           icon={<Users className="w-16 h-16" />}
-          title="No teams yet"
-          description="Create your first team to organize members"
-          action={can("teams", "create") ? <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Team</Button> : undefined}
+          title={debouncedSearch ? "No matching teams" : "No teams yet"}
+          description={debouncedSearch ? "Try a different search term" : "Create your first team to organize members"}
+          action={
+            debouncedSearch
+              ? <Button variant="ghost" onClick={() => setSearch("")}>Clear search</Button>
+              : can("teams", "create") ? <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Team</Button> : undefined
+          }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teams.data.map((team: Team) => (
+          {teams.map((team: Team) => (
             <Card key={team.id} compact>
               <div className="cursor-pointer" onClick={() => setSelectedTeam(team)}>
                 <div className="flex items-start justify-between">
-                  <div>
-                    <h3 className="font-semibold text-lg">{team.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-lg truncate">{team.name}</h3>
                     {team.description && (
                       <p className="text-sm text-base-content/60 mt-1 line-clamp-2">{team.description}</p>
                     )}
                   </div>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 ml-2 shrink-0">
                     <Link
                       href={`/${orgSlug}/teams/${team.id}`}
                       className="btn btn-ghost btn-xs btn-square"
@@ -141,6 +211,32 @@ export default function TeamsPage() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
+          <span className="text-sm text-base-content/60">
+            Showing {page * PAGE_SIZE + 1}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+          </span>
+          <div className="join">
+            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(0)}>
+              &laquo;
+            </button>
+            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              &lsaquo;
+            </button>
+            <button className="join-item btn btn-sm">
+              Page {page + 1} of {totalPages}
+            </button>
+            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+              &rsaquo;
+            </button>
+            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>
+              &raquo;
+            </button>
+          </div>
         </div>
       )}
 
@@ -238,18 +334,17 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
     <Modal open onClose={onClose} title={team.name} className="max-w-lg">
       {team.description && <p className="text-base-content/60 mb-4">{team.description}</p>}
 
-      {/* Current members */}
       <h4 className="font-semibold mb-2">Members ({members?.data?.length ?? 0})</h4>
       {isLoading ? (
         <span className="loading loading-spinner loading-sm" />
       ) : (!members?.data || members.data.length === 0) ? (
         <p className="text-sm text-base-content/50 mb-4">No members yet</p>
       ) : (
-        <ul className="space-y-2 mb-4">
+        <ul className="space-y-2 mb-4 max-h-60 overflow-y-auto">
           {members.data.map((m: TeamMember) => (
             <li key={m.user_id} className="flex items-center gap-2 text-sm group">
               <Avatar name={m.display_name || m.email || m.user_id.slice(0, 4)} src={m.avatar_url} size="xs" />
-              <span className="text-xs flex-1">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
+              <span className="text-xs flex-1 truncate">{m.display_name || m.email || m.user_id.slice(0, 12)}</span>
               <select
                 className="select select-ghost select-xs capitalize"
                 value={m.role}
@@ -270,7 +365,6 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
         </ul>
       )}
 
-      {/* Add member form */}
       <div className="divider text-xs">Add Member</div>
       <form
         className="flex gap-2 items-end"
@@ -282,7 +376,7 @@ function TeamDetailModal({ team, orgId, onClose }: { team: Team; orgId: string; 
             value={addUserId}
             onChange={(e) => setAddUserId(e.target.value)}
           >
-            <option value="">Select org member…</option>
+            <option value="">Select org member...</option>
             {availableOrg.map((m) => (
               <option key={m.user_id} value={m.user_id}>{m.display_name || m.email || m.user_id.slice(0, 16)}</option>
             ))}

@@ -171,6 +171,8 @@ function TaskCard({
 }
 
 /* ── Month Week Row with strips ── */
+const MAX_VISIBLE_LANES = 3;
+
 function MonthWeekRowView({
   row,
   weekdays,
@@ -182,24 +184,33 @@ function MonthWeekRowView({
   onClickTask?: (task: Task) => void;
   onClickDay?: (date: Date) => void;
 }) {
-  const maxLane = row.strips.length > 0
-    ? Math.max(...row.strips.map((s) => s.lane))
-    : -1;
-  // Minimum row height = day number row (20px) + strip lanes + padding
-  const minH = Math.max(80, 20 + (maxLane + 1) * 22 + 8);
+  // Fixed row height: day number (22px) + MAX_VISIBLE_LANES * 22px + overflow row (18px) + padding
+  const rowH = 22 + MAX_VISIBLE_LANES * 22 + 18 + 4;
+
+  // Only show strips in visible lanes
+  const visibleStrips = row.strips.filter((s) => s.lane < MAX_VISIBLE_LANES);
+  const hiddenStrips = row.strips.filter((s) => s.lane >= MAX_VISIBLE_LANES);
+
+  // Count hidden tasks per day column for "+N more" indicator
+  const hiddenPerCol: number[] = Array(7).fill(0);
+  for (const s of hiddenStrips) {
+    for (let c = s.startCol; c < s.startCol + s.span; c++) {
+      if (c >= 0 && c < 7) hiddenPerCol[c]++;
+    }
+  }
 
   return (
-    <div className="grid grid-cols-7 relative" style={{ minHeight: `${minH}px` }}>
+    <div className="grid grid-cols-7 relative" style={{ height: `${rowH}px` }}>
       {/* Day number cells */}
       {row.days.map((day, col) => (
         <div
           key={col}
           className={cn(
-            "border border-base-200 px-1 pt-0.5 cursor-pointer hover:bg-base-200/30 transition-colors",
+            "border border-base-200 px-1 pt-0.5 cursor-pointer hover:bg-base-200/30 transition-colors overflow-hidden",
             !day.isCurrentMonth && "opacity-40",
             day.isToday && "ring-2 ring-primary ring-inset"
           )}
-          style={{ minHeight: `${minH}px` }}
+          style={{ height: `${rowH}px` }}
           onClick={() => onClickDay?.(day.date)}
         >
           <span
@@ -210,11 +221,21 @@ function MonthWeekRowView({
           >
             {day.date.getDate()}
           </span>
+          {/* "+N more" indicator at bottom of cell */}
+          {hiddenPerCol[col] > 0 && (
+            <div
+              className="absolute bottom-0.5 text-[10px] font-medium text-primary hover:text-primary/80 cursor-pointer z-20"
+              style={{ left: `calc(${(col / 7) * 100}% + 4px)` }}
+              onClick={(e) => { e.stopPropagation(); onClickDay?.(day.date); }}
+            >
+              +{hiddenPerCol[col]} more
+            </div>
+          )}
         </div>
       ))}
 
-      {/* Strip overlay */}
-      {row.strips.map((strip, i) => (
+      {/* Strip overlay — only visible lanes */}
+      {visibleStrips.map((strip, i) => (
         <StripBar key={`${strip.task.id}-${i}`} strip={strip} onClick={onClickTask} />
       ))}
     </div>
@@ -480,13 +501,13 @@ function WeekGridView({
   const grid = useMemo(() => getWeekGrid(viewDate, tasks), [viewDate, tasks]);
 
   return (
-    <div className="grid grid-cols-7 gap-2">
+    <div className="grid grid-cols-7 gap-2 h-[calc(100vh-200px)]">
       {grid.map((day, i) => {
         const sorted = sortTasksByPriority(day.tasks);
         return (
-          <div key={i} className="flex flex-col min-h-[200px]">
+          <div key={i} className="flex flex-col min-h-0 border border-base-200 rounded-lg overflow-hidden bg-base-100/50">
             <div className={cn(
-              "text-center py-2 sticky top-0 bg-base-100 z-10 border-b border-base-200",
+              "text-center py-2 bg-base-100 z-10 border-b border-base-200 shrink-0",
               day.isToday && "text-primary font-bold"
             )}>
               <div className="text-xs text-base-content/60">{weekdays[i]}</div>
@@ -497,7 +518,7 @@ function WeekGridView({
                 {day.date.getDate()}
               </div>
             </div>
-            <div className="flex-1 flex flex-col gap-1.5 p-1">
+            <div className="flex-1 flex flex-col gap-1.5 p-1 overflow-y-auto min-h-0">
               {sorted.map((task) => (
                 <TaskCard key={task.id} task={task} onClick={onClickTask} members={members} />
               ))}
@@ -507,6 +528,11 @@ function WeekGridView({
                 </div>
               )}
             </div>
+            {sorted.length > 0 && (
+              <div className="text-[10px] text-center text-base-content/50 py-0.5 border-t border-base-200 shrink-0">
+                {sorted.length} task{sorted.length !== 1 ? "s" : ""}
+              </div>
+            )}
           </div>
         );
       })}
@@ -529,20 +555,27 @@ function DayGridView({
   const grid = useMemo(() => getDayGrid(viewDate, tasks), [viewDate, tasks]);
 
   return (
-    <div>
+    <div className="max-w-2xl mx-auto">
       {grid[0] && (
-        <div className="space-y-2">
-          {grid[0].tasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 text-base-content/50">
-              <CalendarDays className="w-12 h-12 mb-2" />
-              <p className="text-sm">No tasks for this day</p>
+        <>
+          {grid[0].tasks.length > 0 && (
+            <div className="text-sm text-base-content/60 mb-2">
+              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""}
             </div>
-          ) : (
-            sortTasksByPriority(grid[0].tasks).map((task) => (
-              <TaskCard key={task.id} task={task} onClick={onClickTask} members={members} />
-            ))
           )}
-        </div>
+          <div className="space-y-2 max-h-[calc(100vh-240px)] overflow-y-auto pr-1">
+            {grid[0].tasks.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-base-content/50">
+                <CalendarDays className="w-12 h-12 mb-2" />
+                <p className="text-sm">No tasks for this day</p>
+              </div>
+            ) : (
+              sortTasksByPriority(grid[0].tasks).map((task) => (
+                <TaskCard key={task.id} task={task} onClick={onClickTask} members={members} />
+              ))
+            )}
+          </div>
+        </>
       )}
     </div>
   );

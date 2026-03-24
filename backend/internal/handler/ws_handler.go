@@ -381,7 +381,7 @@ func (h *WSHandler) handleTaskTree(ctx context.Context, conn *websocket.OrgConn,
 		return
 	}
 
-	tasks, err := h.taskSvc.ListTreeByProject(ctx, projectID)
+	tasks, err := h.taskSvc.ListTreeByProject(ctx, projectID, 500)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
 		return

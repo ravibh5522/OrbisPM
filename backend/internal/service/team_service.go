@@ -188,6 +188,14 @@ func (s *TeamService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain
 	return s.teamRepo.ListByOrg(ctx, orgID)
 }
 
+func (s *TeamService) ListByOrgPaginated(ctx context.Context, orgID uuid.UUID, f repository.TeamFilter) ([]*domain.Team, int, error) {
+	return s.teamRepo.ListByOrgPaginated(ctx, orgID, f)
+}
+
+func (s *TeamService) ListMembersPaginated(ctx context.Context, teamID uuid.UUID, f repository.MemberFilter) ([]*domain.TeamMember, int, error) {
+	return s.teamMemberRepo.ListByTeamPaginated(ctx, teamID, f)
+}
+
 // --- Members ---
 
 func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, role string) error {

@@ -33,6 +33,33 @@ type TaskFilter struct {
 	SortOrder   string  // "asc" or "desc"
 }
 
+// TeamFilter for paginated team listing.
+type TeamFilter struct {
+	ListFilter
+	Search    *string
+	SortBy    string // name, member_count, created_at
+	SortOrder string // asc, desc
+}
+
+// ProjectFilter for paginated project listing.
+type ProjectFilter struct {
+	ListFilter
+	Search    *string
+	Status    *string
+	TeamID    *uuid.UUID
+	SortBy    string // name, status, created_at, updated_at
+	SortOrder string // asc, desc
+}
+
+// MemberFilter for paginated member listing.
+type MemberFilter struct {
+	ListFilter
+	Search    *string
+	Role      *string
+	SortBy    string // display_name, email, role, joined_at
+	SortOrder string // asc, desc
+}
+
 // --- Organisation ---
 
 type OrgRepository interface {
@@ -61,6 +88,7 @@ type TeamRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, team *domain.Team) (*domain.Team, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.Team, error)
+	ListByOrgPaginated(ctx context.Context, orgID uuid.UUID, f TeamFilter) ([]*domain.Team, int, error)
 	SetManager(ctx context.Context, tx pgx.Tx, teamID uuid.UUID, managerID *uuid.UUID) error
 }
 
@@ -69,6 +97,8 @@ type TeamMemberRepository interface {
 	Remove(ctx context.Context, tx pgx.Tx, teamID, userID uuid.UUID) error
 	UpdateRole(ctx context.Context, tx pgx.Tx, teamID, userID uuid.UUID, role string) error
 	ListByTeam(ctx context.Context, teamID uuid.UUID) ([]*domain.TeamMember, error)
+	ListByTeamPaginated(ctx context.Context, teamID uuid.UUID, f MemberFilter) ([]*domain.TeamMember, int, error)
+	GetByTeamAndUser(ctx context.Context, teamID, userID uuid.UUID) (*domain.TeamMember, error)
 }
 
 // --- Project ---
@@ -79,6 +109,7 @@ type ProjectRepository interface {
 	Update(ctx context.Context, tx pgx.Tx, project *domain.Project) (*domain.Project, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID, teamID *uuid.UUID) ([]*domain.Project, error)
+	ListByOrgPaginated(ctx context.Context, orgID uuid.UUID, f ProjectFilter) ([]*domain.Project, int, error)
 }
 
 type ProjectMemberRepository interface {
@@ -86,6 +117,8 @@ type ProjectMemberRepository interface {
 	Remove(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID) error
 	UpdateRole(ctx context.Context, tx pgx.Tx, projectID, userID uuid.UUID, role string) error
 	ListByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error)
+	ListByProjectPaginated(ctx context.Context, projectID uuid.UUID, limit, offset int) ([]*domain.ProjectMember, int, error)
+	GetByProjectAndUser(ctx context.Context, projectID, userID uuid.UUID) (*domain.ProjectMember, error)
 	ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error)
 	RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID uuid.UUID) error
 	RemoveBySourceTeamAndUser(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID, userID uuid.UUID) error
@@ -101,7 +134,8 @@ type TaskRepository interface {
 	GetTreeTx(ctx context.Context, tx pgx.Tx, rootTaskID uuid.UUID) ([]*domain.Task, error)
 	GetAncestors(ctx context.Context, taskID uuid.UUID) ([]*domain.Task, error)
 	GetAncestorsTx(ctx context.Context, tx pgx.Tx, taskID uuid.UUID) ([]*domain.Task, error)
-	ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error)
+	ListTreeByProject(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error)
+	ListTreeByProjectLight(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error)
 	List(ctx context.Context, projectID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error)
 	ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, limit, offset int) ([]*domain.Task, int, error)
 	Update(ctx context.Context, tx pgx.Tx, task *domain.Task) (*domain.Task, error)

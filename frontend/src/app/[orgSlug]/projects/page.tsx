@@ -10,9 +10,12 @@ import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { Project, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Activity, Calendar, FolderKanban, LayoutGrid, Plus, Table2, Trash2, Users } from "lucide-react";
+import {
+  Activity, Calendar, ChevronDown, FolderKanban, LayoutGrid,
+  Plus, Search, SlidersHorizontal, Table2, Trash2, Users, X,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
 interface ProjectForm {
@@ -22,6 +25,8 @@ interface ProjectForm {
   team_ids: string[];
 }
 
+const PAGE_SIZE = 20;
+
 export default function ProjectsPage() {
   const router = useRouter();
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -30,48 +35,54 @@ export default function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
-  const [teamFilter, setTeamFilter] = useState<string>("all");
 
-  const { data: projects, isLoading } = useQuery({
-    queryKey: ["projects", currentOrg?.id],
-    queryFn: () => api.projects.list(currentOrg!.id),
+  // Server-side pagination, search, filter, sort state
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(0);
+  const [sortBy, setSortBy] = useState("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [teamFilter, setTeamFilter] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => { setDebouncedSearch(search); setPage(0); }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const { data: projectsResponse, isLoading } = useQuery({
+    queryKey: ["projects", currentOrg?.id, debouncedSearch, page, sortBy, sortOrder, statusFilter, teamFilter],
+    queryFn: () => api.projects.list(currentOrg!.id, {
+      limit: PAGE_SIZE,
+      offset: page * PAGE_SIZE,
+      search: debouncedSearch || undefined,
+      status: statusFilter || undefined,
+      team_id: teamFilter || undefined,
+      sort_by: sortBy,
+      sort_order: sortOrder,
+    }),
     enabled: !!currentOrg,
   });
 
-  const { data: teams } = useQuery({
-    queryKey: ["teams", currentOrg?.id],
-    queryFn: () => api.teams.list(currentOrg!.id),
+  // Fetch teams for the filter dropdown and create form (smaller request)
+  const { data: teamsResponse } = useQuery({
+    queryKey: ["teams-all", currentOrg?.id],
+    queryFn: () => api.teams.list(currentOrg!.id, { limit: 500 }),
     enabled: !!currentOrg,
+    staleTime: 5 * 60_000,
   });
+
+  const projects = projectsResponse?.data || [];
+  const total = projectsResponse?.total || 0;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const teamList = teamsResponse?.data || [];
 
   const { register, handleSubmit, reset, formState: { errors: formErrors }, watch, setValue } = useForm<ProjectForm>({
     defaultValues: { team_ids: [] },
   });
-
   const selectedTeamIds = watch("team_ids") || [];
-
-  // Filter projects by team
-  const filteredProjects = useMemo(() => {
-    const allProjects = projects?.data || [];
-    if (teamFilter === "all") return allProjects;
-    // Filter by team - would need team linkage info on project
-    return allProjects.filter((p: Project) => {
-      // Check if team_id matches or if project has team_ids array
-      return p.team_id === teamFilter || (p.team_ids && p.team_ids.includes(teamFilter));
-    });
-  }, [projects?.data, teamFilter]);
-
-  // Group projects by team for stats
-  const teamStats = useMemo(() => {
-    const stats: Record<string, number> = { all: (projects?.data || []).length };
-    const teamList = teams?.data || [];
-    teamList.forEach((t: Team) => {
-      stats[t.id] = (projects?.data || []).filter((p: Project) => 
-        p.team_id === t.id || (p.team_ids && p.team_ids.includes(t.id))
-      ).length;
-    });
-    return stats;
-  }, [projects?.data, teams?.data]);
 
   const createMutation = useMutation({
     mutationFn: (data: ProjectForm) => {
@@ -84,7 +95,7 @@ export default function ProjectsPage() {
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects", currentOrg?.id] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
       setShowCreate(false);
       reset();
       setError("");
@@ -95,30 +106,39 @@ export default function ProjectsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.projects.delete(currentOrg!.id, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects", currentOrg?.id] });
+      qc.invalidateQueries({ queryKey: ["projects"] });
       setDeleteTarget(null);
     },
   });
 
-  if (isLoading) return (
-    <div className="animate-pulse">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <div className="h-8 bg-base-300 rounded w-36 mb-2" />
-          <div className="h-4 bg-base-300 rounded w-64" />
-        </div>
-        <div className="h-10 bg-base-300 rounded w-32" />
-      </div>
-      <div className="space-y-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="h-14 bg-base-200 rounded-lg border border-base-200" />
-        ))}
-      </div>
-    </div>
+  const handleSort = (col: string) => {
+    if (sortBy === col) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      setSortOrder("asc");
+    }
+    setPage(0);
+  };
+
+  const activeFilterCount = [statusFilter, teamFilter].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setStatusFilter("");
+    setTeamFilter("");
+    setSearch("");
+    setPage(0);
+  };
+
+  const SortIcon = ({ col }: { col: string }) => (
+    <ChevronDown className={cn(
+      "w-3 h-3 inline ml-0.5 transition-transform",
+      sortBy === col ? "opacity-100" : "opacity-30",
+      sortBy === col && sortOrder === "asc" && "rotate-180",
+    )} />
   );
 
-  const teamOptions = (teams?.data || []).map((t: Team) => ({ value: t.id, label: t.name }));
-  const teamList = teams?.data || [];
+  const teamOptions = teamList.map((t: Team) => ({ value: t.id, label: t.name }));
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-8rem)]">
@@ -134,76 +154,130 @@ export default function ProjectsPage() {
         }
       />
 
-      {/* Filters and View Toggle */}
-      <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-sm font-medium">Team:</span>
-          <button
-            className={cn(
-              "btn btn-sm gap-1",
-              teamFilter === "all" ? "btn-primary" : "btn-outline"
-            )}
-            onClick={() => setTeamFilter("all")}
-          >
-            All ({teamStats.all || 0})
-          </button>
-          {teamList.map((t: Team) => (
-            <button
-              key={t.id}
-              className={cn(
-                "btn btn-sm gap-1",
-                teamFilter === t.id ? "btn-primary" : "btn-outline"
-              )}
-              onClick={() => setTeamFilter(t.id)}
-            >
-              <Users className="w-3 h-3" />
-              {t.name} ({teamStats[t.id] || 0})
+      {/* Search bar + Filter toggle + View toggle */}
+      <div className="flex items-center gap-2 mb-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <input
+            type="text"
+            placeholder="Search projects..."
+            className="input input-bordered input-sm w-full pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle" onClick={() => setSearch("")}>
+              <X className="w-3 h-3" />
             </button>
-          ))}
+          )}
         </div>
+
+        <button
+          className={cn("btn btn-sm gap-1", showFilters ? "btn-primary" : "btn-ghost")}
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="badge badge-xs badge-secondary">{activeFilterCount}</span>
+          )}
+        </button>
+
+        <div className="flex-1" />
+
+        <span className="text-sm text-base-content/50">{total} project{total !== 1 ? "s" : ""}</span>
+
         <div className="join">
-          <button
-            className={cn("btn btn-sm join-item", viewMode === "grid" && "btn-active")}
-            onClick={() => setViewMode("grid")}
-          >
-            <LayoutGrid className="w-4 h-4" />
-          </button>
-          <button
-            className={cn("btn btn-sm join-item", viewMode === "table" && "btn-active")}
-            onClick={() => setViewMode("table")}
-          >
+          <button className={cn("btn btn-sm join-item", viewMode === "table" && "btn-active")} onClick={() => setViewMode("table")}>
             <Table2 className="w-4 h-4" />
+          </button>
+          <button className={cn("btn btn-sm join-item", viewMode === "grid" && "btn-active")} onClick={() => setViewMode("grid")}>
+            <LayoutGrid className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {(!filteredProjects || filteredProjects.length === 0) ? (
+      {/* Filter bar */}
+      {showFilters && (
+        <div className="flex items-center gap-3 mb-3 p-3 bg-base-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium whitespace-nowrap">Status:</span>
+            <select
+              className="select select-bordered select-sm"
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
+            >
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="on_hold">On Hold</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium whitespace-nowrap">Team:</span>
+            <select
+              className="select select-bordered select-sm max-w-[200px]"
+              value={teamFilter}
+              onChange={(e) => { setTeamFilter(e.target.value); setPage(0); }}
+            >
+              <option value="">All teams</option>
+              {teamList.map((t: Team) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          </div>
+          {activeFilterCount > 0 && (
+            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+              <X className="w-3 h-3" /> Clear all
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Loading state */}
+      {isLoading ? (
+        <div className="animate-pulse space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-14 bg-base-200 rounded-lg border border-base-200" />
+          ))}
+        </div>
+      ) : projects.length === 0 ? (
         <EmptyState
           icon={<FolderKanban className="w-16 h-16" />}
-          title={teamFilter === "all" ? "No projects yet" : "No projects for this team"}
-          description={teamFilter === "all" ? "Create your first project to get started" : "Create a project or change the team filter"}
-          action={<Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Project</Button>}
+          title={debouncedSearch || statusFilter || teamFilter ? "No matching projects" : "No projects yet"}
+          description={debouncedSearch || statusFilter || teamFilter ? "Try adjusting your search or filters" : "Create your first project to get started"}
+          action={
+            debouncedSearch || statusFilter || teamFilter
+              ? <Button variant="ghost" onClick={clearFilters}>Clear filters</Button>
+              : <Button onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" /> Create Project</Button>
+          }
         />
       ) : viewMode === "table" ? (
-        /* Table View */
         <Card className="flex-1">
-          <div className="w-full">
+          <div className="w-full overflow-x-auto">
             <table className="table w-full">
               <thead>
                 <tr>
-                  <th>Project Name</th>
+                  <th className="cursor-pointer select-none" onClick={() => handleSort("name")}>
+                    Project Name <SortIcon col="name" />
+                  </th>
                   <th>Description</th>
-                  <th>Status</th>
+                  <th className="cursor-pointer select-none" onClick={() => handleSort("status")}>
+                    Status <SortIcon col="status" />
+                  </th>
                   <th><Users className="w-3.5 h-3.5 inline mr-1" />Teams</th>
-                  <th><Calendar className="w-3.5 h-3.5 inline mr-1" />Created</th>
-                  <th><Activity className="w-3.5 h-3.5 inline mr-1" />Updated</th>
+                  <th className="cursor-pointer select-none" onClick={() => handleSort("created_at")}>
+                    <Calendar className="w-3.5 h-3.5 inline mr-1" />Created <SortIcon col="created_at" />
+                  </th>
+                  <th className="cursor-pointer select-none" onClick={() => handleSort("updated_at")}>
+                    <Activity className="w-3.5 h-3.5 inline mr-1" />Updated <SortIcon col="updated_at" />
+                  </th>
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredProjects.map((project: Project) => {
-                  // Find team names
-                  const projectTeams = teamList.filter((t: Team) => 
+                {projects.map((project: Project) => {
+                  const projectTeams = teamList.filter((t: Team) =>
                     t.id === project.team_id || (project.team_ids && project.team_ids.includes(t.id))
                   );
                   return (
@@ -220,13 +294,13 @@ export default function ProjectsPage() {
                       </td>
                       <td>
                         <span className="text-sm text-base-content/60 line-clamp-1 max-w-xs">
-                          {project.description || "—"}
+                          {project.description || "\u2014"}
                         </span>
                       </td>
                       <td>
                         <span className={cn(
                           "badge badge-sm",
-                          project.status === "active" ? "badge-success" : 
+                          project.status === "active" ? "badge-success" :
                           project.status === "archived" ? "badge-ghost" : "badge-info"
                         )}>
                           {statusLabel(project.status)}
@@ -239,22 +313,15 @@ export default function ProjectsPage() {
                               <Users className="w-2.5 h-2.5" />
                               {t.name}
                             </span>
-                          )) : <span className="text-base-content/40 text-sm">—</span>}
+                          )) : <span className="text-base-content/40 text-sm">{"\u2014"}</span>}
                         </div>
                       </td>
-                      <td className="text-sm text-base-content/60">
-                        {formatDate(project.created_at)}
-                      </td>
-                      <td className="text-sm text-base-content/60">
-                        {project.updated_at ? formatDate(project.updated_at) : "—"}
-                      </td>
+                      <td className="text-sm text-base-content/60">{formatDate(project.created_at)}</td>
+                      <td className="text-sm text-base-content/60">{project.updated_at ? formatDate(project.updated_at) : "\u2014"}</td>
                       <td>
                         <div className="flex gap-1 justify-end" onClick={(e) => e.stopPropagation()}>
                           <PermissionGate resource="projects" action="delete">
-                            <button
-                              className="btn btn-ghost btn-xs btn-square text-error"
-                              onClick={() => setDeleteTarget(project)}
-                            >
+                            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={() => setDeleteTarget(project)}>
                               <Trash2 className="w-3 h-3" />
                             </button>
                           </PermissionGate>
@@ -268,14 +335,10 @@ export default function ProjectsPage() {
           </div>
         </Card>
       ) : (
-        /* Grid View */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredProjects.map((project: Project) => (
+          {projects.map((project: Project) => (
             <Card key={project.id} compact>
-              <div
-                className="cursor-pointer"
-                onClick={() => router.push(`/${currentOrg!.slug}/projects/${project.id}`)}
-              >
+              <div className="cursor-pointer" onClick={() => router.push(`/${currentOrg!.slug}/projects/${project.id}`)}>
                 <div className="flex items-start justify-between">
                   <div>
                     <h3 className="font-semibold text-lg">{project.name}</h3>
@@ -287,14 +350,17 @@ export default function ProjectsPage() {
                     {statusLabel(project.status)}
                   </div>
                 </div>
-                <div className="flex items-center justify-between mt-4 text-sm text-base-content/50">
+                {(project.member_count || project.task_count) ? (
+                  <div className="flex gap-3 mt-2 text-xs text-base-content/50">
+                    {project.member_count != null && <span>{project.member_count} members</span>}
+                    {project.task_count != null && <span>{project.task_count} tasks</span>}
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between mt-3 text-sm text-base-content/50">
                   <span>Created {formatDate(project.created_at)}</span>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
                     <PermissionGate resource="projects" action="delete">
-                      <button
-                        className="btn btn-ghost btn-xs btn-square"
-                        onClick={(e) => { e.stopPropagation(); setDeleteTarget(project); }}
-                      >
+                      <button className="btn btn-ghost btn-xs btn-square" onClick={() => setDeleteTarget(project)}>
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </PermissionGate>
@@ -303,6 +369,32 @@ export default function ProjectsPage() {
               </div>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
+          <span className="text-sm text-base-content/60">
+            Showing {page * PAGE_SIZE + 1}&ndash;{Math.min((page + 1) * PAGE_SIZE, total)} of {total}
+          </span>
+          <div className="join">
+            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(0)}>
+              &laquo;
+            </button>
+            <button className="join-item btn btn-sm" disabled={page === 0} onClick={() => setPage(p => p - 1)}>
+              &lsaquo;
+            </button>
+            <button className="join-item btn btn-sm">
+              Page {page + 1} of {totalPages}
+            </button>
+            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(p => p + 1)}>
+              &rsaquo;
+            </button>
+            <button className="join-item btn btn-sm" disabled={page >= totalPages - 1} onClick={() => setPage(totalPages - 1)}>
+              &raquo;
+            </button>
+          </div>
         </div>
       )}
 
@@ -328,11 +420,10 @@ export default function ProjectsPage() {
             {...register("team_id", { required: "Team is required" })}
             error={formErrors.team_id?.message}
           />
-          {/* Multi-team selection */}
           {teamOptions.length > 1 && (
             <div>
               <label className="label"><span className="label-text font-medium">Additional Teams (optional)</span></label>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
                 {teamOptions.map((t: { value: string; label: string }) => (
                   <label key={t.value} className="flex items-center gap-2 p-2 rounded border border-base-300 cursor-pointer hover:bg-base-200">
                     <input
@@ -346,7 +437,7 @@ export default function ProjectsPage() {
                         setValue("team_ids", ids);
                       }}
                     />
-                    <span className="text-sm">{t.label}</span>
+                    <span className="text-sm truncate">{t.label}</span>
                   </label>
                 ))}
               </div>
@@ -360,7 +451,6 @@ export default function ProjectsPage() {
         </form>
       </Modal>
 
-      {/* Delete confirm */}
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}

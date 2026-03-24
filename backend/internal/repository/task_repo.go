@@ -110,15 +110,41 @@ func (r *taskRepo) GetTreeTx(ctx context.Context, tx pgx.Tx, rootTaskID uuid.UUI
 	return collectTasks(rows)
 }
 
-func (r *taskRepo) ListTreeByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.Task, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+func (r *taskRepo) ListTreeByProject(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error) {
+	query := `SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
 		FROM tasks WHERE project_id = $1
-		ORDER BY depth, position, created_at`, projectID)
+		ORDER BY depth, position, created_at`
+	var rows pgx.Rows
+	var err error
+	if limit > 0 {
+		rows, err = r.pool.Query(ctx, query+" LIMIT $2", projectID, limit)
+	} else {
+		rows, err = r.pool.Query(ctx, query, projectID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("list tree by project: %w", err)
+	}
+	defer rows.Close()
+	return collectTasks(rows)
+}
+
+func (r *taskRepo) ListTreeByProjectLight(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error) {
+	query := `SELECT id, org_id, project_id, parent_task_id, title, '' as description, status, priority,
+		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
+		  labels, '{}'::jsonb as metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
+		FROM tasks WHERE project_id = $1
+		ORDER BY depth, position, created_at`
+	var rows pgx.Rows
+	var err error
+	if limit > 0 {
+		rows, err = r.pool.Query(ctx, query+" LIMIT $2", projectID, limit)
+	} else {
+		rows, err = r.pool.Query(ctx, query, projectID)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list tree light: %w", err)
 	}
 	defer rows.Close()
 	return collectTasks(rows)

@@ -15,13 +15,24 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 
+import dynamic from "next/dynamic";
+
 import ApiKeysTab from "./_components/api-keys-tab";
 import BillingTab from "./_components/billing-tab";
-import EmailTemplatesTab from "./_components/email-templates-tab";
 import MembersTab from "./_components/members-tab";
 import OrganisationTab from "./_components/organisation-tab";
 import PermissionsTab from "./_components/permissions-tab";
 import WebhooksTab from "./_components/webhooks-tab";
+
+const EmailTemplatesTab = dynamic(
+  () => import("./_components/email-templates-tab"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-96 animate-pulse bg-base-200 rounded-lg" />
+    ),
+  }
+);
 
 interface TabDef {
   key: string;

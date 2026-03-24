@@ -123,9 +123,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse database url")
 	}
-	poolCfg.MaxConns = 20
-	poolCfg.MinConns = 2
+	poolCfg.MaxConns = 50
+	poolCfg.MinConns = 5
 	poolCfg.MaxConnLifetime = 30 * time.Minute
+	poolCfg.MaxConnIdleTime = 5 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
@@ -307,6 +308,7 @@ func main() {
 
 	// Inject permission resolver into handlers
 	permResolver.SetPermRepo(permRepo)
+	permResolver.SetCache(cacheManager)
 	projectHandler.SetPermResolver(permResolver)
 	teamHandler.SetPermResolver(permResolver)
 
@@ -382,6 +384,7 @@ func main() {
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recovery)
+	r.Use(middleware.Compress)
 	r.Use(rateLimiter.Handler)
 	r.Use(middleware.Metrics)
 	r.Use(middleware.CacheControl)

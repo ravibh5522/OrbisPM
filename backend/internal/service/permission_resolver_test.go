@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -91,6 +92,20 @@ func (m *mockTeamMemberRepo) ListByTeam(_ context.Context, teamID uuid.UUID) ([]
 	return m.members[teamID], nil
 }
 
+func (m *mockTeamMemberRepo) ListByTeamPaginated(_ context.Context, teamID uuid.UUID, _ repository.MemberFilter) ([]*domain.TeamMember, int, error) {
+	members := m.members[teamID]
+	return members, len(members), nil
+}
+
+func (m *mockTeamMemberRepo) GetByTeamAndUser(_ context.Context, teamID, userID uuid.UUID) (*domain.TeamMember, error) {
+	for _, tm := range m.members[teamID] {
+		if tm.UserID == userID {
+			return tm, nil
+		}
+	}
+	return nil, errors.New("not found")
+}
+
 // --- ProjectMemberRepo ---
 
 type mockProjectMemberRepo struct {
@@ -116,6 +131,20 @@ func (m *mockProjectMemberRepo) UpdateRole(_ context.Context, _ pgx.Tx, _, _ uui
 
 func (m *mockProjectMemberRepo) ListByProject(_ context.Context, projectID uuid.UUID) ([]*domain.ProjectMember, error) {
 	return m.members[projectID], nil
+}
+
+func (m *mockProjectMemberRepo) ListByProjectPaginated(_ context.Context, projectID uuid.UUID, limit, offset int) ([]*domain.ProjectMember, int, error) {
+	members := m.members[projectID]
+	return members, len(members), nil
+}
+
+func (m *mockProjectMemberRepo) GetByProjectAndUser(_ context.Context, projectID, userID uuid.UUID) (*domain.ProjectMember, error) {
+	for _, pm := range m.members[projectID] {
+		if pm.UserID == userID {
+			return pm, nil
+		}
+	}
+	return nil, errors.New("not found")
 }
 
 func (m *mockProjectMemberRepo) ListEffectiveMembers(_ context.Context, _ uuid.UUID) ([]*domain.EffectiveMember, error) {

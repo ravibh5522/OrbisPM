@@ -8,7 +8,9 @@ import type { Project, Task } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { FolderKanban, ListTodo, Search as SearchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const SEARCH_LIMIT = 25;
 
 export default function SearchPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -17,15 +19,24 @@ export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
+  // Debounce: auto-search after 300ms of inactivity
+  useEffect(() => {
+    if (query.trim().length < 2) return;
+    const timer = setTimeout(() => {
+      setSearchTerm(query.trim());
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
   const { data: taskResults, isFetching: tasksFetching } = useQuery({
     queryKey: ["search-tasks", currentOrg?.id, searchTerm],
-    queryFn: () => api.search.tasks(currentOrg!.id, searchTerm),
+    queryFn: () => api.search.tasks(currentOrg!.id, searchTerm, SEARCH_LIMIT),
     enabled: !!currentOrg && searchTerm.length >= 2,
   });
 
   const { data: projectResults, isFetching: projectsFetching } = useQuery({
     queryKey: ["search-projects", currentOrg?.id, searchTerm],
-    queryFn: () => api.search.projects(currentOrg!.id, searchTerm),
+    queryFn: () => api.search.projects(currentOrg!.id, searchTerm, SEARCH_LIMIT),
     enabled: !!currentOrg && searchTerm.length >= 2,
   });
 
@@ -88,6 +99,9 @@ export default function SearchPage() {
         <div>
           <p className="text-sm text-base-content/50 mb-4">
             {totalResults} result{totalResults !== 1 ? "s" : ""} for &quot;{searchTerm}&quot;
+            {(tasks.length >= SEARCH_LIMIT || projects.length >= SEARCH_LIMIT) && (
+              <span className="ml-1">(showing first {SEARCH_LIMIT} per category)</span>
+            )}
           </p>
 
           {totalResults === 0 ? (
