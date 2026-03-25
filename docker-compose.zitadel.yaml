@@ -1,17 +1,29 @@
 # ============================================================
 # OrbisPM — Zitadel v4 (Identity Provider)
 # ============================================================
-# Included by docker-compose.yml.
-# Single-container setup: Zitadel API with built-in Login v1.
-# Uses external PostgreSQL and Redis (configured in .env).
+# Standalone compose (deployed separately from main stack).
+# Uses external PostgreSQL and a dedicated internal Redis.
 # ============================================================
 
 services:
+  zitadel-redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   zitadel:
     image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.12.1}
     restart: unless-stopped
     user: "0"
     command: start-from-init --masterkey "${ZITADEL_MASTERKEY}" --config /zitadel-config.yaml
+    depends_on:
+      zitadel-redis:
+        condition: service_healthy
     ports:
       - "${ZITADEL_MAPPED_PORT:-8081}:8080"
     environment:
@@ -47,9 +59,7 @@ services:
       ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
 
       ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: true
-      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "${REDIS_HOST}:${REDIS_PORT}"
-      ZITADEL_CACHES_CONNECTORS_REDIS_USERNAME: ${REDIS_USERNAME:-default}
-      ZITADEL_CACHES_CONNECTORS_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "zitadel-redis:6379"
       ZITADEL_CACHES_INSTANCE_CONNECTOR: redis
       ZITADEL_CACHES_MILESTONES_CONNECTOR: redis
       ZITADEL_CACHES_ORGANIZATION_CONNECTOR: redis
