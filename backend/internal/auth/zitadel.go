@@ -27,6 +27,8 @@ import (
 	userv2 "github.com/zitadel/zitadel-go/v3/pkg/client/zitadel/user/v2"
 	"github.com/zitadel/zitadel-go/v3/pkg/zitadel"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // ZitadelClient communicates with Zitadel via gRPC and provides OIDC PKCE auth flows.
@@ -1270,23 +1272,33 @@ func (c *ZitadelClient) wrapGRPCError(err error) error {
 	if err == nil {
 		return nil
 	}
-	msg := err.Error()
-	code := 500
-	switch {
-	case strings.Contains(msg, "NotFound"):
-		code = 404
-	case strings.Contains(msg, "AlreadyExists"):
-		code = 409
-	case strings.Contains(msg, "PermissionDenied"), strings.Contains(msg, "Unauthenticated"):
-		code = 401
-	case strings.Contains(msg, "InvalidArgument"):
-		code = 400
-	case strings.Contains(msg, "FailedPrecondition"):
-		code = 422
-	case strings.Contains(msg, "Unavailable"), strings.Contains(msg, "DeadlineExceeded"), strings.Contains(msg, "502"), strings.Contains(msg, "503"):
-		code = 503
+	// Use the gRPC status code directly instead of string matching.
+	code := http.StatusInternalServerError
+	if st, ok := status.FromError(err); ok {
+		switch st.Code() {
+		case codes.NotFound:
+			code = http.StatusNotFound
+		case codes.AlreadyExists:
+			code = http.StatusConflict
+		case codes.PermissionDenied, codes.Unauthenticated:
+			code = http.StatusUnauthorized
+		case codes.InvalidArgument, codes.OutOfRange:
+			code = http.StatusBadRequest
+		case codes.FailedPrecondition:
+			code = http.StatusUnprocessableEntity
+		case codes.Unavailable, codes.Internal, codes.DataLoss, codes.Unknown:
+			// Upstream Zitadel error — map to 502 Bad Gateway so the client
+			// can distinguish an auth service outage from an app-level error.
+			code = http.StatusBadGateway
+		case codes.ResourceExhausted:
+			code = http.StatusTooManyRequests
+		case codes.DeadlineExceeded, codes.Canceled:
+			code = http.StatusGatewayTimeout
+		case codes.Unimplemented:
+			code = http.StatusNotImplemented
+		}
 	}
-	return &AuthError{Code: code, Message: msg}
+	return &AuthError{Code: code, Message: err.Error()}
 }
 
 // --- PKCE Helpers ---
