@@ -3,7 +3,9 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -15,6 +17,10 @@ func main() {
 	if dbURL == "" {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
+
+	// Use a separate migrations table so messaging-service migrations do not
+	// conflict with the main backend's schema_migrations table in the shared DB.
+	dbURL = addMigrationsTable(dbURL, "messaging_schema_migrations")
 
 	migrationsPath := os.Getenv("MIGRATIONS_PATH")
 	if migrationsPath == "" {
@@ -63,4 +69,17 @@ func main() {
 	default:
 		log.Fatalf("unknown command: %s (use: up, down, version, force)", cmd)
 	}
+}
+
+// addMigrationsTable appends x-migrations-table to a postgres URL without
+// overwriting any existing query parameters or fragment.
+func addMigrationsTable(dbURL, table string) string {
+	u, err := url.Parse(dbURL)
+	if err != nil || !strings.HasPrefix(u.Scheme, "postgres") {
+		return dbURL
+	}
+	q := u.Query()
+	q.Set("x-migrations-table", table)
+	u.RawQuery = q.Encode()
+	return u.String()
 }
