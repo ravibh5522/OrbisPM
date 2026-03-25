@@ -1283,6 +1283,8 @@ func (c *ZitadelClient) wrapGRPCError(err error) error {
 		code = 400
 	case strings.Contains(msg, "FailedPrecondition"):
 		code = 422
+	case strings.Contains(msg, "Unavailable"), strings.Contains(msg, "DeadlineExceeded"), strings.Contains(msg, "502"), strings.Contains(msg, "503"):
+		code = 503
 	}
 	return &AuthError{Code: code, Message: msg}
 }
