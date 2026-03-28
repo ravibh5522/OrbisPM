@@ -1,5 +1,14 @@
 // Domain types matching the Go backend models exactly
 
+export interface OrgThemeConfig {
+  org_id: string;
+  base_theme: string;
+  custom_colors: Record<string, string>;
+  locked: boolean;
+  updated_at: string;
+  updated_by?: string;
+}
+
 export interface Org {
   id: string;
   name: string;

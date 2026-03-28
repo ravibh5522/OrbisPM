@@ -9,6 +9,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
 import type { NotificationPreference, TOTPRegistration } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ThemeCustomizerModal } from "@/components/ui/theme-customizer-modal";
 import {
   AlertTriangle,
   Bell,
@@ -23,6 +24,7 @@ import {
   Lock,
   Mail,
   Moon,
+  Paintbrush,
   Palette,
   RefreshCw,
   Shield,
@@ -31,7 +33,7 @@ import {
   Trash2,
   User,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -318,14 +320,39 @@ function NotificationsTab() {
 }
 
 function AppearanceTab() {
-  const { theme: currentTheme, setTheme } = useUIStore();
-  const { user } = useAuthStore();
+  const { theme: currentTheme, setTheme, themeLocked } = useUIStore();
+  const { user, currentOrg } = useAuthStore();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
+  const [customizerOpen, setCustomizerOpen] = useState(false);
+
+  // Fetch org theme config to enforce lock
+  const { data: orgThemeCfg } = useQuery({
+    queryKey: ["org-theme", currentOrg?.id],
+    queryFn: () => api.orgTheme.get(currentOrg!.id),
+    enabled: !!currentOrg?.id,
+    select: (d) => d,
+  });
+
+  // Apply org theme lock on load
+  React.useEffect(() => {
+    if (!orgThemeCfg) return;
+    const { setThemeLocked, applyCustomisation, setTheme: st } = useUIStore.getState();
+    setThemeLocked(orgThemeCfg.locked);
+    if (orgThemeCfg.locked) {
+      st(orgThemeCfg.base_theme as Parameters<typeof st>[0]);
+      // custom_colors stores a ThemeCustomisation object from the admin
+      const customisation = orgThemeCfg.custom_colors as unknown as import("@/stores/ui-store").ThemeCustomisation | null;
+      applyCustomisation(customisation && customisation.profileId ? customisation : null);
+    }
+  }, [orgThemeCfg]);
+
+  const isLocked = orgThemeCfg?.locked || themeLocked;
 
   const handleThemeChange = async (themeValue: string) => {
+    if (isLocked) return;
     setTheme(themeValue as typeof currentTheme);
     setSaving(true);
     setError("");
@@ -362,15 +389,37 @@ function AppearanceTab() {
         </div>
       )}
 
+      {isLocked && (
+        <div className="alert gap-2 border border-warning/30 bg-warning/10 text-warning text-sm">
+          <Lock className="w-4 h-4 flex-shrink-0" />
+          <span>
+            Your organisation admin has applied and locked a theme. You cannot
+            change it.
+          </span>
+        </div>
+      )}
+
       <Card>
-        <div className="flex items-center gap-3 mb-6">
-          <Palette className="w-5 h-5 text-primary" />
-          <div>
-            <h3 className="font-semibold text-base">Theme</h3>
-            <p className="text-sm text-base-content/50">
-              Choose your preferred appearance
-            </p>
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-3">
+            <Palette className="w-5 h-5 text-primary" />
+            <div>
+              <h3 className="font-semibold text-base">Theme</h3>
+              <p className="text-sm text-base-content/50">
+                Choose your preferred appearance
+              </p>
+            </div>
           </div>
+          {/* Customise colours button */}
+          <button
+            type="button"
+            onClick={() => setCustomizerOpen(true)}
+            className="btn btn-sm btn-outline gap-2"
+            title="Customise theme colours"
+          >
+            <Paintbrush className="w-3.5 h-3.5" />
+            Customise
+          </button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -381,10 +430,13 @@ function AppearanceTab() {
               <button
                 key={t.value}
                 type="button"
-                disabled={saving}
+                disabled={saving || isLocked}
                 onClick={() => handleThemeChange(t.value)}
                 className={cn(
-                  "relative rounded-xl p-1 transition-all duration-200 text-left cursor-pointer",
+                  "relative rounded-xl p-1 transition-all duration-200 text-left",
+                  isLocked
+                    ? "opacity-60 cursor-not-allowed"
+                    : "cursor-pointer",
                   isActive
                     ? "ring-2 ring-primary ring-offset-2 ring-offset-base-100"
                     : "ring-1 ring-base-300 hover:ring-base-content/30",
@@ -526,6 +578,12 @@ function AppearanceTab() {
           })}
         </div>
       </Card>
+
+      <ThemeCustomizerModal
+        open={customizerOpen}
+        onClose={() => setCustomizerOpen(false)}
+        locked={isLocked}
+      />
     </div>
   );
 }

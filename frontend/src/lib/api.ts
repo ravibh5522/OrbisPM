@@ -243,6 +243,7 @@ import type {
   ActivityLog,
   Announcement,
   APIKey,
+  OrgThemeConfig,
   Attachment,
   AuthTokens,
   BackupCodesResponse,
@@ -1634,5 +1635,15 @@ export const api = {
           `${V1}/chat/attachments/${attachmentId}/url`,
         ),
     },
+  },
+
+  // Org theme config
+  orgTheme: {
+    get: (orgId: string) =>
+      get<OrgThemeConfig>(`${V1}/orgs/${orgId}/theme`),
+    update: (
+      orgId: string,
+      data: { base_theme: string; custom_colors: Record<string, string>; locked: boolean },
+    ) => put<OrgThemeConfig>(`${V1}/orgs/${orgId}/theme`, data),
   },
 };

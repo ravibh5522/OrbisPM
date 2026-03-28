@@ -447,7 +447,7 @@ export default function EmailTemplatesTab() {
         className="max-w-2xl"
       >
         {previewHtml && (
-          <div className="rounded-xl overflow-hidden border border-base-200 bg-white shadow-inner">
+          <div className="rounded-xl overflow-hidden border border-base-200 bg-base-100 shadow-inner">
             <iframe
               srcDoc={previewHtml}
               className="w-full border-0"

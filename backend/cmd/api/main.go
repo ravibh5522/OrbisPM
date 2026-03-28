@@ -252,6 +252,9 @@ func main() {
 	// --- Repositories (Analytics) ---
 	analyticsRepo := repository.NewAnalyticsRepo(pool)
 
+	// --- Repositories (Theme) ---
+	orgThemeRepo := repository.NewOrgThemeRepo(pool)
+
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
@@ -363,6 +366,9 @@ func main() {
 	// --- Handlers (Analytics) ---
 	analyticsHandler := handler.NewAnalyticsHandler(analyticsSvc)
 
+	// --- Handlers (Theme) ---
+	themeHandler := handler.NewThemeHandler(orgThemeRepo)
+
 	// --- Handlers (Email Templates) ---
 	emailTemplateHandler := handler.NewEmailTemplateHandler()
 
@@ -455,6 +461,7 @@ func main() {
 					r.Mount("/api-keys", apikeyHandler.Routes())
 					r.Mount("/roles", customRoleHandler.Routes())
 					r.Mount("/billing", billingHandler.Routes())
+					r.Put("/theme", themeHandler.UpdateOrgTheme)
 
 				})
 
@@ -469,6 +476,7 @@ func main() {
 
 					r.Get("/me", orgHandler.GetMyMembership)
 					r.Get("/members", orgHandler.ListMembers)
+					r.Get("/theme", themeHandler.GetOrgTheme)
 
 					// Permissions & Roles (combined: reads for members, mutations for admins)
 					r.Mount("/permissions", permHandler.CombinedRoutes(pool))

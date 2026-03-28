@@ -1,4 +1,10 @@
 import { create } from "zustand";
+import {
+  DEFAULT_PROFILE_ID,
+  findProfile,
+  PROFILES_BY_THEME,
+  ThemeColorProfile,
+} from "@/lib/theme-profiles";
 
 type Theme = "glass-light" | "glass-dark" | "orbis-light" | "orbis-dark";
 type ProjectTab =
@@ -11,9 +17,22 @@ type ProjectTab =
   | "settings";
 type TaskViewMode = "columns" | "list" | "tree" | "calendar";
 
+/** Stored as `{profile_id, primary_override?, base_content_override?}` */
+export interface ThemeCustomisation {
+  /** Profile id e.g. "glass-dark:nebula" */
+  profileId: string;
+  /** Optional free-choice primary colour (hex or oklch).
+   *  When set, overrides the profile primary but keeps secondary/accent. */
+  primaryOverride?: string;
+  /** Optional text (base-content) colour override. */
+  baseContentOverride?: string;
+}
+
 interface UIState {
   sidebarCollapsed: boolean;
   theme: Theme;
+  customisation: ThemeCustomisation | null;
+  themeLocked: boolean;
   commandPaletteOpen: boolean;
   mobileMenuOpen: boolean;
   breadcrumb: { label: string; backHref?: string } | null;
@@ -25,6 +44,10 @@ interface UIState {
   toggleSidebar: () => void;
   setSidebarCollapsed: (v: boolean) => void;
   setTheme: (t: Theme) => void;
+  setCustomisation: (c: ThemeCustomisation | null) => void;
+  /** Apply colours from a customisation without persisting to localStorage. */
+  applyCustomisation: (c: ThemeCustomisation | null) => void;
+  setThemeLocked: (locked: boolean) => void;
   setCommandPaletteOpen: (v: boolean) => void;
   setMobileMenuOpen: (v: boolean) => void;
   setBreadcrumb: (b: { label: string; backHref?: string } | null) => void;
@@ -48,6 +71,17 @@ function getStoredTheme(): Theme {
   return "orbis-light";
 }
 
+function getStoredCustomisation(): ThemeCustomisation | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("theme_customisation");
+    if (!raw) return null;
+    return JSON.parse(raw) as ThemeCustomisation;
+  } catch {
+    return null;
+  }
+}
+
 function getStoredProjectViews(): {
   tabs: Record<string, ProjectTab>;
   views: Record<string, TaskViewMode>;
@@ -64,11 +98,84 @@ function getStoredProjectViews(): {
   }
 }
 
+/**
+ * Applies theme profile colour vars to :root.
+ * Also applies primary / base-content overrides if present.
+ * Pass null to clear all inline overrides (revert to CSS theme defaults).
+ */
+export function applyThemeCustomisation(
+  theme: Theme,
+  customisation: ThemeCustomisation | null,
+) {
+  if (typeof window === "undefined") return;
+  const root = document.documentElement;
+
+  const ALL_VARS = [
+    "--color-primary",
+    "--color-primary-content",
+    "--color-secondary",
+    "--color-secondary-content",
+    "--color-accent",
+    "--color-accent-content",
+    "--color-base-content",
+  ];
+
+  // Clear previous inline overrides
+  ALL_VARS.forEach((v) => root.style.removeProperty(v));
+
+  if (!customisation) return;
+
+  // Resolve profile
+  const profile =
+    findProfile(customisation.profileId) ??
+    findProfile(DEFAULT_PROFILE_ID[theme]) ??
+    PROFILES_BY_THEME[theme]?.[0];
+
+  if (!profile) return;
+
+  // Apply profile vars
+  Object.entries(profile.vars).forEach(([k, v]) => {
+    root.style.setProperty(k, v);
+  });
+
+  // Apply individual overrides (these take precedence)
+  if (customisation.primaryOverride) {
+    root.style.setProperty("--color-primary", customisation.primaryOverride);
+    // Auto-derive primary-content from lightness
+    const pct = extractOklchL(customisation.primaryOverride);
+    if (pct !== null) {
+      root.style.setProperty(
+        "--color-primary-content",
+        pct > 60 ? "oklch(15% 0.02 260)" : "oklch(97% 0.02 260)",
+      );
+    }
+  }
+
+  if (customisation.baseContentOverride) {
+    root.style.setProperty("--color-base-content", customisation.baseContentOverride);
+  }
+}
+
+/** Extract L% from an oklch() string, returns null for hex/other formats. */
+function extractOklchL(value: string): number | null {
+  const m = value.match(/oklch\(\s*([\d.]+)%/);
+  return m ? parseFloat(m[1]) : null;
+}
+
 export const useUIStore = create<UIState>((set, get) => {
   const stored = getStoredProjectViews();
+  const storedCustomisation = getStoredCustomisation();
+  const storedTheme = getStoredTheme();
+
+  if (typeof window !== "undefined") {
+    applyThemeCustomisation(storedTheme, storedCustomisation);
+  }
+
   return {
     sidebarCollapsed: false,
-    theme: getStoredTheme(),
+    theme: storedTheme,
+    customisation: storedCustomisation,
+    themeLocked: false,
     commandPaletteOpen: false,
     mobileMenuOpen: false,
     breadcrumb: null,
@@ -78,16 +185,42 @@ export const useUIStore = create<UIState>((set, get) => {
     toggleSidebar: () =>
       set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
     setSidebarCollapsed: (v) => set({ sidebarCollapsed: v }),
+
     setTheme: (t) => {
       if (typeof window !== "undefined") {
         localStorage.setItem("theme", t);
         document.documentElement.setAttribute("data-theme", t);
       }
-      set({ theme: t });
+      // Clear customisation when switching base theme
+      set({ theme: t, customisation: null });
+      if (typeof window !== "undefined") {
+        applyThemeCustomisation(t, null);
+        localStorage.removeItem("theme_customisation");
+      }
     },
+
+    setCustomisation: (c) => {
+      if (typeof window !== "undefined") {
+        if (c) {
+          localStorage.setItem("theme_customisation", JSON.stringify(c));
+        } else {
+          localStorage.removeItem("theme_customisation");
+        }
+      }
+      applyThemeCustomisation(get().theme, c);
+      set({ customisation: c });
+    },
+
+    applyCustomisation: (c) => {
+      applyThemeCustomisation(get().theme, c);
+      set({ customisation: c });
+    },
+
+    setThemeLocked: (locked) => set({ themeLocked: locked }),
     setCommandPaletteOpen: (v) => set({ commandPaletteOpen: v }),
     setMobileMenuOpen: (v) => set({ mobileMenuOpen: v }),
     setBreadcrumb: (b) => set({ breadcrumb: b }),
+
     setProjectTab: (projectId, tab) => {
       set((s) => {
         const next = { ...s.projectTabs, [projectId]: tab };
@@ -97,6 +230,7 @@ export const useUIStore = create<UIState>((set, get) => {
       });
     },
     getProjectTab: (projectId) => get().projectTabs[projectId] || "tasks",
+
     setProjectTaskView: (projectId, view) => {
       set((s) => {
         const next = { ...s.projectTaskViews, [projectId]: view };
@@ -141,3 +275,7 @@ export const THEMES: {
     colorScheme: "dark",
   },
 ];
+
+/** Re-export for convenience */
+export type { ThemeColorProfile };
+export { PROFILES_BY_THEME, DEFAULT_PROFILE_ID, findProfile };

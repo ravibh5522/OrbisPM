@@ -9,6 +9,7 @@ import {
   CreditCard,
   KeyRound,
   Mail,
+  Paintbrush,
   Shield,
   Users,
   Webhook,
@@ -23,6 +24,7 @@ import BillingTab from "./_components/billing-tab";
 import MembersTab from "./_components/members-tab";
 import OrganisationTab from "./_components/organisation-tab";
 import PermissionsTab from "./_components/permissions-tab";
+import ThemeTab from "./_components/theme-tab";
 import WebhooksTab from "./_components/webhooks-tab";
 
 const EmailTemplatesTab = dynamic(
@@ -103,6 +105,15 @@ const TABS: TabDef[] = [
     icon: <Mail className="w-4 h-4" />,
     roles: ["owner", "admin"],
     component: EmailTemplatesTab,
+  },
+  {
+    key: "theme",
+    label: "Theme",
+    description:
+      "Set an org-wide theme with custom colours and optionally lock it for all members.",
+    icon: <Paintbrush className="w-4 h-4" />,
+    roles: ["owner", "admin"],
+    component: ThemeTab,
   },
 ];
 
