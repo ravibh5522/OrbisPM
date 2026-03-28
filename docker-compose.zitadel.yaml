@@ -20,7 +20,7 @@ services:
     image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.12.1}
     restart: unless-stopped
     user: "0"
-    command: start-from-init --masterkey "${ZITADEL_MASTERKEY}" --config /zitadel-config.yaml
+    command: start-from-init --masterkey "${ZITADEL_MASTERKEY}"
     depends_on:
       zitadel-redis:
         condition: service_healthy
@@ -44,6 +44,9 @@ services:
       ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
       ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 25
       ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 10
+      ZITADEL_DATABASE_POSTGRES_CONNMAXLIFETIME: "1h"
+      ZITADEL_DATABASE_POSTGRES_CONNMAXIDLETIME: "5m"
+      ZITADEL_DATABASE_POSTGRES_DIALER_TIMEOUT: "30s"
 
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USER:-admin@orbispm.local}
       ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${ZITADEL_ADMIN_PASSWORD:-Admin123!}
@@ -70,11 +73,11 @@ services:
       # Increase eventstore push timeout for remote DB (default 15s)
       ZITADEL_EVENTSTORE_PUSHTIMEOUT: "120s"
       ZITADEL_EVENTSTORE_MAXRETRIES: 10
+      # Settings previously in zitadel-config.yaml
+      ZITADEL_SYSTEMDEFAULTS_MULTIFACTORS_OTP_ISSUER: "OrbisPM"
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]
       interval: 10s
       timeout: 30s
       retries: 30
       start_period: 600s
-    volumes:
-      - ./zitadel-config.yaml:/zitadel-config.yaml:ro
