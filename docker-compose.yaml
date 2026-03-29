@@ -127,8 +127,8 @@ services:
       ZITADEL_LOG_LEVEL: ${ZITADEL_LOG_LEVEL:-info}
       ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
       # Increase eventstore push timeout for remote DB with high RTT (default 15s)
-      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "120s"
-      ZITADEL_EVENTSTORE_MAXRETRIES: 10
+      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "600s"
+      ZITADEL_EVENTSTORE_MAXRETRIES: 15
       # Settings previously in zitadel-config.yaml
       ZITADEL_SYSTEMDEFAULTS_MULTIFACTORS_OTP_ISSUER: "OrbisPM"
     depends_on:
