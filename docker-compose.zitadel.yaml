@@ -1,23 +1,19 @@
 # ============================================================
-# OrbisPM — Zitadel v4 (Identity Provider)
+# OrbisPM — Zitadel v4.12.1 (Identity Provider)
 # ============================================================
-# Standalone compose (deployed separately from main stack).
-# Uses external PostgreSQL and a dedicated internal Redis.
+# Two containers: zitadel-redis + zitadel
+# Uses AWS RDS PostgreSQL + local Redis for caching.
+# Run: docker compose -f docker-compose.zitadel.yaml --env-file .env.production up -d
 # ============================================================
 
 services:
   zitadel-redis:
     image: redis:7-alpine
     restart: unless-stopped
-    # Keyspace notifications (Ex) required for Zitadel's cache invalidation subscriptions.
-    # volatile-lru evicts only TTL-bearing keys (all Zitadel cache keys have TTL).
-    command: >
-      redis-server
-      --notify-keyspace-events Ex
-      --save ""
-      --appendonly no
-      --maxmemory 256mb
-      --maxmemory-policy volatile-lru
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -25,95 +21,71 @@ services:
       retries: 10
 
   zitadel:
-    image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.12.1}
+    image: ghcr.io/zitadel/zitadel:v4.12.1
     restart: unless-stopped
     user: "0"
-    command: start --masterkey "${ZITADEL_MASTERKEY}" --config /zitadel-caches.yaml
-    depends_on:
-      zitadel-redis:
-        condition: service_healthy
-    ports:
-      - "${ZITADEL_MAPPED_PORT:-8081}:8080"
+    command: >-
+      start
+      --masterkey "${ZITADEL_MASTERKEY}"
+      --config /zitadel-caches.yaml
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     environment:
+      # ── Networking ──
       ZITADEL_PORT: 8080
-      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN}
+      ZITADEL_EXTERNALDOMAIN: ${ZITADEL_EXTERNAL_DOMAIN:-zitadel.orbispm.in}
       ZITADEL_EXTERNALPORT: ${ZITADEL_EXTERNAL_PORT:-443}
-      ZITADEL_EXTERNALSECURE: "${ZITADEL_EXTERNAL_SECURE:-true}"
-      ZITADEL_TLS_ENABLED: false
+      ZITADEL_EXTERNALSECURE: "true"
+      ZITADEL_TLS_ENABLED: "false"
 
+      # ── Database (AWS RDS) ──
       ZITADEL_DATABASE_POSTGRES_HOST: ${POSTGRES_HOST}
-      ZITADEL_DATABASE_POSTGRES_PORT: ${POSTGRES_PORT}
-      ZITADEL_DATABASE_POSTGRES_DATABASE: ${POSTGRES_DB}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: ${POSTGRES_USER}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
+      ZITADEL_DATABASE_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
+      ZITADEL_DATABASE_POSTGRES_DATABASE: ${POSTGRES_DB:-orbispmdev}
       ZITADEL_DATABASE_POSTGRES_USER_USERNAME: ${POSTGRES_USER}
       ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${POSTGRES_PASSWORD}
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
-      ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 50
-      ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 25
-      ZITADEL_DATABASE_POSTGRES_CONNMAXLIFETIME: "30m"
-      ZITADEL_DATABASE_POSTGRES_CONNMAXIDLETIME: "5m"
-      ZITADEL_DATABASE_POSTGRES_DIALER_TIMEOUT: "60s"
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-require}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: ${POSTGRES_USER}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: ${POSTGRES_SSL_MODE:-require}
 
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USER:-admin@orbispm.local}
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: ${ZITADEL_ADMIN_PASSWORD:-Admin123!}
-      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: false
-      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_ORG_NAME:-OrbisPM}
-      ZITADEL_FIRSTINSTANCE_INSTANCENAME: ${ZITADEL_INSTANCE_NAME:-OrbisPM}
-      ZITADEL_FIRSTINSTANCE_DEFAULTLANGUAGE: en
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: ${ZITADEL_MACHINE_USERNAME:-backend-service}
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: ${ZITADEL_MACHINE_NAME:-OrbisPM Backend}
-      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: ${ZITADEL_MACHINE_PAT_EXPIRY:-2030-01-01T00:00:00Z}
+      # ── Features ──
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
 
-      # Use built-in Login v1 (no separate login container needed)
-      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
+      # ── Database connection pool (tuned for remote RDS) ──
+      ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 25
+      ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 10
+      ZITADEL_DATABASE_POSTGRES_MAXCONNLIFETIME: "30m"
+      ZITADEL_DATABASE_POSTGRES_MAXCONNIDLETIME: "5m"
 
-      ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: false
+      # ── Projections (tuned for high-latency remote DB) ──
+      ZITADEL_PROJECTIONS_TRANSACTIONDURATION: "300s"
+      ZITADEL_PROJECTIONS_BULKLIMIT: 100
+      ZITADEL_PROJECTIONS_MAXFAILURECOUNT: 50
+      ZITADEL_PROJECTIONS_RETRYFAILEDAFTER: "30s"
+      # Override per-projection customizations (defaults.yaml sets these to 2s)
+      ZITADEL_PROJECTIONS_CUSTOMIZATIONS_PASSWORD_COMPLEXITIES_TRANSACTIONDURATION: "120s"
+      ZITADEL_PROJECTIONS_CUSTOMIZATIONS_LOCKOUT_POLICY_TRANSACTIONDURATION: "120s"
+
+      # ── Eventstore ──
+      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "120s"
+      ZITADEL_EVENTSTORE_MAXRETRIES: 5
+
+      # ── Logging ──
       ZITADEL_LOG_LEVEL: info
+      ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: "false"
 
-      # ── Redis cache connector ──────────────────────────────────────
-      ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: "true"
-      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "zitadel-redis:6379"
-      ZITADEL_CACHES_CONNECTORS_REDIS_MAXRETRIES: "5"
-      ZITADEL_CACHES_CONNECTORS_REDIS_MINRETRYBACKOFF: "50ms"
-      ZITADEL_CACHES_CONNECTORS_REDIS_MAXRETRYBACKOFF: "1s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_DIALTIMEOUT: "10s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_READTIMEOUT: "5s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_WRITETIMEOUT: "5s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_POOLSIZE: "10"
-      ZITADEL_CACHES_CONNECTORS_REDIS_POOLTIMEOUT: "10s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_MINIDLECONNS: "0"
-      ZITADEL_CACHES_CONNECTORS_REDIS_MAXIDLECONNS: "5"
-      ZITADEL_CACHES_CONNECTORS_REDIS_MAXACTIVECONNS: "40"
-      # Disable circuit breaker auto-trip (go-redis 9.16 + Redis 7 incompatibility)
-      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_MAXCONSECUTIVEFAILURES: "0"
-      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_MAXFAILURERATIO: "0"
-      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_TIMEOUT: "60s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_INTERVAL: "60s"
-      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_MAXRETRYREQUESTS: "5"
-      # Cache connector assignments
-      ZITADEL_CACHES_INSTANCE_CONNECTOR: "redis"
-      ZITADEL_CACHES_MILESTONES_CONNECTOR: "redis"
-      ZITADEL_CACHES_ORGANIZATION_CONNECTOR: "redis"
-
-      # Increase eventstore push timeout for remote DB (default 15s)
-      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "600s"
-      ZITADEL_EVENTSTORE_MAXRETRIES: 10
-      # Settings previously in zitadel-config.yaml
-      ZITADEL_SYSTEMDEFAULTS_MULTIFACTORS_OTP_ISSUER: "OrbisPM"
-
-      # Projection settings — tuned for high-latency remote DB
-      ZITADEL_PROJECTIONS_TRANSACTIONDURATION: "120s"
-      ZITADEL_PROJECTIONS_BULKLIMIT: 50
-      ZITADEL_PROJECTIONS_MAXFAILURECOUNT: 10
-      ZITADEL_PROJECTIONS_RETRYFAILEDAFTER: "10s"
-      ZITADEL_PROJECTIONS_MAXPARALLELTRIGGERS: 10
-    volumes:
-      - ./zitadel-caches.yaml:/zitadel-caches.yaml:ro
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]
       interval: 10s
       timeout: 30s
       retries: 30
-      start_period: 600s
+      start_period: 120s
+    ports:
+      - "${ZITADEL_MAPPED_PORT:-8081}:8080"
+    volumes:
+      - ./zitadel-caches.yaml:/zitadel-caches.yaml:ro
+    depends_on:
+      zitadel-redis:
+        condition: service_healthy

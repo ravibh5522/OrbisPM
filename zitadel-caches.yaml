@@ -20,7 +20,7 @@ Caches:
       MaxIdleConns: 5
       MaxActiveConns: 40
       ConnMaxIdleTime: "30m"
-      ConnMaxLifetime: "-1"
+      ConnMaxLifetime: "0s"
       # Disable circuit breaker auto-trip.
       # go-redis 9.16 sends CLIENT MAINT_NOTIFICATIONS during handshake;
       # Redis 7 rejects it with "ERR unknown subcommand" which the CB
