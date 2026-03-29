@@ -11,7 +11,7 @@ services:
     container_name: orbispm-alert-engine
     environment:
       # Database
-      DATABASE_URL: "postgres://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=disable"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=${POSTGRES_SSL_MODE:-disable}"
 
       # Redis
       REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
@@ -34,7 +34,9 @@ services:
       - "8090"
     networks:
       - monitoring
-      - orbispm_default
+      - default
+    extra_hosts:
+      - "${POSTGRES_HOST:-postgres}:52.20.37.249"
     deploy:
       resources:
         limits:
@@ -84,8 +86,6 @@ networks:
   monitoring:
     external: false
     name: orbispm-monitoring_monitoring
-  orbispm_default:
-    external: false
 
 volumes:
   alertmanager-data:

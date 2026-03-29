@@ -16,7 +16,7 @@ services:
       LOG_LEVEL: "${LOG_LEVEL:-info}"
 
       # Database connections
-      DATABASE_URL: "postgres://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=disable"
+      DATABASE_URL: "postgres://${POSTGRES_USER:-orbispm}:${POSTGRES_PASSWORD:-changeme}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispm}?sslmode=${POSTGRES_SSL_MODE:-disable}"
       CLICKHOUSE_URL: "http://clickhouse:8123"
       CLICKHOUSE_DB: "${CLICKHOUSE_DB:-monitoring}"
       REDIS_URL: "redis://${REDIS_HOST:-redis}:${REDIS_PORT:-6379}"
@@ -38,7 +38,9 @@ services:
       - "${SUPER_ADMIN_PORT:-8090}:8080"
     networks:
       - monitoring
-      - orbispm_default
+      - default
+    extra_hosts:
+      - "${POSTGRES_HOST:-postgres}:52.20.37.249"
     deploy:
       resources:
         limits:
@@ -61,8 +63,6 @@ networks:
   monitoring:
     external: false
     name: orbispm-monitoring_monitoring
-  orbispm_default:
-    external: false
 
 # Note: Super Admin service has external port mapping
 # as it provides the unified admin dashboard access
