@@ -179,6 +179,51 @@ services:
   # APPLICATION SERVICES  (always on)
   # ══════════════════════════════════════════════════════════
 
+  # ── PgBouncer — connection pooler between app and RDS ──
+  # Keeps hot connections to RDS so apps avoid ~2s SSL handshake per new connection.
+  # session mode: compatible with RLS set_config() and pgx prepared-statement cache.
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    restart: unless-stopped
+    expose:
+      - "5432"
+    environment:
+      DB_HOST: ${POSTGRES_HOST:-postgres}
+      DB_PORT: ${POSTGRES_PORT:-5432}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB:-orbispmdev}
+      POOL_MODE: session
+      DEFAULT_POOL_SIZE: 20
+      MIN_POOL_SIZE: 5
+      MAX_CLIENT_CONN: 400
+      RESERVE_POOL_SIZE: 5
+      SERVER_IDLE_TIMEOUT: 600
+      SERVER_CONNECT_TIMEOUT: 30
+      SERVER_LIFETIME: 3600
+      CLIENT_IDLE_TIMEOUT: 600
+      AUTH_TYPE: plain
+      # SSL from PgBouncer to RDS; client→PgBouncer is plain (Docker-internal)
+      SERVER_TLS_SSLMODE: ${POSTGRES_SSL_MODE:-disable}
+      # Ignore extra startup params sent by pgx / psycopg
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "pg_isready",
+          "-h",
+          "localhost",
+          "-p",
+          "5432",
+          "-U",
+          "${POSTGRES_USER:-postgres}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   meilisearch:
     image: getmeili/meilisearch:v1.7
     restart: unless-stopped
@@ -207,7 +252,9 @@ services:
     environment:
       PORT: ${API_PORT:-8080}
       ENV: ${APP_ENV:-development}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB}?sslmode=${POSTGRES_SSL_MODE:-disable}
+      # Route through PgBouncer (session mode) to avoid per-request RDS connection overhead.
+      # sslmode=disable: app→pgbouncer is Docker-internal; pgbouncer→RDS handles SSL.
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       ZITADEL_DOMAIN: ${ZITADEL_DOMAIN:?ZITADEL_DOMAIN required}
       ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
@@ -239,6 +286,8 @@ services:
       READ_TIMEOUT_SECONDS: ${READ_TIMEOUT_SECONDS:-60}
     depends_on:
       meilisearch:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       # optional — only present when running with --profile local
       postgres:
@@ -332,7 +381,8 @@ services:
     environment:
       PORT: ${MSG_PORT:-8082}
       ENV: ${APP_ENV:-development}
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@${POSTGRES_HOST:-postgres}:${POSTGRES_PORT:-5432}/${POSTGRES_DB:-orbispmdev}?sslmode=${POSTGRES_SSL_MODE:-disable}
+      # Route through PgBouncer to avoid per-request RDS connection overhead
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB:-orbispmdev}?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       NATS_URL: ${NATS_URL:-nats://nats:4222}
       ZITADEL_ISSUER: ${ZITADEL_ISSUER:?ZITADEL_ISSUER required}
@@ -349,6 +399,8 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
     depends_on:
       nats:
+        condition: service_healthy
+      pgbouncer:
         condition: service_healthy
       postgres:
         condition: service_healthy

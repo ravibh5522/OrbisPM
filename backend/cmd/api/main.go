@@ -124,9 +124,9 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to parse database url")
 	}
 	poolCfg.MaxConns = 50
-	poolCfg.MinConns = 5
-	poolCfg.MaxConnLifetime = 30 * time.Minute
-	poolCfg.MaxConnIdleTime = 5 * time.Minute
+	poolCfg.MinConns = 10
+	poolCfg.MaxConnLifetime = 60 * time.Minute
+	poolCfg.MaxConnIdleTime = 10 * time.Minute
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
