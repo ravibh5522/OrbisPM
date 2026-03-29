@@ -211,7 +211,11 @@ services:
       # Check if PgBouncer is listening on port 5432 via /proc/net/tcp.
       # Port 5432 = 0x1538. Pure kernel file — no binaries, no auth, no env vars needed.
       # Works on any Linux container regardless of image variant or architecture.
-      test: ["CMD-SHELL", "grep -q ':1538 ' /proc/net/tcp 2>/dev/null || grep -q ':1538 ' /proc/net/tcp6 2>/dev/null"]
+      test:
+        [
+          "CMD-SHELL",
+          "grep -q ':1538 ' /proc/net/tcp 2>/dev/null || grep -q ':1538 ' /proc/net/tcp6 2>/dev/null",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
