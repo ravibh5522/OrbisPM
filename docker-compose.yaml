@@ -208,17 +208,14 @@ services:
       # Ignore extra startup params sent by pgx / psycopg
       IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
     healthcheck:
-      # Query PgBouncer's own admin DB — no RDS connection required.
-      # $$ escapes Compose interpolation so the container shell expands $DB_PASSWORD at runtime.
-      test:
-        [
-          "CMD-SHELL",
-          "PGPASSWORD=$$DB_PASSWORD psql -h 127.0.0.1 -p 5432 -U $$DB_USER -d pgbouncer -c 'SHOW VERSION;' -q --no-psqlrc 2>/dev/null || exit 1",
-        ]
+      # Check if PgBouncer is listening on port 5432 via /proc/net/tcp.
+      # Port 5432 = 0x1538. Pure kernel file — no binaries, no auth, no env vars needed.
+      # Works on any Linux container regardless of image variant or architecture.
+      test: ["CMD-SHELL", "grep -q ':1538 ' /proc/net/tcp 2>/dev/null || grep -q ':1538 ' /proc/net/tcp6 2>/dev/null"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
 
   meilisearch:
     image: getmeili/meilisearch:v1.7
