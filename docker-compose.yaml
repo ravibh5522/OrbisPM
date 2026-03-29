@@ -210,7 +210,11 @@ services:
     healthcheck:
       # Query PgBouncer's own admin DB — no RDS connection required.
       # $$ escapes Compose interpolation so the container shell expands $DB_PASSWORD at runtime.
-      test: ["CMD-SHELL", "PGPASSWORD=$$DB_PASSWORD psql -h 127.0.0.1 -p 5432 -U $$DB_USER -d pgbouncer -c 'SHOW VERSION;' -q --no-psqlrc 2>/dev/null || exit 1"]
+      test:
+        [
+          "CMD-SHELL",
+          "PGPASSWORD=$$DB_PASSWORD psql -h 127.0.0.1 -p 5432 -U $$DB_USER -d pgbouncer -c 'SHOW VERSION;' -q --no-psqlrc 2>/dev/null || exit 1",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
