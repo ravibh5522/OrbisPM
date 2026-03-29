@@ -208,18 +208,18 @@ services:
       # Ignore extra startup params sent by pgx / psycopg
       IGNORE_STARTUP_PARAMETERS: extra_float_digits,options
     healthcheck:
-      # Check if PgBouncer is listening on port 5432 via /proc/net/tcp.
-      # Port 5432 = 0x1538. Pure kernel file — no binaries, no auth, no env vars needed.
-      # Works on any Linux container regardless of image variant or architecture.
+      # pg_isready only performs the protocol handshake — no password, no auth.
+      # Returns 0 as soon as PgBouncer accepts TCP connections on port 5432.
+      # Falls back to /proc/net/tcp port check if pg_isready is absent in the image.
       test:
         [
           "CMD-SHELL",
-          "grep -q ':1538 ' /proc/net/tcp 2>/dev/null || grep -q ':1538 ' /proc/net/tcp6 2>/dev/null",
+          "pg_isready -h 127.0.0.1 -p 5432 -q 2>/dev/null || grep -q ':1538 ' /proc/net/tcp 2>/dev/null || grep -q ':1538 ' /proc/net/tcp6 2>/dev/null",
         ]
       interval: 10s
       timeout: 5s
-      retries: 5
-      start_period: 20s
+      retries: 10
+      start_period: 30s
 
   meilisearch:
     image: getmeili/meilisearch:v1.7
@@ -285,7 +285,9 @@ services:
       meilisearch:
         condition: service_healthy
       pgbouncer:
-        condition: service_healthy
+        # service_started: pgx lazily retries connections — no need to block on healthcheck.
+        # Avoids deployment failure if PgBouncer healthcheck is slow on Coolify.
+        condition: service_started
       # optional — only present when running with --profile local
       postgres:
         condition: service_healthy
@@ -398,7 +400,8 @@ services:
       nats:
         condition: service_healthy
       pgbouncer:
-        condition: service_healthy
+        # service_started: pgx lazily retries connections — no need to block on healthcheck.
+        condition: service_started
       postgres:
         condition: service_healthy
         required: false
