@@ -1,37 +1,47 @@
 # ============================================================
-# Zitadel v4 — Caches configuration overlay (lowercase keys)
-# Mounted as --config /zitadel-caches.yaml
+# Zitadel v4 — Caches configuration overlay
+# Mounted via: --config /zitadel-caches.yaml
+# PascalCase keys matching cmd/defaults.yaml for reliable merge.
 # ============================================================
-# Diagnostic: if this file is loaded, log level will be DEBUG
-Log:
-  Level: debug
-caches:
-  connectors:
-    redis:
-      enabled: true
-      addr: "zitadel-redis:6379"
-      poolsize: 10
-      minidleconns: 0
-      maxidleconns: 5
-      dialtimeout: "5s"
-      readtimeout: "5s"
-      writetimeout: "5s"
-      pooltimeout: "5s"
-      circuitbreaker:
-        maxconsecutivefailures: 100
-        maxfailureratio: 0
-        timeout: "60s"
-        interval: "120s"
-        maxretryrequests: 5
-  instance:
-    connector: "redis"
-    maxage: 1h
-    lastuseage: 10m
-  milestones:
-    connector: "redis"
-    maxage: 1h
-    lastuseage: 10m
-  organization:
-    connector: "redis"
-    maxage: 1h
-    lastuseage: 10m
+Caches:
+  Connectors:
+    Redis:
+      Enabled: true
+      Addr: "zitadel-redis:6379"
+      MaxRetries: 5
+      MinRetryBackoff: "50ms"
+      MaxRetryBackoff: "1s"
+      DialTimeout: "10s"
+      ReadTimeout: "5s"
+      WriteTimeout: "5s"
+      PoolSize: 10
+      PoolTimeout: "10s"
+      MinIdleConns: 0
+      MaxIdleConns: 5
+      MaxActiveConns: 40
+      ConnMaxIdleTime: "30m"
+      ConnMaxLifetime: "-1"
+      # Disable circuit breaker auto-trip.
+      # go-redis 9.16 sends CLIENT MAINT_NOTIFICATIONS during handshake;
+      # Redis 7 rejects it with "ERR unknown subcommand" which the CB
+      # redis.Limiter.ReportResult counts as a failure, tripping the CB
+      # before any real cache operation occurs.
+      # Setting both to 0 makes readyToTrip() always return false.
+      CircuitBreaker:
+        MaxConsecutiveFailures: 0
+        MaxFailureRatio: 0
+        Timeout: "60s"
+        Interval: "60s"
+        MaxRetryRequests: 5
+  Instance:
+    Connector: "redis"
+    MaxAge: "1h"
+    LastUseAge: "10m"
+  Milestones:
+    Connector: "redis"
+    MaxAge: "1h"
+    LastUseAge: "10m"
+  Organization:
+    Connector: "redis"
+    MaxAge: "1h"
+    LastUseAge: "10m"
