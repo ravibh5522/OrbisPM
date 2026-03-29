@@ -188,6 +188,12 @@ services:
     expose:
       - "5432"
     environment:
+      # Neutralize any Coolify-injected global DATABASE_URL.
+      # edoburu/pgbouncer entrypoint calls parse_url($DATABASE_URL) if set, which
+      # extracts DB_NAME including the ?sslmode=require query string, producing an
+      # invalid pgbouncer.ini syntax error ("orbispmdev?sslmode=require = host=...").
+      # Setting it to empty string prevents parse_url from being called.
+      DATABASE_URL: ""
       DB_HOST: ${POSTGRES_HOST:-postgres}
       DB_PORT: ${POSTGRES_PORT:-5432}
       DB_USER: ${POSTGRES_USER:-postgres}
