@@ -1,0 +1,37 @@
+# ============================================================
+# Zitadel v4 — Caches configuration overlay (lowercase keys)
+# Mounted as --config /zitadel-caches.yaml
+# ============================================================
+# Diagnostic: if this file is loaded, log level will be DEBUG
+Log:
+  Level: debug
+caches:
+  connectors:
+    redis:
+      enabled: true
+      addr: "zitadel-redis:6379"
+      poolsize: 10
+      minidleconns: 0
+      maxidleconns: 5
+      dialtimeout: "5s"
+      readtimeout: "5s"
+      writetimeout: "5s"
+      pooltimeout: "5s"
+      circuitbreaker:
+        maxconsecutivefailures: 100
+        maxfailureratio: 0
+        timeout: "60s"
+        interval: "120s"
+        maxretryrequests: 5
+  instance:
+    connector: "redis"
+    maxage: 1h
+    lastuseage: 10m
+  milestones:
+    connector: "redis"
+    maxage: 1h
+    lastuseage: 10m
+  organization:
+    connector: "redis"
+    maxage: 1h
+    lastuseage: 10m

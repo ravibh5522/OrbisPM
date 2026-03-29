@@ -68,6 +68,13 @@ ADMIN_PASS = os.environ.get("ZITADEL_ADMIN_PASSWORD", "Admin123!")
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 REDIRECT_URI = f"{FRONTEND_URL}/auth/callback"
 
+# When ZITADEL_URL points to localhost but external domain differs,
+# inject the Host header so Zitadel recognises the correct instance.
+_parsed_url = urllib.parse.urlparse(ZITADEL_URL)
+_HOST_OVERRIDE = None
+if _parsed_url.hostname in ("localhost", "127.0.0.1") and ZITADEL_DOMAIN not in ("localhost", "127.0.0.1"):
+    _HOST_OVERRIDE = ZITADEL_DOMAIN
+
 # Use a real browser User-Agent (Zitadel fingerprints UA and rejects mismatches)
 BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 # Full browser headers — Zitadel fingerprints the entire header set
@@ -76,6 +83,7 @@ BROWSER_HEADERS = [
     ("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"),
     ("Accept-Language", "en-US,en;q=0.9"),
     ("Accept-Encoding", "identity"),
+] + ([("Host", _HOST_OVERRIDE)] if _HOST_OVERRIDE else []) + [
     ("Connection", "keep-alive"),
     ("Upgrade-Insecure-Requests", "1"),
 ]
@@ -99,19 +107,39 @@ class RewriteHTTPSRedirectHandler(urllib.request.HTTPRedirectHandler):
             local_http_prefix = f"http://{parsed.netloc}"
             https_prefix = f"https://{parsed.netloc}"
             newurl = newurl.replace(https_prefix, local_http_prefix)
+            # Also rewrite external domain redirects to local URL
+            if _HOST_OVERRIDE:
+                for ext_prefix in [f"https://{_HOST_OVERRIDE}:443", f"https://{_HOST_OVERRIDE}"]:
+                    newurl = newurl.replace(ext_prefix, local_http_prefix)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
+class HostOverrideHandler(urllib.request.BaseHandler):
+    """Overrides the Host header on every outgoing request when _HOST_OVERRIDE is set."""
+    handler_order = 999  # Run late, after other handlers set headers
+    def http_request(self, req):
+        if _HOST_OVERRIDE:
+            req.remove_header("Host")
+            req.add_unredirected_header("Host", _HOST_OVERRIDE)
+        return req
+    https_request = http_request
+
 # opener: follows redirects, rewriting external https → local http
-opener = urllib.request.build_opener(
+_handlers = [
     urllib.request.HTTPCookieProcessor(cookiejar),
     RewriteHTTPSRedirectHandler(),
-)
+]
+if _HOST_OVERRIDE:
+    _handlers.append(HostOverrideHandler())
+opener = urllib.request.build_opener(*_handlers)
 opener.addheaders = BROWSER_HEADERS
 
-no_redirect_opener = urllib.request.build_opener(
+_no_redirect_handlers = [
     urllib.request.HTTPCookieProcessor(cookiejar),
     NoRedirectHandler(),
-)
+]
+if _HOST_OVERRIDE:
+    _no_redirect_handlers.append(HostOverrideHandler())
+no_redirect_opener = urllib.request.build_opener(*_no_redirect_handlers)
 no_redirect_opener.addheaders = BROWSER_HEADERS
 
 def api_call(method, path, data=None, token=None, content_type="application/json"):
@@ -126,6 +154,8 @@ def api_call(method, path, data=None, token=None, content_type="application/json
         body = None
     req = urllib.request.Request(url, data=body, method=method)
     req.add_header("Content-Type", content_type)
+    if _HOST_OVERRIDE:
+        req.add_header("Host", _HOST_OVERRIDE)
     if token:
         req.add_header("Authorization", f"Bearer {token}")
     try:
@@ -208,6 +238,8 @@ def _post_form(path_or_url, data):
     url = path_or_url if path_or_url.startswith("http") else f"{ZITADEL_URL}{path_or_url}"
     req = urllib.request.Request(url, data=urllib.parse.urlencode(data).encode(), method="POST")
     req.add_header("Content-Type", "application/x-www-form-urlencoded")
+    if _HOST_OVERRIDE:
+        req.add_header("Host", _HOST_OVERRIDE)
     try:
         with no_redirect_opener.open(req) as resp:
             return resp.getcode(), resp.read().decode("utf-8", errors="replace"), resp.headers.get("Location", "")
@@ -221,6 +253,9 @@ def _follow_to_page(url):
     if not ZITADEL_URL.startswith("https://"):
         parsed = urllib.parse.urlparse(ZITADEL_URL)
         url = url.replace(f"https://{parsed.netloc}", f"http://{parsed.netloc}")
+        if _HOST_OVERRIDE:
+            for ext_prefix in [f"https://{_HOST_OVERRIDE}:443", f"https://{_HOST_OVERRIDE}"]:
+                url = url.replace(ext_prefix, f"http://{parsed.netloc}")
     if url.startswith("/"):
         url = f"{ZITADEL_URL}{url}"
     try:
@@ -373,37 +408,74 @@ def get_admin_token_via_oidc():
             code = re.search(r'code=([^&]+)', loc).group(1)
             print(f"  Got code directly from password redirect")
         else:
-            # Follow the redirect to the next page (usually 2FA or callback)
-            next_body, next_url = _follow_to_page(loc)
-            code_m = re.search(r'code=([^&]+)', next_url)
-            if code_m:
-                code = code_m.group(1)
-                print(f"  Got code from redirect chain after password")
-            elif "mfa" in next_url.lower() or "2-factor" in next_body.lower():
-                # Landed on 2FA page — submit skip
-                print(f"  On 2FA page, submitting skip...")
-                new_csrf = extract_csrf(next_body)
-                if new_csrf:
-                    csrf = new_csrf
-                sc2, body2, loc2 = _post_form("/ui/login/mfa/prompt", {
-                    "authRequestID": auth_request_id,
-                    "gorilla.csrf.Token": csrf,
-                    "skip": "true",
-                })
-                print(f"  MFA skip: {sc2} loc={loc2[:100]}")
-                code = None
-                if "code=" in loc2:
-                    code = re.search(r'code=([^&]+)', loc2).group(1)
-                elif sc2 in (302, 303):
-                    final_body, final_url = _follow_to_page(loc2)
-                    code_m = re.search(r'code=([^&]+)', final_url)
+            # Follow the redirect to the authorize callback, but use no_redirect
+            # to catch the final redirect that contains the auth code
+            callback_url = loc
+            if not ZITADEL_URL.startswith("https://"):
+                parsed = urllib.parse.urlparse(ZITADEL_URL)
+                if _HOST_OVERRIDE:
+                    for ext_prefix in [f"https://{_HOST_OVERRIDE}:443", f"https://{_HOST_OVERRIDE}"]:
+                        callback_url = callback_url.replace(ext_prefix, f"http://{parsed.netloc}")
+                callback_url = callback_url.replace(f"https://{parsed.netloc}", f"http://{parsed.netloc}")
+            if callback_url.startswith("/"):
+                callback_url = f"{ZITADEL_URL}{callback_url}"
+            # Follow redirect chain manually until we find the code
+            code = None
+            for _ in range(10):
+                try:
+                    cb_req = urllib.request.Request(callback_url)
+                    if _HOST_OVERRIDE:
+                        cb_req.add_unredirected_header("Host", _HOST_OVERRIDE)
+                    with no_redirect_opener.open(cb_req) as resp:
+                        cb_body = resp.read().decode("utf-8", errors="replace")
+                        code_m = re.search(r'code=([^&\s"]+)', cb_body)
+                        if code_m:
+                            code = code_m.group(1)
+                            break
+                        break
+                except urllib.error.HTTPError as e:
+                    redirect_loc = e.headers.get("Location", "")
+                    code_m = re.search(r'code=([^&\s"]+)', redirect_loc)
                     if code_m:
                         code = code_m.group(1)
-                if not code:
-                    print(f"  Could not get code after 2FA skip: loc2={loc2[:100]}, url={next_url[:100]}")
-                    return None
+                        break
+                    if "mfa" in redirect_loc.lower() or "2-factor" in redirect_loc.lower():
+                        # Follow to MFA page
+                        next_body, next_url = _follow_to_page(redirect_loc)
+                        if "mfa" in next_url.lower() or "2-factor" in next_body.lower():
+                            print(f"  On 2FA page, submitting skip...")
+                            new_csrf = extract_csrf(next_body)
+                            if new_csrf:
+                                csrf = new_csrf
+                            sc2, body2, loc2 = _post_form("/ui/login/mfa/prompt", {
+                                "authRequestID": auth_request_id,
+                                "gorilla.csrf.Token": csrf,
+                                "skip": "true",
+                            })
+                            print(f"  MFA skip: {sc2} loc={loc2[:100]}")
+                            if "code=" in loc2:
+                                code = re.search(r'code=([^&]+)', loc2).group(1)
+                            elif sc2 in (302, 303):
+                                callback_url = loc2
+                                continue
+                        break
+                    if redirect_loc and e.code in (302, 303, 307):
+                        callback_url = redirect_loc
+                        if not ZITADEL_URL.startswith("https://"):
+                            parsed = urllib.parse.urlparse(ZITADEL_URL)
+                            if _HOST_OVERRIDE:
+                                for ext_prefix in [f"https://{_HOST_OVERRIDE}:443", f"https://{_HOST_OVERRIDE}"]:
+                                    callback_url = callback_url.replace(ext_prefix, f"http://{parsed.netloc}")
+                            callback_url = callback_url.replace(f"https://{parsed.netloc}", f"http://{parsed.netloc}")
+                        if callback_url.startswith("/"):
+                            callback_url = f"{ZITADEL_URL}{callback_url}"
+                        continue
+                    break
+
+            if code:
+                print(f"  Got code from redirect chain after password")
             else:
-                print(f"  Unexpected page after password redirect: {next_url[:100]}")
+                print(f"  Could not extract code from redirect chain: {loc[:100]}")
                 return None
     else:
         body_err = body or loc

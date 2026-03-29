@@ -9,7 +9,15 @@ services:
   zitadel-redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: redis-server --save "" --appendonly no --maxmemory 128mb --maxmemory-policy allkeys-lru
+    # Keyspace notifications (Ex) required for Zitadel's cache invalidation subscriptions.
+    # volatile-lru evicts only TTL-bearing keys (all Zitadel cache keys have TTL).
+    command: >
+      redis-server
+      --notify-keyspace-events Ex
+      --save ""
+      --appendonly no
+      --maxmemory 256mb
+      --maxmemory-policy volatile-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -20,7 +28,7 @@ services:
     image: ghcr.io/zitadel/zitadel:${ZITADEL_VERSION:-v4.12.1}
     restart: unless-stopped
     user: "0"
-    command: start --masterkey "${ZITADEL_MASTERKEY}"
+    command: start --masterkey "${ZITADEL_MASTERKEY}" --config /zitadel-caches.yaml
     depends_on:
       zitadel-redis:
         condition: service_healthy
@@ -42,9 +50,9 @@ services:
       ZITADEL_DATABASE_POSTGRES_USER_USERNAME: ${POSTGRES_USER}
       ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${POSTGRES_PASSWORD}
       ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
-      ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 40
-      ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 20
-      ZITADEL_DATABASE_POSTGRES_CONNMAXLIFETIME: "1h"
+      ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 50
+      ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 25
+      ZITADEL_DATABASE_POSTGRES_CONNMAXLIFETIME: "30m"
       ZITADEL_DATABASE_POSTGRES_CONNMAXIDLETIME: "5m"
       ZITADEL_DATABASE_POSTGRES_DIALER_TIMEOUT: "60s"
 
@@ -61,16 +69,32 @@ services:
       # Use built-in Login v1 (no separate login container needed)
       ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: false
 
-      # Redis caching disabled — plain Redis 7 lacks maint_notifications,
-      # causing circuit breaker to open and overload remote Postgres.
-      ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: false
-      # ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "zitadel-redis:6379"
-      # ZITADEL_CACHES_INSTANCE_CONNECTOR: redis
-      # ZITADEL_CACHES_MILESTONES_CONNECTOR: redis
-      # ZITADEL_CACHES_ORGANIZATION_CONNECTOR: redis
+      # Redis caching — keyspace notifications (Ex) enabled on the Redis service above.
+      # Pool tuning: MinIdleConns=0 avoids eager startup (prevents pool-timeout CB trips).
+      # PoolTimeout/DialTimeout overridden — Zitadel's defaults (100ms pool, 1s dial) are
+      # too aggressive for Docker networking; they cause spurious circuit-breaker opens.
+      # Circuit breaker tuned: higher threshold, faster recovery, 60s reset interval.
+      # NOTE: Instance/Milestones/Organization connector assignment is done via
+      # zitadel-caches.yaml (YAML config file) because Viper cannot allocate
+      # nil pointer-to-struct fields (like *cache.Config) from env vars alone.
 
       ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: false
-      ZITADEL_LOG_LEVEL: ${ZITADEL_LOG_LEVEL:-info}
+      # DIAGNOSTIC: ZITADEL_LOG_LEVEL removed — if zitadel-caches.yaml (Log.Level: debug) is loaded, we see DEBUG
+      # ZITADEL_LOG_LEVEL: info
+      # Redis caching via env vars (higher Viper priority than YAML config file)
+      # Redis connector settings
+      ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: "true"
+      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "zitadel-redis:6379"
+      ZITADEL_CACHES_CONNECTORS_REDIS_READTIMEOUT: "5s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_WRITETIMEOUT: "5s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_POOLTIMEOUT: "5s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_DIALTIMEOUT: "5s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_MINIDLECONNS: "0"
+      ZITADEL_CACHES_CONNECTORS_REDIS_POOLSIZE: "10"
+      # Cache connector assignments
+      ZITADEL_CACHES_INSTANCE_CONNECTOR: "redis"
+      ZITADEL_CACHES_MILESTONES_CONNECTOR: "redis"
+      ZITADEL_CACHES_ORGANIZATION_CONNECTOR: "redis"
 
       # Increase eventstore push timeout for remote DB (default 15s)
       ZITADEL_EVENTSTORE_PUSHTIMEOUT: "600s"
@@ -80,8 +104,13 @@ services:
 
       # Projection timeouts — increase for high-latency remote DB
       ZITADEL_PROJECTIONS_HANDLETIMEOUT: "300s"
-      ZITADEL_PROJECTIONS_TRANSACTIONDURATION: "300s"
+      ZITADEL_PROJECTIONS_TRANSACTIONDURATION: "120s"
       ZITADEL_PROJECTIONS_BULKLIMIT: 50
+      ZITADEL_PROJECTIONS_MAXFAILURECOUNT: 3
+      ZITADEL_PROJECTIONS_RETRYFAILEDDURATION: "30m"
+      ZITADEL_PROJECTIONS_CONCURRENTINSTANCES: 10
+    volumes:
+      - ./zitadel-caches.yaml:/zitadel-caches.yaml:ro
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]
       interval: 10s
