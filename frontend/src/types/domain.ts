@@ -305,6 +305,34 @@ export interface NotificationPreference {
   enabled: boolean;
 }
 
+export interface StickyNoteCheckpoint {
+  id: string;
+  text: string;
+  checked: boolean;
+}
+
+export interface StickyNote {
+  id: string;
+  user_id: string;
+  title: string;
+  description: string;
+  color: string;
+  priority: string;
+  start_date?: string | null;
+  due_date?: string | null;
+  completed: boolean;
+  checkpoints: StickyNoteCheckpoint[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StickyNoteStats {
+  total: number;
+  completed: number;
+  overdue: number;
+  upcoming: number;
+}
+
 export interface ActivityLog {
   id: string;
   org_id: string;

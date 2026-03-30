@@ -35,6 +35,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { NotificationBell } from "@/components/notification-bell";
+import { StickyNotesPanel } from "@/components/sticky-notes/sticky-notes-panel";
 
 interface NavItem {
   href: string;
@@ -522,7 +523,8 @@ function TopBar() {
 
       <div className="flex-1" />
 
-      {/* Notifications */}
+      {/* Sticky Notes & Notifications */}
+      <StickyNotesPanel />
       <NotificationBell />
     </header>
   );

@@ -242,6 +242,7 @@ func main() {
 	commentRepo := repository.NewCommentRepo(pool)
 	activityRepo := repository.NewActivityRepo(pool)
 	notifRepo := repository.NewNotificationRepo(pool)
+	stickyNoteRepo := repository.NewStickyNoteRepo(pool)
 
 	// --- Repositories (new) ---
 	attachmentRepo := repository.NewAttachmentRepo(pool)
@@ -281,6 +282,7 @@ func main() {
 	ruleSvc := service.NewRuleService(ruleRepo, txm)
 	activitySvc := service.NewActivityService(activityRepo, txm)
 	notifSvc := service.NewNotificationService(notifRepo, txm)
+	stickyNoteSvc := service.NewStickyNoteService(stickyNoteRepo, txm)
 
 	// --- Services (new) ---
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, storageClient, txm)
@@ -338,6 +340,7 @@ func main() {
 	ruleHandler := handler.NewRuleHandler(ruleSvc)
 	activityHandler := handler.NewActivityHandler(activitySvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
+	stickyNoteHandler := handler.NewStickyNoteHandler(stickyNoteSvc)
 	healthHandler := handler.NewHealthHandler(pool, rdb)
 
 	// Inject permission resolver into handlers
@@ -651,6 +654,9 @@ func main() {
 
 		// Notifications (user-scoped, no org context needed)
 		r.Mount("/notifications", notifHandler.Routes())
+
+		// Sticky Notes (user-scoped, no org context needed)
+		r.Mount("/sticky-notes", stickyNoteHandler.Routes())
 	})
 
 	// --- Background Worker (Start) ---

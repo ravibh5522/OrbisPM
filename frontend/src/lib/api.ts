@@ -283,6 +283,8 @@ import type {
   RiskScore,
   Role,
   ScopePermissionsResponse,
+  StickyNote,
+  StickyNoteStats,
   Task,
   TaskChangeRequest,
   TaskDependency,
@@ -960,6 +962,21 @@ export const api = {
       ),
     upsert: (orgId: string, data: Partial<NotificationPreference>) =>
       put<void>(`${V1}/orgs/${orgId}/notification-preferences`, data),
+  },
+
+  // Sticky Notes (user-scoped, no org prefix)
+  stickyNotes: {
+    list: (params?: string) =>
+      get<ListResponse<StickyNote>>(
+        `${V1}/sticky-notes${params ? `?${params}` : ""}`,
+      ),
+    get: (id: string) => get<StickyNote>(`${V1}/sticky-notes/${id}`),
+    create: (data: Partial<StickyNote>) =>
+      post<StickyNote>(`${V1}/sticky-notes`, data),
+    update: (id: string, data: Partial<StickyNote>) =>
+      put<StickyNote>(`${V1}/sticky-notes/${id}`, data),
+    delete: (id: string) => del(`${V1}/sticky-notes/${id}`),
+    stats: () => get<StickyNoteStats>(`${V1}/sticky-notes/stats`),
   },
 
   // Activity logs

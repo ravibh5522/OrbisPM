@@ -194,6 +194,17 @@ type NotificationRepository interface {
 	CountUnread(ctx context.Context, userID uuid.UUID) (int, error)
 }
 
+// --- Sticky Note ---
+
+type StickyNoteRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, n *domain.StickyNote) (*domain.StickyNote, error)
+	GetByID(ctx context.Context, id, userID uuid.UUID) (*domain.StickyNote, error)
+	Update(ctx context.Context, tx pgx.Tx, n *domain.StickyNote) (*domain.StickyNote, error)
+	Delete(ctx context.Context, tx pgx.Tx, id, userID uuid.UUID) error
+	ListByUser(ctx context.Context, userID uuid.UUID, filter ListFilter) ([]*domain.StickyNote, int, error)
+	Stats(ctx context.Context, userID uuid.UUID) (*domain.StickyNoteStats, error)
+}
+
 // --- Attachment ---
 
 type AttachmentRepository interface {
