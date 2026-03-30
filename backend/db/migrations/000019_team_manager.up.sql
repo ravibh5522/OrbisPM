@@ -26,5 +26,6 @@ CREATE INDEX IF NOT EXISTS idx_team_manager_history_team ON team_manager_history
 
 -- RLS for team_manager_history
 ALTER TABLE team_manager_history ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS team_manager_history_org_isolation ON team_manager_history;
 CREATE POLICY team_manager_history_org_isolation ON team_manager_history
     USING (org_id = current_setting('app.current_org_id')::uuid);

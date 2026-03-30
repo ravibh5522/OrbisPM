@@ -5,7 +5,7 @@
 -- ============================================================
 -- 1. ANNOUNCEMENTS TABLE
 -- ============================================================
-CREATE TABLE announcements (
+CREATE TABLE IF NOT EXISTS announcements (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id       UUID        NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
     project_id   UUID        REFERENCES projects(id) ON DELETE CASCADE,
@@ -23,11 +23,11 @@ CREATE TABLE announcements (
 );
 
 -- Index for org-wide announcement feeds (most-recent-first)
-CREATE INDEX idx_announcements_org_created
+CREATE INDEX IF NOT EXISTS idx_announcements_org_created
     ON announcements(org_id, created_at DESC);
 
 -- Index for project-scoped feeds (partial — only rows that have a project)
-CREATE INDEX idx_announcements_project_created
+CREATE INDEX IF NOT EXISTS idx_announcements_project_created
     ON announcements(project_id, created_at DESC)
     WHERE project_id IS NOT NULL;
 
@@ -36,7 +36,7 @@ CREATE INDEX idx_announcements_project_created
 -- Tracks which users have read each announcement.
 -- No org_id column — RLS is enforced via join to announcements.
 -- ============================================================
-CREATE TABLE announcement_reads (
+CREATE TABLE IF NOT EXISTS announcement_reads (
     announcement_id UUID        NOT NULL REFERENCES announcements(id) ON DELETE CASCADE,
     user_id         UUID        NOT NULL,
     read_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -49,12 +49,14 @@ CREATE TABLE announcement_reads (
 
 -- announcements: standard tenant isolation on org_id
 ALTER TABLE announcements ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_announcements ON announcements;
 CREATE POLICY tenant_isolation_announcements ON announcements FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
 -- announcement_reads: join through announcements to enforce org boundary
 ALTER TABLE announcement_reads ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_announcement_reads ON announcement_reads;
 CREATE POLICY tenant_isolation_announcement_reads ON announcement_reads FOR ALL
     USING (
         announcement_id IN (

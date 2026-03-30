@@ -4,8 +4,10 @@
 -- The existing tenant_isolation_notifications policy still protects INSERT
 -- (requires app.current_org_id, which the worker now sets via TxManager).
 
+DROP POLICY IF EXISTS user_read_own_notifications ON notifications;
 CREATE POLICY user_read_own_notifications ON notifications
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS user_update_own_notifications ON notifications;
 CREATE POLICY user_update_own_notifications ON notifications
   FOR UPDATE USING (true);

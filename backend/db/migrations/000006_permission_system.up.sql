@@ -5,7 +5,7 @@
 -- ============================================================
 -- 1. PERMISSIONS TABLE — Canonical permission registry
 -- ============================================================
-CREATE TABLE permissions (
+CREATE TABLE IF NOT EXISTS permissions (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     resource    TEXT NOT NULL,
     action      TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE permissions (
 -- ============================================================
 -- 2. ROLES TABLE — DB-driven role definitions
 -- ============================================================
-CREATE TABLE roles (
+CREATE TABLE IF NOT EXISTS roles (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id      UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
     scope       TEXT NOT NULL CHECK (scope IN ('org', 'team', 'project')),
@@ -28,34 +28,34 @@ CREATE TABLE roles (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE(org_id, scope, slug)
 );
-CREATE INDEX idx_roles_org ON roles(org_id);
-CREATE INDEX idx_roles_org_scope ON roles(org_id, scope);
+CREATE INDEX IF NOT EXISTS idx_roles_org ON roles(org_id);
+CREATE INDEX IF NOT EXISTS idx_roles_org_scope ON roles(org_id, scope);
 
 -- ============================================================
 -- 3. ROLE_PERMISSIONS TABLE — Many-to-many
 -- ============================================================
-CREATE TABLE role_permissions (
+CREATE TABLE IF NOT EXISTS role_permissions (
     role_id       UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY(role_id, permission_id)
 );
-CREATE INDEX idx_role_permissions_perm ON role_permissions(permission_id);
+CREATE INDEX IF NOT EXISTS idx_role_permissions_perm ON role_permissions(permission_id);
 
 -- ============================================================
 -- 4. PROJECT_TEAMS TABLE — Multi-team projects
 -- ============================================================
-CREATE TABLE project_teams (
+CREATE TABLE IF NOT EXISTS project_teams (
     project_id  UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
     team_id     UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
     added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (project_id, team_id)
 );
-CREATE INDEX idx_project_teams_team ON project_teams(team_id);
+CREATE INDEX IF NOT EXISTS idx_project_teams_team ON project_teams(team_id);
 
 -- ============================================================
 -- 5. TASK_CHANGE_REQUESTS TABLE — Review pipeline
 -- ============================================================
-CREATE TABLE task_change_requests (
+CREATE TABLE IF NOT EXISTS task_change_requests (
     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     org_id       UUID NOT NULL REFERENCES orgs(id) ON DELETE CASCADE,
     task_id      UUID NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -68,19 +68,21 @@ CREATE TABLE task_change_requests (
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
     reviewed_at  TIMESTAMPTZ
 );
-CREATE INDEX idx_change_requests_task ON task_change_requests(task_id, status);
-CREATE INDEX idx_change_requests_org ON task_change_requests(org_id, status);
-CREATE INDEX idx_change_requests_reviewer ON task_change_requests(reviewer_id) WHERE status = 'pending';
+CREATE INDEX IF NOT EXISTS idx_change_requests_task ON task_change_requests(task_id, status);
+CREATE INDEX IF NOT EXISTS idx_change_requests_org ON task_change_requests(org_id, status);
+CREATE INDEX IF NOT EXISTS idx_change_requests_reviewer ON task_change_requests(reviewer_id) WHERE status = 'pending';
 
 -- ============================================================
 -- 6. RLS POLICIES for new tables
 -- ============================================================
 ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_roles ON roles;
 CREATE POLICY tenant_isolation_roles ON roles FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
 ALTER TABLE task_change_requests ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_change_requests ON task_change_requests;
 CREATE POLICY tenant_isolation_change_requests ON task_change_requests FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
@@ -88,10 +90,12 @@ CREATE POLICY tenant_isolation_change_requests ON task_change_requests FOR ALL
 -- role_permissions and project_teams don't have org_id directly,
 -- they are accessed via JOINs through RLS-protected parent tables.
 ALTER TABLE project_teams ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_project_teams ON project_teams;
 CREATE POLICY tenant_isolation_project_teams ON project_teams FOR ALL
     USING (project_id IN (SELECT id FROM projects WHERE org_id = current_setting('app.current_org_id', true)::uuid));
 
 ALTER TABLE role_permissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation_role_permissions ON role_permissions;
 CREATE POLICY tenant_isolation_role_permissions ON role_permissions FOR ALL
     USING (role_id IN (SELECT id FROM roles WHERE org_id = current_setting('app.current_org_id', true)::uuid));
 
@@ -390,6 +394,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_seed_org_roles ON orgs;
 CREATE TRIGGER trg_seed_org_roles
     AFTER INSERT ON orgs
     FOR EACH ROW

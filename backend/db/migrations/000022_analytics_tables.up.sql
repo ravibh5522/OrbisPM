@@ -18,18 +18,19 @@ CREATE TABLE IF NOT EXISTS analytics_events (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_analytics_events_org_type_time
+CREATE INDEX IF NOT EXISTS idx_analytics_events_org_type_time
     ON analytics_events (org_id, event_type, created_at DESC);
-CREATE INDEX idx_analytics_events_entity
+CREATE INDEX IF NOT EXISTS idx_analytics_events_entity
     ON analytics_events (org_id, entity_type, entity_id, created_at DESC);
-CREATE INDEX idx_analytics_events_project
+CREATE INDEX IF NOT EXISTS idx_analytics_events_project
     ON analytics_events (org_id, project_id, created_at DESC) WHERE project_id IS NOT NULL;
-CREATE INDEX idx_analytics_events_actor
+CREATE INDEX IF NOT EXISTS idx_analytics_events_actor
     ON analytics_events (org_id, actor_id, created_at DESC);
-CREATE INDEX idx_analytics_events_data
+CREATE INDEX IF NOT EXISTS idx_analytics_events_data
     ON analytics_events USING GIN (data);
 
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS analytics_events_isolation ON analytics_events;
 CREATE POLICY analytics_events_isolation ON analytics_events
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -47,14 +48,15 @@ CREATE TABLE IF NOT EXISTS task_state_transitions (
     transitioned_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_task_transitions_task
+CREATE INDEX IF NOT EXISTS idx_task_transitions_task
     ON task_state_transitions (org_id, task_id, transitioned_at);
-CREATE INDEX idx_task_transitions_project
+CREATE INDEX IF NOT EXISTS idx_task_transitions_project
     ON task_state_transitions (org_id, project_id, transitioned_at DESC);
-CREATE INDEX idx_task_transitions_status
+CREATE INDEX IF NOT EXISTS idx_task_transitions_status
     ON task_state_transitions (org_id, to_status, transitioned_at DESC);
 
 ALTER TABLE task_state_transitions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS task_state_transitions_isolation ON task_state_transitions;
 CREATE POLICY task_state_transitions_isolation ON task_state_transitions
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -75,10 +77,11 @@ CREATE TABLE IF NOT EXISTS task_status_snapshots (
     UNIQUE (org_id, project_id, snapshot_date)
 );
 
-CREATE INDEX idx_task_snapshots_lookup
+CREATE INDEX IF NOT EXISTS idx_task_snapshots_lookup
     ON task_status_snapshots (org_id, project_id, snapshot_date DESC);
 
 ALTER TABLE task_status_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS task_status_snapshots_isolation ON task_status_snapshots;
 CREATE POLICY task_status_snapshots_isolation ON task_status_snapshots
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -96,10 +99,11 @@ CREATE TABLE IF NOT EXISTS daily_metrics (
     UNIQUE (org_id, metric_date, scope_type, scope_id)
 );
 
-CREATE INDEX idx_daily_metrics_lookup
+CREATE INDEX IF NOT EXISTS idx_daily_metrics_lookup
     ON daily_metrics (org_id, scope_type, scope_id, metric_date DESC);
 
 ALTER TABLE daily_metrics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS daily_metrics_isolation ON daily_metrics;
 CREATE POLICY daily_metrics_isolation ON daily_metrics
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -117,10 +121,11 @@ CREATE TABLE IF NOT EXISTS weekly_metrics (
     UNIQUE (org_id, metric_date, scope_type, scope_id)
 );
 
-CREATE INDEX idx_weekly_metrics_lookup
+CREATE INDEX IF NOT EXISTS idx_weekly_metrics_lookup
     ON weekly_metrics (org_id, scope_type, scope_id, metric_date DESC);
 
 ALTER TABLE weekly_metrics ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS weekly_metrics_isolation ON weekly_metrics;
 CREATE POLICY weekly_metrics_isolation ON weekly_metrics
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -139,10 +144,11 @@ CREATE TABLE IF NOT EXISTS risk_scores (
     UNIQUE (org_id, task_id)
 );
 
-CREATE INDEX idx_risk_scores_project
+CREATE INDEX IF NOT EXISTS idx_risk_scores_project
     ON risk_scores (org_id, risk_level);
 
 ALTER TABLE risk_scores ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS risk_scores_isolation ON risk_scores;
 CREATE POLICY risk_scores_isolation ON risk_scores
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -164,11 +170,12 @@ CREATE TABLE IF NOT EXISTS metric_alerts (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_metric_alerts_active
+CREATE INDEX IF NOT EXISTS idx_metric_alerts_active
     ON metric_alerts (org_id, severity, created_at DESC)
     WHERE acknowledged_at IS NULL;
 
 ALTER TABLE metric_alerts ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS metric_alerts_isolation ON metric_alerts;
 CREATE POLICY metric_alerts_isolation ON metric_alerts
     USING (org_id = current_setting('app.current_org_id', true)::UUID);
 
@@ -190,9 +197,10 @@ CREATE TABLE IF NOT EXISTS performance_reports (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_perf_reports_lookup
+CREATE INDEX IF NOT EXISTS idx_perf_reports_lookup
     ON performance_reports (org_id, report_type, created_at DESC);
 
 ALTER TABLE performance_reports ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS performance_reports_isolation ON performance_reports;
 CREATE POLICY performance_reports_isolation ON performance_reports
     USING (org_id = current_setting('app.current_org_id', true)::UUID);

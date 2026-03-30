@@ -8,5 +8,5 @@ CREATE TABLE IF NOT EXISTS public.contact_submissions (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX idx_contact_submissions_created_at ON public.contact_submissions (created_at DESC);
-CREATE INDEX idx_contact_submissions_email ON public.contact_submissions (email);
+CREATE INDEX IF NOT EXISTS idx_contact_submissions_created_at ON public.contact_submissions (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_contact_submissions_email ON public.contact_submissions (email);
