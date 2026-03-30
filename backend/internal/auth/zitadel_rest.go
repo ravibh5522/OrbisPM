@@ -34,6 +34,11 @@ func isGRPCTransportError(err error) bool {
 		"HTTP Version Not Supported",
 		"TLS handshake",
 		"connection reset",
+		// Cloudflare/proxy blocks gRPC (HTTP/2 upgrade rejected)
+		"server closed the stream without sending trailers",
+		"code=502",
+		"code=503",
+		"code=504",
 	}
 	for _, p := range transportPatterns {
 		if strings.Contains(errMsg, p) {

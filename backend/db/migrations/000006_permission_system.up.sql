@@ -166,7 +166,8 @@ INSERT INTO permissions (resource, action, scope, description) VALUES
     -- Attachments
     ('attachments', 'create', 'org', 'Upload attachments'),
     ('attachments', 'read', 'org', 'View attachments'),
-    ('attachments', 'delete', 'org', 'Delete attachments');
+    ('attachments', 'delete', 'org', 'Delete attachments')
+ON CONFLICT (resource, action, scope) DO NOTHING;
 
 -- Team-scope permissions
 INSERT INTO permissions (resource, action, scope, description) VALUES
@@ -182,7 +183,8 @@ INSERT INTO permissions (resource, action, scope, description) VALUES
     ('tasks', 'review', 'team', 'Review change requests in team'),
     ('tasks', 'direct_update', 'team', 'Bypass review in team projects'),
     ('comments', 'create', 'team', 'Create comments in team'),
-    ('comments', 'read', 'team', 'View comments in team');
+    ('comments', 'read', 'team', 'View comments in team')
+ON CONFLICT (resource, action, scope) DO NOTHING;
 
 -- Project-scope permissions
 INSERT INTO permissions (resource, action, scope, description) VALUES
@@ -206,7 +208,8 @@ INSERT INTO permissions (resource, action, scope, description) VALUES
     ('checklists', 'delete', 'project', 'Delete checklist items'),
     ('attachments', 'create', 'project', 'Upload attachments'),
     ('attachments', 'read', 'project', 'View attachments'),
-    ('attachments', 'delete', 'project', 'Delete attachments');
+    ('attachments', 'delete', 'project', 'Delete attachments')
+ON CONFLICT (resource, action, scope) DO NOTHING;
 
 -- ============================================================
 -- 8. FUNCTION: Seed system roles for an org

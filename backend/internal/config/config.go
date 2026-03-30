@@ -27,6 +27,7 @@ type Config struct {
 	ZitadelInternalURL  string // e.g. "http://zitadel:8080"
 	ZitadelServiceToken string // PAT for management API
 	ZitadelClientID     string // OIDC application client ID
+	ZitadelGRPCDisabled bool   // force REST-only mode (set true when gRPC is blocked, e.g. behind Cloudflare)
 	JWTSecret           string // secret for signing backend-issued JWTs
 
 	// MinIO / S3
@@ -84,6 +85,7 @@ func Load() (*Config, error) {
 		ZitadelInternalURL:  getEnv("ZITADEL_INTERNAL_URL", "http://zitadel:8080"),
 		ZitadelServiceToken: getEnv("ZITADEL_SERVICE_TOKEN", ""),
 		ZitadelClientID:     getEnv("ZITADEL_CLIENT_ID", ""),
+		ZitadelGRPCDisabled: getEnvBool("ZITADEL_GRPC_DISABLED", false),
 		JWTSecret:           getEnv("JWT_SECRET", "orbispm-dev-jwt-secret-change-in-prod"),
 		MinIOEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),

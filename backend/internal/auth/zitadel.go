@@ -54,7 +54,9 @@ type ZitadelClient struct {
 // NewZitadelClient creates a new Zitadel client with gRPC connections.
 // domain is the Zitadel instance domain (e.g. "zitadel.orbispm.in") used for
 // instance routing; it may differ from the issuer hostname in local dev.
-func NewZitadelClient(ctx context.Context, domain, issuer, internalURL, serviceToken, clientID string) (*ZitadelClient, error) {
+// grpcDisabled=true skips gRPC entirely and forces REST-only mode (use when gRPC
+// is blocked by a proxy such as Cloudflare).
+func NewZitadelClient(ctx context.Context, domain, issuer, internalURL, serviceToken, clientID string, grpcDisabled bool) (*ZitadelClient, error) {
 	// Use domain as Host header for REST calls and JWKS fetches.
 	// Fall back to issuer host if domain is empty.
 	externalHost := domain
@@ -75,6 +77,14 @@ func NewZitadelClient(ctx context.Context, domain, issuer, internalURL, serviceT
 	// Initialize JWKS cache — use internal URL for within-Docker access
 	jwksURL := internalURL + "/oauth/v2/keys"
 	c.jwks = NewJWKSCache(jwksURL, c.httpClient, c.externalHost)
+
+	// Skip gRPC entirely when explicitly disabled (e.g. behind Cloudflare which blocks gRPC).
+	if grpcDisabled {
+		c.serviceToken = serviceToken
+		c.useREST.Store(true)
+		log.Info().Msg("Zitadel gRPC disabled — using REST API only")
+		return c, nil
+	}
 
 	// Connect gRPC via zitadel-go SDK
 	// Domain tells Zitadel which instance to route to.
