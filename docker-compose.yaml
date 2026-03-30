@@ -185,17 +185,19 @@ services:
   pgbouncer:
     image: edoburu/pgbouncer:latest
     restart: unless-stopped
-    # Strip ?query-string from DATABASE_URL before the real entrypoint runs.
-    # Coolify injects DATABASE_URL=<url>?sslmode=require globally into every container.
-    # edoburu/pgbouncer entrypoint uses parse_url($DATABASE_URL) → DB_NAME includes
-    # "?sslmode=require" → invalid pgbouncer.ini line 3 syntax error → crash loop.
-    # $$VAR escapes Compose interpolation; the container shell expands it at runtime.
+    # Unset DATABASE_URL so the entrypoint uses individual DB_* env vars.
+    # This avoids two issues:
+    # 1) Coolify injects DATABASE_URL=<url>?sslmode=require globally — the query
+    #    string becomes part of DB_NAME and produces an invalid pgbouncer.ini line.
+    # 2) In local dev, DATABASE_URL has "localhost" which resolves to the pgbouncer
+    #    container itself instead of the postgres Docker service.
+    # Also rewrite DB_HOST=localhost → postgres (Docker service name) for local dev.
     # We pass the CMD explicitly (/usr/bin/pgbouncer ...) because the image uses
     # ENTRYPOINT+CMD pattern and exec "$@" in the wrapper script needs args.
     entrypoint:
       - "sh"
       - "-c"
-      - "DATABASE_URL=$$(echo $$DATABASE_URL | cut -d'?' -f1) && exec /entrypoint.sh /usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini"
+      - 'unset DATABASE_URL; [ "$$DB_HOST" = localhost ] && export DB_HOST=postgres; exec /entrypoint.sh /usr/bin/pgbouncer /etc/pgbouncer/pgbouncer.ini'
     expose:
       - "5432"
     environment:

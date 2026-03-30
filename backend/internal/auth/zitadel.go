@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	jwtgo "github.com/golang-jwt/jwt/v5"
@@ -44,13 +45,23 @@ type ZitadelClient struct {
 
 	// JWKS cache for RS256 token validation
 	jwks *JWKSCache
+
+	// REST API fallback fields
+	serviceToken string      // PAT stored for REST API Authorization header
+	useREST      atomic.Bool // true → gRPC unavailable, use REST API
 }
 
 // NewZitadelClient creates a new Zitadel client with gRPC connections.
-func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, clientID string) (*ZitadelClient, error) {
-	externalHost := ""
-	if parsed, err := url.Parse(issuer); err == nil {
-		externalHost = parsed.Host
+// domain is the Zitadel instance domain (e.g. "zitadel.orbispm.in") used for
+// instance routing; it may differ from the issuer hostname in local dev.
+func NewZitadelClient(ctx context.Context, domain, issuer, internalURL, serviceToken, clientID string) (*ZitadelClient, error) {
+	// Use domain as Host header for REST calls and JWKS fetches.
+	// Fall back to issuer host if domain is empty.
+	externalHost := domain
+	if externalHost == "" {
+		if parsed, err := url.Parse(issuer); err == nil {
+			externalHost = parsed.Host
+		}
 	}
 
 	c := &ZitadelClient{
@@ -66,14 +77,16 @@ func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, cl
 	c.jwks = NewJWKSCache(jwksURL, c.httpClient, c.externalHost)
 
 	// Connect gRPC via zitadel-go SDK
-	// Domain is always from the external issuer (so Zitadel recognises the instance),
-	// but TLS mode and TCP target are driven by the INTERNAL URL — Coolify terminates
+	// Domain tells Zitadel which instance to route to.
+	// TLS mode and TCP target are driven by the INTERNAL URL — Coolify terminates
 	// TLS externally; the internal Docker connection is always plain HTTP.
-	parsedIssuer, err := url.Parse(issuer)
-	if err != nil {
-		return nil, fmt.Errorf("parse issuer URL: %w", err)
+	if domain == "" {
+		parsedIssuer, err := url.Parse(issuer)
+		if err != nil {
+			return nil, fmt.Errorf("parse issuer URL: %w", err)
+		}
+		domain = parsedIssuer.Hostname()
 	}
-	domain := parsedIssuer.Hostname()
 
 	// Parse internal URL first — this determines the actual gRPC transport security.
 	parsedInternal, err := url.Parse(internalURL)
@@ -102,6 +115,8 @@ func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, cl
 		z = zitadel.New(domain) // TLS — internal URL is also HTTPS
 	}
 
+	c.serviceToken = serviceToken
+
 	grpcClient, err := zclient.New(ctx, z,
 		zclient.WithAuth(zclient.PAT(serviceToken)),
 		zclient.WithGRPCDialOptions(
@@ -111,9 +126,25 @@ func NewZitadelClient(ctx context.Context, issuer, internalURL, serviceToken, cl
 		),
 	)
 	if err != nil {
-		return nil, fmt.Errorf("create gRPC client: %w", err)
+		log.Warn().Err(err).Msg("gRPC client creation failed — REST API fallback enabled")
+		c.useREST.Store(true)
+		return c, nil
 	}
 	c.grpc = grpcClient
+
+	// Test gRPC connectivity — on failure (e.g., Cloudflare blocking gRPC protocol),
+	// the client automatically falls back to Zitadel's REST API.
+	testCtx, testCancel := context.WithTimeout(ctx, 5*time.Second)
+	_, testErr := c.grpc.SessionServiceV2().GetSession(testCtx, &sessionv2.GetSessionRequest{
+		SessionId: "00000000-0000-0000-0000-000000000000",
+	})
+	testCancel()
+	if testErr != nil && isGRPCTransportError(testErr) {
+		log.Warn().Err(testErr).Msg("gRPC to Zitadel unavailable — REST API fallback enabled")
+		c.useREST.Store(true)
+	} else {
+		log.Info().Msg("Zitadel gRPC connection verified")
+	}
 
 	return c, nil
 }
@@ -346,6 +377,9 @@ func (c *ZitadelClient) RefreshOIDCToken(ctx context.Context, refreshToken strin
 
 // SignUp creates a new user in Zitadel via gRPC and signs them in.
 func (c *ZitadelClient) SignUp(ctx context.Context, req SignUpRequest) (*TokenResponse, error) {
+	if c.useREST.Load() {
+		return c.restSignUp(ctx, req)
+	}
 	name := "User"
 	if req.Data != nil {
 		if n, ok := req.Data["name"].(string); ok && n != "" {
@@ -381,6 +415,9 @@ func (c *ZitadelClient) SignUp(ctx context.Context, req SignUpRequest) (*TokenRe
 		},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restSignUp(ctx, req)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -393,6 +430,9 @@ func (c *ZitadelClient) SignUp(ctx context.Context, req SignUpRequest) (*TokenRe
 // If the user has active MFA factors the response has MFARequired=true and
 // no access_token; the caller must complete the MFA step via VerifyLoginMFA.
 func (c *ZitadelClient) SignIn(ctx context.Context, email, password string) (*TokenResponse, error) {
+	if c.useREST.Load() {
+		return c.restSignIn(ctx, email, password)
+	}
 	sessionResp, err := c.grpc.SessionServiceV2().CreateSession(ctx, &sessionv2.CreateSessionRequest{
 		Checks: &sessionv2.Checks{
 			User: &sessionv2.CheckUser{
@@ -404,6 +444,9 @@ func (c *ZitadelClient) SignIn(ctx context.Context, email, password string) (*To
 		},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restSignIn(ctx, email, password)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -415,6 +458,9 @@ func (c *ZitadelClient) SignIn(ctx context.Context, email, password string) (*To
 		SessionId: sessionID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restSignIn(ctx, email, password)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -427,6 +473,9 @@ func (c *ZitadelClient) SignIn(ctx context.Context, email, password string) (*To
 	factorsResp, factorsErr := c.grpc.UserServiceV2().ListAuthenticationFactors(ctx, &userv2.ListAuthenticationFactorsRequest{
 		UserId: userID,
 	})
+	if factorsErr != nil && c.grpcFailed(factorsErr) {
+		return c.restSignIn(ctx, email, password)
+	}
 	if factorsErr == nil {
 		for _, f := range factorsResp.GetResult() {
 			if f.GetState() != userv2.AuthFactorState_AUTH_FACTOR_STATE_READY {
@@ -464,6 +513,9 @@ func (c *ZitadelClient) SignIn(ctx context.Context, email, password string) (*To
 // for the given in-progress session. Must be called before VerifyLoginMFA for
 // otp_email and otp_sms methods; ignored (no-op) for totp and recovery_code.
 func (c *ZitadelClient) SendOTPChallenge(ctx context.Context, sessionID, sessionToken, method string) error {
+	if c.useREST.Load() {
+		return c.restSendOTPChallenge(ctx, sessionID, sessionToken, method)
+	}
 	var challenges *sessionv2.RequestChallenges
 	switch method {
 	case "otp_email":
@@ -487,6 +539,9 @@ func (c *ZitadelClient) SendOTPChallenge(ctx context.Context, sessionID, session
 		Challenges:   challenges,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restSendOTPChallenge(ctx, sessionID, sessionToken, method)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -495,6 +550,9 @@ func (c *ZitadelClient) SendOTPChallenge(ctx context.Context, sessionID, session
 // VerifyLoginMFA completes the second factor of a login and returns full tokens.
 // method must be one of: "totp", "otp_email", "otp_sms", "recovery_code".
 func (c *ZitadelClient) VerifyLoginMFA(ctx context.Context, sessionID, sessionToken, method, code string) (*TokenResponse, error) {
+	if c.useREST.Load() {
+		return c.restVerifyLoginMFA(ctx, sessionID, sessionToken, method, code)
+	}
 	checks := &sessionv2.Checks{}
 	switch method {
 	case "totp":
@@ -515,6 +573,9 @@ func (c *ZitadelClient) VerifyLoginMFA(ctx context.Context, sessionID, sessionTo
 		Checks:       checks,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restVerifyLoginMFA(ctx, sessionID, sessionToken, method, code)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -523,6 +584,9 @@ func (c *ZitadelClient) VerifyLoginMFA(ctx context.Context, sessionID, sessionTo
 		SessionId: sessionID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restVerifyLoginMFA(ctx, sessionID, sessionToken, method, code)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 	sess := getResp.GetSession()
@@ -540,10 +604,16 @@ func (c *ZitadelClient) VerifyLoginMFA(ctx context.Context, sessionID, sessionTo
 // in-progress session. Used by the handler to validate backup codes without
 // calling into Zitadel's unimplemented RecoveryCodes RPC.
 func (c *ZitadelClient) GetSessionUserDetails(ctx context.Context, sessionID string) (userID, loginName, displayName string, err error) {
+	if c.useREST.Load() {
+		return c.restGetSessionUserDetails(ctx, sessionID)
+	}
 	getResp, err := c.grpc.SessionServiceV2().GetSession(ctx, &sessionv2.GetSessionRequest{
 		SessionId: sessionID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restGetSessionUserDetails(ctx, sessionID)
+		}
 		return "", "", "", c.wrapGRPCError(err)
 	}
 	f := getResp.GetSession().GetFactors().GetUser()
@@ -584,6 +654,9 @@ func (c *ZitadelClient) buildSessionTokenResponse(sessionID, sessionToken, userI
 
 // RefreshSessionToken refreshes a session-based token.
 func (c *ZitadelClient) RefreshSessionToken(ctx context.Context, refreshToken string) (*TokenResponse, error) {
+	if c.useREST.Load() {
+		return c.restRefreshSessionToken(ctx, refreshToken)
+	}
 	decoded, err := base64.RawURLEncoding.DecodeString(refreshToken)
 	if err != nil {
 		return nil, &AuthError{Code: 401, Message: "invalid refresh token"}
@@ -598,6 +671,9 @@ func (c *ZitadelClient) RefreshSessionToken(ctx context.Context, refreshToken st
 		SessionId: sessionID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restRefreshSessionToken(ctx, refreshToken)
+		}
 		return nil, &AuthError{Code: 401, Message: "session expired or invalid"}
 	}
 
@@ -628,6 +704,9 @@ func (c *ZitadelClient) ValidateToken(ctx context.Context, tokenStr string) (*To
 
 // validateSessionToken validates a session-based token by calling GetSession.
 func (c *ZitadelClient) validateSessionToken(ctx context.Context, tokenStr string) (*TokenClaims, error) {
+	if c.useREST.Load() {
+		return c.restValidateSessionToken(ctx, tokenStr)
+	}
 	decoded, err := base64.RawURLEncoding.DecodeString(tokenStr)
 	if err != nil {
 		return nil, &AuthError{Code: 401, Message: "invalid token"}
@@ -642,6 +721,9 @@ func (c *ZitadelClient) validateSessionToken(ctx context.Context, tokenStr strin
 		SessionId: sessionID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restValidateSessionToken(ctx, tokenStr)
+		}
 		return nil, &AuthError{Code: 401, Message: "session expired or invalid"}
 	}
 
@@ -660,10 +742,16 @@ func (c *ZitadelClient) validateSessionToken(ctx context.Context, tokenStr strin
 
 // GetUser retrieves user info via gRPC.
 func (c *ZitadelClient) GetUser(ctx context.Context, userID string) (*UserInfo, error) {
+	if c.useREST.Load() {
+		return c.restGetUser(ctx, userID)
+	}
 	resp, err := c.grpc.UserServiceV2().GetUserByID(ctx, &userv2.GetUserByIDRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restGetUser(ctx, userID)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -714,6 +802,9 @@ func (c *ZitadelClient) GetUser(ctx context.Context, userID string) (*UserInfo, 
 	factorsResp, factorsErr := c.grpc.UserServiceV2().ListAuthenticationFactors(ctx, &userv2.ListAuthenticationFactorsRequest{
 		UserId: userID,
 	})
+	if factorsErr != nil && c.grpcFailed(factorsErr) {
+		return c.restGetUser(ctx, userID)
+	}
 	if factorsErr == nil {
 		for _, f := range factorsResp.GetResult() {
 			if f.GetState() != userv2.AuthFactorState_AUTH_FACTOR_STATE_READY {
@@ -755,6 +846,9 @@ type UpdateUserRequest struct {
 
 // UpdateUser updates a user's profile in Zitadel and returns fresh UserInfo.
 func (c *ZitadelClient) UpdateUser(ctx context.Context, userID string, req UpdateUserRequest) (*UserInfo, error) {
+	if c.useREST.Load() {
+		return c.restUpdateUser(ctx, userID, req)
+	}
 	updateReq := &userv2.UpdateHumanUserRequest{
 		UserId: userID,
 	}
@@ -785,6 +879,9 @@ func (c *ZitadelClient) UpdateUser(ctx context.Context, userID string, req Updat
 	}
 
 	if _, err := c.grpc.UserServiceV2().UpdateHumanUser(ctx, updateReq); err != nil {
+		if c.grpcFailed(err) {
+			return c.restUpdateUser(ctx, userID, req)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -793,10 +890,16 @@ func (c *ZitadelClient) UpdateUser(ctx context.Context, userID string, req Updat
 
 // ListAllUsers retrieves all human users from Zitadel (for backfill / cache warmup).
 func (c *ZitadelClient) ListAllUsers(ctx context.Context) ([]*UserInfo, error) {
+	if c.useREST.Load() {
+		return c.restListAllUsers(ctx)
+	}
 	resp, err := c.grpc.UserServiceV2().ListUsers(ctx, &userv2.ListUsersRequest{
 		Query: &objectv2.ListQuery{Limit: 2000},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restListAllUsers(ctx)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 	var result []*UserInfo
@@ -831,11 +934,17 @@ func (c *ZitadelClient) ListAllUsers(ctx context.Context) ([]*UserInfo, error) {
 
 // Logout deletes a session or revokes a token.
 func (c *ZitadelClient) Logout(ctx context.Context, claims *TokenClaims, rawToken string) error {
+	if c.useREST.Load() {
+		return c.restLogout(ctx, claims, rawToken)
+	}
 	if claims != nil && claims.SessionID != "" {
 		_, err := c.grpc.SessionServiceV2().DeleteSession(ctx, &sessionv2.DeleteSessionRequest{
 			SessionId: claims.SessionID,
 		})
 		if err != nil {
+			if c.grpcFailed(err) {
+				return c.restLogout(ctx, claims, rawToken)
+			}
 			return c.wrapGRPCError(err)
 		}
 		return nil
@@ -875,10 +984,24 @@ func (c *ZitadelClient) revokeToken(ctx context.Context, token string) error {
 
 // RegisterTOTP starts TOTP registration for a user.
 func (c *ZitadelClient) RegisterTOTP(ctx context.Context, userID string) (*TOTPRegistration, error) {
+	if c.useREST.Load() {
+		uri, secret, err := c.restRegisterTOTP(ctx, userID)
+		if err != nil {
+			return nil, err
+		}
+		return &TOTPRegistration{URI: uri, Secret: secret}, nil
+	}
 	resp, err := c.grpc.UserServiceV2().RegisterTOTP(ctx, &userv2.RegisterTOTPRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			uri, secret, restErr := c.restRegisterTOTP(ctx, userID)
+			if restErr != nil {
+				return nil, restErr
+			}
+			return &TOTPRegistration{URI: uri, Secret: secret}, nil
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 	return &TOTPRegistration{
@@ -889,11 +1012,17 @@ func (c *ZitadelClient) RegisterTOTP(ctx context.Context, userID string) (*TOTPR
 
 // VerifyTOTP verifies a TOTP code to complete registration.
 func (c *ZitadelClient) VerifyTOTP(ctx context.Context, userID, code string) error {
+	if c.useREST.Load() {
+		return c.restVerifyTOTP(ctx, userID, code)
+	}
 	_, err := c.grpc.UserServiceV2().VerifyTOTPRegistration(ctx, &userv2.VerifyTOTPRegistrationRequest{
 		UserId: userID,
 		Code:   code,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restVerifyTOTP(ctx, userID, code)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -901,10 +1030,16 @@ func (c *ZitadelClient) VerifyTOTP(ctx context.Context, userID, code string) err
 
 // RemoveTOTP removes TOTP from a user.
 func (c *ZitadelClient) RemoveTOTP(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restRemoveTOTP(ctx, userID)
+	}
 	_, err := c.grpc.UserServiceV2().RemoveTOTP(ctx, &userv2.RemoveTOTPRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restRemoveTOTP(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -912,10 +1047,16 @@ func (c *ZitadelClient) RemoveTOTP(ctx context.Context, userID string) error {
 
 // AddOTPEmail enables email OTP for a user.
 func (c *ZitadelClient) AddOTPEmail(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restAddOTPEmail(ctx, userID)
+	}
 	_, err := c.grpc.UserServiceV2().AddOTPEmail(ctx, &userv2.AddOTPEmailRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restAddOTPEmail(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -923,10 +1064,16 @@ func (c *ZitadelClient) AddOTPEmail(ctx context.Context, userID string) error {
 
 // RemoveOTPEmail disables email OTP for a user.
 func (c *ZitadelClient) RemoveOTPEmail(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restRemoveOTPEmail(ctx, userID)
+	}
 	_, err := c.grpc.UserServiceV2().RemoveOTPEmail(ctx, &userv2.RemoveOTPEmailRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restRemoveOTPEmail(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -934,10 +1081,16 @@ func (c *ZitadelClient) RemoveOTPEmail(ctx context.Context, userID string) error
 
 // AddOTPSMS enables SMS OTP for a user.
 func (c *ZitadelClient) AddOTPSMS(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restAddOTPSMS(ctx, userID)
+	}
 	_, err := c.grpc.UserServiceV2().AddOTPSMS(ctx, &userv2.AddOTPSMSRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restAddOTPSMS(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -945,10 +1098,16 @@ func (c *ZitadelClient) AddOTPSMS(ctx context.Context, userID string) error {
 
 // RemoveOTPSMS disables SMS OTP for a user.
 func (c *ZitadelClient) RemoveOTPSMS(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restRemoveOTPSMS(ctx, userID)
+	}
 	_, err := c.grpc.UserServiceV2().RemoveOTPSMS(ctx, &userv2.RemoveOTPSMSRequest{
 		UserId: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restRemoveOTPSMS(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -956,6 +1115,9 @@ func (c *ZitadelClient) RemoveOTPSMS(ctx context.Context, userID string) error {
 
 // VerifyMFASession verifies a TOTP code against an existing session.
 func (c *ZitadelClient) VerifyMFASession(ctx context.Context, sessionID, sessionToken, totpCode string) error {
+	if c.useREST.Load() {
+		return c.restVerifyMFASession(ctx, sessionID, sessionToken, totpCode)
+	}
 	_, err := c.grpc.SessionServiceV2().SetSession(ctx, &sessionv2.SetSessionRequest{
 		SessionId:    sessionID,
 		SessionToken: sessionToken,
@@ -966,6 +1128,9 @@ func (c *ZitadelClient) VerifyMFASession(ctx context.Context, sessionID, session
 		},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restVerifyMFASession(ctx, sessionID, sessionToken, totpCode)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -975,8 +1140,14 @@ func (c *ZitadelClient) VerifyMFASession(ctx context.Context, sessionID, session
 
 // ListIDPs lists configured identity providers.
 func (c *ZitadelClient) ListIDPs(ctx context.Context) ([]*IDPInfo, error) {
+	if c.useREST.Load() {
+		return c.restListOrgIDPs(ctx)
+	}
 	resp, err := c.grpc.ManagementService().ListOrgIDPs(ctx, &management.ListOrgIDPsRequest{})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restListOrgIDPs(ctx)
+		}
 		return nil, c.wrapGRPCError(err)
 	}
 
@@ -999,6 +1170,9 @@ func (c *ZitadelClient) ListIDPs(ctx context.Context) ([]*IDPInfo, error) {
 
 // StartIDPIntent starts an IDP intent for social login.
 func (c *ZitadelClient) StartIDPIntent(ctx context.Context, idpID, successURL, failureURL string) (string, error) {
+	if c.useREST.Load() {
+		return c.restStartIDPIntent(ctx, idpID, successURL, failureURL)
+	}
 	resp, err := c.grpc.UserServiceV2().StartIdentityProviderIntent(ctx, &userv2.StartIdentityProviderIntentRequest{
 		IdpId: idpID,
 		Content: &userv2.StartIdentityProviderIntentRequest_Urls{
@@ -1009,6 +1183,9 @@ func (c *ZitadelClient) StartIDPIntent(ctx context.Context, idpID, successURL, f
 		},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restStartIDPIntent(ctx, idpID, successURL, failureURL)
+		}
 		return "", c.wrapGRPCError(err)
 	}
 	return resp.GetAuthUrl(), nil
@@ -1040,6 +1217,9 @@ func (c *ZitadelClient) HealthCheck(ctx context.Context) error {
 
 // ChangePassword changes a user's password (requires old password verification).
 func (c *ZitadelClient) ChangePassword(ctx context.Context, userID, oldPassword, newPassword string) error {
+	if c.useREST.Load() {
+		return c.restChangePassword(ctx, userID, oldPassword, newPassword)
+	}
 	req := &userv2.SetPasswordRequest{
 		UserId: userID,
 		NewPassword: &userv2.Password{
@@ -1052,6 +1232,9 @@ func (c *ZitadelClient) ChangePassword(ctx context.Context, userID, oldPassword,
 	}
 	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restChangePassword(ctx, userID, oldPassword, newPassword)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -1059,6 +1242,9 @@ func (c *ZitadelClient) ChangePassword(ctx context.Context, userID, oldPassword,
 
 // AdminResetPassword sets a user's password without requiring the old one (admin action).
 func (c *ZitadelClient) AdminResetPassword(ctx context.Context, userID, newPassword string) error {
+	if c.useREST.Load() {
+		return c.restAdminResetPassword(ctx, userID, newPassword)
+	}
 	req := &userv2.SetPasswordRequest{
 		UserId: userID,
 		NewPassword: &userv2.Password{
@@ -1068,6 +1254,9 @@ func (c *ZitadelClient) AdminResetPassword(ctx context.Context, userID, newPassw
 	}
 	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restAdminResetPassword(ctx, userID, newPassword)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -1076,6 +1265,9 @@ func (c *ZitadelClient) AdminResetPassword(ctx context.Context, userID, newPassw
 // RequestPasswordReset initiates a password reset flow via Zitadel.
 // Returns a verification code that should be sent to the user's email.
 func (c *ZitadelClient) RequestPasswordReset(ctx context.Context, userID string) (string, error) {
+	if c.useREST.Load() {
+		return c.restRequestPasswordReset(ctx, userID)
+	}
 	req := &userv2.PasswordResetRequest{
 		UserId: userID,
 		Medium: &userv2.PasswordResetRequest_ReturnCode{
@@ -1084,6 +1276,9 @@ func (c *ZitadelClient) RequestPasswordReset(ctx context.Context, userID string)
 	}
 	resp, err := c.grpc.UserServiceV2().PasswordReset(ctx, req)
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restRequestPasswordReset(ctx, userID)
+		}
 		return "", c.wrapGRPCError(err)
 	}
 	code := ""
@@ -1095,6 +1290,9 @@ func (c *ZitadelClient) RequestPasswordReset(ctx context.Context, userID string)
 
 // ResetPasswordWithCode completes a password reset using a verification code.
 func (c *ZitadelClient) ResetPasswordWithCode(ctx context.Context, userID, code, newPassword string) error {
+	if c.useREST.Load() {
+		return c.restResetPasswordWithCode(ctx, userID, code, newPassword)
+	}
 	req := &userv2.SetPasswordRequest{
 		UserId: userID,
 		NewPassword: &userv2.Password{
@@ -1107,6 +1305,9 @@ func (c *ZitadelClient) ResetPasswordWithCode(ctx context.Context, userID, code,
 	}
 	_, err := c.grpc.UserServiceV2().SetPassword(ctx, req)
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restResetPasswordWithCode(ctx, userID, code, newPassword)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -1114,6 +1315,9 @@ func (c *ZitadelClient) ResetPasswordWithCode(ctx context.Context, userID, code,
 
 // FindUserByEmail searches for a user by email and returns their Zitadel user ID.
 func (c *ZitadelClient) FindUserByEmail(ctx context.Context, email string) (string, error) {
+	if c.useREST.Load() {
+		return c.restFindUserByEmail(ctx, email)
+	}
 	resp, err := c.grpc.UserServiceV2().ListUsers(ctx, &userv2.ListUsersRequest{
 		Query: &objectv2.ListQuery{Limit: 1},
 		Queries: []*userv2.SearchQuery{
@@ -1127,6 +1331,9 @@ func (c *ZitadelClient) FindUserByEmail(ctx context.Context, email string) (stri
 		},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restFindUserByEmail(ctx, email)
+		}
 		return "", c.wrapGRPCError(err)
 	}
 	if len(resp.GetResult()) == 0 {
@@ -1137,10 +1344,16 @@ func (c *ZitadelClient) FindUserByEmail(ctx context.Context, email string) (stri
 
 // DeactivateUser deactivates a Zitadel user account.
 func (c *ZitadelClient) DeactivateUser(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restDeactivateUser(ctx, userID)
+	}
 	_, err := c.grpc.ManagementService().DeactivateUser(ctx, &management.DeactivateUserRequest{
 		Id: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restDeactivateUser(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -1148,10 +1361,16 @@ func (c *ZitadelClient) DeactivateUser(ctx context.Context, userID string) error
 
 // ReactivateUser reactivates a previously deactivated Zitadel user account.
 func (c *ZitadelClient) ReactivateUser(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restReactivateUser(ctx, userID)
+	}
 	_, err := c.grpc.ManagementService().ReactivateUser(ctx, &management.ReactivateUserRequest{
 		Id: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restReactivateUser(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -1159,6 +1378,9 @@ func (c *ZitadelClient) ReactivateUser(ctx context.Context, userID string) error
 
 // UpdateUserEmail updates a user's email address in Zitadel.
 func (c *ZitadelClient) UpdateUserEmail(ctx context.Context, userID, newEmail string) error {
+	if c.useREST.Load() {
+		return c.restSetEmail(ctx, userID, newEmail)
+	}
 	_, err := c.grpc.UserServiceV2().SetEmail(ctx, &userv2.SetEmailRequest{
 		UserId: userID,
 		Email:  newEmail,
@@ -1167,6 +1389,9 @@ func (c *ZitadelClient) UpdateUserEmail(ctx context.Context, userID, newEmail st
 		},
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restSetEmail(ctx, userID, newEmail)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil
@@ -1174,10 +1399,16 @@ func (c *ZitadelClient) UpdateUserEmail(ctx context.Context, userID, newEmail st
 
 // DeleteUser permanently deletes a Zitadel user account.
 func (c *ZitadelClient) DeleteUser(ctx context.Context, userID string) error {
+	if c.useREST.Load() {
+		return c.restRemoveUser(ctx, userID)
+	}
 	_, err := c.grpc.ManagementService().RemoveUser(ctx, &management.RemoveUserRequest{
 		Id: userID,
 	})
 	if err != nil {
+		if c.grpcFailed(err) {
+			return c.restRemoveUser(ctx, userID)
+		}
 		return c.wrapGRPCError(err)
 	}
 	return nil

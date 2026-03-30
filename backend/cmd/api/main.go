@@ -161,7 +161,7 @@ func main() {
 	}
 
 	// --- Zitadel Auth Client (gRPC + OIDC) ---
-	zitadelClient, err := auth.NewZitadelClient(ctx, cfg.ZitadelIssuer, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, cfg.ZitadelClientID)
+	zitadelClient, err := auth.NewZitadelClient(ctx, cfg.ZitadelDomain, cfg.ZitadelIssuer, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, cfg.ZitadelClientID)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create Zitadel client")
 	}
