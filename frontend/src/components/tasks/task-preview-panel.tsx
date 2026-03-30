@@ -48,6 +48,7 @@ import {
   ListChecks,
   MessageSquare,
   Paperclip,
+  Play,
   Plus,
   Send,
   Settings2,
@@ -1371,6 +1372,86 @@ function CommentsTab({
    Attachments Tab
    ═══════════════════════════════════════════════════════ */
 
+const MAX_FILE_SIZE = 30 * 1024 * 1024; // 30 MB
+
+function AttachmentPreview({
+  orgId,
+  projectId,
+  taskId,
+  attachment,
+}: {
+  orgId: string;
+  projectId: string;
+  taskId: string;
+  attachment: Attachment;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.attachments
+      .fetchBlobUrl(orgId, projectId, taskId, attachment.id)
+      .then((blobUrl) => {
+        if (!cancelled) {
+          setUrl(blobUrl);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setError(true);
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+      // Revoke blob URL on unmount
+      if (url) URL.revokeObjectURL(url);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgId, projectId, taskId, attachment.id]);
+
+  if (loading) {
+    return (
+      <div className="w-full h-32 rounded-lg bg-base-300 animate-pulse flex items-center justify-center">
+        <span className="loading loading-spinner loading-sm" />
+      </div>
+    );
+  }
+
+  if (error || !url) {
+    return (
+      <div className="w-full h-32 rounded-lg bg-base-300 flex items-center justify-center text-xs text-base-content/40">
+        Preview unavailable
+      </div>
+    );
+  }
+
+  if (attachment.mime_type.startsWith("video/")) {
+    return (
+      <video
+        src={url}
+        controls
+        className="w-full max-h-[200px] rounded-lg object-contain bg-black"
+        preload="metadata"
+      />
+    );
+  }
+
+  // Image
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt={attachment.filename}
+      className="w-full max-h-[200px] rounded-lg object-contain"
+      loading="lazy"
+    />
+  );
+}
+
 function AttachmentsTab({
   orgId,
   projectId,
@@ -1387,27 +1468,47 @@ function AttachmentsTab({
   onRefresh: () => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [preview, setPreview] = useState<{
     url: string;
     mime: string;
     name: string;
   } | null>(null);
   const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     try {
       await api.attachments.delete(orgId, projectId, taskId, id);
       onRefresh();
     } catch {}
+    setDeleteConfirm(null);
   };
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    setUploadError(null);
+
+    // Validate all files first
+    for (const file of Array.from(files)) {
+      if (file.size > MAX_FILE_SIZE) {
+        setUploadError(
+          `"${file.name}" exceeds 30 MB limit (${(file.size / (1024 * 1024)).toFixed(1)} MB)`,
+        );
+        e.target.value = "";
+        return;
+      }
+    }
+
     setUploading(true);
     try {
-      await api.attachments.upload(orgId, projectId, taskId, file);
+      for (const file of Array.from(files)) {
+        await api.attachments.upload(orgId, projectId, taskId, file);
+      }
       onRefresh();
+    } catch (err) {
+      setUploadError("Upload failed. Please try again.");
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -1417,13 +1518,19 @@ function AttachmentsTab({
   const handleDownload = async (att: Attachment) => {
     try {
       setLoadingId(att.id);
-      const res = await api.attachments.download(
+      const blobUrl = await api.attachments.fetchBlobUrl(
         orgId,
         projectId,
         taskId,
         att.id,
       );
-      window.open(res.download_url, "_blank");
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = att.filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
     } finally {
       setLoadingId(null);
     }
@@ -1432,14 +1539,14 @@ function AttachmentsTab({
   const handlePreview = async (att: Attachment) => {
     try {
       setLoadingId(att.id);
-      const res = await api.attachments.download(
+      const blobUrl = await api.attachments.fetchBlobUrl(
         orgId,
         projectId,
         taskId,
         att.id,
       );
       setPreview({
-        url: res.download_url,
+        url: blobUrl,
         mime: att.mime_type,
         name: att.filename,
       });
@@ -1449,79 +1556,204 @@ function AttachmentsTab({
   };
 
   const isImage = (mime: string) => mime.startsWith("image/");
+  const isVideo = (mime: string) => mime.startsWith("video/");
   const isPDF = (mime: string) => mime === "application/pdf";
-  const isPreviewable = (mime: string) => isImage(mime) || isPDF(mime);
+  const isMedia = (mime: string) => isImage(mime) || isVideo(mime);
+  const isPreviewable = (mime: string) =>
+    isImage(mime) || isVideo(mime) || isPDF(mime);
 
   const fileIcon = (mime: string) => {
     if (isImage(mime)) return <ImageIcon className="w-4 h-4 text-primary" />;
+    if (isVideo(mime)) return <Play className="w-4 h-4 text-secondary" />;
     if (isPDF(mime)) return <FileText className="w-4 h-4 text-error" />;
     return <Paperclip className="w-4 h-4" />;
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Split into media & non-media for layout
+  const mediaAttachments = items.filter((a) => isMedia(a.mime_type));
+  const otherAttachments = items.filter((a) => !isMedia(a.mime_type));
+
   return (
     <>
-      <div className="p-3 space-y-2">
-        {items.length === 0 ? (
-          <div className="text-center text-base-content/40 text-sm py-8">
-            <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-40" />
-            No attachments yet
-          </div>
-        ) : (
-          items.map((att) => (
-            <div
-              key={att.id}
-              className="flex items-center gap-2 p-2 rounded border border-base-200 hover:bg-base-200/50 group"
-            >
-              <div className="shrink-0">{fileIcon(att.mime_type)}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{att.filename}</p>
-                <p className="text-[10px] text-base-content/50">
-                  {(att.file_size / 1024).toFixed(0)} KB
-                </p>
-              </div>
-              <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100">
-                {isPreviewable(att.mime_type) && (
-                  <button
-                    className="btn btn-ghost btn-xs btn-square"
-                    disabled={loadingId === att.id}
-                    onClick={() => handlePreview(att)}
-                  >
-                    <Eye className="w-3 h-3" />
-                  </button>
-                )}
-                <button
-                  className="btn btn-ghost btn-xs btn-square"
-                  disabled={loadingId === att.id}
-                  onClick={() => handleDownload(att)}
-                >
-                  <Download className="w-3 h-3" />
-                </button>
-                {access.canEdit && (
-                  <button
-                    className="btn btn-ghost btn-xs btn-square text-error"
-                    onClick={() => handleDelete(att.id)}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-
+      <div className="p-3 space-y-3">
+        {/* Upload button */}
         {access.canAttach && (
-          <label className="btn btn-outline btn-xs gap-1 w-full">
-            <Upload className="w-3 h-3" />
-            {uploading ? "Uploading..." : "Upload"}
+          <label
+            className={cn(
+              "btn btn-outline btn-sm gap-2 w-full",
+              uploading && "btn-disabled",
+            )}
+          >
+            <Upload className="w-4 h-4" />
+            {uploading ? "Uploading..." : "Upload files"}
             <input
               type="file"
               className="hidden"
               onChange={handleUpload}
               disabled={uploading}
+              multiple
             />
+            <span className="text-xs text-base-content/50 ml-auto">
+              Max 30 MB
+            </span>
           </label>
         )}
+
+        {uploadError && (
+          <div className="text-xs text-error bg-error/10 rounded-lg px-3 py-2 flex items-center gap-2">
+            <X className="w-3 h-3 shrink-0" />
+            {uploadError}
+          </div>
+        )}
+
+        {items.length === 0 && !uploading ? (
+          <div className="text-center text-base-content/40 text-sm py-8">
+            <Paperclip className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            No attachments yet
+          </div>
+        ) : (
+          <>
+            {/* Media grid (images & videos with inline preview) */}
+            {mediaAttachments.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-base-content/50 font-medium">
+                  Media ({mediaAttachments.length})
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {mediaAttachments.map((att) => (
+                    <div
+                      key={att.id}
+                      className="relative group rounded-lg overflow-hidden border border-base-200 hover:border-primary/40 transition-colors"
+                    >
+                      <button
+                        className="w-full cursor-pointer"
+                        onClick={() => handlePreview(att)}
+                        disabled={loadingId === att.id}
+                      >
+                        <AttachmentPreview
+                          orgId={orgId}
+                          projectId={projectId}
+                          taskId={taskId}
+                          attachment={att}
+                        />
+                      </button>
+                      {/* Overlay with filename & actions */}
+                      <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <p className="text-xs text-white truncate">
+                          {att.filename}
+                        </p>
+                        <p className="text-[10px] text-white/70">
+                          {formatSize(att.file_size)}
+                        </p>
+                      </div>
+                      {/* Action buttons */}
+                      <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          className="btn btn-xs btn-circle bg-base-100/80 hover:bg-base-100 border-0"
+                          disabled={loadingId === att.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDownload(att);
+                          }}
+                          title="Download"
+                        >
+                          <Download className="w-3 h-3" />
+                        </button>
+                        {access.canEdit && (
+                          <button
+                            className="btn btn-xs btn-circle bg-base-100/80 hover:bg-error/20 border-0 text-error"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm(att.id);
+                            }}
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Non-media file list */}
+            {otherAttachments.length > 0 && (
+              <div className="space-y-1">
+                {mediaAttachments.length > 0 && (
+                  <p className="text-xs text-base-content/50 font-medium mt-2">
+                    Files ({otherAttachments.length})
+                  </p>
+                )}
+                {otherAttachments.map((att) => (
+                  <div
+                    key={att.id}
+                    className="flex items-center gap-2 p-2 rounded-lg border border-base-200 hover:bg-base-200/50 group transition-colors"
+                  >
+                    <div className="shrink-0">{fileIcon(att.mime_type)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium truncate">
+                        {att.filename}
+                      </p>
+                      <p className="text-[10px] text-base-content/50">
+                        {formatSize(att.file_size)}
+                      </p>
+                    </div>
+                    <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      {isPDF(att.mime_type) && (
+                        <button
+                          className="btn btn-ghost btn-xs btn-square"
+                          disabled={loadingId === att.id}
+                          onClick={() => handlePreview(att)}
+                          title="Preview"
+                        >
+                          <Eye className="w-3 h-3" />
+                        </button>
+                      )}
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        disabled={loadingId === att.id}
+                        onClick={() => handleDownload(att)}
+                        title="Download"
+                      >
+                        <Download className="w-3 h-3" />
+                      </button>
+                      {access.canEdit && (
+                        <button
+                          className="btn btn-ghost btn-xs btn-square text-error"
+                          onClick={() => setDeleteConfirm(att.id)}
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
+
+      {/* Delete confirmation dialog */}
+      <ConfirmDialog
+        open={deleteConfirm !== null}
+        title="Delete attachment?"
+        message="This file will be permanently removed. This action cannot be undone."
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deleteConfirm) handleDelete(deleteConfirm);
+        }}
+        onClose={() => setDeleteConfirm(null)}
+      />
 
       {/* Preview Modal */}
       {preview && (
@@ -1535,12 +1767,29 @@ function AttachmentsTab({
           >
             <div className="flex items-center justify-between px-3 py-2 border-b border-base-200">
               <h3 className="font-semibold text-sm truncate">{preview.name}</h3>
-              <button
-                className="btn btn-ghost btn-xs btn-square"
-                onClick={() => setPreview(null)}
-              >
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex gap-1">
+                <button
+                  className="btn btn-ghost btn-xs btn-square"
+                  onClick={() => {
+                    const a = document.createElement("a");
+                    a.href = preview.url;
+                    a.download = preview.name;
+                    a.target = "_blank";
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                  }}
+                  title="Download"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  className="btn btn-ghost btn-xs btn-square"
+                  onClick={() => setPreview(null)}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
             <div
               className="flex items-center justify-center overflow-auto p-4"
@@ -1552,6 +1801,14 @@ function AttachmentsTab({
                   src={preview.url}
                   alt={preview.name}
                   className="max-w-full max-h-[70vh] object-contain rounded"
+                />
+              )}
+              {isVideo(preview.mime) && (
+                <video
+                  src={preview.url}
+                  controls
+                  autoPlay
+                  className="max-w-full max-h-[70vh] rounded"
                 />
               )}
               {isPDF(preview.mime) && (

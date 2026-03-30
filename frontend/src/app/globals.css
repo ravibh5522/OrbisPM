@@ -375,7 +375,10 @@
 }
 
 /* ── Glass Light — Badges: frosted pill (exclude semantic variants) ── */
-[data-theme="glass-light"] .badge:not(.badge-primary):not(.badge-secondary):not(.badge-accent):not(.badge-success):not(.badge-warning):not(.badge-error):not(.badge-info) {
+[data-theme="glass-light"]
+  .badge:not(.badge-primary):not(.badge-secondary):not(.badge-accent):not(
+    .badge-success
+  ):not(.badge-warning):not(.badge-error):not(.badge-info) {
   border-color: oklch(0% 0 0 / 0.08) !important;
   background-color: oklch(100% 0 0 / 0.45) !important;
   backdrop-filter: blur(8px);
@@ -468,18 +471,21 @@
 
 /* ── Glass Light — Scrollbar: sleek translucent ── */
 [data-theme="glass-light"] ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 [data-theme="glass-light"] ::-webkit-scrollbar-track {
   background: transparent;
 }
 [data-theme="glass-light"] ::-webkit-scrollbar-thumb {
-  background: oklch(0% 0 0 / 0.12);
-  border-radius: 3px;
+  background: oklch(52% 0.22 265 / 0.2);
+  border-radius: 99px;
 }
 [data-theme="glass-light"] ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0% 0 0 / 0.2);
+  background: oklch(52% 0.22 265 / 0.4);
+}
+[data-theme="glass-light"] ::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ── Glass Light — Modal backdrop ── */
@@ -687,7 +693,10 @@
 }
 
 /* ── Glass Dark — Badges: frosted pill (exclude semantic variants) ── */
-[data-theme="glass-dark"] .badge:not(.badge-primary):not(.badge-secondary):not(.badge-accent):not(.badge-success):not(.badge-warning):not(.badge-error):not(.badge-info) {
+[data-theme="glass-dark"]
+  .badge:not(.badge-primary):not(.badge-secondary):not(.badge-accent):not(
+    .badge-success
+  ):not(.badge-warning):not(.badge-error):not(.badge-info) {
   border-color: oklch(100% 0 0 / 0.1) !important;
   background-color: oklch(100% 0 0 / 0.06) !important;
   backdrop-filter: blur(8px);
@@ -812,18 +821,21 @@
 
 /* ── Glass Dark — Scrollbar: sleek translucent ── */
 [data-theme="glass-dark"] ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 [data-theme="glass-dark"] ::-webkit-scrollbar-track {
   background: transparent;
 }
 [data-theme="glass-dark"] ::-webkit-scrollbar-thumb {
-  background: oklch(100% 0 0 / 0.15);
-  border-radius: 3px;
+  background: oklch(72% 0.2 280 / 0.25);
+  border-radius: 99px;
 }
 [data-theme="glass-dark"] ::-webkit-scrollbar-thumb:hover {
-  background: oklch(100% 0 0 / 0.25);
+  background: oklch(72% 0.2 280 / 0.5);
+}
+[data-theme="glass-dark"] ::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 /* ── Glass Dark — hardcoded Tailwind text/bg overrides ── */
@@ -1006,6 +1018,69 @@
 [data-theme="glass-dark"] .active\:bg-base-200:active,
 [data-theme="glass-dark"] .focus\:bg-base-200:focus {
   background-color: oklch(100% 0 0 / 0.12) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   CUSTOM SCROLLBARS — Thin (4px), theme-matched primary color
+   Works in Chrome/Edge/Safari (webkit) + Firefox (scrollbar-*)
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Orbis Light ── */
+[data-theme="orbis-light"] ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+[data-theme="orbis-light"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="orbis-light"] ::-webkit-scrollbar-thumb {
+  background: oklch(50% 0.2 260 / 0.25);
+  border-radius: 99px;
+}
+[data-theme="orbis-light"] ::-webkit-scrollbar-thumb:hover {
+  background: oklch(50% 0.2 260 / 0.5);
+}
+[data-theme="orbis-light"] ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+[data-theme="orbis-light"] * {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(50% 0.2 260 / 0.25) transparent;
+}
+
+/* ── Orbis Dark ── */
+[data-theme="orbis-dark"] ::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+[data-theme="orbis-dark"] ::-webkit-scrollbar-track {
+  background: transparent;
+}
+[data-theme="orbis-dark"] ::-webkit-scrollbar-thumb {
+  background: oklch(65% 0.2 265 / 0.3);
+  border-radius: 99px;
+}
+[data-theme="orbis-dark"] ::-webkit-scrollbar-thumb:hover {
+  background: oklch(65% 0.2 265 / 0.6);
+}
+[data-theme="orbis-dark"] ::-webkit-scrollbar-corner {
+  background: transparent;
+}
+[data-theme="orbis-dark"] * {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(65% 0.2 265 / 0.3) transparent;
+}
+
+/* ── Glass Light — Firefox ── */
+[data-theme="glass-light"] * {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(52% 0.22 265 / 0.2) transparent;
+}
+
+/* ── Glass Dark — Firefox ── */
+[data-theme="glass-dark"] * {
+  scrollbar-width: thin;
+  scrollbar-color: oklch(72% 0.2 280 / 0.25) transparent;
 }
 
 /* ═══════════════════════════════════════════════════════════════

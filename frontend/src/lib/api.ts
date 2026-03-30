@@ -243,7 +243,6 @@ import type {
   ActivityLog,
   Announcement,
   APIKey,
-  OrgThemeConfig,
   Attachment,
   AuthTokens,
   BackupCodesResponse,
@@ -273,6 +272,7 @@ import type {
   OrgAnalytics,
   OrgMember,
   OrgSubscription,
+  OrgThemeConfig,
   PerformanceReport,
   Permission,
   Project,
@@ -1032,11 +1032,17 @@ export const api = {
       get<ListResponse<Attachment>>(
         `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`,
       ),
-    upload: (orgId: string, projId: string, taskId: string, file: File) => {
+    /** Direct multipart upload through the backend (avoids S3 CORS issues). */
+    upload: (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      file: File,
+    ): Promise<Attachment> => {
       const fd = new FormData();
       fd.append("file", file);
       return upload<Attachment>(
-        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments`,
+        `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/upload`,
         fd,
       );
     },
@@ -1044,6 +1050,30 @@ export const api = {
       get<{ attachment: Attachment; download_url: string }>(
         `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}/download`,
       ),
+    /** Returns a URL that streams the file content through the backend (avoids S3 CORS). */
+    contentUrl: (orgId: string, projId: string, taskId: string, id: string) =>
+      `${API_BASE}${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}/content`,
+    /** Fetches the file content with auth headers and returns a blob URL for use in <img>/<video> tags. */
+    fetchBlobUrl: async (
+      orgId: string,
+      projId: string,
+      taskId: string,
+      id: string,
+    ): Promise<string> => {
+      const path = `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}/content`;
+      const token = getToken();
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      const orgHeader =
+        typeof localStorage !== "undefined"
+          ? localStorage.getItem("current_org_id")
+          : null;
+      if (orgHeader) headers["X-Org-ID"] = orgHeader;
+      const res = await fetch(`${API_BASE}${path}`, { headers });
+      if (!res.ok) throw new Error("Failed to fetch attachment content");
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
       del(
         `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/attachments/${id}`,
@@ -1646,11 +1676,14 @@ export const api = {
 
   // Org theme config
   orgTheme: {
-    get: (orgId: string) =>
-      get<OrgThemeConfig>(`${V1}/orgs/${orgId}/theme`),
+    get: (orgId: string) => get<OrgThemeConfig>(`${V1}/orgs/${orgId}/theme`),
     update: (
       orgId: string,
-      data: { base_theme: string; custom_colors: Record<string, string>; locked: boolean },
+      data: {
+        base_theme: string;
+        custom_colors: Record<string, string>;
+        locked: boolean;
+      },
     ) => put<OrgThemeConfig>(`${V1}/orgs/${orgId}/theme`, data),
   },
 };

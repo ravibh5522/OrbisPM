@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"time"
 
 	"github.com/google/uuid"
@@ -79,6 +80,59 @@ func (s *AttachmentService) Create(ctx context.Context, params CreateAttachmentP
 	}
 
 	return created, uploadURL, nil
+}
+
+// DirectUpload stores the file in MinIO via the backend (instead of presigned URL)
+// and records the attachment in the database.
+func (s *AttachmentService) DirectUpload(ctx context.Context, params CreateAttachmentParams, reader io.Reader) (*domain.Attachment, error) {
+	storagePath := fmt.Sprintf("orgs/%s/attachments/%s/%s",
+		params.OrgID.String(), uuid.New().String(), params.Filename)
+
+	// Upload to MinIO via the storage client
+	if _, err := s.storageClient.Upload(ctx, storagePath, reader, params.FileSize, params.MimeType); err != nil {
+		return nil, fmt.Errorf("upload file to storage: %w", err)
+	}
+
+	att := &domain.Attachment{
+		OrgID:           params.OrgID,
+		TaskID:          params.TaskID,
+		CommentID:       params.CommentID,
+		ChangeRequestID: params.ChangeRequestID,
+		UploadedBy:      params.UserID,
+		Filename:        params.Filename,
+		StoragePath:     storagePath,
+		FileSize:        params.FileSize,
+		MimeType:        params.MimeType,
+	}
+
+	var created *domain.Attachment
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		created, err = s.attachmentRepo.Create(ctx, tx, att)
+		return err
+	})
+	if err != nil {
+		// Best-effort cleanup of the uploaded file
+		_ = s.storageClient.Delete(ctx, storagePath)
+		return nil, err
+	}
+
+	return created, nil
+}
+
+// StreamContent returns the attachment metadata and a reader for its file content.
+func (s *AttachmentService) StreamContent(ctx context.Context, id uuid.UUID) (*domain.Attachment, io.ReadCloser, error) {
+	att, err := s.attachmentRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	reader, err := s.storageClient.Download(ctx, att.StoragePath)
+	if err != nil {
+		return nil, nil, fmt.Errorf("download from storage: %w", err)
+	}
+
+	return att, reader, nil
 }
 
 // GetDownloadURL returns a pre-signed download URL for an attachment.

@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -25,9 +27,11 @@ func NewAttachmentHandler(attSvc *service.AttachmentService) *AttachmentHandler 
 func (h *AttachmentHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.Create)
+	r.Post("/upload", h.DirectUpload)
 	r.Get("/", h.ListByTask)
 	r.Route("/{attachmentId}", func(r chi.Router) {
 		r.Get("/download", h.Download)
+		r.Get("/content", h.Content)
 		r.Delete("/", h.Delete)
 	})
 	return r
@@ -82,6 +86,54 @@ func (h *AttachmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"attachment": att,
 		"upload_url": uploadURL,
 	})
+}
+
+const maxAttachmentUploadSize = 30 << 20 // 30 MB
+
+// DirectUpload handles multipart file upload — stores the file via the backend
+// so the browser never needs to talk to S3 directly (avoids CORS issues).
+func (h *AttachmentHandler) DirectUpload(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, maxAttachmentUploadSize+1024) // + header overhead
+	if err := r.ParseMultipartForm(maxAttachmentUploadSize); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 30 MB)"})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing file field"})
+		return
+	}
+	defer file.Close()
+
+	if header.Size > maxAttachmentUploadSize {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 30 MB)"})
+		return
+	}
+
+	taskID, _ := uuidParam(r, "taskId")
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	att, err := h.attSvc.DirectUpload(r.Context(), service.CreateAttachmentParams{
+		OrgID:    orgID,
+		TaskID:   &taskID,
+		UserID:   userID,
+		Filename: header.Filename,
+		FileSize: header.Size,
+		MimeType: contentType,
+	}, file)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	JSON(w, http.StatusCreated, att)
 }
 
 // ListByTask godoc
@@ -143,6 +195,32 @@ func (h *AttachmentHandler) Download(w http.ResponseWriter, r *http.Request) {
 		"attachment":   att,
 		"download_url": downloadURL,
 	})
+}
+
+// Content streams the attachment file through the backend so the browser
+// never needs to talk directly to S3/MinIO (avoids CORS and presigned-URL issues).
+func (h *AttachmentHandler) Content(w http.ResponseWriter, r *http.Request) {
+	id, err := uuidParam(r, "attachmentId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid attachment id"})
+		return
+	}
+
+	att, reader, err := h.attSvc.StreamContent(r.Context(), id)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	defer reader.Close()
+
+	w.Header().Set("Content-Type", att.MimeType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, att.Filename))
+	if att.FileSize > 0 {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", att.FileSize))
+	}
+
+	io.Copy(w, reader) //nolint:errcheck
 }
 
 // Delete godoc
