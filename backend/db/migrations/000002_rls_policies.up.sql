@@ -37,75 +37,93 @@ ALTER TABLE team_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE project_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE org_subscriptions ENABLE ROW LEVEL SECURITY;
 
--- Tenant isolation policies
+-- Tenant isolation policies (idempotent: drop before recreate)
+DROP POLICY IF EXISTS tenant_isolation_teams ON teams;
 CREATE POLICY tenant_isolation_teams ON teams FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_projects ON projects;
 CREATE POLICY tenant_isolation_projects ON projects FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_tasks ON tasks;
 CREATE POLICY tenant_isolation_tasks ON tasks FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_checklists ON checklists;
 CREATE POLICY tenant_isolation_checklists ON checklists FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_task_rules ON task_rules;
 CREATE POLICY tenant_isolation_task_rules ON task_rules FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_templates ON task_templates;
 CREATE POLICY tenant_isolation_templates ON task_templates FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_comments ON comments;
 CREATE POLICY tenant_isolation_comments ON comments FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_attachments ON attachments;
 CREATE POLICY tenant_isolation_attachments ON attachments FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_activity ON activity_log;
 CREATE POLICY tenant_isolation_activity ON activity_log FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_notifications ON notifications;
 CREATE POLICY tenant_isolation_notifications ON notifications FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_webhooks ON webhooks;
 CREATE POLICY tenant_isolation_webhooks ON webhooks FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_api_keys ON api_keys;
 CREATE POLICY tenant_isolation_api_keys ON api_keys FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_import_jobs ON import_jobs;
 CREATE POLICY tenant_isolation_import_jobs ON import_jobs FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_custom_roles ON custom_roles;
 CREATE POLICY tenant_isolation_custom_roles ON custom_roles FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
+DROP POLICY IF EXISTS tenant_isolation_org_members ON org_members;
 CREATE POLICY tenant_isolation_org_members ON org_members FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);
 
 -- team_members needs a join through teams to check org_id
+DROP POLICY IF EXISTS tenant_isolation_team_members ON team_members;
 CREATE POLICY tenant_isolation_team_members ON team_members FOR ALL
     USING (team_id IN (SELECT id FROM teams WHERE org_id = current_setting('app.current_org_id', true)::uuid));
 
 -- project_members needs a join through projects to check org_id
+DROP POLICY IF EXISTS tenant_isolation_project_members ON project_members;
 CREATE POLICY tenant_isolation_project_members ON project_members FOR ALL
     USING (project_id IN (SELECT id FROM projects WHERE org_id = current_setting('app.current_org_id', true)::uuid));
 
+DROP POLICY IF EXISTS tenant_isolation_subscriptions ON org_subscriptions;
 CREATE POLICY tenant_isolation_subscriptions ON org_subscriptions FOR ALL
     USING (org_id = current_setting('app.current_org_id', true)::uuid)
     WITH CHECK (org_id = current_setting('app.current_org_id', true)::uuid);

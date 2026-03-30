@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -33,12 +34,12 @@ func main() {
 
 	switch cmd {
 	case "up":
-		if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		if err := runUp(m); err != nil {
 			log.Fatalf("migration up failed: %v", err)
 		}
 		fmt.Println("migrations applied successfully")
 	case "down":
-		if err := m.Down(); err != nil && err != migrate.ErrNoChange {
+		if err := m.Down(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			log.Fatalf("migration down failed: %v", err)
 		}
 		fmt.Println("migrations rolled back successfully")
@@ -63,4 +64,35 @@ func main() {
 	default:
 		log.Fatalf("unknown command: %s (use: up, down, version, force)", cmd)
 	}
+}
+
+// runUp runs migrations up, auto-healing a dirty database state by forcing back
+// to the last clean version and retrying once. This handles crashes mid-migration.
+func runUp(m *migrate.Migrate) error {
+	err := m.Up()
+	if err == nil || errors.Is(err, migrate.ErrNoChange) {
+		return nil
+	}
+
+	var dirtyErr migrate.ErrDirty
+	if !errors.As(err, &dirtyErr) {
+		return err
+	}
+
+	// Auto-heal: a dirty state means the previous migration attempt failed
+	// mid-execution. Force back to the last clean version (dirtyErr.Version - 1)
+	// so the migration can be retried from scratch.
+	prevVersion := dirtyErr.Version - 1
+	log.Printf("dirty database at version %d detected — forcing back to version %d and retrying", dirtyErr.Version, prevVersion)
+
+	if forceErr := m.Force(prevVersion); forceErr != nil {
+		return fmt.Errorf("failed to force version %d during dirty-state recovery: %w", prevVersion, forceErr)
+	}
+
+	if retryErr := m.Up(); retryErr != nil && !errors.Is(retryErr, migrate.ErrNoChange) {
+		return fmt.Errorf("migration failed after dirty-state recovery (version %d → %d): %w", prevVersion, dirtyErr.Version, retryErr)
+	}
+
+	log.Printf("dirty-state recovery successful — now at clean version %d", dirtyErr.Version)
+	return nil
 }
