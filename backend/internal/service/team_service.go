@@ -35,6 +35,7 @@ type TeamService struct {
 	roleRepo          repository.RoleRepository
 	txm               *repository.TxManager
 	publisher         EventPublisher
+	cache             CacheInvalidator
 }
 
 // SetProjectDeps injects optional project-related dependencies for membership lifecycle hooks.
@@ -46,6 +47,9 @@ func (s *TeamService) SetProjectDeps(ptRepo repository.ProjectTeamRepository, pm
 
 // SetRoleRepo injects the role repository for role validation.
 func (s *TeamService) SetRoleRepo(rr repository.RoleRepository) { s.roleRepo = rr }
+
+// SetCache injects the cache invalidator.
+func (s *TeamService) SetCache(c CacheInvalidator) { s.cache = c }
 
 func NewTeamService(teamRepo repository.TeamRepository, teamMemberRepo repository.TeamMemberRepository, txm *repository.TxManager, publisher ...EventPublisher) *TeamService {
 	s := &TeamService{teamRepo: teamRepo, teamMemberRepo: teamMemberRepo, txm: txm}
@@ -244,6 +248,13 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 			orgID = t.OrgID.String()
 		}
 		s.publishEvent(ctx, domain.EventTeamMemberAdded, orgID, teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
+		// Invalidate cached permissions for the added user
+		if s.cache != nil && orgID != "" {
+			orgUUID, pErr := uuid.Parse(orgID)
+			if pErr == nil {
+				_ = s.cache.InvalidateUserPermissions(ctx, userID, orgUUID)
+			}
+		}
 	}
 	return err
 }
@@ -299,6 +310,13 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID uuid.UUID
 			orgID = t.OrgID.String()
 		}
 		s.publishEvent(ctx, domain.EventTeamMemberRemoved, orgID, teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
+		// Invalidate cached permissions for the removed user
+		if s.cache != nil && orgID != "" {
+			orgUUID, pErr := uuid.Parse(orgID)
+			if pErr == nil {
+				_ = s.cache.InvalidateUserPermissions(ctx, userID, orgUUID)
+			}
+		}
 	}
 	return err
 }
@@ -319,6 +337,13 @@ func (s *TeamService) UpdateMemberRole(ctx context.Context, teamID, userID uuid.
 			orgID = t.OrgID.String()
 		}
 		s.publishEvent(ctx, "member.role_updated", orgID, teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
+		// Invalidate cached permissions for the user whose role changed
+		if s.cache != nil && orgID != "" {
+			orgUUID, pErr := uuid.Parse(orgID)
+			if pErr == nil {
+				_ = s.cache.InvalidateUserPermissions(ctx, userID, orgUUID)
+			}
+		}
 	}
 	return err
 }

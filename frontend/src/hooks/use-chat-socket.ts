@@ -271,6 +271,23 @@ function handleMessage(
       }
       break;
     }
+    case "presence:online": {
+      const p = payload as { user_id: string };
+      if (p.user_id) {
+        store.setUserOnline(p.user_id);
+      }
+      break;
+    }
+    case "presence:offline": {
+      const p = payload as { user_id: string; last_seen?: string };
+      if (p.user_id) {
+        store.setUserOffline(
+          p.user_id,
+          p.last_seen || new Date().toISOString(),
+        );
+      }
+      break;
+    }
     default:
       break;
   }

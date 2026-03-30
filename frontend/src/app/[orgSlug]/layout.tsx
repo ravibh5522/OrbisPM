@@ -129,9 +129,11 @@ function Sidebar() {
 
   const handleThemeSwitch = (value: string) => {
     setTheme(value as Parameters<typeof setTheme>[0]);
-    api.auth.updateUser({ data: { theme: value } }).catch(() => {
-      /* non-critical */
-    });
+    api.auth
+      .updateUser({ data: { theme: value, theme_customisation: null } })
+      .catch(() => {
+        /* non-critical */
+      });
   };
 
   const filteredSettings = settingsItems.filter(
@@ -600,9 +602,11 @@ function MobileSidebar() {
 
   const handleThemeSwitch = (value: string) => {
     setTheme(value as Parameters<typeof setTheme>[0]);
-    api.auth.updateUser({ data: { theme: value } }).catch(() => {
-      /* non-critical */
-    });
+    api.auth
+      .updateUser({ data: { theme: value, theme_customisation: null } })
+      .catch(() => {
+        /* non-critical */
+      });
   };
 
   const handleOrgSwitch = async (orgSlug: string) => {
@@ -809,13 +813,22 @@ function MobileSidebar() {
 
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, hasOrgs } = useRequireAuth();
-  const { sidebarCollapsed, setTheme } = useUIStore();
+  const { sidebarCollapsed, setTheme, setCustomisation, setThemeLocked } =
+    useUIStore();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const user = useAuthStore((s) => s.user);
 
-  // Sync theme from user profile on load
+  // Sync theme + customisation from user profile on load
   useEffect(() => {
     const savedTheme = user?.user_metadata?.theme as string | undefined;
+    const savedCustomisation = user?.user_metadata?.theme_customisation as
+      | {
+          profileId: string;
+          primaryOverride?: string;
+          baseContentOverride?: string;
+        }
+      | undefined;
+
     if (
       savedTheme &&
       ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
@@ -830,7 +843,51 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
           | "orbis-dark",
       );
     }
+
+    if (savedCustomisation?.profileId) {
+      setCustomisation(savedCustomisation);
+    }
   }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load org theme on org entry — if locked, override user theme
+  useEffect(() => {
+    if (!currentOrg?.id) return;
+    api.orgTheme
+      .get(currentOrg.id)
+      .then((cfg) => {
+        if (!cfg || !cfg.locked) {
+          setThemeLocked(false);
+          return;
+        }
+        setThemeLocked(true);
+        const baseTheme = cfg.base_theme as
+          | "glass-light"
+          | "glass-dark"
+          | "orbis-light"
+          | "orbis-dark";
+        if (
+          baseTheme &&
+          ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
+            baseTheme,
+          )
+        ) {
+          setTheme(baseTheme);
+        }
+        const c = cfg.custom_colors as
+          | {
+              profileId: string;
+              primaryOverride?: string;
+              baseContentOverride?: string;
+            }
+          | undefined;
+        if (c?.profileId) {
+          setCustomisation(c);
+        }
+      })
+      .catch(() => {
+        /* non-critical */
+      });
+  }, [currentOrg?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Single org-level WebSocket (replaces SSE + per-project WS)
   useOrgSocket(currentOrg?.id);

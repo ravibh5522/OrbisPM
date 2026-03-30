@@ -437,35 +437,43 @@ func (s *MessageService) ListBookmarks(ctx context.Context, limit, offset int) (
 
 // enrichMessages populates reactions and attachments for a slice of messages.
 func (s *MessageService) enrichMessages(ctx context.Context, tx pgx.Tx, messages []domain.Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	// Collect all message IDs for batch queries
+	msgIDs := make([]uuid.UUID, len(messages))
 	for i := range messages {
-		reactions, err := s.reactionR.ListByMessage(ctx, tx, messages[i].ID)
-		if err != nil {
-			return err
-		}
+		msgIDs[i] = messages[i].ID
+	}
+
+	// Batch fetch reactions for all messages
+	reactionsMap, err := s.reactionR.ListByMessages(ctx, tx, msgIDs)
+	if err != nil {
+		return err
+	}
+
+	// Batch fetch attachments for all messages
+	attachmentsMap, err := s.attachmentR.ListByMessages(ctx, tx, msgIDs)
+	if err != nil {
+		return err
+	}
+
+	// Assign reactions and attachments to each message
+	for i := range messages {
+		reactions := reactionsMap[messages[i].ID]
 		if reactions == nil {
 			reactions = []domain.ReactionGroup{}
 		}
 		messages[i].Reactions = reactions
 
-		attachments, err := s.attachmentR.ListByMessage(ctx, tx, messages[i].ID)
-		if err != nil {
-			return err
-		}
+		attachments := attachmentsMap[messages[i].ID]
 		if attachments == nil {
 			attachments = []domain.Attachment{}
 		}
-		// Generate presigned URLs for each attachment
-		if s.presigner != nil {
-			for j := range attachments {
-				if attachments[j].StorageKey != "" {
-					u, err := s.presigner.PresignURL(ctx, attachments[j].StorageKey)
-					if err != nil {
-						log.Warn().Err(err).Str("key", attachments[j].StorageKey).Msg("failed to presign attachment url")
-						continue
-					}
-					attachments[j].URL = u
-				}
-			}
+		// Generate gateway-proxied URLs instead of direct S3 presigned URLs
+		for j := range attachments {
+			attachments[j].URL = "/api/v1/chat/attachments/" + attachments[j].ID.String() + "/file"
 		}
 		messages[i].Attachments = attachments
 	}

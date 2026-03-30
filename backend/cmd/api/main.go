@@ -276,8 +276,8 @@ func main() {
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
 	projectSvc := service.NewProjectService(projectRepo, projectMemberRepo, txm, workerSrv, publisher)
 	taskSvc := service.NewTaskService(taskRepo, checklistRepo, ruleRepo, txm, workerSrv, publisher)
-	checklistSvc := service.NewChecklistService(checklistRepo, txm)
-	commentSvc := service.NewCommentService(commentRepo, orgMemberRepo, txm, workerSrv)
+	checklistSvc := service.NewChecklistService(checklistRepo, txm, publisher)
+	commentSvc := service.NewCommentService(commentRepo, orgMemberRepo, txm, workerSrv, publisher)
 	ruleSvc := service.NewRuleService(ruleRepo, txm)
 	activitySvc := service.NewActivityService(activityRepo, txm)
 	notifSvc := service.NewNotificationService(notifRepo, txm)
@@ -285,7 +285,7 @@ func main() {
 	// --- Services (new) ---
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, storageClient, txm)
 	templateSvc := service.NewTemplateService(templateRepo, txm)
-	depSvc := service.NewDependencyService(depRepo, taskRepo, txm)
+	depSvc := service.NewDependencyService(depRepo, taskRepo, txm, publisher)
 	watcherSvc := service.NewWatcherService(watcherRepo, txm)
 	webhookSvc := service.NewWebhookService(webhookRepo, txm)
 	apikeySvc := service.NewAPIKeyService(apikeyRepo, txm)
@@ -318,6 +318,15 @@ func main() {
 	teamSvc.SetProjectDeps(projectTeamRepo, projectMemberRepo, taskRepo)
 	teamSvc.SetRoleRepo(roleRepo)
 	orgSvc.SetRoleRepo(roleRepo)
+
+	// Inject cache invalidator and publisher into services for permission cache management
+	if cacheManager != nil {
+		orgSvc.SetCache(cacheManager)
+		teamSvc.SetCache(cacheManager)
+		projectSvc.SetCache(cacheManager)
+		permSvc.SetCache(cacheManager)
+	}
+	orgSvc.SetPublisher(publisher)
 
 	// --- Handlers (existing) ---
 	orgHandler := handler.NewOrgHandler(orgSvc, zitadelClient)

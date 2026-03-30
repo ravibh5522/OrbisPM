@@ -182,8 +182,8 @@ function handleMessage(
     return;
   }
 
-  // 3. Project-room broadcasts → update task store
-  handleProjectBroadcast(msg, store);
+  // 3. Project-room broadcasts → update task store + sync QueryClient
+  handleProjectBroadcast(msg, store, qc);
 }
 
 // ═══════════════════════════════════════
@@ -206,6 +206,54 @@ function handleOrgEvent(
     if (event.payload?.project_id) {
       qc.invalidateQueries({
         queryKey: ["project-dashboard", orgId, event.payload.project_id],
+      });
+      // Invalidate task detail if we have the entity_id (task_id)
+      if (event.entity_id) {
+        qc.invalidateQueries({
+          queryKey: ["task", orgId, event.payload.project_id, event.entity_id],
+        });
+        qc.invalidateQueries({
+          queryKey: ["tasks", orgId, event.payload.project_id],
+        });
+      }
+    }
+  }
+
+  // Checklists — invalidate task-scoped checklist queries
+  if (type.startsWith("checklist.")) {
+    const taskId = event.entity_id || event.payload?.task_id;
+    const projectId = event.payload?.project_id;
+    if (taskId) {
+      qc.invalidateQueries({
+        queryKey: ["checklists", orgId, projectId, taskId].filter(Boolean),
+      });
+    }
+    // Also invalidate task detail since checklist progress affects task
+    if (taskId && projectId) {
+      qc.invalidateQueries({
+        queryKey: ["task", orgId, projectId, taskId],
+      });
+    }
+  }
+
+  // Comments — invalidate task-scoped comment queries
+  if (type.startsWith("comment.")) {
+    const taskId = event.entity_id || event.payload?.task_id;
+    const projectId = event.payload?.project_id;
+    if (taskId) {
+      qc.invalidateQueries({
+        queryKey: ["comments", orgId, projectId, taskId].filter(Boolean),
+      });
+    }
+  }
+
+  // Dependencies — invalidate task-scoped dependency queries
+  if (type.startsWith("dependency.")) {
+    const taskId = event.entity_id || event.payload?.task_id;
+    const projectId = event.payload?.project_id;
+    if (taskId) {
+      qc.invalidateQueries({
+        queryKey: ["dependencies", orgId, projectId, taskId].filter(Boolean),
       });
     }
   }
@@ -327,6 +375,7 @@ function handleOrgEvent(
 function handleProjectBroadcast(
   msg: { action: string; payload?: any; actor_id?: string },
   store: ReturnType<typeof useProjectTaskStore.getState>,
+  qc: ReturnType<typeof useQueryClient>,
 ) {
   const p = msg.payload || {};
 
@@ -353,7 +402,15 @@ function handleProjectBroadcast(
     }
     case "task:updated": {
       const task = p.task ?? p;
-      if (task?.id) store.upsertTask(task);
+      if (task?.id) {
+        store.upsertTask(task);
+        // Sync to QueryClient for task detail page
+        if (task.project_id) {
+          qc.invalidateQueries({
+            queryKey: ["task", task.org_id, task.project_id, task.id],
+          });
+        }
+      }
       break;
     }
     case "task:conflict": {
@@ -401,22 +458,36 @@ function handleProjectBroadcast(
 
     // ─── Checklist broadcasts ────
     case "checklist:created":
-      if (p.task_id && p.item) store.addChecklist(p.task_id, p.item);
+      if (p.task_id && p.item) {
+        store.addChecklist(p.task_id, p.item);
+        qc.invalidateQueries({ queryKey: ["checklists"], exact: false });
+      }
       break;
     case "checklist:updated":
-      if (p.task_id && p.item)
+      if (p.task_id && p.item) {
         store.updateChecklist(p.task_id, p.item.id, p.item);
+        qc.invalidateQueries({ queryKey: ["checklists"], exact: false });
+      }
       break;
     case "checklist:deleted":
-      if (p.task_id && p.id) store.removeChecklist(p.task_id, p.id);
+      if (p.task_id && p.id) {
+        store.removeChecklist(p.task_id, p.id);
+        qc.invalidateQueries({ queryKey: ["checklists"], exact: false });
+      }
       break;
 
     // ─── Comment broadcasts ────
     case "comment:created":
-      if (p.task_id && p.item) store.addComment(p.task_id, p.item);
+      if (p.task_id && p.item) {
+        store.addComment(p.task_id, p.item);
+        qc.invalidateQueries({ queryKey: ["comments"], exact: false });
+      }
       break;
     case "comment:deleted":
-      if (p.task_id && p.id) store.removeComment(p.task_id, p.id);
+      if (p.task_id && p.id) {
+        store.removeComment(p.task_id, p.id);
+        qc.invalidateQueries({ queryKey: ["comments"], exact: false });
+      }
       break;
 
     // ─── Dependency broadcasts ────
@@ -427,11 +498,14 @@ function handleProjectBroadcast(
           depends_on_id: p.depends_on_id,
           type: p.type,
         });
+        qc.invalidateQueries({ queryKey: ["dependencies"], exact: false });
       }
       break;
     case "dependency:removed":
-      if (p.task_id && p.depends_on_id)
+      if (p.task_id && p.depends_on_id) {
         store.removeDependency(p.task_id, p.depends_on_id);
+        qc.invalidateQueries({ queryKey: ["dependencies"], exact: false });
+      }
       break;
 
     // ─── Change request broadcasts ────

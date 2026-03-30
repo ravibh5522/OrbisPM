@@ -7,12 +7,107 @@ import { useChatStore } from "@/stores/chat-store";
 import type { ChatMessage } from "@/types/domain";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, isSameDay, isToday, isYesterday } from "date-fns";
-import { Bookmark, MessageSquare, Search, SmilePlus } from "lucide-react";
+import {
+  Bookmark,
+  Download,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Search,
+  SmilePlus,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const EMOJI_LIST = ["👍", "❤️", "😂", "🎉", "😮", "😢", "🔥", "👀"];
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_TYPING = new Set<string>();
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+
+/** Fetches an attachment image via the authenticated /file streaming endpoint and renders it as a blob URL. */
+function ChatAttachmentImage({
+  attachmentId,
+  fileName,
+  onClick,
+}: {
+  attachmentId: string;
+  fileName: string;
+  onClick: (url: string) => void;
+}) {
+  const { data: blobUrl, isLoading, isError } = useQuery({
+    queryKey: ["chat-attachment-blob", attachmentId],
+    queryFn: async () => {
+      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+      const orgId = typeof window !== "undefined" ? localStorage.getItem("current_org_id") : null;
+      const headers: Record<string, string> = {};
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+      if (orgId) headers["X-Org-ID"] = orgId;
+
+      const res = await fetch(`${API_BASE}/api/v1/chat/attachments/${attachmentId}/file`, { headers });
+      if (!res.ok) throw new Error("Failed to fetch attachment");
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    },
+    staleTime: 10 * 60 * 1000,
+    gcTime: 15 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="w-40 h-24 rounded-lg bg-base-300 animate-pulse flex items-center justify-center">
+        <span className="loading loading-spinner loading-sm" />
+      </div>
+    );
+  }
+  if (isError || !blobUrl) {
+    return (
+      <div className="w-40 h-24 rounded-lg bg-base-300 flex items-center justify-center text-xs text-base-content/40">
+        Preview unavailable
+      </div>
+    );
+  }
+  return (
+    <button
+      onClick={() => onClick(blobUrl)}
+      className="block rounded-lg overflow-hidden border border-base-200 hover:border-primary/50 transition-colors cursor-pointer"
+      style={{ maxWidth: 240 }}
+    >
+      <img
+        src={blobUrl}
+        alt={fileName}
+        className="max-w-full max-h-[200px] w-auto h-auto object-cover"
+        loading="lazy"
+      />
+    </button>
+  );
+}
+
+/** Downloads a chat attachment via the authenticated /file streaming endpoint. */
+async function downloadAttachment(attachmentId: string, fileName: string) {
+  try {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const orgId = typeof window !== "undefined" ? localStorage.getItem("current_org_id") : null;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    if (orgId) headers["X-Org-ID"] = orgId;
+
+    const res = await fetch(`${API_BASE}/api/v1/chat/attachments/${attachmentId}/file`, { headers });
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    // silently fail
+  }
+}
 
 export function MessageList() {
   const user = useAuthStore((s) => s.user);
@@ -287,14 +382,33 @@ function MessageBubble({
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [bookmarked, setBookmarked] = useState(false);
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editBody, setEditBody] = useState(message.body);
+  const menuRef = useRef<HTMLDivElement>(null);
   const qc = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const removeMessage = useChatStore((s) => s.removeMessage);
+  const updateMessage = useChatStore((s) => s.updateMessage);
 
-  // Resolve sender name: use auth store for own messages, message data otherwise
+  // Resolve sender name
   const senderName =
     message.sender_name ||
     (isOwn ? user?.user_metadata?.name || user?.email || "You" : "Unknown");
+
+  // Close menu on outside click
+  useEffect(() => {
+    if (!showMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showMenu]);
 
   const handleReaction = async (emoji: string) => {
     try {
@@ -304,6 +418,32 @@ function MessageBubble({
       // ignore
     }
     setShowEmoji(false);
+  };
+
+  const handleDelete = async () => {
+    setShowMenu(false);
+    try {
+      await api.chat.messages.delete(message.id);
+      removeMessage(message.channel_id, message.id);
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleEdit = async () => {
+    if (!editBody.trim() || editBody === message.body) {
+      setEditing(false);
+      return;
+    }
+    try {
+      const updated = await api.chat.messages.edit(message.id, {
+        body: editBody.trim(),
+      });
+      updateMessage(message.channel_id, updated);
+      setEditing(false);
+    } catch {
+      // ignore
+    }
   };
 
   if (message.is_deleted) {
@@ -318,7 +458,7 @@ function MessageBubble({
     );
   }
 
-  // Check if message has images
+  // Separate image and other attachments
   const imageAttachments =
     message.attachments?.filter((a) => a.content_type?.startsWith("image/")) ||
     [];
@@ -327,219 +467,371 @@ function MessageBubble({
     [];
 
   return (
-    <div
-      className={cn(
-        "group relative flex gap-3 px-2 py-1 rounded-lg transition-colors",
-        !isGrouped && "mt-3",
-        isOwn ? "flex-row-reverse" : "flex-row",
-        !isOwn && "hover:bg-base-200/40",
-      )}
-      onMouseEnter={() => setShowActions(true)}
-      onMouseLeave={() => {
-        setShowActions(false);
-        setShowEmoji(false);
-      }}
-    >
-      {/* Avatar - only show for others' messages */}
-      {!isOwn && !isGrouped ? (
-        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0 mt-0.5">
-          {message.sender_avatar ? (
-            <img
-              src={message.sender_avatar}
-              alt=""
-              className="w-9 h-9 rounded-full object-cover"
-            />
-          ) : (
-            (senderName?.[0] || "?").toUpperCase()
-          )}
-        </div>
-      ) : !isOwn ? (
-        <div className="w-9 flex-shrink-0" />
-      ) : null}
-
+    <>
       <div
         className={cn(
-          "flex-1 min-w-0 max-w-[75%]",
-          isOwn && "flex flex-col items-end",
+          "group relative flex gap-3 px-2 py-1 rounded-lg transition-colors",
+          !isGrouped && "mt-3",
+          isOwn ? "flex-row-reverse" : "flex-row",
+          !isOwn && "hover:bg-base-200/40",
         )}
+        onMouseEnter={() => setShowActions(true)}
+        onMouseLeave={() => {
+          setShowActions(false);
+          if (!showMenu) setShowEmoji(false);
+        }}
       >
-        {/* Header (name + time) */}
-        {!isGrouped && (
-          <div
-            className={cn(
-              "flex items-center gap-2 mb-0.5",
-              isOwn && "flex-row-reverse",
-            )}
-          >
-            <span className="text-sm font-semibold text-base-content">
-              {isOwn ? "You" : senderName}
-            </span>
-            <span className="text-xs text-base-content/40">
-              {format(new Date(message.created_at), "h:mm a")}
-            </span>
-            {message.is_edited && (
-              <span className="text-xs text-base-content/30">(edited)</span>
+        {/* Avatar */}
+        {!isOwn && !isGrouped ? (
+          <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0 mt-0.5">
+            {message.sender_avatar ? (
+              <img
+                src={message.sender_avatar}
+                alt=""
+                className="w-9 h-9 rounded-full object-cover"
+              />
+            ) : (
+              (senderName?.[0] || "?").toUpperCase()
             )}
           </div>
-        )}
+        ) : !isOwn ? (
+          <div className="w-9 flex-shrink-0" />
+        ) : null}
 
-        {/* Message bubble */}
         <div
           className={cn(
-            "inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words",
-            isOwn
-              ? "bg-primary text-primary-content rounded-tr-sm"
-              : "bg-base-200 text-base-content rounded-tl-sm",
+            "flex-1 min-w-0 max-w-[75%]",
+            isOwn && "flex flex-col items-end",
           )}
         >
-          {message.body}
+          {/* Header */}
+          {!isGrouped && (
+            <div
+              className={cn(
+                "flex items-center gap-2 mb-0.5",
+                isOwn && "flex-row-reverse",
+              )}
+            >
+              <span className="text-sm font-semibold text-base-content">
+                {isOwn ? "You" : senderName}
+              </span>
+              <span className="text-xs text-base-content/40">
+                {format(new Date(message.created_at), "h:mm a")}
+              </span>
+              {message.is_edited && (
+                <span className="text-xs text-base-content/30">(edited)</span>
+              )}
+            </div>
+          )}
+
+          {/* Message bubble or edit mode */}
+          {editing ? (
+            <div className="w-full">
+              <textarea
+                className="textarea textarea-bordered textarea-sm w-full"
+                value={editBody}
+                onChange={(e) => setEditBody(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleEdit();
+                  }
+                  if (e.key === "Escape") setEditing(false);
+                }}
+                autoFocus
+                rows={2}
+              />
+              <div className="flex gap-1 mt-1">
+                <button className="btn btn-xs btn-primary" onClick={handleEdit}>
+                  Save
+                </button>
+                <button
+                  className="btn btn-xs btn-ghost"
+                  onClick={() => setEditing(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              className={cn(
+                "inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words",
+                isOwn
+                  ? "bg-primary text-primary-content rounded-tr-sm"
+                  : "bg-base-200 text-base-content rounded-tl-sm",
+              )}
+            >
+              {message.body}
+            </div>
+          )}
+
+          {/* Image attachments — thumbnail grid with lightbox */}
+          {imageAttachments.length > 0 && (
+            <div
+              className={cn(
+                "flex flex-wrap gap-2 mt-2",
+                isOwn && "justify-end",
+              )}
+            >
+              {imageAttachments.map((att) => (
+                <ChatAttachmentImage
+                  key={att.id}
+                  attachmentId={att.id}
+                  fileName={att.file_name}
+                  onClick={(url) => setLightboxUrl(url)}
+                />
+              ))}
+            </div>
+          )}
+
+          {/* Other attachments */}
+          {otherAttachments.length > 0 && (
+            <div
+              className={cn("flex flex-col gap-1 mt-2", isOwn && "items-end")}
+            >
+              {otherAttachments.map((att) => (
+                <button
+                  key={att.id}
+                  onClick={() => downloadAttachment(att.id, att.file_name)}
+                  className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-lg text-sm hover:bg-base-300 transition-colors"
+                >
+                  <span className="text-base">📎</span>
+                  <span className="truncate max-w-[150px]">
+                    {att.file_name}
+                  </span>
+                  <span className="text-xs text-base-content/50">
+                    {(att.file_size / 1024).toFixed(0)} KB
+                  </span>
+                  <Download className="w-3.5 h-3.5 text-base-content/40 ml-auto" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Reactions — fixed spacing to prevent overlap */}
+          {message.reactions && message.reactions.length > 0 && (
+            <div
+              className={cn(
+                "flex flex-wrap gap-1.5 mt-2 relative z-0",
+                isOwn && "justify-end",
+              )}
+            >
+              {message.reactions.map((rg) => {
+                const userId = user?.id || "";
+                const hasReacted = rg.users?.includes(userId);
+                return (
+                  <button
+                    key={rg.emoji}
+                    onClick={() => handleReaction(rg.emoji)}
+                    className={cn(
+                      "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border transition-colors leading-none",
+                      hasReacted
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-base-200 bg-base-100 hover:bg-base-200",
+                    )}
+                  >
+                    <span className="text-sm leading-none">{rg.emoji}</span>
+                    <span className="leading-none">{rg.count}</span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Thread indicator */}
+          {message.thread_count > 0 && (
+            <button
+              onClick={onOpenThread}
+              className={cn(
+                "flex items-center gap-1.5 mt-1.5 text-primary text-xs hover:underline",
+                isOwn && "justify-end",
+              )}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              {message.thread_count}{" "}
+              {message.thread_count === 1 ? "reply" : "replies"}
+            </button>
+          )}
         </div>
 
-        {/* Image attachments */}
-        {imageAttachments.length > 0 && (
-          <div
-            className={cn("flex flex-wrap gap-2 mt-2", isOwn && "justify-end")}
-          >
-            {imageAttachments.map((att) => (
-              <a
-                key={att.id}
-                href={att.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block max-w-[200px] rounded-lg overflow-hidden border border-base-200"
-              >
-                <img
-                  src={att.url}
-                  alt={att.file_name}
-                  className="max-w-full h-auto"
-                  loading="lazy"
-                />
-              </a>
-            ))}
-          </div>
-        )}
-
-        {/* Other attachments */}
-        {otherAttachments.length > 0 && (
-          <div className={cn("flex flex-col gap-1 mt-2", isOwn && "items-end")}>
-            {otherAttachments.map((att) => (
-              <a
-                key={att.id}
-                href={att.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-lg text-sm hover:bg-base-300 transition-colors"
-              >
-                <span className="text-base">📎</span>
-                <span className="truncate max-w-[150px]">{att.file_name}</span>
-                <span className="text-xs text-base-content/50">
-                  {(att.file_size / 1024).toFixed(0)} KB
-                </span>
-              </a>
-            ))}
-          </div>
-        )}
-
-        {/* Reactions */}
-        {message.reactions && message.reactions.length > 0 && (
+        {/* Hover actions — 3-dot menu + quick actions */}
+        {showActions && !editing && (
           <div
             className={cn(
-              "flex flex-wrap gap-1 mt-1.5",
-              isOwn && "justify-end",
+              "absolute -top-3 flex items-center bg-base-100 border border-base-200 rounded-lg shadow-md p-0.5 z-10",
+              isOwn ? "right-2" : "left-12",
             )}
           >
-            {message.reactions.map((rg) => (
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              title="Reply in thread"
+              onClick={onOpenThread}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+            </button>
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              title="React"
+              onClick={() => setShowEmoji(!showEmoji)}
+            >
+              <SmilePlus className="w-3.5 h-3.5" />
+            </button>
+            <button
+              className={cn(
+                "btn btn-ghost btn-xs btn-square",
+                bookmarked && "text-warning",
+              )}
+              title={bookmarked ? "Bookmarked!" : "Bookmark"}
+              onClick={async () => {
+                try {
+                  if (bookmarked) {
+                    await api.chat.bookmarks.remove(message.id);
+                    setBookmarked(false);
+                  } else {
+                    await api.chat.bookmarks.add(message.id);
+                    setBookmarked(true);
+                  }
+                } catch {
+                  // toggle failed silently
+                }
+              }}
+            >
+              <Bookmark
+                className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
+              />
+            </button>
+            {/* 3-dot menu */}
+            <div className="relative" ref={menuRef}>
               <button
-                key={rg.emoji}
-                onClick={() => handleReaction(rg.emoji)}
-                className={cn(
-                  "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs border transition-colors",
-                  rg.users?.includes(useAuthStore.getState().user?.id || "")
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-base-200 bg-base-100 hover:bg-base-200",
-                )}
+                className="btn btn-ghost btn-xs btn-square"
+                title="More"
+                onClick={() => setShowMenu(!showMenu)}
               >
-                <span>{rg.emoji}</span>
-                <span>{rg.count}</span>
+                <MoreHorizontal className="w-3.5 h-3.5" />
+              </button>
+              {showMenu && (
+                <div
+                  className={cn(
+                    "absolute top-full mt-1 w-44 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-lg py-1 z-30",
+                    isOwn ? "right-0" : "left-0",
+                  )}
+                >
+                  {isOwn && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                      onClick={() => {
+                        setShowMenu(false);
+                        setEditing(true);
+                        setEditBody(message.body);
+                      }}
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      Edit Message
+                    </button>
+                  )}
+                  {/* Download all attachments */}
+                  {message.attachments && message.attachments.length > 0 && (
+                    <>
+                      {message.attachments.map((att) => (
+                        <button
+                          key={att.id}
+                          className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                          onClick={() => {
+                            setShowMenu(false);
+                            downloadAttachment(att.id, att.file_name);
+                          }}
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          <span className="truncate">
+                            Download {att.file_name}
+                          </span>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  <button
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowEmoji(true);
+                    }}
+                  >
+                    <SmilePlus className="w-3.5 h-3.5" />
+                    Add Reaction
+                  </button>
+                  <button
+                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                    onClick={onOpenThread}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Reply in Thread
+                  </button>
+                  {isOwn && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors"
+                      onClick={handleDelete}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Message
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Emoji picker */}
+        {showEmoji && (
+          <div
+            className={cn(
+              "absolute -top-10 flex gap-0.5 bg-base-100 border border-base-200 rounded-xl shadow-lg p-1 z-20",
+              isOwn ? "right-2" : "left-12",
+            )}
+          >
+            {EMOJI_LIST.map((e) => (
+              <button
+                key={e}
+                onClick={() => handleReaction(e)}
+                className="btn btn-ghost btn-xs btn-square text-base hover:scale-125 transition-transform"
+              >
+                {e}
               </button>
             ))}
           </div>
         )}
-
-        {/* Thread indicator */}
-        {message.thread_count > 0 && (
-          <button
-            onClick={onOpenThread}
-            className={cn(
-              "flex items-center gap-1.5 mt-1.5 text-primary text-xs hover:underline",
-              isOwn && "justify-end",
-            )}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            {message.thread_count}{" "}
-            {message.thread_count === 1 ? "reply" : "replies"}
-          </button>
-        )}
       </div>
 
-      {/* Hover actions */}
-      {showActions && (
-        <div className="absolute -top-3 right-2 flex items-center bg-base-100 border border-base-200 rounded-lg shadow-md p-0.5 z-10">
+      {/* Lightbox for image preview */}
+      {lightboxUrl && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          onClick={() => setLightboxUrl(null)}
+        >
           <button
-            className="btn btn-ghost btn-xs btn-square"
-            title="Reply in thread"
-            onClick={onOpenThread}
+            className="absolute top-4 right-4 btn btn-ghost btn-sm btn-circle text-white"
+            onClick={() => setLightboxUrl(null)}
           >
-            <MessageSquare className="w-3.5 h-3.5" />
+            <X className="w-5 h-5" />
           </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
-            title="React"
-            onClick={() => setShowEmoji(!showEmoji)}
+          <img
+            src={lightboxUrl}
+            alt="Preview"
+            className="max-w-full max-h-full object-contain rounded-lg"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <a
+            href={lightboxUrl}
+            download
+            className="absolute bottom-4 right-4 btn btn-sm btn-primary gap-1"
+            onClick={(e) => e.stopPropagation()}
           >
-            <SmilePlus className="w-3.5 h-3.5" />
-          </button>
-          <button
-            className={cn(
-              "btn btn-ghost btn-xs btn-square",
-              bookmarked && "text-warning",
-            )}
-            title={bookmarked ? "Bookmarked!" : "Bookmark"}
-            onClick={async () => {
-              try {
-                if (bookmarked) {
-                  await api.chat.bookmarks.remove(message.id);
-                  setBookmarked(false);
-                } else {
-                  await api.chat.bookmarks.add(message.id);
-                  setBookmarked(true);
-                }
-              } catch {
-                // toggle failed silently
-              }
-            }}
-          >
-            <Bookmark
-              className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
-            />
-          </button>
+            <Download className="w-4 h-4" />
+            Download
+          </a>
         </div>
       )}
-
-      {/* Emoji picker */}
-      {showEmoji && (
-        <div className="absolute -top-10 right-2 flex gap-0.5 bg-base-100 border border-base-200 rounded-xl shadow-lg p-1 z-20">
-          {EMOJI_LIST.map((e) => (
-            <button
-              key={e}
-              onClick={() => handleReaction(e)}
-              className="btn btn-ghost btn-xs btn-square text-base hover:scale-125 transition-transform"
-            >
-              {e}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
+    </>
   );
 }

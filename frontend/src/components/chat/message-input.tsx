@@ -475,16 +475,6 @@ export function MessageInput() {
         </button>
       </div>
 
-      {/* Hint */}
-      <div className="flex items-center justify-between px-2 mt-1">
-        <span className="text-xs text-base-content/30">
-          Press <kbd className="kbd kbd-xs">Enter</kbd> to send,{" "}
-          <kbd className="kbd kbd-xs">Shift+Enter</kbd> for new line
-        </span>
-        <span className="text-xs text-base-content/30">
-          Max {MAX_FILE_SIZE / 1024 / 1024}MB per file
-        </span>
-      </div>
     </div>
   );
 }

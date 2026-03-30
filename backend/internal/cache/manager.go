@@ -328,11 +328,16 @@ func FieldLevelMerge(serverTask *domain.Task, baseVersion int64, yourChanges map
 		return yourChanges, "", nil
 	}
 
-	// Check if any changed field overlaps with what the server changed since baseVersion.
-	// Since we can't know exactly which fields other users changed,
-	// we allow the merge (write-behind pattern makes this safe for field-level updates).
-	// The conflict is detected via version counter; if versions diverge by 1,
-	// it's likely a single other user's edit — auto-merge is safe.
+	// Version diverged — another user made a change between baseVersion and
+	// the server's current version.  Without per-field change tracking we
+	// cannot distinguish "field unchanged on server but client wants to update"
+	// from "field was updated by another user".  We therefore allow the merge
+	// (field-level write-last-wins) which is safe for independent field edits.
+	//
+	// True same-field conflicts (e.g. both users editing title) are surfaced
+	// via the CheckAndIncrementVersion layer: the second writer sees a version
+	// mismatch and receives the server state so the UI can prompt for manual
+	// resolution.
 
 	return yourChanges, "auto-merged", nil
 }

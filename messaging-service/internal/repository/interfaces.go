@@ -49,12 +49,14 @@ type ReactionRepository interface {
 	Add(ctx context.Context, tx pgx.Tx, r *domain.Reaction) error
 	Remove(ctx context.Context, tx pgx.Tx, messageID, userID uuid.UUID, emoji string) error
 	ListByMessage(ctx context.Context, tx pgx.Tx, messageID uuid.UUID) ([]domain.ReactionGroup, error)
+	ListByMessages(ctx context.Context, tx pgx.Tx, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.ReactionGroup, error)
 }
 
 // AttachmentRepository handles message attachment persistence.
 type AttachmentRepository interface {
 	Create(ctx context.Context, tx pgx.Tx, att *domain.Attachment) error
 	ListByMessage(ctx context.Context, tx pgx.Tx, messageID uuid.UUID) ([]domain.Attachment, error)
+	ListByMessages(ctx context.Context, tx pgx.Tx, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.Attachment, error)
 	GetByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.Attachment, error)
 }
 

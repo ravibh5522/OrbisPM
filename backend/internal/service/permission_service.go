@@ -17,6 +17,7 @@ type PermissionService struct {
 	roleRepo repository.RoleRepository
 	orgRepo  repository.OrgRepository
 	txm      *repository.TxManager
+	cache    CacheInvalidator
 }
 
 func NewPermissionService(
@@ -32,6 +33,9 @@ func NewPermissionService(
 		txm:      txm,
 	}
 }
+
+// SetCache injects the cache invalidator.
+func (s *PermissionService) SetCache(c CacheInvalidator) { s.cache = c }
 
 // ListPermissions returns all canonical permissions, optionally filtered by scope.
 func (s *PermissionService) ListPermissions(ctx context.Context, scope *string) ([]*domain.Permission, error) {
@@ -147,14 +151,30 @@ func (s *PermissionService) UpdateRole(ctx context.Context, roleID uuid.UUID, pa
 	for i, p := range perms {
 		updated.Permissions[i] = *p
 	}
+	// Invalidate role permission cache for the org
+	if s.cache != nil {
+		_ = s.cache.InvalidateRolePermissions(ctx, role.OrgID)
+	}
 	return updated, nil
 }
 
 // DeleteRole deletes a non-system role.
 func (s *PermissionService) DeleteRole(ctx context.Context, roleID uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.roleRepo.Delete(ctx, tx, roleID)
 	})
+	if err != nil {
+		return err
+	}
+	// Invalidate role permission cache for the org
+	if s.cache != nil {
+		_ = s.cache.InvalidateRolePermissions(ctx, role.OrgID)
+	}
+	return nil
 }
 
 // GetRole returns a role with its permissions.
@@ -176,9 +196,21 @@ func (s *PermissionService) GetRole(ctx context.Context, roleID uuid.UUID) (*dom
 
 // SetRolePermissions replaces a role's permissions.
 func (s *PermissionService) SetRolePermissions(ctx context.Context, roleID uuid.UUID, permIDs []uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	role, err := s.roleRepo.GetByID(ctx, roleID)
+	if err != nil {
+		return err
+	}
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.roleRepo.SetPermissions(ctx, tx, roleID, permIDs)
 	})
+	if err != nil {
+		return err
+	}
+	// Invalidate role permission cache for the org
+	if s.cache != nil {
+		_ = s.cache.InvalidateRolePermissions(ctx, role.OrgID)
+	}
+	return nil
 }
 
 // GetTeamProjectRoleMap returns the team→project role mapping for an org.

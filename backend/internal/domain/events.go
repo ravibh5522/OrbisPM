@@ -42,6 +42,22 @@ const (
 	EventProjectTeamUnlinked  = "project.team_unlinked"
 	EventProjectMemberAdded   = "project.member_added"
 	EventProjectMemberRemoved = "project.member_removed"
+
+	// Checklist events.
+	EventChecklistCreated = "checklist.created"
+	EventChecklistUpdated = "checklist.updated"
+	EventChecklistDeleted = "checklist.deleted"
+
+	// Comment events.
+	EventCommentDeleted = "comment.deleted"
+
+	// Dependency events.
+	EventDependencyAdded   = "dependency.added"
+	EventDependencyRemoved = "dependency.removed"
+
+	// Org member events.
+	EventOrgMemberRoleUpdated = "member.role_updated"
+	EventOrgMemberRemoved     = "member.removed"
 )
 
 // DomainEvent carries event data for pub/sub and notifications.

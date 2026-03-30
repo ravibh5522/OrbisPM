@@ -41,6 +41,7 @@ type ProjectService struct {
 	txm               *repository.TxManager
 	workerSrv         *worker.Server
 	publisher         EventPublisher
+	cache             CacheInvalidator
 }
 
 func NewProjectService(
@@ -74,6 +75,9 @@ func (s *ProjectService) SetTeamMemberRepo(tmr repository.TeamMemberRepository) 
 
 // SetRoleRepo injects the role repository for role validation.
 func (s *ProjectService) SetRoleRepo(rr repository.RoleRepository) { s.roleRepo = rr }
+
+// SetCache injects the cache invalidator.
+func (s *ProjectService) SetCache(c CacheInvalidator) { s.cache = c }
 
 func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams) (*domain.Project, error) {
 	// Determine team IDs — prefer TeamIDs, fall back to single TeamID
@@ -306,6 +310,10 @@ func (s *ProjectService) AddMember(ctx context.Context, projectID, userID uuid.U
 		return err
 	}
 	s.publishEvent(ctx, domain.EventProjectMemberAdded, project.OrgID.String(), projectID.String(), map[string]any{"user_id": userID.String(), "role": role})
+	// Invalidate cached permissions for the added user
+	if s.cache != nil {
+		_ = s.cache.InvalidateUserPermissions(ctx, userID, project.OrgID)
+	}
 	return nil
 }
 
@@ -346,6 +354,10 @@ func (s *ProjectService) RemoveMemberWithReassign(ctx context.Context, projectID
 		return err
 	}
 	s.publishEvent(ctx, domain.EventProjectMemberRemoved, project.OrgID.String(), projectID.String(), map[string]any{"user_id": userID.String()})
+	// Invalidate cached permissions for the removed user
+	if s.cache != nil {
+		_ = s.cache.InvalidateUserPermissions(ctx, userID, project.OrgID)
+	}
 	return nil
 }
 
@@ -387,6 +399,13 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 		orgID = p.OrgID.String()
 	}
 	s.publishEvent(ctx, "member.role_updated", orgID, projectID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "project"})
+	// Invalidate cached permissions for the user whose role changed
+	if s.cache != nil && orgID != "" {
+		orgUUID, pErr := uuid.Parse(orgID)
+		if pErr == nil {
+			_ = s.cache.InvalidateUserPermissions(ctx, userID, orgUUID)
+		}
+	}
 	return nil
 }
 

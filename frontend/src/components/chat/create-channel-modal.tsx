@@ -2,25 +2,35 @@
 
 import { api } from "@/lib/api";
 import { useChatStore } from "@/stores/chat-store";
-import { Hash, Lock, Users, X } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Hash, X } from "lucide-react";
 import { useState } from "react";
 
 interface CreateChannelModalProps {
   open: boolean;
   onClose: () => void;
+  /** Team ID — channel will be created inside this team */
+  teamId?: string;
+  /** Group channel ID — channel will be created as a sub-channel of this group */
+  groupChannelId?: string;
 }
 
-export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
+export function CreateChannelModal({
+  open,
+  onClose,
+  teamId,
+  groupChannelId,
+}: CreateChannelModalProps) {
   const addChannel = useChatStore((s) => s.addChannel);
   const setActiveChannel = useChatStore((s) => s.setActiveChannel);
+  const qc = useQueryClient();
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [channelType, setChannelType] = useState<"group" | "team" | "project">(
-    "group",
-  );
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
+
+  const parentLabel = teamId ? "team" : groupChannelId ? "group" : "conversation";
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -33,10 +43,12 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
       const channel = await api.chat.channels.create({
         name: name.trim(),
         description: description.trim(),
-        type: channelType,
+        type: "team",
+        ...(teamId ? { team_id: teamId } : {}),
       });
       addChannel(channel);
       setActiveChannel(channel.id);
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       handleClose();
     } catch (err: unknown) {
       const message =
@@ -50,7 +62,6 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
   const handleClose = () => {
     setName("");
     setDescription("");
-    setChannelType("group");
     setError("");
     onClose();
   };
@@ -58,10 +69,19 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
   if (!open) return null;
 
   return (
-    <div className="modal modal-open">
-      <div className="modal-box max-w-md bg-base-100">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      onClick={handleClose}
+    >
+      <div
+        className="w-full max-w-md bg-base-100 rounded-2xl shadow-2xl border border-base-200 p-6 mx-4"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-bold">Create Channel</h3>
+          <div className="flex items-center gap-2">
+            <Hash className="w-5 h-5 text-primary" />
+            <h3 className="text-lg font-bold">Create Channel</h3>
+          </div>
           <button
             className="btn btn-ghost btn-sm btn-square"
             onClick={handleClose}
@@ -70,52 +90,15 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
           </button>
         </div>
 
+        <p className="text-xs text-base-content/50 mb-4">
+          This channel will be created inside this {parentLabel}.
+        </p>
+
         {error && (
           <div className="alert alert-error alert-sm mb-3">
             <span className="text-sm">{error}</span>
           </div>
         )}
-
-        {/* Channel Type */}
-        <div className="form-control mb-3">
-          <label className="label">
-            <span className="label-text text-sm font-medium">Type</span>
-          </label>
-          <div className="flex gap-2">
-            {(
-              [
-                {
-                  value: "group",
-                  label: "Group",
-                  icon: <Hash className="w-4 h-4" />,
-                },
-                {
-                  value: "team",
-                  label: "Team",
-                  icon: <Users className="w-4 h-4" />,
-                },
-                {
-                  value: "project",
-                  label: "Project",
-                  icon: <Lock className="w-4 h-4" />,
-                },
-              ] as const
-            ).map((t) => (
-              <button
-                key={t.value}
-                onClick={() => setChannelType(t.value)}
-                className={`btn btn-sm flex-1 ${
-                  channelType === t.value
-                    ? "btn-primary"
-                    : "btn-ghost border border-base-200"
-                }`}
-              >
-                {t.icon}
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Name */}
         <div className="form-control mb-3">
@@ -124,7 +107,7 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
           </label>
           <input
             type="text"
-            placeholder="e.g. general, design-team, project-alpha"
+            placeholder="e.g. general, design, announcements"
             className="input input-bordered w-full"
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -151,7 +134,7 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
         </div>
 
         {/* Actions */}
-        <div className="modal-action">
+        <div className="flex justify-end gap-2 mt-4">
           <button className="btn btn-ghost" onClick={handleClose}>
             Cancel
           </button>
@@ -168,7 +151,6 @@ export function CreateChannelModal({ open, onClose }: CreateChannelModalProps) {
           </button>
         </div>
       </div>
-      <div className="modal-backdrop" onClick={handleClose} />
     </div>
   );
 }

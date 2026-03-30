@@ -210,14 +210,12 @@ func TestE2E_ConflictResolution_TrueConflict(t *testing.T) {
 	serverTask, err := m.GetTask(ctx, projectID, task.ID)
 	require.NoError(t, err)
 
-	// Same field conflict — title was changed by server
+	// FieldLevelMerge uses auto-merge (last-write-wins) since we don't track per-field versions
 	userAChanges := map[string]any{"title": "User A Title"}
-	_, resolution, err := FieldLevelMerge(serverTask, 1, userAChanges)
+	merged, resolution, err := FieldLevelMerge(serverTask, 1, userAChanges)
 	require.NoError(t, err)
-	// Should still "auto-merge" since we don't track per-field versions,
-	// but the server field differs from what user A expected
-	// In our implementation, we auto-merge in favor of user's changes
 	assert.Equal(t, "auto-merged", resolution)
+	assert.Equal(t, "User A Title", merged["title"])
 }
 
 // TestE2E_EvictAndReload tests evicting a project cache and reloading it.

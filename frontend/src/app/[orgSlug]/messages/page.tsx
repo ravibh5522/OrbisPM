@@ -23,6 +23,10 @@ export default function MessagesPage() {
   const ws = useChatStore((s) => s.ws);
 
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [createChannelContext, setCreateChannelContext] = useState<{
+    teamId?: string;
+    groupChannelId?: string;
+  }>({});
 
   // Connect chat WebSocket
   const { send } = useChatSocket(currentOrg?.id);
@@ -62,20 +66,25 @@ export default function MessagesPage() {
       {/* Left: Conversation List + Channel Panel */}
       <div
         className={cn(
-          "border-r border-base-300/50 flex-shrink-0 overflow-hidden",
+          "border-r border-base-300/50 overflow-hidden",
           activeChannelId
-            ? "hidden md:flex w-80 lg:w-96"
-            : "w-full md:w-80 lg:w-96",
+            ? "hidden md:flex md:w-80 lg:w-96 flex-shrink-0"
+            : "flex-1",
         )}
       >
-        <ChannelList onCreateChannel={() => setCreateModalOpen(true)} />
+        <ChannelList
+          onCreateChannel={(ctx) => {
+            setCreateChannelContext(ctx ?? {});
+            setCreateModalOpen(true);
+          }}
+        />
       </div>
 
       {/* Center: Chat Area */}
       <div
         className={cn(
           "flex-1 flex flex-col min-w-0",
-          !activeChannelId && "hidden md:flex",
+          !activeChannelId && "hidden",
         )}
       >
         <ChannelHeader />
@@ -91,6 +100,8 @@ export default function MessagesPage() {
       <CreateChannelModal
         open={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
+        teamId={createChannelContext.teamId}
+        groupChannelId={createChannelContext.groupChannelId}
       />
     </div>
   );

@@ -42,7 +42,7 @@ interface ConversationItem {
 }
 
 interface ChannelListProps {
-  onCreateChannel: () => void;
+  onCreateChannel: (ctx?: { teamId?: string; groupChannelId?: string }) => void;
 }
 
 /* ─── Main ChannelList ──────────────────────────────── */
@@ -152,10 +152,21 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
   }, [sidebarData]);
 
   // ─── Presence ──────────────────────────────────────
+  const setPresenceMap = useChatStore((s) => s.setPresenceMap);
+  const presenceMap = useChatStore((s) => s.presenceMap);
+
   const { data: onlineUsers } = useQuery<Set<string>>({
     queryKey: ["chat-presence"],
     queryFn: async () => {
       const res = await api.chat.presence.get();
+      // Populate enriched presence data in store
+      if (res.users) {
+        const map = new Map<string, { online: boolean; last_seen?: string }>();
+        for (const [uid, info] of Object.entries(res.users)) {
+          map.set(uid, { online: info.online, last_seen: info.last_seen });
+        }
+        setPresenceMap(map);
+      }
       return new Set(res.online_users ?? []);
     },
     enabled: !!currentOrg,
@@ -217,6 +228,16 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
     return selectedItem?.id ?? null;
   }, [activeChannelId, conversations, selectedItem]);
 
+  // Keep selectedItem in sync with fresh sidebar data so Panel 2 updates
+  // after channel creation, member changes, etc.
+  useEffect(() => {
+    if (!selectedItem) return;
+    const fresh = conversations.find((c) => c.id === selectedItem.id);
+    if (fresh && fresh !== selectedItem) {
+      setSelectedItem(fresh);
+    }
+  }, [conversations, selectedItem]);
+
   // Show channel panel for teams
   const showTeamPanel = selectedItem?.kind === "team" && selectedItem.team;
   const showGroupPanel = selectedItem?.kind === "group" && selectedItem.channel;
@@ -234,7 +255,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
   }
 
   return (
-    <div className="flex h-full">
+    <div className="flex h-full w-full">
       {/* ─── Panel 1: Unified Conversation List ──── */}
       <div
         className={cn(
@@ -249,6 +270,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
           activeItemId={activeItemId}
           onItemClick={handleItemClick}
           onlineUsers={onlineUsers}
+          presenceMap={presenceMap}
           currentUserId={user?.internal_id ?? ""}
           filter={filter}
           setFilter={setFilter}
@@ -262,15 +284,24 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
             team={selectedItem.team}
             activeChannelId={activeChannelId}
             onSelectChannel={setActiveChannel}
-            onCreateChannel={onCreateChannel}
+            onCreateChannel={() =>
+              onCreateChannel({ teamId: selectedItem.team!.id })
+            }
           />
         </div>
       )}
 
-      {/* ─── Panel 2: Members (groups) ───────────── */}
+      {/* ─── Panel 2: Channels + Members (groups) ── */}
       {showGroupPanel && selectedItem.channel && (
         <div className="flex-1 bg-base-200/50 flex flex-col min-w-0">
-          <GroupMemberPanel channel={selectedItem.channel} />
+          <GroupMemberPanel
+            channel={selectedItem.channel}
+            activeChannelId={activeChannelId}
+            onSelectChannel={setActiveChannel}
+            onCreateChannel={() =>
+              onCreateChannel({ groupChannelId: selectedItem.channel!.id })
+            }
+          />
         </div>
       )}
     </div>
@@ -284,6 +315,7 @@ function ConversationPanel({
   activeItemId,
   onItemClick,
   onlineUsers,
+  presenceMap,
   currentUserId,
   filter,
   setFilter,
@@ -292,14 +324,15 @@ function ConversationPanel({
   activeItemId: string | null;
   onItemClick: (item: ConversationItem) => void;
   onlineUsers?: Set<string>;
+  presenceMap: Map<string, { online: boolean; last_seen?: string }>;
   currentUserId: string;
   filter: string;
   setFilter: (v: string) => void;
 }) {
-  const [showUserSearch, setShowUserSearch] = useState(false);
+  const [showCreateOverlay, setShowCreateOverlay] = useState(false);
 
-  if (showUserSearch) {
-    return <UserSearchOverlay onClose={() => setShowUserSearch(false)} />;
+  if (showCreateOverlay) {
+    return <CreateConversationOverlay onClose={() => setShowCreateOverlay(false)} />;
   }
 
   return (
@@ -309,8 +342,8 @@ function ConversationPanel({
           <h2 className="text-sm font-bold text-base-content">Messages</h2>
           <button
             className="btn btn-ghost btn-xs btn-square"
-            onClick={() => setShowUserSearch(true)}
-            title="New direct message"
+            onClick={() => setShowCreateOverlay(true)}
+            title="New conversation"
           >
             <Plus className="w-4 h-4" />
           </button>
@@ -340,12 +373,39 @@ function ConversationPanel({
             isActive={activeItemId === item.id}
             onClick={() => onItemClick(item)}
             onlineUsers={onlineUsers}
+            presenceMap={presenceMap}
             currentUserId={currentUserId}
           />
         ))}
       </div>
     </div>
   );
+}
+
+/* ─── Helpers: format relative time and status color ── */
+
+function formatLastSeen(lastSeen?: string): string {
+  if (!lastSeen) return "";
+  const diff = Date.now() - new Date(lastSeen).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+/** Returns a status color class based on last activity.
+ * green: online or active <=2 min, yellow: <3 hr, red: >=3 hr */
+function statusDotColor(presence?: { online: boolean; last_seen?: string }): string {
+  if (!presence) return "bg-base-content/20"; // unknown
+  if (presence.online) return "bg-success"; // green — online now
+  if (!presence.last_seen) return "bg-error"; // red — no data
+  const mins = (Date.now() - new Date(presence.last_seen).getTime()) / 60_000;
+  if (mins <= 2) return "bg-success"; // green — within 2 min
+  if (mins < 180) return "bg-warning"; // yellow — less than 3 hr
+  return "bg-error"; // red — 3+ hr
 }
 
 /* ─── Conversation Row ──────────────────────────────── */
@@ -355,14 +415,32 @@ function ConversationRow({
   isActive,
   onClick,
   onlineUsers,
+  presenceMap,
   currentUserId,
 }: {
   item: ConversationItem;
   isActive: boolean;
   onClick: () => void;
   onlineUsers?: Set<string>;
+  presenceMap: Map<string, { online: boolean; last_seen?: string }>;
   currentUserId: string;
 }) {
+  // For DMs, resolve the other user's presence
+  const dmPresence = useMemo(() => {
+    if (item.kind !== "dm") return null;
+    const ch = item.channel!;
+    const otherUserId = ch.dm_pair
+      ?.split(":")
+      .find((id) => id !== currentUserId);
+    if (!otherUserId) return null;
+    const p = presenceMap.get(otherUserId);
+    return {
+      otherUserId,
+      isOnline: !!onlineUsers?.has(otherUserId),
+      presence: p,
+    };
+  }, [item, onlineUsers, presenceMap, currentUserId]);
+
   const icon = useMemo(() => {
     switch (item.kind) {
       case "team":
@@ -384,25 +462,28 @@ function ConversationRow({
           </div>
         );
       case "dm": {
-        const ch = item.channel!;
-        const otherUserId = ch.dm_pair
-          ?.split(":")
-          .find((id) => id !== currentUserId);
-        const isOnline = !!otherUserId && !!onlineUsers?.has(otherUserId);
         const initial = item.name[0]?.toUpperCase() || "?";
+        const dotColor = dmPresence?.presence
+          ? statusDotColor(dmPresence.presence)
+          : dmPresence?.isOnline
+            ? "bg-success"
+            : "bg-base-content/20";
         return (
           <div className="relative flex-shrink-0">
             <div className="w-8 h-8 rounded-full bg-success/10 flex items-center justify-center text-success font-bold text-xs">
               {initial}
             </div>
-            {isOnline && (
-              <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-success border-2 border-base-200" />
-            )}
+            <span
+              className={cn(
+                "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-base-200",
+                dotColor,
+              )}
+            />
           </div>
         );
       }
     }
-  }, [item, onlineUsers, currentUserId]);
+  }, [item, dmPresence]);
 
   const kindBadge = useMemo(() => {
     switch (item.kind) {
@@ -429,6 +510,16 @@ function ConversationRow({
     }
   }, [item.kind]);
 
+  // Last seen subtitle for DMs
+  const dmSubtitle = useMemo(() => {
+    if (!dmPresence) return null;
+    if (dmPresence.isOnline || dmPresence.presence?.online) return "Online";
+    if (dmPresence.presence?.last_seen) {
+      return `Last seen ${formatLastSeen(dmPresence.presence.last_seen)}`;
+    }
+    return null;
+  }, [dmPresence]);
+
   return (
     <button
       onClick={onClick}
@@ -452,6 +543,18 @@ function ConversationRow({
           </span>
           {kindBadge}
         </div>
+        {dmSubtitle && (
+          <span
+            className={cn(
+              "text-[10px] truncate block",
+              dmPresence?.isOnline
+                ? "text-success"
+                : "text-base-content/40",
+            )}
+          >
+            {dmSubtitle}
+          </span>
+        )}
       </div>
       {item.unreadCount > 0 && !isActive && (
         <span className="badge badge-primary badge-xs min-w-[18px]">
@@ -607,9 +710,20 @@ function TeamChannelPanel({
   );
 }
 
-/* ─── Group Member Panel (Panel 2 for groups) ────────── */
+/* ─── Group Panel (Panel 2 for groups) — channels + members */
 
-function GroupMemberPanel({ channel }: { channel: ChatChannel }) {
+function GroupMemberPanel({
+  channel,
+  activeChannelId,
+  onSelectChannel,
+  onCreateChannel,
+}: {
+  channel: ChatChannel;
+  activeChannelId: string | null;
+  onSelectChannel: (id: string) => void;
+  onCreateChannel: () => void;
+}) {
+  const [channelsExpanded, setChannelsExpanded] = useState(true);
   const [membersExpanded, setMembersExpanded] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const qc = useQueryClient();
@@ -646,7 +760,26 @@ function GroupMemberPanel({ channel }: { channel: ChatChannel }) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2 py-2">
+      <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1">
+        {/* Channels section — the group's main channel is listed here */}
+        <SectionHeader
+          title="Channels"
+          count={1}
+          expanded={channelsExpanded}
+          onToggle={() => setChannelsExpanded((p) => !p)}
+          onAdd={onCreateChannel}
+        />
+        {channelsExpanded && (
+          <ChannelRow
+            name={channel.name || "general"}
+            isActive={activeChannelId === channel.id}
+            onClick={() => onSelectChannel(channel.id)}
+            icon={<Hash className="w-3.5 h-3.5" />}
+            unread={channel.unread_count ?? 0}
+          />
+        )}
+
+        {/* Members section */}
         <SectionHeader
           title="Members"
           count={members?.length}
@@ -699,7 +832,11 @@ function MemberRow({
 }) {
   const currentUser = useAuthStore((s) => s.user);
   const isCurrentUser = currentUser?.internal_id === member.user_id;
+  const presenceMap = useChatStore((s) => s.presenceMap);
   const qc = useQueryClient();
+
+  const presence = presenceMap.get(member.user_id);
+  const dotColor = statusDotColor(presence);
 
   const updateRole = useMutation({
     mutationFn: async (newRole: string) => {
@@ -713,21 +850,34 @@ function MemberRow({
 
   return (
     <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-base-300/30 group/member">
-      <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] flex-shrink-0">
-        {member.avatar_url ? (
-          <img
-            src={member.avatar_url}
-            alt=""
-            className="w-6 h-6 rounded-full object-cover"
-          />
-        ) : (
-          (member.display_name?.[0] || member.email?.[0] || "?").toUpperCase()
-        )}
+      <div className="relative flex-shrink-0">
+        <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px]">
+          {member.avatar_url ? (
+            <img
+              src={member.avatar_url}
+              alt=""
+              className="w-6 h-6 rounded-full object-cover"
+            />
+          ) : (
+            (member.display_name?.[0] || member.email?.[0] || "?").toUpperCase()
+          )}
+        </div>
+        <span
+          className={cn(
+            "absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-base-200",
+            dotColor,
+          )}
+        />
       </div>
       <div className="flex-1 min-w-0">
         <span className="text-xs font-medium truncate block">
           {member.display_name || member.email}
         </span>
+        {!presence?.online && presence?.last_seen && (
+          <span className="text-[9px] text-base-content/35 truncate block">
+            {formatLastSeen(presence.last_seen)}
+          </span>
+        )}
       </div>
       {member.role !== "member" && (
         <span className="badge badge-xs badge-ghost capitalize">
@@ -860,13 +1010,21 @@ function AddMemberSearch({
   );
 }
 
-/* ─── User Search Overlay (for starting DMs) ────────── */
+/* ─── Create Conversation Overlay (DM / Group / Team) ── */
 
-function UserSearchOverlay({ onClose }: { onClose: () => void }) {
+type CreateMode = "dm" | "group" | "team";
+
+function CreateConversationOverlay({ onClose }: { onClose: () => void }) {
+  const [mode, setMode] = useState<CreateMode>("dm");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<OrgMemberInfo[]>([]);
+  const [name, setName] = useState("");
+  const [creating, setCreating] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const setActiveChannel = useChatStore((s) => s.setActiveChannel);
+  const addChannel = useChatStore((s) => s.addChannel);
+  const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
 
   useEffect(() => {
@@ -874,6 +1032,13 @@ function UserSearchOverlay({ onClose }: { onClose: () => void }) {
     const timer = setTimeout(() => setDebouncedQuery(query), 250);
     return () => clearTimeout(timer);
   }, [query]);
+
+  // Reset selections when mode changes
+  useEffect(() => {
+    setSelectedUsers([]);
+    setName("");
+    setQuery("");
+  }, [mode]);
 
   const { data: results, isLoading } = useQuery<OrgMemberInfo[]>({
     queryKey: ["chat-user-search", debouncedQuery],
@@ -884,57 +1049,249 @@ function UserSearchOverlay({ onClose }: { onClose: () => void }) {
     enabled: !!debouncedQuery.trim(),
   });
 
-  const handleSelect = async (userId: string) => {
+  const filteredResults = results?.filter(
+    (u) => !selectedUsers.some((s) => s.user_id === u.user_id),
+  );
+
+  const toggleUser = (user: OrgMemberInfo) => {
+    if (mode === "dm") {
+      // DM mode: single user only, auto-start
+      handleCreateDM(user);
+      return;
+    }
+    setSelectedUsers((prev) => {
+      const exists = prev.find((u) => u.user_id === user.user_id);
+      if (exists) return prev.filter((u) => u.user_id !== user.user_id);
+      return [...prev, user];
+    });
+    setQuery("");
+    inputRef.current?.focus();
+  };
+
+  const removeUser = (userId: string) => {
+    setSelectedUsers((prev) => prev.filter((u) => u.user_id !== userId));
+    inputRef.current?.focus();
+  };
+
+  const handleCreateDM = async (user: OrgMemberInfo) => {
     try {
-      const channel = await api.chat.channels.getOrCreateDM(userId);
+      const channel = await api.chat.channels.getOrCreateDM(user.user_id);
       setActiveChannel(channel.id);
       qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       onClose();
     } catch {
-      // ignore
+      toast.error("Failed to create conversation");
     }
   };
 
+  const handleCreateGroup = async () => {
+    if (selectedUsers.length < 1) return;
+    setCreating(true);
+    try {
+      const groupName =
+        name.trim() ||
+        selectedUsers.map((u) => u.display_name || u.email).join(", ");
+      const channel = await api.chat.channels.create({
+        name: groupName,
+        type: "group",
+      });
+      for (const u of selectedUsers) {
+        try {
+          await api.chat.members.add(channel.id, u.user_id);
+        } catch {
+          // user may already be a member
+        }
+      }
+      addChannel(channel);
+      setActiveChannel(channel.id);
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+      onClose();
+    } catch {
+      toast.error("Failed to create group");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCreateTeam = async () => {
+    if (!name.trim() || !currentOrg) return;
+    setCreating(true);
+    try {
+      // 1. Create team in main backend
+      const team = await api.teams.create(currentOrg.id, {
+        name: name.trim(),
+      });
+
+      // 2. Create default channels within the team
+      const defaultChannels = ["general", "random"];
+      let firstChannel: ChatChannel | null = null;
+      for (const chName of defaultChannels) {
+        try {
+          const ch = await api.chat.channels.create({
+            name: chName,
+            type: "team",
+            team_id: team.id,
+          });
+          if (!firstChannel) firstChannel = ch;
+          // Add selected members to each channel
+          for (const u of selectedUsers) {
+            try {
+              await api.chat.members.add(ch.id, u.user_id);
+            } catch {
+              // ignore
+            }
+          }
+        } catch {
+          // ignore individual channel creation failures
+        }
+      }
+
+      if (firstChannel) {
+        addChannel(firstChannel);
+        setActiveChannel(firstChannel.id);
+      }
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+      onClose();
+    } catch {
+      toast.error("Failed to create team");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleSubmit = () => {
+    if (mode === "group") handleCreateGroup();
+    else if (mode === "team") handleCreateTeam();
+  };
+
+  const canSubmit =
+    mode === "dm"
+      ? false // DMs are created on user click
+      : mode === "group"
+        ? selectedUsers.length >= 1
+        : name.trim().length > 0; // Team just needs a name
+
+  const submitLabel =
+    mode === "group"
+      ? `Create Group${selectedUsers.length > 0 ? ` (${selectedUsers.length})` : ""}`
+      : "Create Team";
+
   return (
     <div className="flex flex-col h-full bg-base-100">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-base-300">
-        <Search className="w-4 h-4 text-base-content/40" />
-        <input
-          ref={inputRef}
-          type="text"
-          placeholder="Find or start a conversation..."
-          className="flex-1 bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Escape" && onClose()}
-        />
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-base-300">
+        <span className="text-sm font-semibold">New Conversation</span>
         <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
           <X className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Mode selector */}
+      <div className="flex gap-1 px-3 py-2 border-b border-base-300">
+        {(
+          [
+            { value: "dm" as const, label: "DM" },
+            { value: "group" as const, label: "Group" },
+            { value: "team" as const, label: "Team" },
+          ] as const
+        ).map((m) => (
+          <button
+            key={m.value}
+            onClick={() => setMode(m.value)}
+            className={cn(
+              "btn btn-xs flex-1",
+              mode === m.value
+                ? "btn-primary"
+                : "btn-ghost border border-base-200",
+            )}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Name input for Group / Team */}
+      {(mode === "group" || mode === "team") && (
+        <div className="px-3 py-2 border-b border-base-300">
+          <input
+            type="text"
+            placeholder={
+              mode === "team" ? "Team name *" : "Group name (optional)"
+            }
+            className="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30 border-b border-base-300/50 pb-1"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+      )}
+
+      {/* User search & selection */}
+      <div className="px-3 py-2 border-b border-base-300">
+        <div className="flex flex-wrap items-center gap-1.5 min-h-[32px]">
+          <span className="text-xs font-medium text-base-content/50">
+            {mode === "dm" ? "To:" : "Members:"}
+          </span>
+          {selectedUsers.map((u) => (
+            <span
+              key={u.user_id}
+              className="inline-flex items-center gap-1 bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-full"
+            >
+              {u.display_name || u.email}
+              <button
+                onClick={() => removeUser(u.user_id)}
+                className="hover:text-error transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+          <input
+            ref={inputRef}
+            type="text"
+            placeholder="Search people..."
+            className="flex-1 min-w-[100px] bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Backspace" && !query && selectedUsers.length > 0) {
+                removeUser(selectedUsers[selectedUsers.length - 1].user_id);
+              }
+              if (e.key === "Escape") onClose();
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Search results */}
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading && (
           <div className="flex justify-center py-4">
             <span className="loading loading-spinner loading-sm" />
           </div>
         )}
-        {!isLoading && debouncedQuery && (!results || results.length === 0) && (
+        {!isLoading &&
+          debouncedQuery &&
+          (!filteredResults || filteredResults.length === 0) && (
+            <p className="text-xs text-center text-base-content/40 py-4">
+              No users found
+            </p>
+          )}
+        {!debouncedQuery && selectedUsers.length === 0 && (
           <p className="text-xs text-center text-base-content/40 py-4">
-            No users found
+            {mode === "dm"
+              ? "Type a name or email to search"
+              : mode === "team"
+                ? "Add members (optional)"
+                : "Search people to add to the group"}
           </p>
         )}
-        {!debouncedQuery && (
-          <p className="text-xs text-center text-base-content/40 py-4">
-            Type a name or email to search
-          </p>
-        )}
-        {results?.map((u) => (
+        {filteredResults?.map((u) => (
           <button
             key={u.user_id}
             className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-base-300/60 transition-colors text-left"
-            onClick={() => handleSelect(u.user_id)}
+            onClick={() => toggleUser(u)}
           >
-            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
               {u.avatar_url ? (
                 <img
                   src={u.avatar_url}
@@ -945,7 +1302,7 @@ function UserSearchOverlay({ onClose }: { onClose: () => void }) {
                 (u.display_name?.[0] || u.email?.[0] || "?").toUpperCase()
               )}
             </div>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="text-sm font-medium truncate">
                 {u.display_name || u.email}
               </div>
@@ -958,6 +1315,23 @@ function UserSearchOverlay({ onClose }: { onClose: () => void }) {
           </button>
         ))}
       </div>
+
+      {/* Action button (not for DM mode — DMs create on user click) */}
+      {mode !== "dm" && (
+        <div className="px-3 py-2 border-t border-base-300">
+          <button
+            className="btn btn-primary btn-sm w-full"
+            disabled={!canSubmit || creating}
+            onClick={handleSubmit}
+          >
+            {creating ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              submitLabel
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

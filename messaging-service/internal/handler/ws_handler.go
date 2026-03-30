@@ -73,13 +73,14 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		_ = h.presenceSvc.SetOnline(r.Context(), orgID, userID)
 	}
 	defer func() {
+		now := time.Now().UTC().Format(time.RFC3339)
 		if h.presenceSvc != nil {
 			_ = h.presenceSvc.SetOffline(context.Background(), orgID, userID)
 		}
-		// Broadcast offline event to org
+		// Broadcast offline event with last_seen timestamp
 		h.hub.BroadcastOrg(orgID, websocket.WSMessage{
 			Action:  "presence:offline",
-			Payload: mustMarshal(map[string]any{"user_id": userID}),
+			Payload: mustMarshal(map[string]any{"user_id": userID, "last_seen": now}),
 		}, nil)
 	}()
 

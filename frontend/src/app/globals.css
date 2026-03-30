@@ -232,6 +232,17 @@
    glass treatment. No need to add special classes to new pages.
    ═══════════════════════════════════════════════════════════════ */
 
+/* Global: remove modal overlay darkness — card handles its own contrast */
+.modal {
+  background-color: transparent !important;
+}
+.modal-backdrop,
+.modal::backdrop {
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 /* Body must be transparent so html gradient shows through */
 [data-theme="glass-light"] body,
 [data-theme="glass-dark"] body {
@@ -286,9 +297,9 @@
 /* Light dropdowns/modals — more opaque for readability */
 [data-theme="glass-light"] .dropdown-content,
 [data-theme="glass-light"] .modal-box {
-  background-color: oklch(99% 0.005 270 / 0.88) !important;
-  backdrop-filter: blur(32px) saturate(1.6) !important;
-  -webkit-backdrop-filter: blur(32px) saturate(1.6) !important;
+  background-color: oklch(98% 0.004 270 / 0.15) !important;
+  backdrop-filter: blur(48px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(48px) saturate(1.8) !important;
   border: 1px solid oklch(0% 0 0 / 0.08) !important;
   box-shadow:
     inset 0 1px 0 oklch(100% 0 0 / 0.4),
@@ -363,12 +374,17 @@
     0 3px 12px oklch(62% 0.2 20 / 0.2) !important;
 }
 
-/* ── Glass Light — Badges: frosted pill ── */
-[data-theme="glass-light"] .badge {
+/* ── Glass Light — Badges: frosted pill (exclude semantic variants) ── */
+[data-theme="glass-light"] .badge:not(.badge-primary):not(.badge-secondary):not(.badge-accent):not(.badge-success):not(.badge-warning):not(.badge-error):not(.badge-info) {
   border-color: oklch(0% 0 0 / 0.08) !important;
   background-color: oklch(100% 0 0 / 0.45) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+[data-theme="glass-light"] .badge-primary {
+  background-color: var(--color-primary) !important;
+  color: var(--color-primary-content) !important;
+  border-color: var(--color-primary) !important;
 }
 
 /* ── Glass Light — Menu items ── */
@@ -469,9 +485,9 @@
 /* ── Glass Light — Modal backdrop ── */
 [data-theme="glass-light"] .modal-backdrop,
 [data-theme="glass-light"] .modal::backdrop {
-  background-color: oklch(0% 0 0 / 0.25) !important;
-  backdrop-filter: blur(6px) !important;
-  -webkit-backdrop-filter: blur(6px) !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* ── Glass Light — Avatar group / placeholder ── */
@@ -570,10 +586,10 @@
 /* Dark dropdowns/modals — slightly more opaque glass for readability */
 [data-theme="glass-dark"] .dropdown-content,
 [data-theme="glass-dark"] .modal-box {
-  background-color: oklch(100% 0 0 / 0.08) !important;
+  background-color: oklch(100% 0 0 / 0.06) !important;
   color: oklch(95% 0.005 270) !important;
-  backdrop-filter: blur(40px) saturate(1.5) !important;
-  -webkit-backdrop-filter: blur(40px) saturate(1.5) !important;
+  backdrop-filter: blur(48px) saturate(1.8) !important;
+  -webkit-backdrop-filter: blur(48px) saturate(1.8) !important;
   border: 1px solid oklch(100% 0 0 / 0.1) !important;
   box-shadow:
     inset 0 1px 0 oklch(100% 0 0 / 0.12),
@@ -670,12 +686,17 @@
   color: oklch(95% 0.005 270 / 0.6) !important;
 }
 
-/* ── Glass Dark — Badges: frosted pill ── */
-[data-theme="glass-dark"] .badge {
+/* ── Glass Dark — Badges: frosted pill (exclude semantic variants) ── */
+[data-theme="glass-dark"] .badge:not(.badge-primary):not(.badge-secondary):not(.badge-accent):not(.badge-success):not(.badge-warning):not(.badge-error):not(.badge-info) {
   border-color: oklch(100% 0 0 / 0.1) !important;
   background-color: oklch(100% 0 0 / 0.06) !important;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+[data-theme="glass-dark"] .badge-primary {
+  background-color: var(--color-primary) !important;
+  color: var(--color-primary-content) !important;
+  border-color: var(--color-primary) !important;
 }
 
 /* ── Glass Dark — Menu items ── */
@@ -852,9 +873,9 @@
 /* ── Glass Dark — Modal backdrop ── */
 [data-theme="glass-dark"] .modal-backdrop,
 [data-theme="glass-dark"] .modal::backdrop {
-  background-color: oklch(0% 0 0 / 0.6) !important;
-  backdrop-filter: blur(8px) !important;
-  -webkit-backdrop-filter: blur(8px) !important;
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 /* ── Glass Dark — Avatar group / placeholder ── */

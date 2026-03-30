@@ -1599,7 +1599,14 @@ export const api = {
     },
     // Presence
     presence: {
-      get: () => get<{ online_users: string[] }>(`${V1}/chat/presence`),
+      get: () =>
+        get<{
+          online_users: string[];
+          users: Record<
+            string,
+            { user_id: string; online: boolean; last_seen?: string }
+          >;
+        }>(`${V1}/chat/presence`),
     },
     // File upload
     upload: {

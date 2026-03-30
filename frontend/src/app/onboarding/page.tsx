@@ -1,14 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { useAuthStore } from "@/stores/auth-store";
-import { Input } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/form-fields";
 import { api, ApiError } from "@/lib/api";
 import { slugify } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import { Building2 } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
 
 interface OnboardingForm {
   orgName: string;
@@ -17,7 +17,7 @@ interface OnboardingForm {
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const { isAuthenticated, orgs, setCurrentOrg } = useAuthStore();
+  const { isAuthenticated, isLoading, orgs, setCurrentOrg } = useAuthStore();
   const [error, setError] = useState("");
   const submitting = useRef(false);
   const {
@@ -30,20 +30,26 @@ export default function OnboardingPage() {
 
   // Redirect in effect — never during render
   useEffect(() => {
+    if (isLoading) return;
     if (isAuthenticated && orgs.length > 0) {
       router.replace(`/${orgs[0].slug}`);
     }
-  }, [isAuthenticated, orgs, router]);
+  }, [isAuthenticated, isLoading, orgs, router]);
 
   useEffect(() => {
+    if (isLoading) return;
     if (!isAuthenticated) {
       router.replace("/login");
     }
-  }, [isAuthenticated, router]);
+  }, [isAuthenticated, isLoading, router]);
 
-  // Show nothing while redirecting
-  if (!isAuthenticated || orgs.length > 0) {
-    return null;
+  // Show nothing while loading or redirecting
+  if (isLoading || !isAuthenticated || orgs.length > 0) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <span className="loading loading-spinner loading-lg text-primary" />
+      </div>
+    );
   }
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {

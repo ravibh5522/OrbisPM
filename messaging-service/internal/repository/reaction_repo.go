@@ -73,3 +73,30 @@ func (r *reactionRepo) ListByMessage(ctx context.Context, tx pgx.Tx, messageID u
 	}
 	return groups, nil
 }
+
+func (r *reactionRepo) ListByMessages(ctx context.Context, tx pgx.Tx, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.ReactionGroup, error) {
+	if len(messageIDs) == 0 {
+		return map[uuid.UUID][]domain.ReactionGroup{}, nil
+	}
+	db := conn(r.pool, tx)
+	rows, err := db.Query(ctx, `
+		SELECT message_id, emoji, count(*), array_agg(user_id ORDER BY created_at)
+		FROM message_reactions WHERE message_id = ANY($1)
+		GROUP BY message_id, emoji ORDER BY message_id, min(created_at)`, messageIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("batch list reactions: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[uuid.UUID][]domain.ReactionGroup, len(messageIDs))
+	for rows.Next() {
+		var msgID uuid.UUID
+		var g domain.ReactionGroup
+		if err := rows.Scan(&msgID, &g.Emoji, &g.Count, &g.Users); err != nil {
+			return nil, fmt.Errorf("scan batch reaction group: %w", err)
+		}
+		result[msgID] = append(result[msgID], g)
+	}
+	return result, nil
+}

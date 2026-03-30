@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 )
 
@@ -28,12 +29,20 @@ type UpdateOrgParams struct {
 	Settings *map[string]any `json:"settings,omitempty"`
 }
 
+// CacheInvalidator defines the subset of cache.Manager needed for permission invalidation.
+type CacheInvalidator interface {
+	InvalidateUserPermissions(ctx context.Context, userID, orgID uuid.UUID) error
+	InvalidateRolePermissions(ctx context.Context, orgID uuid.UUID) error
+}
+
 // OrgService handles organization business logic.
 type OrgService struct {
 	orgRepo       repository.OrgRepository
 	orgMemberRepo repository.OrgMemberRepository
 	roleRepo      repository.RoleRepository
 	txm           *repository.TxManager
+	cache         CacheInvalidator
+	publisher     EventPublisher
 }
 
 // NewOrgService creates a new OrgService.
@@ -43,6 +52,12 @@ func NewOrgService(orgRepo repository.OrgRepository, orgMemberRepo repository.Or
 
 // SetRoleRepo injects the role repository for role validation.
 func (s *OrgService) SetRoleRepo(rr repository.RoleRepository) { s.roleRepo = rr }
+
+// SetCache injects the cache invalidator.
+func (s *OrgService) SetCache(c CacheInvalidator) { s.cache = c }
+
+// SetPublisher injects the event publisher.
+func (s *OrgService) SetPublisher(p EventPublisher) { s.publisher = p }
 
 var slugRegex = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
@@ -183,9 +198,22 @@ func (s *OrgService) UpdateMemberRole(ctx context.Context, orgID, userID uuid.UU
 	if err := s.validateRole(ctx, orgID, domain.ScopeOrg, role); err != nil {
 		return err
 	}
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.orgMemberRepo.UpdateRole(ctx, tx, orgID, userID, role)
 	})
+	if err != nil {
+		return err
+	}
+	// Invalidate cached permissions for the affected user
+	if s.cache != nil {
+		_ = s.cache.InvalidateUserPermissions(ctx, userID, orgID)
+	}
+	s.publishEvent(ctx, domain.EventOrgMemberRoleUpdated, orgID.String(), orgID.String(), map[string]any{
+		"user_id": userID.String(),
+		"role":    role,
+		"scope":   "org",
+	})
+	return nil
 }
 
 // validateRole checks that a role slug is valid for the given scope (system or custom).
@@ -202,7 +230,35 @@ func (s *OrgService) validateRole(ctx context.Context, orgID uuid.UUID, scope, s
 
 // RemoveMember removes a member from an org.
 func (s *OrgService) RemoveMember(ctx context.Context, orgID, userID uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.orgMemberRepo.Remove(ctx, tx, orgID, userID)
 	})
+	if err != nil {
+		return err
+	}
+	// Invalidate cached permissions for the removed user
+	if s.cache != nil {
+		_ = s.cache.InvalidateUserPermissions(ctx, userID, orgID)
+	}
+	s.publishEvent(ctx, domain.EventOrgMemberRemoved, orgID.String(), orgID.String(), map[string]any{
+		"user_id": userID.String(),
+	})
+	return nil
+}
+
+// publishEvent publishes a domain event via the event publisher.
+func (s *OrgService) publishEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
+	if s.publisher == nil {
+		return
+	}
+	event := domain.DomainEvent{
+		Type:     eventType,
+		OrgID:    orgID,
+		ActorID:  tenant.UserID(ctx).String(),
+		EntityID: entityID,
+		Payload:  payload,
+	}
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		_ = err
+	}
 }

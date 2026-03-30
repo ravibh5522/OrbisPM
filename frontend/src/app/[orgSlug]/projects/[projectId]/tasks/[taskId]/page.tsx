@@ -854,7 +854,9 @@ function ChecklistSection({
     mutationFn: (title: string) =>
       api.checklists.create(orgId, projectId, taskId, { title }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["checklists"] });
+      qc.invalidateQueries({
+        queryKey: ["checklists", orgId, projectId, taskId],
+      });
       setNewTitle("");
       toast.success("Checklist item added");
     },
@@ -1195,7 +1197,9 @@ function CommentsSection({
     mutationFn: (b: string) =>
       api.comments.create(orgId, projectId, taskId, { body: b }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["comments"] });
+      qc.invalidateQueries({
+        queryKey: ["comments", orgId, projectId, taskId],
+      });
       setBody("");
       toast.success("Comment added");
     },
@@ -1205,7 +1209,9 @@ function CommentsSection({
     mutationFn: (id: string) =>
       api.comments.delete(orgId, projectId, taskId, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["comments"] });
+      qc.invalidateQueries({
+        queryKey: ["comments", orgId, projectId, taskId],
+      });
       toast.success("Comment deleted");
     },
   });
@@ -1293,7 +1299,9 @@ function AttachmentsSection({
     mutationFn: (id: string) =>
       api.attachments.delete(orgId, projectId, taskId, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["attachments"] });
+      qc.invalidateQueries({
+        queryKey: ["attachments", orgId, projectId, taskId],
+      });
       toast.success("Attachment deleted");
     },
   });
@@ -1304,7 +1312,9 @@ function AttachmentsSection({
     setUploading(true);
     try {
       await api.attachments.upload(orgId, projectId, taskId, file);
-      qc.invalidateQueries({ queryKey: ["attachments"] });
+      qc.invalidateQueries({
+        queryKey: ["attachments", orgId, projectId, taskId],
+      });
     } finally {
       setUploading(false);
       e.target.value = "";
@@ -1510,7 +1520,9 @@ function DependenciesSection({
     mutationFn: (data: { depends_on_id: string; type: string }) =>
       api.dependencies.add(orgId, projectId, taskId, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dependencies"] });
+      qc.invalidateQueries({
+        queryKey: ["dependencies", orgId, projectId, taskId],
+      });
       setDepId("");
       setAdding(false);
       toast.success("Dependency added");
@@ -1521,7 +1533,9 @@ function DependenciesSection({
     mutationFn: (depOnId: string) =>
       api.dependencies.remove(orgId, projectId, taskId, depOnId),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["dependencies"] });
+      qc.invalidateQueries({
+        queryKey: ["dependencies", orgId, projectId, taskId],
+      });
       toast.success("Dependency removed");
     },
   });
@@ -1629,7 +1643,7 @@ function RulesSection({
     mutationFn: (data: { rule_type: string; is_required: boolean }) =>
       api.rules.create(orgId, projectId, taskId, data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rules"] });
+      qc.invalidateQueries({ queryKey: ["rules", orgId, projectId, taskId] });
       setAdding(false);
       toast.success("Rule added");
     },
@@ -1638,7 +1652,7 @@ function RulesSection({
   const removeMutation = useMutation({
     mutationFn: (id: string) => api.rules.delete(orgId, projectId, taskId, id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["rules"] });
+      qc.invalidateQueries({ queryKey: ["rules", orgId, projectId, taskId] });
       toast.success("Rule removed");
     },
   });

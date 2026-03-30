@@ -56,6 +56,31 @@ func (r *attachmentRepo) ListByMessage(ctx context.Context, tx pgx.Tx, messageID
 	return attachments, nil
 }
 
+func (r *attachmentRepo) ListByMessages(ctx context.Context, tx pgx.Tx, messageIDs []uuid.UUID) (map[uuid.UUID][]domain.Attachment, error) {
+	if len(messageIDs) == 0 {
+		return map[uuid.UUID][]domain.Attachment{}, nil
+	}
+	db := conn(r.pool, tx)
+	rows, err := db.Query(ctx, `
+		SELECT id, org_id, message_id, file_name, file_size, content_type, storage_key, metadata, created_at
+		FROM message_attachments WHERE message_id = ANY($1) ORDER BY created_at`, messageIDs,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("batch list attachments: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[uuid.UUID][]domain.Attachment, len(messageIDs))
+	for rows.Next() {
+		var a domain.Attachment
+		if err := rows.Scan(&a.ID, &a.OrgID, &a.MessageID, &a.FileName, &a.FileSize, &a.ContentType, &a.StorageKey, &a.Metadata, &a.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan batch attachment: %w", err)
+		}
+		result[a.MessageID] = append(result[a.MessageID], a)
+	}
+	return result, nil
+}
+
 func (r *attachmentRepo) GetByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.Attachment, error) {
 	db := conn(r.pool, tx)
 	a := &domain.Attachment{}

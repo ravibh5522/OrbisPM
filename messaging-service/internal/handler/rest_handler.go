@@ -101,6 +101,7 @@ func (h *RESTHandler) Routes(r chi.Router) {
 
 	// Attachments
 	r.Get("/attachments/{attachmentID}/url", h.GetAttachmentURL)
+	r.Get("/attachments/{attachmentID}/file", h.DownloadAttachment)
 
 	r.Get("/bookmarks", h.ListBookmarks)
 
@@ -714,12 +715,27 @@ func (h *RESTHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 
 func (h *RESTHandler) GetPresence(w http.ResponseWriter, r *http.Request) {
 	orgID := tenant.OrgID(r.Context())
-	online, err := h.presenceSvc.GetOnlineUsers(r.Context(), orgID)
+
+	details, err := h.presenceSvc.GetPresenceDetails(r.Context(), orgID)
 	if err != nil {
 		Error(w, r, err)
 		return
 	}
-	JSON(w, http.StatusOK, map[string]any{"online_users": online})
+
+	// Build both formats: legacy online_users array + enriched users map
+	var onlineUsers []uuid.UUID
+	usersMap := make(map[string]service.PresenceInfo, len(details))
+	for _, d := range details {
+		usersMap[d.UserID.String()] = d
+		if d.Online {
+			onlineUsers = append(onlineUsers, d.UserID)
+		}
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"online_users": onlineUsers,
+		"users":        usersMap,
+	})
 }
 
 // ─── Upload Handler ───────────────────────────
@@ -800,6 +816,17 @@ func (h *RESTHandler) GetAttachmentURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	JSON(w, http.StatusOK, att)
+}
+
+// DownloadAttachment streams the attachment file through the gateway so clients
+// never see direct S3/MinIO URLs.
+func (h *RESTHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request) {
+	attachmentID, err := uuid.Parse(chi.URLParam(r, "attachmentID"))
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid attachment_id"})
+		return
+	}
+	h.uploadSvc.StreamFile(r.Context(), w, attachmentID)
 }
 
 // ─── Category Handlers ───────────────────────

@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"path"
+	"strconv"
 	"strings"
 	"time"
 
@@ -135,13 +137,8 @@ func (u *UploadService) Upload(
 		return nil, fmt.Errorf("create attachment record: %w", err)
 	}
 
-	// Generate presigned URL for the response
-	url, err := u.PresignURL(ctx, storageKey)
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to generate presigned url for attachment")
-	} else {
-		att.URL = url
-	}
+	// Return gateway-proxied URL instead of direct S3 presigned URL
+	att.URL = "/api/v1/chat/attachments/" + att.ID.String() + "/file"
 
 	return att, nil
 }
@@ -189,4 +186,44 @@ func sanitizeFileName(name string) string {
 
 func isImage(contentType string) bool {
 	return strings.HasPrefix(contentType, "image/")
+}
+
+// StreamFile streams an attachment directly from MinIO to the HTTP response,
+// so clients access files through the gateway instead of direct S3 URLs.
+func (u *UploadService) StreamFile(ctx context.Context, w http.ResponseWriter, attachmentID uuid.UUID) {
+	att, err := u.attachmentR.GetByID(ctx, nil, attachmentID)
+	if err != nil {
+		http.Error(w, "attachment not found", http.StatusNotFound)
+		return
+	}
+
+	obj, err := u.mc.GetObject(ctx, u.bucket, att.StorageKey, minio.GetObjectOptions{})
+	if err != nil {
+		log.Error().Err(err).Str("key", att.StorageKey).Msg("failed to get object from minio")
+		http.Error(w, "failed to fetch file", http.StatusInternalServerError)
+		return
+	}
+	defer obj.Close()
+
+	info, err := obj.Stat()
+	if err != nil {
+		log.Error().Err(err).Str("key", att.StorageKey).Msg("failed to stat minio object")
+		http.Error(w, "failed to fetch file", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", att.ContentType)
+	w.Header().Set("Content-Length", strconv.FormatInt(info.Size, 10))
+	// Inline for images so they render in <img>, attachment for others
+	if isImage(att.ContentType) {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=%q", att.FileName))
+	} else {
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", att.FileName))
+	}
+	// Cache for 1 hour since attachments are immutable
+	w.Header().Set("Cache-Control", "private, max-age=3600, immutable")
+
+	if _, err := io.Copy(w, obj); err != nil {
+		log.Error().Err(err).Str("key", att.StorageKey).Msg("failed to stream file")
+	}
 }

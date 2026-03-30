@@ -7,19 +7,25 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 )
 
 // DependencyService handles task dependency business logic.
 type DependencyService struct {
-	depRepo  repository.TaskDependencyRepository
-	taskRepo repository.TaskRepository
-	txm      *repository.TxManager
+	depRepo   repository.TaskDependencyRepository
+	taskRepo  repository.TaskRepository
+	txm       *repository.TxManager
+	publisher EventPublisher
 }
 
 // NewDependencyService creates a new DependencyService.
-func NewDependencyService(depRepo repository.TaskDependencyRepository, taskRepo repository.TaskRepository, txm *repository.TxManager) *DependencyService {
-	return &DependencyService{depRepo: depRepo, taskRepo: taskRepo, txm: txm}
+func NewDependencyService(depRepo repository.TaskDependencyRepository, taskRepo repository.TaskRepository, txm *repository.TxManager, publisher ...EventPublisher) *DependencyService {
+	s := &DependencyService{depRepo: depRepo, taskRepo: taskRepo, txm: txm}
+	if len(publisher) > 0 {
+		s.publisher = publisher[0]
+	}
+	return s
 }
 
 // AddDependencyParams holds parameters for adding a dependency.
@@ -36,7 +42,8 @@ func (s *DependencyService) Add(ctx context.Context, params AddDependencyParams)
 	}
 
 	// Check both tasks exist
-	if _, err := s.taskRepo.GetByID(ctx, params.TaskID); err != nil {
+	task, err := s.taskRepo.GetByID(ctx, params.TaskID)
+	if err != nil {
 		return domain.ErrNotFound.WithDetail("task not found")
 	}
 	if _, err := s.taskRepo.GetByID(ctx, params.DependsOnID); err != nil {
@@ -58,16 +65,38 @@ func (s *DependencyService) Add(ctx context.Context, params AddDependencyParams)
 		Type:        params.Type,
 	}
 
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.depRepo.Add(ctx, tx, dep)
 	})
+	if err != nil {
+		return err
+	}
+	s.publishEvent(ctx, domain.EventDependencyAdded, task.OrgID.String(), params.TaskID.String(), map[string]any{
+		"task_id":       params.TaskID.String(),
+		"depends_on_id": params.DependsOnID.String(),
+		"type":          params.Type,
+		"project_id":    task.ProjectID.String(),
+	})
+	return nil
 }
 
 // Remove removes a dependency between two tasks.
 func (s *DependencyService) Remove(ctx context.Context, taskID, dependsOnID uuid.UUID) error {
-	return s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	task, _ := s.taskRepo.GetByID(ctx, taskID)
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.depRepo.Remove(ctx, tx, taskID, dependsOnID)
 	})
+	if err != nil {
+		return err
+	}
+	if task != nil {
+		s.publishEvent(ctx, domain.EventDependencyRemoved, task.OrgID.String(), taskID.String(), map[string]any{
+			"task_id":       taskID.String(),
+			"depends_on_id": dependsOnID.String(),
+			"project_id":    task.ProjectID.String(),
+		})
+	}
+	return nil
 }
 
 // ListByTask returns all dependencies for a task.
@@ -78,4 +107,21 @@ func (s *DependencyService) ListByTask(ctx context.Context, taskID uuid.UUID) ([
 // ListDependents returns all tasks that depend on the given task.
 func (s *DependencyService) ListDependents(ctx context.Context, taskID uuid.UUID) ([]*domain.TaskDependency, error) {
 	return s.depRepo.ListDependents(ctx, taskID)
+}
+
+// publishEvent publishes a domain event via the event publisher.
+func (s *DependencyService) publishEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
+	if s.publisher == nil {
+		return
+	}
+	event := domain.DomainEvent{
+		Type:     eventType,
+		OrgID:    orgID,
+		ActorID:  tenant.UserID(ctx).String(),
+		EntityID: entityID,
+		Payload:  payload,
+	}
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		_ = err
+	}
 }

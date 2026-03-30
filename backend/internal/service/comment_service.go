@@ -13,6 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
 )
@@ -34,10 +35,15 @@ type CommentService struct {
 	orgMemberRepo repository.OrgMemberRepository
 	txm           *repository.TxManager
 	workerSrv     *worker.Server
+	publisher     EventPublisher
 }
 
-func NewCommentService(commentRepo repository.CommentRepository, orgMemberRepo repository.OrgMemberRepository, txm *repository.TxManager, workerSrv *worker.Server) *CommentService {
-	return &CommentService{commentRepo: commentRepo, orgMemberRepo: orgMemberRepo, txm: txm, workerSrv: workerSrv}
+func NewCommentService(commentRepo repository.CommentRepository, orgMemberRepo repository.OrgMemberRepository, txm *repository.TxManager, workerSrv *worker.Server, publisher ...EventPublisher) *CommentService {
+	s := &CommentService{commentRepo: commentRepo, orgMemberRepo: orgMemberRepo, txm: txm, workerSrv: workerSrv}
+	if len(publisher) > 0 {
+		s.publisher = publisher[0]
+	}
+	return s
 }
 
 func (s *CommentService) Create(ctx context.Context, params CreateCommentParams) (*domain.Comment, error) {
@@ -61,6 +67,13 @@ func (s *CommentService) Create(ctx context.Context, params CreateCommentParams)
 
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "comment", created.ID.String(), "created", created.UserID.String())
+
+	// Publish domain event for real-time sync
+	s.publishDomainEvent(ctx, domain.EventCommentCreated, created.OrgID.String(), created.TaskID.String(), map[string]any{
+		"task_id":    created.TaskID.String(),
+		"project_id": params.ProjectID.String(),
+		"item":       created,
+	})
 
 	// Parse @mentions and notify mentioned users
 	go func() {
@@ -180,5 +193,22 @@ func (s *CommentService) enqueueNotification(userID, orgID, ntype, title, body s
 	// Delay mention notifications by 5 minutes to batch with nearby task updates
 	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(5*time.Minute)); err != nil {
 		log.Error().Err(err).Msg("enqueue notification task for mention")
+	}
+}
+
+// publishDomainEvent publishes a domain event via the event publisher.
+func (s *CommentService) publishDomainEvent(ctx context.Context, eventType, orgID, entityID string, payload map[string]any) {
+	if s.publisher == nil {
+		return
+	}
+	event := domain.DomainEvent{
+		Type:     eventType,
+		OrgID:    orgID,
+		ActorID:  tenant.UserID(ctx).String(),
+		EntityID: entityID,
+		Payload:  payload,
+	}
+	if err := s.publisher.Publish(ctx, event); err != nil {
+		_ = err
 	}
 }

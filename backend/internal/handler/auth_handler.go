@@ -148,9 +148,19 @@ func (h *AuthHandler) upsertUserProfilePartial(ctx context.Context, u *auth.User
 	language := stringFromMetaFallback(data, "language", "")
 	theme := stringFromMetaFallback(data, "theme", "")
 
+	// Extract theme_customisation as JSONB (nil means "don't update")
+	var themeCustomisation []byte
+	if tc, ok := data["theme_customisation"]; ok {
+		if tc == nil {
+			themeCustomisation = []byte("null")
+		} else {
+			themeCustomisation, _ = json.Marshal(tc)
+		}
+	}
+
 	_, _ = h.pool.Exec(ctx,
-		`INSERT INTO users (id, email, display_name, phone, avatar_url, bio, job_title, department, timezone, language, theme, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+		`INSERT INTO users (id, email, display_name, phone, avatar_url, bio, job_title, department, timezone, language, theme, theme_customisation, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
 		 ON CONFLICT (id) DO UPDATE SET
 		  email=EXCLUDED.email, display_name=EXCLUDED.display_name,
 		  phone=EXCLUDED.phone,
@@ -161,8 +171,9 @@ func (h *AuthHandler) upsertUserProfilePartial(ctx context.Context, u *auth.User
 		  timezone=CASE WHEN EXCLUDED.timezone != '' THEN EXCLUDED.timezone ELSE users.timezone END,
 		  language=CASE WHEN EXCLUDED.language != '' THEN EXCLUDED.language ELSE users.language END,
 		  theme=CASE WHEN EXCLUDED.theme != '' THEN EXCLUDED.theme ELSE users.theme END,
+		  theme_customisation=CASE WHEN $12 IS NOT NULL THEN EXCLUDED.theme_customisation ELSE users.theme_customisation END,
 		  updated_at=NOW()`,
-		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language, theme,
+		userUUID, u.Email, displayName, u.Phone, avatarURL, bio, jobTitle, department, timezone, language, theme, themeCustomisation,
 	)
 }
 
@@ -174,10 +185,11 @@ func (h *AuthHandler) enrichUserFromDB(ctx context.Context, u *auth.UserInfo) {
 	}
 	userUUID := zitadelIDToUUID(u.ID)
 	var avatarURL, bio, jobTitle, department, timezone, language, theme string
+	var themeCustomisation []byte
 	err := h.pool.QueryRow(ctx,
-		`SELECT avatar_url, bio, job_title, department, timezone, language, theme
+		`SELECT avatar_url, bio, job_title, department, timezone, language, theme, theme_customisation
 		 FROM users WHERE id = $1`, userUUID).
-		Scan(&avatarURL, &bio, &jobTitle, &department, &timezone, &language, &theme)
+		Scan(&avatarURL, &bio, &jobTitle, &department, &timezone, &language, &theme, &themeCustomisation)
 	if err != nil {
 		return // DB miss is non-fatal
 	}
@@ -204,6 +216,12 @@ func (h *AuthHandler) enrichUserFromDB(ctx context.Context, u *auth.UserInfo) {
 	}
 	if theme != "" {
 		u.UserMetadata["theme"] = theme
+	}
+	if len(themeCustomisation) > 0 && string(themeCustomisation) != "null" {
+		var tc any
+		if err := json.Unmarshal(themeCustomisation, &tc); err == nil {
+			u.UserMetadata["theme_customisation"] = tc
+		}
 	}
 }
 

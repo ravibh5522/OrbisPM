@@ -27,9 +27,19 @@ interface ChatState {
   searchOpen: boolean;
   searchQuery: string;
 
+  // Presence — userId → { online, last_seen }
+  presenceMap: Map<string, { online: boolean; last_seen?: string }>;
+
   // WebSocket
   connected: boolean;
   ws: WebSocket | null;
+
+  // Actions – presence
+  setPresenceMap: (
+    map: Map<string, { online: boolean; last_seen?: string }>,
+  ) => void;
+  setUserOnline: (userId: string) => void;
+  setUserOffline: (userId: string, lastSeen: string) => void;
 
   // Actions – channels
   setChannels: (channels: ChatChannel[]) => void;
@@ -82,6 +92,7 @@ const initialState = {
   threadParentId: null,
   threadMessages: [],
   typingUsers: new Map<string, Set<string>>(),
+  presenceMap: new Map<string, { online: boolean; last_seen?: string }>(),
   detailsOpen: false,
   searchOpen: false,
   searchQuery: "",
@@ -228,6 +239,27 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
       next.set(channelId, users);
       return { typingUsers: next };
+    }),
+
+  // ── Presence ─────────────────────────────────
+  setPresenceMap: (map) => set({ presenceMap: map }),
+
+  setUserOnline: (userId) =>
+    set((s) => {
+      const next = new Map(s.presenceMap);
+      const existing = next.get(userId);
+      next.set(userId, {
+        online: true,
+        last_seen: existing?.last_seen ?? new Date().toISOString(),
+      });
+      return { presenceMap: next };
+    }),
+
+  setUserOffline: (userId, lastSeen) =>
+    set((s) => {
+      const next = new Map(s.presenceMap);
+      next.set(userId, { online: false, last_seen: lastSeen });
+      return { presenceMap: next };
     }),
 
   // ── UI ────────────────────────────────────────
