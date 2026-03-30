@@ -77,6 +77,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hibiken/asynq"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
@@ -123,10 +124,25 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to parse database url")
 	}
-	poolCfg.MaxConns = 50
-	poolCfg.MinConns = 10
-	poolCfg.MaxConnLifetime = 60 * time.Minute
-	poolCfg.MaxConnIdleTime = 10 * time.Minute
+	// Keep MaxConns at or below PgBouncer's MAX_DB_CONNECTIONS (55) and within
+	// RDS max_connections budget (79 total; ~20 reserved for Zitadel + DBA tools).
+	poolCfg.MaxConns = 25
+	// Keep 5 warm connections to pgbouncer so the first requests after idle periods
+	// don't pay the pgbouncer→RDS SSL handshake cost (~100ms).
+	poolCfg.MinConns = 5
+	// Recycle connections every 20 min to avoid stale SSL sessions and RDS failover.
+	poolCfg.MaxConnLifetime = 20 * time.Minute
+	// Return idle connections to the pool quickly so pgbouncer can reuse the slot.
+	poolCfg.MaxConnIdleTime = 5 * time.Minute
+	// Background health-check period — 30s is sufficient; default is 60s.
+	poolCfg.HealthCheckPeriod = 30 * time.Second
+	// AfterConnect: set session-level timeouts to prevent runaway queries from
+	// holding connections and causing cascading pool exhaustion.
+	// RuntimeParams cannot be used here because pgbouncer blocks unknown startup params.
+	poolCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		_, err := conn.Exec(ctx, "SET statement_timeout = '30s'; SET idle_in_transaction_session_timeout = '10s'")
+		return err
+	}
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {

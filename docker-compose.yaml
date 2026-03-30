@@ -207,14 +207,21 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_NAME: ${POSTGRES_DB:-orbispmdev}
       POOL_MODE: session
-      DEFAULT_POOL_SIZE: 20
-      MIN_POOL_SIZE: 5
+      # Match the API's MaxConns (25) + headroom for other services.
+      # RDS max_connections=79; Zitadel uses ~10, so cap server connections at 30.
+      DEFAULT_POOL_SIZE: 25
+      MIN_POOL_SIZE: 10
       MAX_CLIENT_CONN: 400
       RESERVE_POOL_SIZE: 5
-      SERVER_IDLE_TIMEOUT: 600
-      SERVER_CONNECT_TIMEOUT: 30
-      SERVER_LIFETIME: 3600
+      # Close idle server connections after 5 min to free RDS slots.
+      SERVER_IDLE_TIMEOUT: 300
+      SERVER_CONNECT_TIMEOUT: 15
+      # Recycle server connections every 30 min to pick up new SSL certs / config.
+      SERVER_LIFETIME: 1800
       CLIENT_IDLE_TIMEOUT: 600
+      # Hard cap on total server-side connections from this pgbouncer instance.
+      # RDS max_connections=79; leave 20 for Zitadel + admin.
+      MAX_DB_CONNECTIONS: 55
       AUTH_TYPE: plain
       # SSL from PgBouncer to RDS; client→PgBouncer is plain (Docker-internal)
       SERVER_TLS_SSLMODE: ${POSTGRES_SSL_MODE:-disable}
