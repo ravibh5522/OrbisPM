@@ -239,7 +239,11 @@ func (s *TeamService) AddMember(ctx context.Context, teamID, userID uuid.UUID, r
 		return nil
 	})
 	if err == nil {
-		s.publishEvent(ctx, domain.EventTeamMemberAdded, "", teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
+		orgID := ""
+		if t, tErr := s.teamRepo.GetByID(ctx, teamID); tErr == nil {
+			orgID = t.OrgID.String()
+		}
+		s.publishEvent(ctx, domain.EventTeamMemberAdded, orgID, teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
 	}
 	return err
 }
@@ -290,7 +294,11 @@ func (s *TeamService) RemoveMember(ctx context.Context, teamID, userID uuid.UUID
 		return nil
 	})
 	if err == nil {
-		s.publishEvent(ctx, domain.EventTeamMemberRemoved, "", teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
+		orgID := ""
+		if t, tErr := s.teamRepo.GetByID(ctx, teamID); tErr == nil {
+			orgID = t.OrgID.String()
+		}
+		s.publishEvent(ctx, domain.EventTeamMemberRemoved, orgID, teamID.String(), map[string]any{"user_id": userID.String(), "scope": "team"})
 	}
 	return err
 }
@@ -306,7 +314,11 @@ func (s *TeamService) UpdateMemberRole(ctx context.Context, teamID, userID uuid.
 		return s.teamMemberRepo.UpdateRole(ctx, tx, teamID, userID, role)
 	})
 	if err == nil {
-		s.publishEvent(ctx, "member.role_updated", "", teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
+		orgID := ""
+		if t, tErr := s.teamRepo.GetByID(ctx, teamID); tErr == nil {
+			orgID = t.OrgID.String()
+		}
+		s.publishEvent(ctx, "member.role_updated", orgID, teamID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "team"})
 	}
 	return err
 }

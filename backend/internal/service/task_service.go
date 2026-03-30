@@ -293,7 +293,7 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	// Enqueue search index
 	s.enqueueSearchIndex("tasks", created)
 	// Publish real-time event
-	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), nil)
+	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), map[string]any{"project_id": created.ProjectID.String()})
 
 	// Notify assigned users
 	for _, aid := range created.AssigneeIDs {
@@ -396,6 +396,10 @@ func (s *TaskService) Duplicate(ctx context.Context, taskID uuid.UUID) (*domain.
 
 	if len(createdTasks) > 0 {
 		root = createdTasks[0]
+		s.publishEvent(ctx, domain.EventTaskCreated, root.OrgID.String(), root.ID.String(), map[string]any{
+			"project_id": root.ProjectID.String(),
+			"duplicate":  true,
+		})
 	}
 	return root, nil
 }
@@ -537,10 +541,17 @@ func (s *TaskService) BulkCreate(ctx context.Context, params BulkCreateParams) (
 		}
 	}
 
-	// Enqueue async jobs for all created tasks
+	// Enqueue async jobs and publish events for all created tasks
 	for _, t := range created {
 		s.enqueueActivity(t.OrgID.String(), "task", t.ID.String(), "created", "", nil)
 		s.enqueueSearchIndex("tasks", t)
+	}
+	if len(created) > 0 {
+		s.publishEvent(ctx, domain.EventTaskCreated, created[0].OrgID.String(), created[0].ID.String(), map[string]any{
+			"project_id": params.ProjectID.String(),
+			"bulk":       true,
+			"count":      len(created),
+		})
 	}
 
 	return created, nil
@@ -625,10 +636,17 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 		}
 	}
 
-	// Enqueue async jobs
+	// Enqueue async jobs and publish events for all updated tasks
 	for _, t := range updated {
 		s.enqueueActivity(t.OrgID.String(), "task", t.ID.String(), "updated", "", nil)
 		s.enqueueSearchIndex("tasks", t)
+	}
+	if len(updated) > 0 {
+		s.publishEvent(ctx, domain.EventTaskUpdated, updated[0].OrgID.String(), updated[0].ID.String(), map[string]any{
+			"project_id": updated[0].ProjectID.String(),
+			"bulk":       true,
+			"count":      len(updated),
+		})
 	}
 
 	return updated, nil
@@ -1028,7 +1046,8 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "updated", "", directChanges)
 	// Enqueue search index update
 	s.enqueueSearchIndex("tasks", updated)
-	// Publish real-time event
+	// Publish real-time event — include project_id so frontend can invalidate project-dashboard
+	directChanges["project_id"] = task.ProjectID.String()
 	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), directChanges)
 
 	// ── Notification triggers ──
@@ -1257,7 +1276,7 @@ func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) ([]*domain.Task,
 	// Enqueue search delete
 	s.enqueueSearchDelete("tasks", id.String())
 	// Publish real-time event
-	s.publishEvent(ctx, domain.EventTaskDeleted, task.OrgID.String(), task.ID.String(), nil)
+	s.publishEvent(ctx, domain.EventTaskDeleted, task.OrgID.String(), task.ID.String(), map[string]any{"project_id": task.ProjectID.String()})
 
 	return progressAncestors, nil
 }
@@ -1377,6 +1396,23 @@ func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
 			}
 			_ = s.cache.RemoveFromParentIndex(ctx, ce.UpdatedTask.ProjectID, ce.UpdatedTask.ID, ce.OldParentID)
 			_ = s.cache.SetTask(ctx, ce.UpdatedTask.ProjectID, ce.UpdatedTask)
+		}
+	}
+
+	// Publish a single reorder event so connected clients refresh task lists
+	if len(cacheEntries) > 0 {
+		first := cacheEntries[0].UpdatedTask
+		s.publishEvent(ctx, domain.EventTaskUpdated, first.OrgID.String(), first.ID.String(), map[string]any{
+			"project_id": first.ProjectID.String(),
+			"reorder":    true,
+		})
+	} else if len(items) > 0 {
+		// Fallback when cache is disabled: fetch minimal task info to get orgID/projectID
+		if task, fetchErr := s.taskRepo.GetByID(ctx, items[0].ID); fetchErr == nil {
+			s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), map[string]any{
+				"project_id": task.ProjectID.String(),
+				"reorder":    true,
+			})
 		}
 	}
 	return nil

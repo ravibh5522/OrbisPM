@@ -32,6 +32,18 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// cachedToken stores a validated TokenClaims with an expiry time.
+type cachedToken struct {
+	claims    *TokenClaims
+	expiresAt time.Time
+}
+
+// cachedUser stores a fetched UserInfo with an expiry time.
+type cachedUser struct {
+	user      *UserInfo
+	expiresAt time.Time
+}
+
 // ZitadelClient communicates with Zitadel via gRPC and provides OIDC PKCE auth flows.
 type ZitadelClient struct {
 	issuer       string // external Zitadel URL (e.g. http://localhost:8081)
@@ -49,6 +61,12 @@ type ZitadelClient struct {
 	// REST API fallback fields
 	serviceToken string      // PAT stored for REST API Authorization header
 	useREST      atomic.Bool // true → gRPC unavailable, use REST API
+
+	// In-memory session token cache to avoid calling Zitadel on every request
+	sessionCache sync.Map // map[tokenStr]cachedToken
+
+	// In-memory user info cache
+	userCache sync.Map // map[userID]cachedUser
 }
 
 // NewZitadelClient creates a new Zitadel client with gRPC connections.
@@ -700,6 +718,8 @@ func (c *ZitadelClient) RefreshSessionToken(ctx context.Context, refreshToken st
 
 // --- Token Validation ---
 
+const sessionTokenCacheTTL = 3 * time.Minute
+
 // ValidateToken validates a Zitadel-issued JWT (RS256) or a session token.
 func (c *ZitadelClient) ValidateToken(ctx context.Context, tokenStr string) (*TokenClaims, error) {
 	// Try RS256 JWT validation first (OIDC-issued tokens)
@@ -708,8 +728,26 @@ func (c *ZitadelClient) ValidateToken(ctx context.Context, tokenStr string) (*To
 		return claims, nil
 	}
 
-	// Fallback: try as session token (base64 encoded sessionID:sessionToken)
-	return c.validateSessionToken(ctx, tokenStr)
+	// Check in-memory session token cache
+	if cached, ok := c.sessionCache.Load(tokenStr); ok {
+		entry := cached.(cachedToken)
+		if time.Now().Before(entry.expiresAt) {
+			return entry.claims, nil
+		}
+		c.sessionCache.Delete(tokenStr)
+	}
+
+	// Fallback: validate via Zitadel API and cache the result
+	claims, err = c.validateSessionToken(ctx, tokenStr)
+	if err != nil {
+		return nil, err
+	}
+
+	c.sessionCache.Store(tokenStr, cachedToken{
+		claims:    claims,
+		expiresAt: time.Now().Add(sessionTokenCacheTTL),
+	})
+	return claims, nil
 }
 
 // validateSessionToken validates a session-based token by calling GetSession.
@@ -750,8 +788,35 @@ func (c *ZitadelClient) validateSessionToken(ctx context.Context, tokenStr strin
 
 // --- User Operations (gRPC) ---
 
-// GetUser retrieves user info via gRPC.
+const userCacheTTL = 3 * time.Minute
+
+// GetUser retrieves user info via gRPC (or REST), with in-memory caching.
 func (c *ZitadelClient) GetUser(ctx context.Context, userID string) (*UserInfo, error) {
+	// Check user cache
+	if cached, ok := c.userCache.Load(userID); ok {
+		entry := cached.(cachedUser)
+		if time.Now().Before(entry.expiresAt) {
+			// Return a copy to avoid mutation of cached data
+			u := *entry.user
+			return &u, nil
+		}
+		c.userCache.Delete(userID)
+	}
+
+	user, err := c.getUserUncached(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	c.userCache.Store(userID, cachedUser{
+		user:      user,
+		expiresAt: time.Now().Add(userCacheTTL),
+	})
+	return user, nil
+}
+
+// getUserUncached fetches user info from Zitadel without caching.
+func (c *ZitadelClient) getUserUncached(ctx context.Context, userID string) (*UserInfo, error) {
 	if c.useREST.Load() {
 		return c.restGetUser(ctx, userID)
 	}
@@ -856,6 +921,7 @@ type UpdateUserRequest struct {
 
 // UpdateUser updates a user's profile in Zitadel and returns fresh UserInfo.
 func (c *ZitadelClient) UpdateUser(ctx context.Context, userID string, req UpdateUserRequest) (*UserInfo, error) {
+	c.userCache.Delete(userID)
 	if c.useREST.Load() {
 		return c.restUpdateUser(ctx, userID, req)
 	}
@@ -944,6 +1010,9 @@ func (c *ZitadelClient) ListAllUsers(ctx context.Context) ([]*UserInfo, error) {
 
 // Logout deletes a session or revokes a token.
 func (c *ZitadelClient) Logout(ctx context.Context, claims *TokenClaims, rawToken string) error {
+	// Invalidate session token cache entry
+	c.sessionCache.Delete(rawToken)
+
 	if c.useREST.Load() {
 		return c.restLogout(ctx, claims, rawToken)
 	}

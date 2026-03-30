@@ -2,7 +2,10 @@ package middleware
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -10,6 +13,20 @@ import (
 
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/service"
+)
+
+// --- In-memory RBAC role cache ---
+
+const rbacCacheTTL = 3 * time.Minute
+
+type rbacCacheEntry struct {
+	role      string
+	found     bool
+	expiresAt time.Time
+}
+
+var (
+	rbacCache sync.Map // map[string]rbacCacheEntry  key = "orgID:userID"
 )
 
 // PermissionResolverMiddleware creates middleware that checks permissions through the PermissionResolver.
@@ -71,15 +88,36 @@ func RBAC(pool *pgxpool.Pool, requiredRoles ...string) func(http.Handler) http.H
 				return
 			}
 
-			// Query user's org role
+			// Query user's org role (with cache)
+			cacheKey := fmt.Sprintf("%s:%s", orgID, userID)
 			var role string
-			err := pool.QueryRow(r.Context(),
-				`SELECT role FROM org_members WHERE org_id = $1 AND user_id = $2`,
-				orgID, userID,
-			).Scan(&role)
-			if err != nil {
-				http.Error(w, `{"message":"not a member of this organization"}`, http.StatusForbidden)
-				return
+			cached := false
+
+			if v, ok := rbacCache.Load(cacheKey); ok {
+				entry := v.(rbacCacheEntry)
+				if time.Now().Before(entry.expiresAt) {
+					if !entry.found {
+						http.Error(w, `{"message":"not a member of this organization"}`, http.StatusForbidden)
+						return
+					}
+					role = entry.role
+					cached = true
+				} else {
+					rbacCache.Delete(cacheKey)
+				}
+			}
+
+			if !cached {
+				err := pool.QueryRow(r.Context(),
+					`SELECT role FROM org_members WHERE org_id = $1 AND user_id = $2`,
+					orgID, userID,
+				).Scan(&role)
+				if err != nil {
+					rbacCache.Store(cacheKey, rbacCacheEntry{found: false, expiresAt: time.Now().Add(rbacCacheTTL)})
+					http.Error(w, `{"message":"not a member of this organization"}`, http.StatusForbidden)
+					return
+				}
+				rbacCache.Store(cacheKey, rbacCacheEntry{role: role, found: true, expiresAt: time.Now().Add(rbacCacheTTL)})
 			}
 
 			// Owner and admin have access to everything

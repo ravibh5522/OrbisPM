@@ -382,7 +382,11 @@ func (s *ProjectService) UpdateMemberRole(ctx context.Context, projectID, userID
 	if err != nil {
 		return err
 	}
-	s.publishEvent(ctx, "member.role_updated", "", projectID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "project"})
+	orgID := ""
+	if p, pErr := s.projectRepo.GetByID(ctx, projectID); pErr == nil {
+		orgID = p.OrgID.String()
+	}
+	s.publishEvent(ctx, "member.role_updated", orgID, projectID.String(), map[string]any{"user_id": userID.String(), "role": role, "scope": "project"})
 	return nil
 }
 

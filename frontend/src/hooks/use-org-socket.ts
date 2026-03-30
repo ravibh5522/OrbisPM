@@ -201,6 +201,7 @@ function handleOrgEvent(
   // Tasks — invalidate dashboard stats + my-tasks (user may be assignee)
   if (type.startsWith("task.")) {
     qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
+    qc.invalidateQueries({ queryKey: ["analytics-dashboard", orgId] });
     qc.invalidateQueries({ queryKey: ["my-tasks", orgId] });
     if (event.payload?.project_id) {
       qc.invalidateQueries({
@@ -213,6 +214,7 @@ function handleOrgEvent(
   if (type.startsWith("project.")) {
     qc.invalidateQueries({ queryKey: ["projects", orgId] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
+    qc.invalidateQueries({ queryKey: ["analytics-dashboard", orgId] });
     if (event.entity_id) {
       qc.invalidateQueries({ queryKey: ["project", orgId, event.entity_id] });
       qc.invalidateQueries({
@@ -224,6 +226,7 @@ function handleOrgEvent(
   // Teams
   if (type.startsWith("team.")) {
     qc.invalidateQueries({ queryKey: ["teams", orgId] });
+    qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
     if (event.entity_id) {
       qc.invalidateQueries({ queryKey: ["team", orgId, event.entity_id] });
       qc.invalidateQueries({
@@ -235,13 +238,15 @@ function handleOrgEvent(
     }
   }
 
-  // Members
+  // Members — use orgId from URL context (event.org_id may be stale on some backends)
   if (type.startsWith("member.")) {
     const scope = event.payload?.scope as string | undefined;
     qc.invalidateQueries({ queryKey: ["org-members", orgId] });
     if (scope === "team") {
+      // Invalidate all team-members and team-dashboard regardless of which team
       qc.invalidateQueries({ queryKey: ["team-members"] });
       qc.invalidateQueries({ queryKey: ["team-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["teams", orgId] });
     }
     if (scope === "project") {
       qc.invalidateQueries({ queryKey: ["project-members"] });
