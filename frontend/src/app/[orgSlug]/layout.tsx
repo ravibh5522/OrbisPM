@@ -22,6 +22,7 @@ import {
   FolderKanban,
   LayoutDashboard,
   ListTodo,
+  Lock,
   LogOut,
   Menu,
   MessageSquare,
@@ -119,7 +120,14 @@ function Sidebar() {
   const pathname = usePathname();
   const { currentOrg, currentMembership, orgs, setCurrentOrg, user, logout } =
     useAuthStore();
-  const { sidebarCollapsed, toggleSidebar, theme, setTheme } = useUIStore();
+  const {
+    sidebarCollapsed,
+    toggleSidebar,
+    theme,
+    setTheme,
+    themeLocked,
+    colorSchemaLocked,
+  } = useUIStore();
   const router = useRouter();
 
   if (!currentOrg) return null;
@@ -129,12 +137,16 @@ function Sidebar() {
   const userRole = currentMembership?.role as OrgRole | undefined;
 
   const handleThemeSwitch = (value: string) => {
+    if (themeLocked) return; // fully locked by admin
     setTheme(value as Parameters<typeof setTheme>[0]);
-    api.auth
-      .updateUser({ data: { theme: value, theme_customisation: null } })
-      .catch(() => {
-        /* non-critical */
-      });
+    // Only save theme to DB — don't clear customisation if org color schema is enforced
+    const updateData: Record<string, unknown> = { theme: value };
+    if (!colorSchemaLocked) {
+      updateData.theme_customisation = null;
+    }
+    api.auth.updateUser({ data: updateData }).catch(() => {
+      /* non-critical */
+    });
   };
 
   const filteredSettings = settingsItems.filter(
@@ -434,13 +446,20 @@ function Sidebar() {
                 <details>
                   <summary className="flex items-center gap-1">
                     <Palette className="w-4 h-4" /> Theme
+                    {themeLocked && (
+                      <Lock className="w-3 h-3 text-warning ml-auto" />
+                    )}
                   </summary>
                   <ul>
                     {THEMES.map((t) => (
                       <li key={t.value}>
                         <button
-                          className={cn(theme === t.value && "active")}
+                          className={cn(
+                            theme === t.value && "active",
+                            themeLocked && "opacity-50 cursor-not-allowed",
+                          )}
                           onClick={() => handleThemeSwitch(t.value)}
+                          disabled={themeLocked}
                         >
                           {t.label}
                         </button>
@@ -535,7 +554,14 @@ function MobileSidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { orgs, currentOrg, setCurrentOrg, user, logout } = useAuthStore();
-  const { mobileMenuOpen, setMobileMenuOpen, theme, setTheme } = useUIStore();
+  const {
+    mobileMenuOpen,
+    setMobileMenuOpen,
+    theme,
+    setTheme,
+    themeLocked,
+    colorSchemaLocked,
+  } = useUIStore();
   const currentMembership = useAuthStore((s) => s.currentMembership);
   const userRole = currentMembership?.role as OrgRole | undefined;
   const orgSlug = currentOrg?.slug || "";
@@ -603,12 +629,15 @@ function MobileSidebar() {
     pathname === href || (href !== `/${orgSlug}` && pathname.startsWith(href));
 
   const handleThemeSwitch = (value: string) => {
+    if (themeLocked) return;
     setTheme(value as Parameters<typeof setTheme>[0]);
-    api.auth
-      .updateUser({ data: { theme: value, theme_customisation: null } })
-      .catch(() => {
-        /* non-critical */
-      });
+    const updateData: Record<string, unknown> = { theme: value };
+    if (!colorSchemaLocked) {
+      updateData.theme_customisation = null;
+    }
+    api.auth.updateUser({ data: updateData }).catch(() => {
+      /* non-critical */
+    });
   };
 
   const handleOrgSwitch = async (orgSlug: string) => {
@@ -778,13 +807,20 @@ function MobileSidebar() {
                   <details>
                     <summary className="flex items-center gap-1">
                       <Palette className="w-4 h-4" /> Theme
+                      {themeLocked && (
+                        <Lock className="w-3 h-3 text-warning ml-auto" />
+                      )}
                     </summary>
                     <ul>
                       {THEMES.map((t) => (
                         <li key={t.value}>
                           <button
-                            className={cn(theme === t.value && "active")}
+                            className={cn(
+                              theme === t.value && "active",
+                              themeLocked && "opacity-50 cursor-not-allowed",
+                            )}
                             onClick={() => handleThemeSwitch(t.value)}
+                            disabled={themeLocked}
                           >
                             {t.label}
                           </button>
@@ -815,81 +851,117 @@ function MobileSidebar() {
 
 export default function OrgLayout({ children }: { children: React.ReactNode }) {
   const { isLoading, hasOrgs } = useRequireAuth();
-  const { sidebarCollapsed, setTheme, setCustomisation, setThemeLocked } =
-    useUIStore();
+  const {
+    sidebarCollapsed,
+    setTheme,
+    setCustomisation,
+    setThemeLocked,
+    initializeTheme,
+    setOrgThemeConfig,
+  } = useUIStore();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const user = useAuthStore((s) => s.user);
 
-  // Sync theme + customisation from user profile on load
-  useEffect(() => {
-    const savedTheme = user?.user_metadata?.theme as string | undefined;
-    const savedCustomisation = user?.user_metadata?.theme_customisation as
-      | {
-          profileId: string;
-          primaryOverride?: string;
-          baseContentOverride?: string;
-        }
-      | undefined;
-
-    if (
-      savedTheme &&
-      ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
-        savedTheme,
-      )
-    ) {
-      setTheme(
-        savedTheme as
-          | "glass-light"
-          | "glass-dark"
-          | "orbis-light"
-          | "orbis-dark",
-      );
-    }
-
-    if (savedCustomisation?.profileId) {
-      setCustomisation(savedCustomisation);
-    }
-  }, [user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Load org theme on org entry — if locked, override user theme
+  // Load org theme on org entry — this determines colour schema enforcement
   useEffect(() => {
     if (!currentOrg?.id) return;
     api.orgTheme
       .get(currentOrg.id)
       .then((cfg) => {
-        if (!cfg || !cfg.locked) {
-          setThemeLocked(false);
-          return;
-        }
-        setThemeLocked(true);
-        const baseTheme = cfg.base_theme as
-          | "glass-light"
-          | "glass-dark"
-          | "orbis-light"
-          | "orbis-dark";
-        if (
-          baseTheme &&
-          ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
-            baseTheme,
-          )
-        ) {
-          setTheme(baseTheme);
-        }
-        const c = cfg.custom_colors as
+        const c = cfg?.custom_colors as unknown as
           | {
               profileId: string;
               primaryOverride?: string;
               baseContentOverride?: string;
             }
           | undefined;
-        if (c?.profileId) {
-          setCustomisation(c);
+        const hasOrgCustomisation = !!c?.profileId;
+
+        // Update org enforcement state
+        setOrgThemeConfig({
+          locked: cfg?.locked ?? false,
+          customisation: hasOrgCustomisation ? c! : null,
+        });
+
+        if (cfg?.locked) {
+          // Fully locked — apply admin's theme + colour schema
+          const baseTheme = cfg.base_theme as
+            | "glass-light"
+            | "glass-dark"
+            | "orbis-light"
+            | "orbis-dark";
+          if (
+            baseTheme &&
+            ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
+              baseTheme,
+            )
+          ) {
+            initializeTheme(baseTheme, hasOrgCustomisation ? c! : null);
+          }
+        } else if (hasOrgCustomisation) {
+          // Admin set colours but not locked — enforce colour schema, user keeps their base theme
+          const { theme } = useUIStore.getState();
+          initializeTheme(theme, c!);
+        } else {
+          // No org config — load user preference from DB
+          const savedTheme = user?.user_metadata?.theme as string | undefined;
+          const savedCustomisation = user?.user_metadata
+            ?.theme_customisation as
+            | {
+                profileId: string;
+                primaryOverride?: string;
+                baseContentOverride?: string;
+              }
+            | undefined;
+
+          if (
+            savedTheme &&
+            ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
+              savedTheme,
+            )
+          ) {
+            initializeTheme(
+              savedTheme as
+                | "glass-light"
+                | "glass-dark"
+                | "orbis-light"
+                | "orbis-dark",
+              savedCustomisation?.profileId ? savedCustomisation : null,
+            );
+          } else if (savedCustomisation?.profileId) {
+            setCustomisation(savedCustomisation);
+          }
         }
       })
       .catch(() => {
-        /* non-critical */
+        // Org theme fetch failed — fall back to user preference from DB
+        setOrgThemeConfig({ locked: false, customisation: null });
+        const savedTheme = user?.user_metadata?.theme as string | undefined;
+        const savedCustomisation = user?.user_metadata?.theme_customisation as
+          | {
+              profileId: string;
+              primaryOverride?: string;
+              baseContentOverride?: string;
+            }
+          | undefined;
+
+        if (
+          savedTheme &&
+          ["glass-light", "glass-dark", "orbis-light", "orbis-dark"].includes(
+            savedTheme,
+          )
+        ) {
+          initializeTheme(
+            savedTheme as
+              | "glass-light"
+              | "glass-dark"
+              | "orbis-light"
+              | "orbis-dark",
+            savedCustomisation?.profileId ? savedCustomisation : null,
+          );
+        }
       });
-  }, [currentOrg?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentOrg?.id, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Single org-level WebSocket (replaces SSE + per-project WS)
   useOrgSocket(currentOrg?.id);

@@ -3,13 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Avatar, Card, PageHeader } from "@/components/ui/shared";
+import { ThemeCustomizerModal } from "@/components/ui/theme-customizer-modal";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
 import type { NotificationPreference, TOTPRegistration } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ThemeCustomizerModal } from "@/components/ui/theme-customizer-modal";
 import {
   AlertTriangle,
   Bell,
@@ -320,7 +320,12 @@ function NotificationsTab() {
 }
 
 function AppearanceTab() {
-  const { theme: currentTheme, setTheme, themeLocked } = useUIStore();
+  const {
+    theme: currentTheme,
+    setTheme,
+    themeLocked,
+    colorSchemaLocked,
+  } = useUIStore();
   const { user, currentOrg } = useAuthStore();
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
@@ -339,13 +344,26 @@ function AppearanceTab() {
   // Apply org theme lock on load
   React.useEffect(() => {
     if (!orgThemeCfg) return;
-    const { setThemeLocked, applyCustomisation, setTheme: st } = useUIStore.getState();
-    setThemeLocked(orgThemeCfg.locked);
+    const { setOrgThemeConfig, initializeTheme } = useUIStore.getState();
+    const c = orgThemeCfg.custom_colors as unknown as
+      | import("@/stores/ui-store").ThemeCustomisation
+      | null;
+    const hasOrgCustomisation = !!c?.profileId;
+
+    setOrgThemeConfig({
+      locked: orgThemeCfg.locked,
+      customisation: hasOrgCustomisation ? c : null,
+    });
+
     if (orgThemeCfg.locked) {
-      st(orgThemeCfg.base_theme as Parameters<typeof st>[0]);
-      // custom_colors stores a ThemeCustomisation object from the admin
-      const customisation = orgThemeCfg.custom_colors as unknown as import("@/stores/ui-store").ThemeCustomisation | null;
-      applyCustomisation(customisation && customisation.profileId ? customisation : null);
+      initializeTheme(
+        orgThemeCfg.base_theme as Parameters<typeof initializeTheme>[0],
+        hasOrgCustomisation ? c : null,
+      );
+    } else if (hasOrgCustomisation) {
+      // Enforce colour schema without changing base theme
+      const { theme } = useUIStore.getState();
+      initializeTheme(theme, c!);
     }
   }, [orgThemeCfg]);
 
@@ -358,9 +376,12 @@ function AppearanceTab() {
     setError("");
     setSuccess("");
     try {
-      await api.auth.updateUser({
-        data: { theme: themeValue },
-      });
+      const updateData: Record<string, unknown> = { theme: themeValue };
+      // Only clear customisation if org doesn't enforce colour schema
+      if (!colorSchemaLocked) {
+        updateData.theme_customisation = null;
+      }
+      await api.auth.updateUser({ data: updateData });
       useAuthStore.getState().updateUser({
         ...user!,
         user_metadata: { ...user?.user_metadata, theme: themeValue },
@@ -399,6 +420,16 @@ function AppearanceTab() {
         </div>
       )}
 
+      {!isLocked && colorSchemaLocked && (
+        <div className="alert gap-2 border border-info/30 bg-info/10 text-info text-sm">
+          <Palette className="w-4 h-4 flex-shrink-0" />
+          <span>
+            Colour scheme is set by your admin. You can switch between themes
+            but cannot customise colours.
+          </span>
+        </div>
+      )}
+
       <Card>
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -414,8 +445,18 @@ function AppearanceTab() {
           <button
             type="button"
             onClick={() => setCustomizerOpen(true)}
-            className="btn btn-sm btn-outline gap-2"
-            title="Customise theme colours"
+            disabled={isLocked || colorSchemaLocked}
+            className={cn(
+              "btn btn-sm btn-outline gap-2",
+              (isLocked || colorSchemaLocked) && "btn-disabled opacity-50",
+            )}
+            title={
+              isLocked
+                ? "Theme locked by admin"
+                : colorSchemaLocked
+                  ? "Colour scheme set by admin"
+                  : "Customise theme colours"
+            }
           >
             <Paintbrush className="w-3.5 h-3.5" />
             Customise
@@ -434,9 +475,7 @@ function AppearanceTab() {
                 onClick={() => handleThemeChange(t.value)}
                 className={cn(
                   "relative rounded-xl p-1 transition-all duration-200 text-left",
-                  isLocked
-                    ? "opacity-60 cursor-not-allowed"
-                    : "cursor-pointer",
+                  isLocked ? "opacity-60 cursor-not-allowed" : "cursor-pointer",
                   isActive
                     ? "ring-2 ring-primary ring-offset-2 ring-offset-base-100"
                     : "ring-1 ring-base-300 hover:ring-base-content/30",
@@ -582,7 +621,7 @@ function AppearanceTab() {
       <ThemeCustomizerModal
         open={customizerOpen}
         onClose={() => setCustomizerOpen(false)}
-        locked={isLocked}
+        locked={isLocked || colorSchemaLocked}
       />
     </div>
   );

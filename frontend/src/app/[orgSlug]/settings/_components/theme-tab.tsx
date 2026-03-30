@@ -1,23 +1,22 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
-import { Card } from "@/components/ui/shared";
 import {
-  ProfileSwatch,
   PrimaryColorPicker,
+  ProfileSwatch,
   isLightHex,
 } from "@/components/ui/color-picker-panel";
+import { Card } from "@/components/ui/shared";
+import { ApiError, api } from "@/lib/api";
 import {
-  PROFILES_BY_THEME,
   DEFAULT_PROFILE_ID,
+  PROFILES_BY_THEME,
   findProfile,
 } from "@/lib/theme-profiles";
-import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
-import { THEMES, ThemeCustomisation, useUIStore } from "@/stores/ui-store";
 import { useAuthStore } from "@/stores/auth-store";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { THEMES, ThemeCustomisation, useUIStore } from "@/stores/ui-store";
 import type { OrgThemeConfig } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ALargeSmall,
   CheckCircle,
@@ -31,6 +30,7 @@ import {
   Sun,
   Users,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 /* ─── Theme preview mini-tiles ─── */
@@ -151,15 +151,29 @@ export default function ThemeTab() {
       base_theme: string;
       custom_colors: Record<string, unknown>;
       locked: boolean;
-    }) => api.orgTheme.update(orgId, data as Parameters<typeof api.orgTheme.update>[1]),
+    }) =>
+      api.orgTheme.update(
+        orgId,
+        data as Parameters<typeof api.orgTheme.update>[1],
+      ),
     onSuccess: (updated) => {
       qc.setQueryData(["org-theme", orgId], updated);
-      const { setTheme, applyCustomisation, setThemeLocked } =
-        useUIStore.getState();
-      setTheme(updated.base_theme as Parameters<typeof setTheme>[0]);
+      const { initializeTheme, setOrgThemeConfig } = useUIStore.getState();
       const c = updated.custom_colors as unknown as ThemeCustomisation;
-      applyCustomisation(c?.profileId ? c : null);
-      setThemeLocked(updated.locked);
+      const hasOrgCustomisation = !!c?.profileId;
+
+      // Update org enforcement state
+      setOrgThemeConfig({
+        locked: updated.locked,
+        customisation: hasOrgCustomisation ? c : null,
+      });
+
+      // Apply the theme immediately for the admin
+      initializeTheme(
+        updated.base_theme as Parameters<typeof initializeTheme>[0],
+        hasOrgCustomisation ? c : null,
+      );
+
       toast.success(
         updated.locked
           ? "Theme applied & locked for all members"
@@ -198,10 +212,14 @@ export default function ThemeTab() {
     );
   }
 
-  const savedCustomisation = cfg?.custom_colors as unknown as Partial<ThemeCustomisation> | undefined;
+  const savedCustomisation = cfg?.custom_colors as unknown as
+    | Partial<ThemeCustomisation>
+    | undefined;
   const isDirty =
     selectedBaseTheme !== (cfg?.base_theme || "orbis-light") ||
-    selectedProfileId !== (savedCustomisation?.profileId ?? DEFAULT_PROFILE_ID[cfg?.base_theme || "orbis-light"]) ||
+    selectedProfileId !==
+      (savedCustomisation?.profileId ??
+        DEFAULT_PROFILE_ID[cfg?.base_theme || "orbis-light"]) ||
     primaryOverride !== (savedCustomisation?.primaryOverride ?? "") ||
     locked !== (cfg?.locked ?? false);
 
@@ -250,22 +268,43 @@ export default function ThemeTab() {
                     : "ring-1 ring-base-300 hover:ring-base-content/30",
                 )}
               >
-                <div className={cn("rounded-lg overflow-hidden h-16", preview.bg)}>
+                <div
+                  className={cn("rounded-lg overflow-hidden h-16", preview.bg)}
+                >
                   <div className="p-2 space-y-1.5">
-                    <div className={cn("flex items-center gap-1.5 rounded px-1.5 py-1", preview.card)}>
-                      <div className={cn("w-2 h-2 rounded-full", preview.primary)} />
-                      <div className={cn("flex-1 h-1 rounded-full opacity-40", preview.primary)} />
+                    <div
+                      className={cn(
+                        "flex items-center gap-1.5 rounded px-1.5 py-1",
+                        preview.card,
+                      )}
+                    >
+                      <div
+                        className={cn("w-2 h-2 rounded-full", preview.primary)}
+                      />
+                      <div
+                        className={cn(
+                          "flex-1 h-1 rounded-full opacity-40",
+                          preview.primary,
+                        )}
+                      />
                     </div>
                     <div className="flex gap-1">
-                      {[preview.primary, preview.secondary, preview.accent].map((c, i) => (
-                        <div key={i} className={cn("w-3 h-3 rounded-full", c)} />
-                      ))}
+                      {[preview.primary, preview.secondary, preview.accent].map(
+                        (c, i) => (
+                          <div
+                            key={i}
+                            className={cn("w-3 h-3 rounded-full", c)}
+                          />
+                        ),
+                      )}
                     </div>
                   </div>
                 </div>
                 <div className="px-1 py-1.5">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold truncate">{t.label}</span>
+                    <span className="text-xs font-semibold truncate">
+                      {t.label}
+                    </span>
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
                     {t.colorScheme === "light" ? (
@@ -273,7 +312,9 @@ export default function ThemeTab() {
                     ) : (
                       <Moon className="w-2.5 h-2.5 text-base-content/40" />
                     )}
-                    <span className="text-[10px] text-base-content/40">{t.colorScheme}</span>
+                    <span className="text-[10px] text-base-content/40">
+                      {t.colorScheme}
+                    </span>
                   </div>
                 </div>
               </button>
@@ -289,7 +330,9 @@ export default function ThemeTab() {
           <div>
             <h3 className="font-semibold text-sm">Colour Profile</h3>
             <p className="text-xs text-base-content/50">
-              Curated sets for {THEMES.find((t) => t.value === selectedBaseTheme)?.label} — primary · secondary · accent
+              Curated sets for{" "}
+              {THEMES.find((t) => t.value === selectedBaseTheme)?.label} —
+              primary · secondary · accent
             </p>
           </div>
         </div>
@@ -318,7 +361,9 @@ export default function ThemeTab() {
             <div>
               <h3 className="font-semibold text-sm">
                 Custom Primary
-                <span className="ml-2 badge badge-xs badge-ghost">optional</span>
+                <span className="ml-2 badge badge-xs badge-ghost">
+                  optional
+                </span>
               </h3>
               <p className="text-xs text-base-content/50">
                 Override the profile primary. Text colour adjusts automatically.

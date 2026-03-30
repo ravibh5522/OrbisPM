@@ -1,10 +1,10 @@
-import { create } from "zustand";
 import {
   DEFAULT_PROFILE_ID,
   findProfile,
   PROFILES_BY_THEME,
   ThemeColorProfile,
 } from "@/lib/theme-profiles";
+import { create } from "zustand";
 
 type Theme = "glass-light" | "glass-dark" | "orbis-light" | "orbis-dark";
 type ProjectTab =
@@ -33,6 +33,10 @@ interface UIState {
   theme: Theme;
   customisation: ThemeCustomisation | null;
   themeLocked: boolean;
+  /** Admin has set a colour schema — users cannot change colour profile, only base theme */
+  colorSchemaLocked: boolean;
+  /** The admin-enforced colour schema (from org_theme_configs.custom_colors) */
+  orgCustomisation: ThemeCustomisation | null;
   commandPaletteOpen: boolean;
   mobileMenuOpen: boolean;
   breadcrumb: { label: string; backHref?: string } | null;
@@ -48,6 +52,16 @@ interface UIState {
   /** Apply colours from a customisation without persisting to localStorage. */
   applyCustomisation: (c: ThemeCustomisation | null) => void;
   setThemeLocked: (locked: boolean) => void;
+  /** Atomically set theme + customisation from DB without clearing customisation first */
+  initializeTheme: (
+    theme: Theme,
+    customisation: ThemeCustomisation | null,
+  ) => void;
+  /** Set org-level colour enforcement */
+  setOrgThemeConfig: (opts: {
+    locked: boolean;
+    customisation: ThemeCustomisation | null;
+  }) => void;
   setCommandPaletteOpen: (v: boolean) => void;
   setMobileMenuOpen: (v: boolean) => void;
   setBreadcrumb: (b: { label: string; backHref?: string } | null) => void;
@@ -152,7 +166,10 @@ export function applyThemeCustomisation(
   }
 
   if (customisation.baseContentOverride) {
-    root.style.setProperty("--color-base-content", customisation.baseContentOverride);
+    root.style.setProperty(
+      "--color-base-content",
+      customisation.baseContentOverride,
+    );
   }
 }
 
@@ -176,6 +193,8 @@ export const useUIStore = create<UIState>((set, get) => {
     theme: storedTheme,
     customisation: storedCustomisation,
     themeLocked: false,
+    colorSchemaLocked: false,
+    orgCustomisation: null,
     commandPaletteOpen: false,
     mobileMenuOpen: false,
     breadcrumb: null,
@@ -191,11 +210,24 @@ export const useUIStore = create<UIState>((set, get) => {
         localStorage.setItem("theme", t);
         document.documentElement.setAttribute("data-theme", t);
       }
-      // Clear customisation when switching base theme
-      set({ theme: t, customisation: null });
-      if (typeof window !== "undefined") {
-        applyThemeCustomisation(t, null);
-        localStorage.removeItem("theme_customisation");
+      const { colorSchemaLocked, orgCustomisation } = get();
+      if (colorSchemaLocked && orgCustomisation) {
+        // Admin enforced colour schema — keep it when switching theme
+        set({ theme: t, customisation: orgCustomisation });
+        applyThemeCustomisation(t, orgCustomisation);
+        if (typeof window !== "undefined") {
+          localStorage.setItem(
+            "theme_customisation",
+            JSON.stringify(orgCustomisation),
+          );
+        }
+      } else {
+        // No org enforcement — clear customisation on theme switch
+        set({ theme: t, customisation: null });
+        if (typeof window !== "undefined") {
+          applyThemeCustomisation(t, null);
+          localStorage.removeItem("theme_customisation");
+        }
       }
     },
 
@@ -217,6 +249,30 @@ export const useUIStore = create<UIState>((set, get) => {
     },
 
     setThemeLocked: (locked) => set({ themeLocked: locked }),
+
+    initializeTheme: (t, c) => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem("theme", t);
+        document.documentElement.setAttribute("data-theme", t);
+        if (c) {
+          localStorage.setItem("theme_customisation", JSON.stringify(c));
+        } else {
+          localStorage.removeItem("theme_customisation");
+        }
+      }
+      applyThemeCustomisation(t, c);
+      set({ theme: t, customisation: c });
+    },
+
+    setOrgThemeConfig: ({ locked, customisation: orgC }) => {
+      const hasOrgCustomisation = !!orgC?.profileId;
+      set({
+        themeLocked: locked,
+        colorSchemaLocked: locked || hasOrgCustomisation,
+        orgCustomisation: hasOrgCustomisation ? orgC : null,
+      });
+    },
+
     setCommandPaletteOpen: (v) => set({ commandPaletteOpen: v }),
     setMobileMenuOpen: (v) => set({ mobileMenuOpen: v }),
     setBreadcrumb: (b) => set({ breadcrumb: b }),
@@ -277,5 +333,5 @@ export const THEMES: {
 ];
 
 /** Re-export for convenience */
+export { DEFAULT_PROFILE_ID, findProfile, PROFILES_BY_THEME };
 export type { ThemeColorProfile };
-export { PROFILES_BY_THEME, DEFAULT_PROFILE_ID, findProfile };
