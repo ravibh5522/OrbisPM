@@ -3,6 +3,7 @@
 import { AreaChartSkeleton } from "@/components/charts/chart-skeleton";
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
 import { cn, formatRelative, priorityColor, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -120,6 +121,7 @@ export default function DashboardPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const currentMembership = useAuthStore((s) => s.currentMembership);
   const orgSlug = currentOrg?.slug || "";
+  const policies = useOrgPolicies();
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats", currentOrg?.id],
@@ -128,9 +130,10 @@ export default function DashboardPage() {
   });
 
   const { data: projects } = useQuery({
-    queryKey: ["projects", currentOrg?.id],
-    queryFn: () => api.projects.list(currentOrg!.id),
-    enabled: !!currentOrg,
+    queryKey: ["projects", currentOrg?.id, policies.canViewAllProjects],
+    queryFn: () =>
+      api.projects.list(currentOrg!.id, policies.projectListParams()),
+    enabled: !!currentOrg && !policies.isLoading,
   });
 
   const { data: analytics, isLoading: analyticsLoading } =

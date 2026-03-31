@@ -38,8 +38,9 @@ type TaskFilter struct {
 type TeamFilter struct {
 	ListFilter
 	Search    *string
-	SortBy    string // name, member_count, created_at
-	SortOrder string // asc, desc
+	UserID    *uuid.UUID // when set, only teams where this user is a member
+	SortBy    string     // name, member_count, created_at
+	SortOrder string     // asc, desc
 }
 
 // ProjectFilter for paginated project listing.
@@ -48,8 +49,9 @@ type ProjectFilter struct {
 	Search    *string
 	Status    *string
 	TeamID    *uuid.UUID
-	SortBy    string // name, status, created_at, updated_at
-	SortOrder string // asc, desc
+	UserID    *uuid.UUID // when set, only projects where this user is a member (direct or via team)
+	SortBy    string     // name, status, created_at, updated_at
+	SortOrder string     // asc, desc
 }
 
 // MemberFilter for paginated member listing.

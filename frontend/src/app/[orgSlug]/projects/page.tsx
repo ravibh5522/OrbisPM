@@ -10,6 +10,7 @@ import {
   EmptyState,
   PageHeader,
 } from "@/components/ui/shared";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -51,6 +52,7 @@ export default function ProjectsPage() {
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
+  const policies = useOrgPolicies();
 
   // Server-side pagination, search, filter, sort state
   const [search, setSearch] = useState("");
@@ -81,6 +83,7 @@ export default function ProjectsPage() {
       sortOrder,
       statusFilter,
       teamFilter,
+      policies.canViewAllProjects,
     ],
     queryFn: () =>
       api.projects.list(currentOrg!.id, {
@@ -91,15 +94,20 @@ export default function ProjectsPage() {
         team_id: teamFilter || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
+        ...policies.projectListParams(),
       }),
-    enabled: !!currentOrg,
+    enabled: !!currentOrg && !policies.isLoading,
   });
 
   // Fetch teams for the filter dropdown and create form (smaller request)
   const { data: teamsResponse } = useQuery({
-    queryKey: ["teams-all", currentOrg?.id],
-    queryFn: () => api.teams.list(currentOrg!.id, { limit: 500 }),
-    enabled: !!currentOrg,
+    queryKey: ["teams-all", currentOrg?.id, policies.canViewAllTeams],
+    queryFn: () =>
+      api.teams.list(currentOrg!.id, {
+        limit: 500,
+        ...policies.teamListParams(),
+      }),
+    enabled: !!currentOrg && !policies.isLoading,
     staleTime: 5 * 60_000,
   });
 

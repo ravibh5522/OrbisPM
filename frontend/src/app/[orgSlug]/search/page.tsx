@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
 import {
   formatRelative,
@@ -21,6 +22,7 @@ export default function SearchPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const router = useRouter();
   const orgSlug = currentOrg?.slug || "";
+  const policies = useOrgPolicies();
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
 
@@ -48,9 +50,10 @@ export default function SearchPage() {
 
   // Build a project name lookup from search results + any project data available
   const { data: allProjects } = useQuery({
-    queryKey: ["projects", currentOrg?.id],
-    queryFn: () => api.projects.list(currentOrg!.id),
-    enabled: !!currentOrg,
+    queryKey: ["projects", currentOrg?.id, policies.canViewAllProjects],
+    queryFn: () =>
+      api.projects.list(currentOrg!.id, policies.projectListParams()),
+    enabled: !!currentOrg && !policies.isLoading,
     staleTime: 5 * 60_000,
   });
 

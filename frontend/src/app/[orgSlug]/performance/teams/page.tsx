@@ -2,6 +2,7 @@
 
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -39,11 +40,12 @@ const BarChartWidget = dynamic(
 export default function TeamsPerformancePage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgSlug = currentOrg?.slug || "";
+  const policies = useOrgPolicies();
 
   const { data: teams } = useQuery({
-    queryKey: ["teams", currentOrg?.id],
-    queryFn: () => api.teams.list(currentOrg!.id),
-    enabled: !!currentOrg,
+    queryKey: ["teams", currentOrg?.id, policies.canViewAllTeams],
+    queryFn: () => api.teams.list(currentOrg!.id, policies.teamListParams()),
+    enabled: !!currentOrg && !policies.isLoading,
   });
 
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);

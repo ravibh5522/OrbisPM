@@ -15,9 +15,11 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { Permission, PermissionScope, Role } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  ArrowRight,
   Check,
   ChevronDown,
   ChevronRight,
+  Info,
   Lock,
   MoreHorizontal,
   Pencil,
@@ -479,8 +481,55 @@ export default function PermissionsTab() {
         </Card>
       )}
 
-      {/* Team → Project Role Mapping (collapsible) */}
-      <TeamProjectRoleMapSection orgId={orgId} />
+      {/* Role Hierarchy Info — shown only on Org scope */}
+      {scope === "org" && (
+        <div className="border border-base-200 rounded-lg p-4 bg-base-200/30">
+          <div className="flex items-start gap-2">
+            <Info className="w-4 h-4 text-base-content/50 mt-0.5 shrink-0" />
+            <div className="space-y-2 w-full">
+              <h3 className="text-sm font-semibold">Role Inheritance Chain</h3>
+              <div className="flex flex-wrap items-center gap-2 text-xs">
+                <div className="flex flex-col items-center gap-1">
+                  <span className="badge badge-primary badge-sm">Org Role</span>
+                  <span className="text-base-content/50">
+                    owner · admin · member · viewer
+                  </span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-base-content/40 shrink-0" />
+                <div className="flex flex-col items-center gap-1">
+                  <span className="badge badge-secondary badge-sm">
+                    Team Role
+                  </span>
+                  <span className="text-base-content/50">
+                    assigned at team membership
+                  </span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-base-content/40 shrink-0" />
+                <div className="flex flex-col items-center gap-1">
+                  <span className="badge badge-accent badge-sm">
+                    Project Role
+                  </span>
+                  <span className="text-base-content/50">
+                    via team mapping or direct
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-base-content/50">
+                To create custom team or project roles (assignable in member
+                management), switch to the
+                <strong className="font-semibold"> Team </strong>or
+                <strong className="font-semibold"> Project </strong>tab and
+                click
+                <strong className="font-semibold"> New Role</strong>. The team →
+                project role mapping is configured under the Team tab.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Team → Project Role Mapping — shown only on Team scope */}
+      {scope === "team" && <TeamProjectRoleMapSection orgId={orgId} />}
 
       {/* Create Role Modal */}
       <Modal

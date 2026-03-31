@@ -121,6 +121,7 @@ func (h *TeamHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/teams [get]
 func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
 	f := repository.TeamFilter{
 		ListFilter: repository.ListFilter{
 			Limit:  queryInt(r, "limit", 20),
@@ -129,6 +130,9 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 		Search:    queryStr(r, "search"),
 		SortBy:    queryStrDefault(r, "sort_by", "name"),
 		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	if queryBool(r, "mine") {
+		f.UserID = &userID
 	}
 	teams, total, err := h.teamSvc.ListByOrgPaginated(r.Context(), orgID, f)
 	if err != nil {

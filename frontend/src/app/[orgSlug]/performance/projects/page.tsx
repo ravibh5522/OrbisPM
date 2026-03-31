@@ -2,6 +2,7 @@
 
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -55,11 +56,13 @@ const BarChartWidget = dynamic(
 export default function ProjectsPerformancePage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgSlug = currentOrg?.slug || "";
+  const policies = useOrgPolicies();
 
   const { data: projects } = useQuery({
-    queryKey: ["projects", currentOrg?.id],
-    queryFn: () => api.projects.list(currentOrg!.id),
-    enabled: !!currentOrg,
+    queryKey: ["projects", currentOrg?.id, policies.canViewAllProjects],
+    queryFn: () =>
+      api.projects.list(currentOrg!.id, policies.projectListParams()),
+    enabled: !!currentOrg && !policies.isLoading,
   });
 
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(

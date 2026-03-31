@@ -14,6 +14,7 @@ import {
   type CalendarViewMode,
 } from "@/components/calendar";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -32,6 +33,7 @@ export default function OrgCalendarPage({
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgId = currentOrg?.id || "";
   const { can } = usePermissions();
+  const policies = useOrgPolicies();
   const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
 
   const [filter, setFilter] = useState<CalendarFilterState>({
@@ -51,16 +53,16 @@ export default function OrgCalendarPage({
 
   // Fetch all projects
   const { data: projectsData } = useQuery({
-    queryKey: ["projects", orgId],
-    queryFn: () => api.projects.list(orgId),
-    enabled: !!orgId,
+    queryKey: ["projects", orgId, policies.canViewAllProjects],
+    queryFn: () => api.projects.list(orgId, policies.projectListParams()),
+    enabled: !!orgId && !policies.isLoading,
   });
 
   // Fetch all teams
   const { data: teamsData } = useQuery({
-    queryKey: ["teams", orgId],
-    queryFn: () => api.teams.list(orgId),
-    enabled: !!orgId,
+    queryKey: ["teams", orgId, policies.canViewAllTeams],
+    queryFn: () => api.teams.list(orgId, policies.teamListParams()),
+    enabled: !!orgId && !policies.isLoading,
   });
 
   // Fetch org members

@@ -567,6 +567,9 @@ function ProjectMembersSection({
   const [removeReassignTo, setRemoveReassignTo] = useState("");
   const [removeLoading, setRemoveLoading] = useState(false);
 
+  // Local role state to prevent dirty reads/writes on concurrent updates
+  const [localRoles, setLocalRoles] = useState<Record<string, string>>({});
+
   // Server-side paginated members query
   const { data: membersResponse, isLoading: membersLoading } = useQuery({
     queryKey: [
@@ -650,6 +653,43 @@ function ProjectMembersSection({
       toast.success("Member role updated");
     },
   });
+
+  // Sync local role state when server data arrives (additive — preserves in-flight changes)
+  useEffect(() => {
+    if (membersResponse?.data) {
+      setLocalRoles((prev) => {
+        const next = { ...prev };
+        for (const m of membersResponse.data) {
+          if (!(m.user_id in next)) next[m.user_id] = m.role;
+        }
+        return next;
+      });
+    }
+  }, [membersResponse?.data]);
+
+  // Keep add-role selects in sync with available role options
+  useEffect(() => {
+    if (projectRoles && projectRoles.length > 0) {
+      const validSlugs = (projectRoles as Role[]).map((r) => r.slug);
+      if (!validSlugs.includes(addRole)) setAddRole(validSlugs[0]);
+      if (!validSlugs.includes(addInternalRole))
+        setAddInternalRole(validSlugs[0]);
+    }
+  }, [projectRoles, addRole, addInternalRole]);
+
+  const handleRoleChange = (userId: string, newRole: string) => {
+    const prevRole = localRoles[userId];
+    setLocalRoles((prev) => ({ ...prev, [userId]: newRole }));
+    updateRoleMutation.mutate(
+      { userId, role: newRole },
+      {
+        onError: () => {
+          setLocalRoles((prev) => ({ ...prev, [userId]: prevRole }));
+          toast.error("Failed to update role");
+        },
+      },
+    );
+  };
 
   const internalMembers = members.filter((m) => m.source === "team");
   const externalMembers = members.filter((m) => m.source !== "team");
@@ -1039,13 +1079,11 @@ function ProjectMembersSection({
                           <td>
                             <select
                               className="select select-ghost select-xs capitalize"
-                              value={m.role}
+                              value={localRoles[m.user_id] ?? m.role}
                               onChange={(e) =>
-                                updateRoleMutation.mutate({
-                                  userId: m.user_id,
-                                  role: e.target.value,
-                                })
+                                handleRoleChange(m.user_id, e.target.value)
                               }
+                              disabled={roleOptions.length === 0}
                             >
                               {roleOptions.map((r) => (
                                 <option key={r.value} value={r.value}>
@@ -1184,13 +1222,11 @@ function ProjectMembersSection({
                         <td>
                           <select
                             className="select select-ghost select-xs capitalize"
-                            value={m.role}
+                            value={localRoles[m.user_id] ?? m.role}
                             onChange={(e) =>
-                              updateRoleMutation.mutate({
-                                userId: m.user_id,
-                                role: e.target.value,
-                              })
+                              handleRoleChange(m.user_id, e.target.value)
                             }
+                            disabled={roleOptions.length === 0}
                           >
                             {roleOptions.map((r) => (
                               <option key={r.value} value={r.value}>

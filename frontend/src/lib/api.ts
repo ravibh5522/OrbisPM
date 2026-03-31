@@ -595,6 +595,7 @@ export const api = {
         limit?: number;
         offset?: number;
         search?: string;
+        mine?: string;
         sort_by?: string;
         sort_order?: string;
       },
@@ -682,6 +683,7 @@ export const api = {
         search?: string;
         status?: string;
         team_id?: string;
+        mine?: string;
         sort_by?: string;
         sort_order?: string;
       },

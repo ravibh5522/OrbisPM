@@ -12,6 +12,7 @@ import { useEffect, useRef } from "react";
  */
 export function DataPrefetcher() {
   const orgId = useAuthStore((s) => s.currentOrg?.id);
+  const orgRole = useAuthStore((s) => s.currentMembership?.role);
   const qc = useQueryClient();
   const ranForOrg = useRef<string | null>(null);
 
@@ -26,10 +27,14 @@ export function DataPrefetcher() {
       }
     };
 
+    // Owner/admin sees all, others see only their own
+    const isAdmin = orgRole === "owner" || orgRole === "admin";
+    const mineParam = isAdmin ? {} : { mine: "true" };
+
     // ── Core org data ─────────────────────────────
     pf(["dashboard-stats", orgId], () => api.dashboard.stats(orgId), 120_000);
-    pf(["projects", orgId], () => api.projects.list(orgId));
-    pf(["teams", orgId], () => api.teams.list(orgId));
+    pf(["projects", orgId], () => api.projects.list(orgId, mineParam));
+    pf(["teams", orgId], () => api.teams.list(orgId, mineParam));
     pf(["org-members", orgId], () => api.members.list(orgId));
 
     // ── Chat sidebar — critical for instant messages page ──

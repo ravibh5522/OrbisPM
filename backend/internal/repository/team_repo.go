@@ -105,6 +105,12 @@ func (r *teamRepo) ListByOrgPaginated(ctx context.Context, orgID uuid.UUID, f Te
 		argIdx++
 	}
 
+	if f.UserID != nil {
+		where = append(where, fmt.Sprintf("EXISTS (SELECT 1 FROM team_members tm2 WHERE tm2.team_id = t.id AND tm2.user_id = $%d)", argIdx))
+		args = append(args, *f.UserID)
+		argIdx++
+	}
+
 	whereClause := strings.Join(where, " AND ")
 
 	// Count

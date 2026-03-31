@@ -11,6 +11,7 @@ import {
   PageHeader,
 } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -47,6 +48,7 @@ export default function TeamsPage() {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [error, setError] = useState("");
   const { can } = usePermissions();
+  const policies = useOrgPolicies();
 
   // Server-side pagination, search, sort
   const [search, setSearch] = useState("");
@@ -71,6 +73,7 @@ export default function TeamsPage() {
       page,
       sortBy,
       sortOrder,
+      policies.canViewAllTeams,
     ],
     queryFn: () =>
       api.teams.list(currentOrg!.id, {
@@ -79,8 +82,9 @@ export default function TeamsPage() {
         search: debouncedSearch || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
+        ...policies.teamListParams(),
       }),
-    enabled: !!currentOrg,
+    enabled: !!currentOrg && !policies.isLoading,
   });
 
   const teams = teamsResponse?.data || [];
@@ -410,6 +414,8 @@ function TeamDetailModal({
   const qc = useQueryClient();
   const [addUserId, setAddUserId] = useState("");
   const [addRole, setAddRole] = useState("member");
+  // Local role state to prevent dirty reads/writes on concurrent updates
+  const [localRoles, setLocalRoles] = useState<Record<string, string>>({});
 
   const { data: members, isLoading } = useQuery({
     queryKey: ["team-members", orgId, team.id],
@@ -426,6 +432,29 @@ function TeamDetailModal({
     queryFn: () => api.permissions.roles.list(orgId, "team"),
   });
 
+  // Sync local role state when server data arrives (only for roles not in flight)
+  useEffect(() => {
+    if (members?.data) {
+      setLocalRoles((prev) => {
+        const next = { ...prev };
+        for (const m of members.data) {
+          if (!(m.user_id in next)) next[m.user_id] = m.role;
+        }
+        return next;
+      });
+    }
+  }, [members?.data]);
+
+  // Keep addRole in sync with available options
+  useEffect(() => {
+    if (teamRoles && teamRoles.length > 0) {
+      const validSlugs = teamRoles.map((r: Role) => r.slug);
+      if (!validSlugs.includes(addRole)) {
+        setAddRole(validSlugs[0]);
+      }
+    }
+  }, [teamRoles, addRole]);
+
   const addMutation = useMutation({
     mutationFn: () =>
       api.teamMembers.add(orgId, team.id, {
@@ -435,7 +464,7 @@ function TeamDetailModal({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
       setAddUserId("");
-      setAddRole("member");
+      setAddRole(teamRoles?.[0]?.slug ?? "member");
       toast.success("Member added to team");
     },
   });
@@ -443,7 +472,13 @@ function TeamDetailModal({
   const removeMutation = useMutation({
     mutationFn: (userId: string) =>
       api.teamMembers.remove(orgId, team.id, userId),
-    onSuccess: () => {
+    onSuccess: (_, userId) => {
+      // Remove from local state
+      setLocalRoles((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
       qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
       toast.success("Member removed from team");
     },
@@ -457,6 +492,22 @@ function TeamDetailModal({
       toast.success("Member role updated");
     },
   });
+
+  const handleRoleChange = (userId: string, newRole: string) => {
+    const prevRole = localRoles[userId];
+    // Optimistic update
+    setLocalRoles((prev) => ({ ...prev, [userId]: newRole }));
+    updateRoleMutation.mutate(
+      { userId, role: newRole },
+      {
+        onError: () => {
+          // Rollback on failure
+          setLocalRoles((prev) => ({ ...prev, [userId]: prevRole }));
+          toast.error("Failed to update role");
+        },
+      },
+    );
+  };
 
   const memberIds = new Set(
     (members?.data || []).map((m: TeamMember) => m.user_id),
@@ -499,13 +550,9 @@ function TeamDetailModal({
               </span>
               <select
                 className="select select-ghost select-xs capitalize"
-                value={m.role}
-                onChange={(e) =>
-                  updateRoleMutation.mutate({
-                    userId: m.user_id,
-                    role: e.target.value,
-                  })
-                }
+                value={localRoles[m.user_id] ?? m.role}
+                onChange={(e) => handleRoleChange(m.user_id, e.target.value)}
+                disabled={roleOptions.length === 0}
               >
                 {roleOptions.map((r) => (
                   <option key={r.value} value={r.value}>

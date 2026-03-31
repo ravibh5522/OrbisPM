@@ -123,6 +123,7 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/projects [get]
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
 	f := repository.ProjectFilter{
 		ListFilter: repository.ListFilter{
 			Limit:  queryInt(r, "limit", 20),
@@ -133,6 +134,9 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		TeamID:    queryUUID(r, "team_id"),
 		SortBy:    queryStrDefault(r, "sort_by", "name"),
 		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	if queryBool(r, "mine") {
+		f.UserID = &userID
 	}
 	projects, total, err := h.projectSvc.ListByOrgPaginated(r.Context(), orgID, f)
 	if err != nil {

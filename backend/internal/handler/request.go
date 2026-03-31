@@ -74,3 +74,9 @@ func queryUUID(r *http.Request, name string) *uuid.UUID {
 	}
 	return &id
 }
+
+// queryBool extracts a boolean from query params ("true"/"1" → true).
+func queryBool(r *http.Request, name string) bool {
+	s := r.URL.Query().Get(name)
+	return s == "true" || s == "1"
+}
