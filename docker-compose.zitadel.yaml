@@ -20,7 +20,7 @@ services:
       timeout: 3s
       retries: 10
     networks:
-      - orbispm_default
+      - default
 
   zitadel:
     image: ghcr.io/zitadel/zitadel:v4.12.1
@@ -135,10 +135,10 @@ services:
       zitadel-redis:
         condition: service_healthy
     networks:
-      - orbispm_default
+      - default
 
 networks:
-  orbispm_default:
+  default:
     # Shared with the main docker-compose.yaml stack when both are running.
     # Docker reuses the network if it already exists with the same name.
     name: orbispm_default
