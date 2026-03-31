@@ -185,6 +185,9 @@ services:
   pgbouncer:
     image: edoburu/pgbouncer:latest
     restart: unless-stopped
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     # Unset DATABASE_URL so the entrypoint uses individual DB_* env vars.
     # This avoids two issues:
     # 1) Coolify injects DATABASE_URL=<url>?sslmode=require globally — the query
@@ -222,7 +225,7 @@ services:
       # Hard cap on total server-side connections from this pgbouncer instance.
       # RDS max_connections=79; leave 20 for Zitadel + admin.
       MAX_DB_CONNECTIONS: 55
-      AUTH_TYPE: md5
+      AUTH_TYPE: plain
       # SSL from PgBouncer to RDS; client→PgBouncer is plain (Docker-internal)
       SERVER_TLS_SSLMODE: ${POSTGRES_SSL_MODE:-disable}
       # Ignore extra startup params sent by pgx / psycopg

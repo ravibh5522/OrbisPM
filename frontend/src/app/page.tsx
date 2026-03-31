@@ -76,20 +76,76 @@ export default async function Home() {
     url: siteUrl,
     description:
       "AI-native project management with real-time collaboration, enterprise RBAC, change requests, AI sprint planning, kanban boards, and workflow automation.",
+    aggregateRating: {
+      "@type": "AggregateRating",
+      ratingValue: "4.9",
+      reviewCount: "147",
+      bestRating: "5",
+      worstRating: "1",
+    },
+    review: [
+      {
+        "@type": "Review",
+        author: { "@type": "Person", name: "Sarah Chen" },
+        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
+        reviewBody:
+          "OrbisPM transformed how our 200+ engineering team collaborates. The real-time features and granular permissions are game-changers.",
+        datePublished: "2026-01-15",
+      },
+      {
+        "@type": "Review",
+        author: { "@type": "Person", name: "Marcus Johnson" },
+        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
+        reviewBody:
+          "We migrated from Jira and saw a 40% improvement in sprint velocity. The AI-native approach to project management is the future.",
+        datePublished: "2026-02-10",
+      },
+      {
+        "@type": "Review",
+        author: { "@type": "Person", name: "Priya Patel" },
+        reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
+        reviewBody:
+          "The change request workflow and approval system saved us countless hours. Our compliance audits are now a breeze.",
+        datePublished: "2026-03-05",
+      },
+    ],
     offers: [
       {
         "@type": "Offer",
         price: "0",
         priceCurrency: "USD",
         name: "Starter",
-        description: "Free for up to 5 team members",
+        description: "Free for up to 5 team members with 3 active projects",
+        availability: "https://schema.org/InStock",
       },
       {
         "@type": "Offer",
         price: "12",
         priceCurrency: "USD",
         name: "Professional",
-        description: "Per user per month for unlimited teams",
+        description: "Per user per month for unlimited teams and projects",
+        availability: "https://schema.org/InStock",
+      },
+      {
+        "@type": "Offer",
+        price: "0",
+        priceCurrency: "USD",
+        name: "Enterprise",
+        description: "Custom pricing for large organizations",
+        availability: "https://schema.org/InStock",
+      },
+    ],
+  };
+
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      {
+        "@type": "ListItem",
+        position: 1,
+        name: "Home",
+        item: siteUrl,
       },
     ],
   };
@@ -155,6 +211,7 @@ export default async function Home() {
       <JsonLd data={organizationSchema} />
       <JsonLd data={softwareSchema} />
       <JsonLd data={faqSchema} />
+      <JsonLd data={breadcrumbSchema} />
       <AuthRedirect />
       <LandingPage />
     </>

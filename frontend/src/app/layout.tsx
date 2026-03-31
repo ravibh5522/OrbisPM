@@ -92,6 +92,11 @@ export async function generateMetadata(): Promise<Metadata> {
       apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
       shortcut: "/favicon.ico",
     },
+    category: "technology",
+    classification: "Business Software",
+    other: {
+      "application-name": "OrbisPM",
+    },
   };
 }
 
@@ -102,6 +107,15 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-theme="orbis-light" suppressHydrationWarning>
+      <head>
+        {/* Preconnect to external origins for improved Core Web Vitals */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-screen bg-base-200">
         <Providers>{children}</Providers>
       </body>
