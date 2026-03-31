@@ -136,6 +136,7 @@ export default function ProjectsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setShowCreate(false);
       reset();
       setError("");
@@ -149,6 +150,7 @@ export default function ProjectsPage() {
     mutationFn: (id: string) => api.projects.delete(currentOrg!.id, id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setDeleteTarget(null);
       toast.success("Project deleted");
     },

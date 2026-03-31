@@ -98,6 +98,8 @@ export default function TeamsPage() {
     mutationFn: (data: TeamForm) => api.teams.create(currentOrg!.id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["teams"] });
+      qc.invalidateQueries({ queryKey: ["teams-all", currentOrg!.id] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setShowCreate(false);
       reset();
       setError("");
@@ -111,6 +113,8 @@ export default function TeamsPage() {
     mutationFn: (id: string) => api.teams.delete(currentOrg!.id, id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["teams"] });
+      qc.invalidateQueries({ queryKey: ["teams-all", currentOrg!.id] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setDeleteTarget(null);
       toast.success("Team deleted");
     },

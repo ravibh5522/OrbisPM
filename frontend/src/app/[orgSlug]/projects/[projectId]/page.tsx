@@ -1321,6 +1321,7 @@ function ProjectTeamsSection({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
       qc.invalidateQueries({ queryKey: ["project-members"] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setShowLink(false);
       setSearch("");
       setPage(0);
@@ -1339,6 +1340,7 @@ function ProjectTeamsSection({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project-teams", orgId, projectId] });
       qc.invalidateQueries({ queryKey: ["project-members"] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setUnlinkTeamId(null);
       setReassignTo("");
       toast.success("Team unlinked from project");

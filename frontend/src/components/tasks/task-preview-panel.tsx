@@ -81,8 +81,8 @@ function getAccessControl(
 ): AccessControl {
   const r = role ?? "";
 
-  // Viewers can only read and comment
-  if (r === "viewer") {
+  // Observers and viewers can only read and comment
+  if (r === "viewer" || r === "observer") {
     return {
       canEdit: false,
       canDelete: false,
@@ -103,11 +103,29 @@ function getAccessControl(
     };
   }
 
-  // Members and editors (or assignee/reporter) can edit and attach
-  if (r === "member" || r === "editor" || isAssignee || isReporter) {
+  // Reviewers can read, comment, and attach but not edit task fields
+  if (r === "reviewer") {
+    return {
+      canEdit: false,
+      canDelete: false,
+      canManageMembers: false,
+      canComment: true,
+      canAttach: true,
+    };
+  }
+
+  // Contributors, members, and editors (or assignee/reporter) can edit and attach
+  if (
+    r === "contributor" ||
+    r === "member" ||
+    r === "editor" ||
+    isAssignee ||
+    isReporter
+  ) {
     return {
       canEdit: true,
-      canDelete: isAssignee || isReporter || r === "member",
+      canDelete:
+        isAssignee || isReporter || r === "member" || r === "contributor",
       canManageMembers: false,
       canComment: true,
       canAttach: true,

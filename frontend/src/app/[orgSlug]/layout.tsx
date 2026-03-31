@@ -35,6 +35,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { DataPrefetcher } from "@/components/data-prefetcher";
 import { NotificationBell } from "@/components/notification-bell";
 import { StickyNotesPanel } from "@/components/sticky-notes/sticky-notes-panel";
 
@@ -976,6 +977,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-base-200/30">
+      <DataPrefetcher />
       <Sidebar />
       <MobileSidebar />
       <TopBar />

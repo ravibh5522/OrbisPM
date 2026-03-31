@@ -406,7 +406,7 @@ func main() {
 	changeReqHandler := handler.NewChangeRequestHandler(changeReqSvc)
 
 	// --- Handler (WebSocket — real-time project collaboration) ---
-	wsHandler := handler.NewWSHandler(orgHub, taskSvc, commentSvc, checklistSvc, depSvc, watcherSvc, changeReqSvc)
+	wsHandler := handler.NewWSHandler(orgHub, taskSvc, commentSvc, checklistSvc, depSvc, watcherSvc, changeReqSvc, permResolver)
 
 	// Search handler (optional — only if Meilisearch is available)
 	var searchHandler *handler.SearchHandler

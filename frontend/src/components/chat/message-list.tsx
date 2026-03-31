@@ -36,16 +36,29 @@ function ChatAttachmentImage({
   fileName: string;
   onClick: (url: string) => void;
 }) {
-  const { data: blobUrl, isLoading, isError } = useQuery({
+  const {
+    data: blobUrl,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["chat-attachment-blob", attachmentId],
     queryFn: async () => {
-      const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-      const orgId = typeof window !== "undefined" ? localStorage.getItem("current_org_id") : null;
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("access_token")
+          : null;
+      const orgId =
+        typeof window !== "undefined"
+          ? localStorage.getItem("current_org_id")
+          : null;
       const headers: Record<string, string> = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
       if (orgId) headers["X-Org-ID"] = orgId;
 
-      const res = await fetch(`${API_BASE}/api/v1/chat/attachments/${attachmentId}/file`, { headers });
+      const res = await fetch(
+        `${API_BASE}/api/v1/chat/attachments/${attachmentId}/file`,
+        { headers },
+      );
       if (!res.ok) throw new Error("Failed to fetch attachment");
       const blob = await res.blob();
       return URL.createObjectURL(blob);
@@ -87,13 +100,22 @@ function ChatAttachmentImage({
 /** Downloads a chat attachment via the authenticated /file streaming endpoint. */
 async function downloadAttachment(attachmentId: string, fileName: string) {
   try {
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-    const orgId = typeof window !== "undefined" ? localStorage.getItem("current_org_id") : null;
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("access_token")
+        : null;
+    const orgId =
+      typeof window !== "undefined"
+        ? localStorage.getItem("current_org_id")
+        : null;
     const headers: Record<string, string> = {};
     if (token) headers["Authorization"] = `Bearer ${token}`;
     if (orgId) headers["X-Org-ID"] = orgId;
 
-    const res = await fetch(`${API_BASE}/api/v1/chat/attachments/${attachmentId}/file`, { headers });
+    const res = await fetch(
+      `${API_BASE}/api/v1/chat/attachments/${attachmentId}/file`,
+      { headers },
+    );
     if (!res.ok) return;
     const blob = await res.blob();
     const url = URL.createObjectURL(blob);
@@ -713,7 +735,7 @@ function MessageBubble({
               {showMenu && (
                 <div
                   className={cn(
-                    "absolute top-full mt-1 w-44 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-lg py-1 z-30",
+                    "absolute top-full mt-1 w-44 bg-base-100 border border-base-200 rounded-lg shadow-lg py-1 z-30",
                     isOwn ? "right-0" : "left-0",
                   )}
                 >

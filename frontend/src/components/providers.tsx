@@ -1,13 +1,13 @@
 "use client";
 
+import { OfflineIndicator } from "@/components/offline-indicator";
+import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
 import { ApiError } from "@/lib/api";
+import { createIDBPersister } from "@/lib/offline/persister";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
-import {
-  MutationCache,
-  QueryClient,
-  QueryClientProvider,
-} from "@tanstack/react-query";
+import { MutationCache, QueryClient } from "@tanstack/react-query";
+import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast, Toaster } from "sonner";
 
@@ -58,7 +58,8 @@ export function Providers({ children }: { children: ReactNode }) {
         defaultOptions: {
           queries: {
             staleTime: 30 * 1000,
-            gcTime: 5 * 60 * 1000,
+            // 24h gcTime — cached data survives long enough for offline / instant loads
+            gcTime: 24 * 60 * 60 * 1000,
             retry: 1,
             refetchOnWindowFocus: false,
             refetchOnReconnect: true,
@@ -70,11 +71,24 @@ export function Providers({ children }: { children: ReactNode }) {
       }),
   );
 
+  const [persister] = useState(() => createIDBPersister());
+
   return (
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider
+      client={queryClient}
+      persistOptions={{
+        persister,
+        // Keep persisted cache for 24 hours
+        maxAge: 24 * 60 * 60 * 1000,
+        // Debounce writes to IndexedDB (500ms after last cache change)
+        buster: "",
+      }}
+    >
       <ThemeInitializer>
         <AuthInitializer>{children}</AuthInitializer>
       </ThemeInitializer>
+      <OfflineIndicator />
+      <ServiceWorkerRegistrar />
       <Toaster
         position="bottom-right"
         richColors
@@ -84,6 +98,6 @@ export function Providers({ children }: { children: ReactNode }) {
           className: "!bg-base-100 !text-base-content !border-base-300",
         }}
       />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }

@@ -22,13 +22,14 @@ import (
 
 // WSHandler handles the bi-directional WebSocket for an org-level connection.
 type WSHandler struct {
-	hub        *websocket.OrgHub
-	taskSvc    *service.TaskService
-	commentSvc *service.CommentService
-	checkSvc   *service.ChecklistService
-	depSvc     *service.DependencyService
-	watcherSvc *service.WatcherService
-	crSvc      *service.TaskChangeRequestService
+	hub          *websocket.OrgHub
+	taskSvc      *service.TaskService
+	commentSvc   *service.CommentService
+	checkSvc     *service.ChecklistService
+	depSvc       *service.DependencyService
+	watcherSvc   *service.WatcherService
+	crSvc        *service.TaskChangeRequestService
+	permResolver *service.PermissionResolver
 }
 
 // NewWSHandler creates a new WSHandler.
@@ -40,16 +41,37 @@ func NewWSHandler(
 	depSvc *service.DependencyService,
 	watcherSvc *service.WatcherService,
 	crSvc *service.TaskChangeRequestService,
+	permResolver *service.PermissionResolver,
 ) *WSHandler {
 	return &WSHandler{
-		hub:        hub,
-		taskSvc:    taskSvc,
-		commentSvc: commentSvc,
-		checkSvc:   checkSvc,
-		depSvc:     depSvc,
-		watcherSvc: watcherSvc,
-		crSvc:      crSvc,
+		hub:          hub,
+		taskSvc:      taskSvc,
+		commentSvc:   commentSvc,
+		checkSvc:     checkSvc,
+		depSvc:       depSvc,
+		watcherSvc:   watcherSvc,
+		crSvc:        crSvc,
+		permResolver: permResolver,
 	}
+}
+
+// checkProjectPermission verifies the user has the given permission on the project.
+// Returns true if allowed. If denied, sends an error reply and returns false.
+func (h *WSHandler) checkProjectPermission(ctx context.Context, conn *websocket.OrgConn, msgID, action string, projectID uuid.UUID, resource, perm string) bool {
+	if h.permResolver == nil {
+		return true // no resolver configured — fail open (shouldn't happen in production)
+	}
+	allowed, err := h.permResolver.HasPermission(ctx, conn.UserID, conn.OrgID, domain.ScopeProject, &projectID, resource, perm)
+	if err != nil {
+		log.Error().Err(err).Str("user", conn.UserID.String()).Str("action", action).Msg("ws: permission check error")
+		h.reply(conn, msgID, action, nil, "permission check failed")
+		return false
+	}
+	if !allowed {
+		h.reply(conn, msgID, action, nil, "insufficient permissions")
+		return false
+	}
+	return true
 }
 
 // ServeWS upgrades to WebSocket and runs the read/write pump for an org connection.
@@ -415,6 +437,10 @@ func (h *WSHandler) handleTaskCreate(ctx context.Context, conn *websocket.OrgCon
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "create") {
+		return
+	}
+
 	var params service.CreateTaskParams
 	if err := json.Unmarshal(msg.Payload, &params); err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, "invalid payload")
@@ -448,6 +474,10 @@ func (h *WSHandler) handleTaskUpdate(ctx context.Context, conn *websocket.OrgCon
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
 		return
 	}
 
@@ -502,6 +532,10 @@ func (h *WSHandler) handleTaskDelete(ctx context.Context, conn *websocket.OrgCon
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "delete") {
+		return
+	}
+
 	type delReq struct {
 		TaskID string `json:"task_id"`
 	}
@@ -533,6 +567,10 @@ func (h *WSHandler) handleTaskBulkCreate(ctx context.Context, conn *websocket.Or
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "create") {
+		return
+	}
+
 	var params service.BulkCreateParams
 	if err := json.Unmarshal(msg.Payload, &params); err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, "invalid payload")
@@ -555,6 +593,10 @@ func (h *WSHandler) handleTaskBulkUpdate(ctx context.Context, conn *websocket.Or
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
 		return
 	}
 
@@ -581,6 +623,10 @@ func (h *WSHandler) handleTaskReorder(ctx context.Context, conn *websocket.OrgCo
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+		return
+	}
+
 	type reorderReq struct {
 		Items []service.ReorderItem `json:"items"`
 	}
@@ -598,6 +644,10 @@ func (h *WSHandler) handleTaskDuplicate(ctx context.Context, conn *websocket.Org
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "create") {
 		return
 	}
 
@@ -628,6 +678,10 @@ func (h *WSHandler) handleTaskSubmitReview(ctx context.Context, conn *websocket.
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+		return
+	}
+
 	type req struct {
 		TaskID string `json:"task_id"`
 	}
@@ -652,6 +706,10 @@ func (h *WSHandler) handleTaskComplete(ctx context.Context, conn *websocket.OrgC
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
 		return
 	}
 
@@ -705,6 +763,10 @@ func (h *WSHandler) handleChecklistCreate(ctx context.Context, conn *websocket.O
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+		return
+	}
+
 	type req struct {
 		TaskID string `json:"task_id"`
 		service.CreateChecklistParams
@@ -739,6 +801,10 @@ func (h *WSHandler) handleChecklistUpdate(ctx context.Context, conn *websocket.O
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+		return
+	}
+
 	type req struct {
 		TaskID string `json:"task_id"`
 		ID     string `json:"id"`
@@ -769,6 +835,10 @@ func (h *WSHandler) handleChecklistDelete(ctx context.Context, conn *websocket.O
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
 		return
 	}
 
@@ -822,6 +892,10 @@ func (h *WSHandler) handleCommentCreate(ctx context.Context, conn *websocket.Org
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "comments", "create") {
+		return
+	}
+
 	type req struct {
 		TaskID   string     `json:"task_id"`
 		Body     string     `json:"body"`
@@ -858,6 +932,10 @@ func (h *WSHandler) handleCommentDelete(ctx context.Context, conn *websocket.Org
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "comments", "delete") {
 		return
 	}
 
@@ -911,6 +989,10 @@ func (h *WSHandler) handleDependencyAdd(ctx context.Context, conn *websocket.Org
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+		return
+	}
+
 	type req struct {
 		TaskID      string `json:"task_id"`
 		DependsOnID string `json:"depends_on_id"`
@@ -939,6 +1021,10 @@ func (h *WSHandler) handleDependencyRemove(ctx context.Context, conn *websocket.
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
 		return
 	}
 
@@ -1052,6 +1138,10 @@ func (h *WSHandler) handleCRApprove(ctx context.Context, conn *websocket.OrgConn
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+		return
+	}
+
 	type req struct {
 		ID   string `json:"id"`
 		Note string `json:"note"`
@@ -1079,6 +1169,10 @@ func (h *WSHandler) handleCRReject(ctx context.Context, conn *websocket.OrgConn,
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
 		return
 	}
 

@@ -1738,6 +1738,8 @@ export function TaskColumns({
           task={contextMenu.task}
           depth={contextMenu.depth}
           members={members}
+          userProjectRole={userProjectRole}
+          currentUserId={currentUserId}
           onClose={() => setContextMenu(null)}
           onSelect={() => selectTask(contextMenu.depth, contextMenu.task.id)}
           onUpdate={(data) => handleUpdate(contextMenu.task.id, data)}

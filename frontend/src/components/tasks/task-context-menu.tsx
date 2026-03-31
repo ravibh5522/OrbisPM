@@ -27,6 +27,8 @@ interface ContextMenuProps {
   task: Task;
   depth: number;
   members: ProjectMember[];
+  userProjectRole?: string;
+  currentUserId?: string;
   onClose: () => void;
   onSelect: () => void;
   onUpdate: (data: Partial<Task>) => void;
@@ -42,6 +44,8 @@ export function TaskContextMenu({
   task,
   depth: _depth,
   members,
+  userProjectRole,
+  currentUserId,
   onClose,
   onSelect,
   onUpdate,
@@ -52,6 +56,24 @@ export function TaskContextMenu({
 }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [subMenu, setSubMenu] = useState<string | null>(null);
+
+  // Determine access based on role
+  const canEdit = [
+    "owner",
+    "admin",
+    "lead",
+    "contributor",
+    "member",
+    "editor",
+    "team_lead",
+  ].includes(userProjectRole ?? "");
+  const canDelete =
+    ["owner", "admin", "lead"].includes(userProjectRole ?? "") ||
+    (canEdit &&
+      currentUserId &&
+      (task.assignee_id === currentUserId ||
+        task.reporter_id === currentUserId ||
+        (task.assignee_ids || []).includes(currentUserId)));
 
   // Close on click outside / escape / scroll
   useEffect(() => {
@@ -153,172 +175,193 @@ export function TaskContextMenu({
     >
       {menuItem("View / Edit", <Pencil className="w-3.5 h-3.5" />, onSelect)}
 
-      <div className="border-t border-base-200 my-1" />
+      {canEdit && (
+        <>
+          <div className="border-t border-base-200 my-1" />
 
-      {/* Status submenu */}
-      <div className="relative">
-        {menuItem(
-          "Status",
-          <span
-            className={cn(
-              "w-2.5 h-2.5 rounded-full",
-              statusOptions.find((s) => s.value === task.status)?.color,
-            )}
-          />,
-          () => {},
-          { submenuKey: "status" },
-        )}
-        {subMenu === "status" && (
-          <div
-            className={cn(
-              "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[140px] z-10",
-              flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
-            )}
-          >
-            {statusOptions.map((s) => (
-              <button
-                key={s.value}
+          {/* Status submenu */}
+          <div className="relative">
+            {menuItem(
+              "Status",
+              <span
                 className={cn(
-                  "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
-                  task.status === s.value && "font-medium",
+                  "w-2.5 h-2.5 rounded-full",
+                  statusOptions.find((s) => s.value === task.status)?.color,
                 )}
-                onClick={() => {
-                  onUpdate({ status: s.value });
-                  onClose();
-                }}
-              >
-                <span className={cn("w-2 h-2 rounded-full", s.color)} />
-                {s.label}
-                {task.status === s.value && (
-                  <Check className="w-3 h-3 ml-auto text-primary" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Priority submenu */}
-      <div className="relative">
-        {menuItem(
-          "Priority",
-          <span
-            className={cn(
-              "text-xs font-bold",
-              priorityOptions.find((p) => p.value === task.priority)?.color,
+              />,
+              () => {},
+              { submenuKey: "status" },
             )}
-          >
-            !
-          </span>,
-          () => {},
-          { submenuKey: "priority" },
-        )}
-        {subMenu === "priority" && (
-          <div
-            className={cn(
-              "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[130px] z-10",
-              flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
-            )}
-          >
-            {priorityOptions.map((p) => (
-              <button
-                key={p.value}
+            {subMenu === "status" && (
+              <div
                 className={cn(
-                  "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
-                  task.priority === p.value && "font-medium",
+                  "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[140px] z-10",
+                  flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
                 )}
-                onClick={() => {
-                  onUpdate({ priority: p.value });
-                  onClose();
-                }}
               >
-                <span className={cn("text-xs font-bold", p.color)}>!</span>
-                {p.label}
-                {task.priority === p.value && (
-                  <Check className="w-3 h-3 ml-auto text-primary" />
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Assign To submenu (multi-select) */}
-      <div className="relative">
-        {menuItem("Assign To", <UserPlus className="w-3.5 h-3.5" />, () => {}, {
-          submenuKey: "assign",
-        })}
-        {subMenu === "assign" && (
-          <div
-            className={cn(
-              "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[170px] max-h-48 overflow-y-auto z-10",
-              flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
+                {statusOptions.map((s) => (
+                  <button
+                    key={s.value}
+                    className={cn(
+                      "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
+                      task.status === s.value && "font-medium",
+                    )}
+                    onClick={() => {
+                      onUpdate({ status: s.value });
+                      onClose();
+                    }}
+                  >
+                    <span className={cn("w-2 h-2 rounded-full", s.color)} />
+                    {s.label}
+                    {task.status === s.value && (
+                      <Check className="w-3 h-3 ml-auto text-primary" />
+                    )}
+                  </button>
+                ))}
+              </div>
             )}
-          >
-            <button
-              className={cn(
-                "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
-                !task.assignee_ids?.length && "font-medium",
-              )}
-              onClick={() => {
-                onUpdate({
-                  assignee_ids: [],
-                  assignee_id: "",
-                } as Partial<Task>);
-                onClose();
-              }}
-            >
-              Clear All
-              {!task.assignee_ids?.length && (
-                <Check className="w-3 h-3 ml-auto text-primary" />
-              )}
-            </button>
-            {members.map((m) => {
-              const isAssigned = (task.assignee_ids || []).includes(m.user_id);
-              return (
+          </div>
+
+          {/* Priority submenu */}
+          <div className="relative">
+            {menuItem(
+              "Priority",
+              <span
+                className={cn(
+                  "text-xs font-bold",
+                  priorityOptions.find((p) => p.value === task.priority)?.color,
+                )}
+              >
+                !
+              </span>,
+              () => {},
+              { submenuKey: "priority" },
+            )}
+            {subMenu === "priority" && (
+              <div
+                className={cn(
+                  "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[130px] z-10",
+                  flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
+                )}
+              >
+                {priorityOptions.map((p) => (
+                  <button
+                    key={p.value}
+                    className={cn(
+                      "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
+                      task.priority === p.value && "font-medium",
+                    )}
+                    onClick={() => {
+                      onUpdate({ priority: p.value });
+                      onClose();
+                    }}
+                  >
+                    <span className={cn("text-xs font-bold", p.color)}>!</span>
+                    {p.label}
+                    {task.priority === p.value && (
+                      <Check className="w-3 h-3 ml-auto text-primary" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Assign To submenu (multi-select) */}
+          <div className="relative">
+            {menuItem(
+              "Assign To",
+              <UserPlus className="w-3.5 h-3.5" />,
+              () => {},
+              {
+                submenuKey: "assign",
+              },
+            )}
+            {subMenu === "assign" && (
+              <div
+                className={cn(
+                  "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[170px] max-h-48 overflow-y-auto z-10",
+                  flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
+                )}
+              >
                 <button
-                  key={m.user_id}
                   className={cn(
                     "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
-                    isAssigned && "font-medium",
+                    !task.assignee_ids?.length && "font-medium",
                   )}
                   onClick={() => {
-                    const current = task.assignee_ids || [];
-                    const next = isAssigned
-                      ? current.filter((id) => id !== m.user_id)
-                      : [...current, m.user_id];
                     onUpdate({
-                      assignee_ids: next,
-                      assignee_id: next.length > 0 ? next[0] : "",
+                      assignee_ids: [],
+                      assignee_id: "",
                     } as Partial<Task>);
+                    onClose();
                   }}
                 >
-                  <span className="truncate">
-                    {m.display_name || m.email || m.user_id.slice(0, 8)}
-                  </span>
-                  {isAssigned && (
+                  Clear All
+                  {!task.assignee_ids?.length && (
                     <Check className="w-3 h-3 ml-auto text-primary" />
                   )}
                 </button>
-              );
-            })}
+                {members.map((m) => {
+                  const isAssigned = (task.assignee_ids || []).includes(
+                    m.user_id,
+                  );
+                  return (
+                    <button
+                      key={m.user_id}
+                      className={cn(
+                        "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200 rounded",
+                        isAssigned && "font-medium",
+                      )}
+                      onClick={() => {
+                        const current = task.assignee_ids || [];
+                        const next = isAssigned
+                          ? current.filter((id) => id !== m.user_id)
+                          : [...current, m.user_id];
+                        onUpdate({
+                          assignee_ids: next,
+                          assignee_id: next.length > 0 ? next[0] : "",
+                        } as Partial<Task>);
+                      }}
+                    >
+                      <span className="truncate">
+                        {m.display_name || m.email || m.user_id.slice(0, 8)}
+                      </span>
+                      {isAssigned && (
+                        <Check className="w-3 h-3 ml-auto text-primary" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </>
+      )}
 
       <div className="border-t border-base-200 my-1" />
 
-      {menuItem("Add Subtask", <Plus className="w-3.5 h-3.5" />, onAddSubtask, {
-        disabled: task.depth >= MAX_DEPTH,
-      })}
-      {menuItem("Duplicate", <Copy className="w-3.5 h-3.5" />, onDuplicate)}
+      {canEdit &&
+        menuItem(
+          "Add Subtask",
+          <Plus className="w-3.5 h-3.5" />,
+          onAddSubtask,
+          {
+            disabled: task.depth >= MAX_DEPTH,
+          },
+        )}
+      {canEdit &&
+        menuItem("Duplicate", <Copy className="w-3.5 h-3.5" />, onDuplicate)}
       {menuItem("Copy Link", <Link className="w-3.5 h-3.5" />, onCopyLink)}
 
-      <div className="border-t border-base-200 my-1" />
-
-      {menuItem("Delete", <Trash2 className="w-3.5 h-3.5" />, onDelete, {
-        danger: true,
-      })}
+      {canDelete && (
+        <>
+          <div className="border-t border-base-200 my-1" />
+          {menuItem("Delete", <Trash2 className="w-3.5 h-3.5" />, onDelete, {
+            danger: true,
+          })}
+        </>
+      )}
     </div>
   );
 }

@@ -36,7 +36,15 @@ export function ChannelHeader() {
 
   const channel = channels.find((c) => c.id === activeChannelId);
 
-  if (!channel) return null;
+  // Show skeleton when a channel is selected but sidebar data hasn't loaded yet
+  if (!channel) {
+    if (!activeChannelId) return null;
+    return (
+      <div className="flex items-center h-14 px-4 border-b border-base-200 bg-base-200 flex-shrink-0">
+        <div className="skeleton h-5 w-48 rounded-lg" />
+      </div>
+    );
+  }
 
   const isChannel = channel.type !== "dm";
   const displayName =
@@ -45,7 +53,7 @@ export function ChannelHeader() {
       : channel.name || "Unnamed Channel";
 
   return (
-    <div className="flex items-center justify-between h-14 px-4 border-b border-base-200 bg-base-100/80 backdrop-blur-sm flex-shrink-0">
+    <div className="flex items-center justify-between h-14 px-4 border-b border-base-200 bg-base-200 flex-shrink-0">
       <div className="flex items-center gap-2.5 min-w-0">
         <span className="flex items-center justify-center w-8 h-8 rounded-lg bg-base-200 flex-shrink-0">
           {isChannel ? (
@@ -231,7 +239,7 @@ export function ChannelDetails() {
               {pins.slice(0, 5).map((pin) => (
                 <div
                   key={pin.message_id}
-                  className="bg-base-200/50 rounded-lg px-2.5 py-2 text-xs"
+                  className="bg-base-200 rounded-lg px-2.5 py-2 text-xs"
                 >
                   <div className="flex items-center gap-1 mb-0.5">
                     <Pin className="w-3 h-3 text-warning" />
@@ -414,7 +422,7 @@ function DetailsAddMemberSearch({
   const filteredResults = results?.filter((u) => !existingIds.has(u.user_id));
 
   return (
-    <div className="mb-2 border border-base-300 rounded-lg bg-base-200/50 overflow-hidden">
+    <div className="mb-2 border border-base-300 rounded-lg bg-base-200 overflow-hidden">
       <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300/50">
         <UserPlus className="w-3.5 h-3.5 text-base-content/40" />
         <input

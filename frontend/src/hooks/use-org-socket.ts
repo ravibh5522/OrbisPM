@@ -263,6 +263,7 @@ function handleOrgEvent(
     qc.invalidateQueries({ queryKey: ["projects", orgId] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
     qc.invalidateQueries({ queryKey: ["analytics-dashboard", orgId] });
+    qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
     if (event.entity_id) {
       qc.invalidateQueries({ queryKey: ["project", orgId, event.entity_id] });
       qc.invalidateQueries({
@@ -274,7 +275,9 @@ function handleOrgEvent(
   // Teams
   if (type.startsWith("team.")) {
     qc.invalidateQueries({ queryKey: ["teams", orgId] });
+    qc.invalidateQueries({ queryKey: ["teams-all", orgId] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
+    qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
     if (event.entity_id) {
       qc.invalidateQueries({ queryKey: ["team", orgId, event.entity_id] });
       qc.invalidateQueries({
@@ -364,7 +367,7 @@ function handleOrgEvent(
     }
     // Invalidate sidebar data so unread counts refresh
     qc.invalidateQueries({ queryKey: ["chat-channels", orgId] });
-    qc.invalidateQueries({ queryKey: ["chat-sidebar", orgId] });
+    qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
   }
 }
 

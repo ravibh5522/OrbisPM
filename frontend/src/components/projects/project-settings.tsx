@@ -80,6 +80,7 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
+      qc.invalidateQueries({ queryKey: ["projects", orgId] });
       setHasChanges(false);
       toast.success("Task statuses saved");
     },
@@ -381,6 +382,8 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
       api.projects.update(orgId, project.id, { name, description }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
+      qc.invalidateQueries({ queryKey: ["projects", orgId] });
+      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
       setHasChanges(false);
       toast.success("Project settings saved");
     },
@@ -470,6 +473,7 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
+      qc.invalidateQueries({ queryKey: ["projects", orgId] });
       setHasChanges(false);
     },
   });
@@ -566,6 +570,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["project", orgId, project.id] });
+      qc.invalidateQueries({ queryKey: ["projects", orgId] });
       setHasChanges(false);
     },
   });

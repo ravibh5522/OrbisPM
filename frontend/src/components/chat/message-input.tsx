@@ -293,7 +293,7 @@ export function MessageInput() {
   return (
     <div
       className={cn(
-        "border-t border-base-200 bg-base-100/80 backdrop-blur-sm p-3 transition-colors",
+        "border-t border-base-300 bg-base-200 p-3 transition-colors",
         isDragging && "border-primary bg-primary/5",
       )}
       onDrop={handleDrop}
@@ -302,7 +302,7 @@ export function MessageInput() {
     >
       {/* File previews */}
       {files.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2 p-2 bg-base-200/50 rounded-lg">
+        <div className="flex flex-wrap gap-2 mb-2 p-2 bg-base-200 rounded-lg">
           {files.map((fp, i) => (
             <div key={i} className="relative group">
               {fp.preview ? (
@@ -355,7 +355,7 @@ export function MessageInput() {
         </div>
       )}
 
-      <div className="relative flex items-end gap-2 bg-base-200/50 rounded-2xl px-3 py-2">
+      <div className="relative flex items-end gap-2 bg-base-200 rounded-2xl px-3 py-2">
         {/* @mention dropdown */}
         {mentionQuery !== null &&
           mentionResults &&
@@ -474,7 +474,6 @@ export function MessageInput() {
           )}
         </button>
       </div>
-
     </div>
   );
 }

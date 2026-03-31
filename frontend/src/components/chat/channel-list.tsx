@@ -279,7 +279,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
 
       {/* ─── Panel 2: Channels + Members (teams) ─── */}
       {showTeamPanel && selectedItem.team && (
-        <div className="flex-1 bg-base-200/50 flex flex-col min-w-0">
+        <div className="flex-1 bg-base-200 flex flex-col min-w-0">
           <TeamChannelPanel
             team={selectedItem.team}
             activeChannelId={activeChannelId}
@@ -293,7 +293,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
 
       {/* ─── Panel 2: Channels + Members (groups) ── */}
       {showGroupPanel && selectedItem.channel && (
-        <div className="flex-1 bg-base-200/50 flex flex-col min-w-0">
+        <div className="flex-1 bg-base-200 flex flex-col min-w-0">
           <GroupMemberPanel
             channel={selectedItem.channel}
             activeChannelId={activeChannelId}
@@ -332,7 +332,9 @@ function ConversationPanel({
   const [showCreateOverlay, setShowCreateOverlay] = useState(false);
 
   if (showCreateOverlay) {
-    return <CreateConversationOverlay onClose={() => setShowCreateOverlay(false)} />;
+    return (
+      <CreateConversationOverlay onClose={() => setShowCreateOverlay(false)} />
+    );
   }
 
   return (
@@ -398,7 +400,10 @@ function formatLastSeen(lastSeen?: string): string {
 
 /** Returns a status color class based on last activity.
  * green: online or active <=2 min, yellow: <3 hr, red: >=3 hr */
-function statusDotColor(presence?: { online: boolean; last_seen?: string }): string {
+function statusDotColor(presence?: {
+  online: boolean;
+  last_seen?: string;
+}): string {
   if (!presence) return "bg-base-content/20"; // unknown
   if (presence.online) return "bg-success"; // green — online now
   if (!presence.last_seen) return "bg-error"; // red — no data
@@ -547,9 +552,7 @@ function ConversationRow({
           <span
             className={cn(
               "text-[10px] truncate block",
-              dmPresence?.isOnline
-                ? "text-success"
-                : "text-base-content/40",
+              dmPresence?.isOnline ? "text-success" : "text-base-content/40",
             )}
           >
             {dmSubtitle}

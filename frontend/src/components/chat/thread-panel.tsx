@@ -83,7 +83,7 @@ export function ThreadPanel() {
 
       {/* Parent message */}
       {parentMessage && (
-        <div className="px-4 py-3 border-b border-base-200 bg-base-200/20">
+        <div className="px-4 py-3 border-b border-base-200 bg-base-200/30">
           <div className="flex items-center gap-2 mb-1">
             <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold flex-shrink-0">
               {(parentMessage.sender_name?.[0] || "?").toUpperCase()}
@@ -131,7 +131,7 @@ export function ThreadPanel() {
 
       {/* Reply input */}
       <div className="border-t border-base-200 p-3 flex-shrink-0">
-        <div className="flex items-center gap-2 bg-base-200/50 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 bg-base-200 rounded-xl px-3 py-2">
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
