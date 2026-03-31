@@ -214,7 +214,10 @@ func (s *ProjectService) Update(ctx context.Context, id uuid.UUID, params Update
 
 	s.enqueueActivity(project.OrgID.String(), "project", project.ID.String(), "updated", "")
 
-	s.publishEvent(ctx, domain.EventProjectUpdated, updated.OrgID.String(), updated.ID.String(), nil)
+	s.publishEvent(ctx, domain.EventProjectUpdated, updated.OrgID.String(), updated.ID.String(), map[string]any{
+		"project_id": updated.ID.String(),
+		"settings":   updated.Settings,
+	})
 
 	return updated, nil
 }

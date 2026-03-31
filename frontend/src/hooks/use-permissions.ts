@@ -1,83 +1,20 @@
 "use client";
 
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
-import type { OrgRole, Role, Permission } from "@/types/domain";
-
-/*
- * Built-in permission matrix for org-level roles.
- * Mirrors the Go backend's hasBuiltInPermission logic.
- * Kept as fallback when DB roles haven't loaded yet.
- */
-const BUILT_IN_PERMISSIONS: Record<string, Record<string, OrgRole[]>> = {
-  projects: {
-    create: ["owner", "admin", "member"],
-    read: ["owner", "admin", "member", "viewer"],
-    update: ["owner", "admin", "member"],
-    delete: ["owner", "admin"],
-    manage_members: ["owner", "admin"],
-  },
-  tasks: {
-    create: ["owner", "admin", "member"],
-    read: ["owner", "admin", "member", "viewer"],
-    update: ["owner", "admin", "member"],
-    delete: ["owner", "admin", "member"],
-    assign: ["owner", "admin", "member"],
-    review: ["owner", "admin", "member"],
-    direct_update: ["owner", "admin"],
-  },
-  teams: {
-    create: ["owner", "admin"],
-    read: ["owner", "admin", "member", "viewer"],
-    update: ["owner", "admin"],
-    delete: ["owner", "admin"],
-    manage_members: ["owner", "admin"],
-  },
-  members: {
-    invite: ["owner", "admin"],
-    read: ["owner", "admin", "member", "viewer"],
-    update_role: ["owner", "admin"],
-    remove: ["owner", "admin"],
-  },
-  billing: {
-    read: ["owner", "admin", "billing_admin"],
-    manage: ["owner", "billing_admin"],
-  },
-  settings: {
-    read: ["owner", "admin"],
-    update: ["owner", "admin"],
-  },
-  change_requests: {
-    create: ["owner", "admin", "member"],
-    read: ["owner", "admin", "member", "viewer"],
-    approve: ["owner", "admin"],
-    reject: ["owner", "admin"],
-  },
-  permissions: {
-    read: ["owner", "admin"],
-    manage: ["owner", "admin"],
-  },
-  announcements: {
-    create: ["owner", "admin"],
-    read: ["owner", "admin", "member", "viewer"],
-    update: ["owner", "admin"],
-    delete: ["owner", "admin"],
-  },
-};
-
-function hasBuiltInPermission(role: OrgRole, resource: string, action: string): boolean {
-  if (role === "owner") return true;
-  const allowed = BUILT_IN_PERMISSIONS[resource]?.[action];
-  return allowed ? allowed.includes(role) : false;
-}
+import { useAuthStore } from "@/stores/auth-store";
+import type { OrgRole, Permission, Role } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
 
 /** Check if a DB-driven role has a specific permission */
-function roleHasPermission(role: Role, resource: string, action: string): boolean {
+function roleHasPermission(
+  role: Role,
+  resource: string,
+  action: string,
+): boolean {
   if (!role.permissions) return false;
   return role.permissions.some(
-    (p: Permission) => p.resource === resource && p.action === action
+    (p: Permission) => p.resource === resource && p.action === action,
   );
 }
 
@@ -98,7 +35,8 @@ export interface PermissionsApi {
 
 /**
  * usePermissions - provides permission checking for the current user in the current org.
- * Uses DB-driven roles when available, falls back to built-in permission matrix.
+ * Uses DB-driven roles exclusively. Owner and admin bypass is determined by the
+ * backend role slug — no hardcoded permission matrix.
  */
 export function usePermissions(): PermissionsApi {
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -122,26 +60,26 @@ export function usePermissions(): PermissionsApi {
 
     const can = (resource: string, action: string): boolean => {
       if (!role) return false;
-      // Owner bypasses everything
-      if (role === "owner") return true;
-      // Admin bypasses most things
-      if (role === "admin") {
-        if (resource === "org" && (action === "delete" || action === "transfer_ownership")) {
+      // Owner bypasses everything (matches backend PermissionResolver)
+      if (isOwner) return true;
+      // Admin bypasses most things (matches backend PermissionResolver)
+      if (isAdmin) {
+        if (
+          resource === "org" &&
+          (action === "delete" || action === "transfer_ownership")
+        ) {
           return false;
         }
         return true;
       }
 
-      // Try DB-driven role first
-      const dbRole = roles.find((r: Role) => r.slug === role);
-      if (dbRole && dbRole.permissions) {
-        return roleHasPermission(dbRole, resource, action);
-      }
+      // While DB roles are still loading, deny access (safe default)
+      if (isLoading) return false;
 
-      // Fallback to built-in permission matrix
-      const builtInRoles: OrgRole[] = ["owner", "admin", "member", "viewer", "billing_admin"];
-      if (builtInRoles.includes(role as OrgRole)) {
-        return hasBuiltInPermission(role as OrgRole, resource, action);
+      // Use DB-driven role permissions exclusively
+      const dbRole = roles.find((r: Role) => r.slug === role);
+      if (dbRole) {
+        return roleHasPermission(dbRole, resource, action);
       }
 
       return false;

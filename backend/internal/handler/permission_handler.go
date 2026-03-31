@@ -5,19 +5,26 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
 // PermissionHandler handles permission and role HTTP endpoints.
 type PermissionHandler struct {
-	permSvc *service.PermissionService
+	permSvc      *service.PermissionService
+	permResolver *service.PermissionResolver
 }
 
 func NewPermissionHandler(permSvc *service.PermissionService) *PermissionHandler {
 	return &PermissionHandler{permSvc: permSvc}
+}
+
+// SetPermissionResolver sets the permission resolver for org-scope my-permissions.
+func (h *PermissionHandler) SetPermissionResolver(pr *service.PermissionResolver) {
+	h.permResolver = pr
 }
 
 // Routes registers permission routes. Mounted under /orgs/{orgId}/permissions.
@@ -71,10 +78,14 @@ func (h *PermissionHandler) AdminRoutes() chi.Router {
 }
 
 // CombinedRoutes returns all permission routes as a single chi.Router.
-// Read operations are accessible by all org members; mutations are guarded by RequireOrgAdmin.
+// Read operations are accessible by all org members; mutations are guarded by PermissionResolver.
 // Use this to mount at a single path and avoid chi duplicate-mount panics.
-func (h *PermissionHandler) CombinedRoutes(pool *pgxpool.Pool) chi.Router {
+func (h *PermissionHandler) CombinedRoutes(resolver *service.PermissionResolver) chi.Router {
 	r := chi.NewRouter()
+
+	prm := func(resource, action string) func(http.Handler) http.Handler {
+		return middleware.RequireResolvedPermission(resolver, resource, action)
+	}
 
 	// Read-only routes — available to all org members
 	r.Get("/", h.ListPermissions)
@@ -84,23 +95,20 @@ func (h *PermissionHandler) CombinedRoutes(pool *pgxpool.Pool) chi.Router {
 		r.Get("/", h.ListRoles)
 		r.Get("/{roleId}", h.GetRole)
 
-		// Admin-only mutations
+		// Admin-only mutations via PermissionResolver
 		r.Group(func(r chi.Router) {
-			r.Use(middleware.RequireOrgAdmin(pool))
+			r.Use(prm("roles", "create"))
 			r.Post("/", h.CreateRole)
-			r.Route("/{roleId}", func(r chi.Router) {
-				r.Patch("/", h.UpdateRole)
-				r.Delete("/", h.DeleteRole)
-				r.Put("/permissions", h.SetRolePermissions)
-			})
+		})
+		r.Route("/{roleId}", func(r chi.Router) {
+			r.With(prm("roles", "update")).Patch("/", h.UpdateRole)
+			r.With(prm("roles", "delete")).Delete("/", h.DeleteRole)
+			r.With(prm("roles", "update")).Put("/permissions", h.SetRolePermissions)
 		})
 	})
 
 	// Admin-only team-project role map mutation
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.RequireOrgAdmin(pool))
-		r.Put("/team-project-role-map", h.SetTeamProjectRoleMap)
-	})
+	r.With(prm("roles", "update")).Put("/team-project-role-map", h.SetTeamProjectRoleMap)
 
 	return r
 }
@@ -251,4 +259,34 @@ func (h *PermissionHandler) SetTeamProjectRoleMap(w http.ResponseWriter, r *http
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// GetMyOrgPermissions returns the calling user's effective role and permissions at org scope.
+func (h *PermissionHandler) GetMyOrgPermissions(w http.ResponseWriter, r *http.Request) {
+	if h.permResolver == nil {
+		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "permission resolver not configured"})
+		return
+	}
+	userID := tenant.UserID(r.Context())
+	orgID := middleware.OrgIDFromCtx(r.Context())
+
+	role, perms, err := h.permResolver.GetEffectivePermissions(r.Context(), userID, orgID, domain.ScopeOrg, nil)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	type permItem struct {
+		Resource string `json:"resource"`
+		Action   string `json:"action"`
+	}
+	items := make([]permItem, 0, len(perms))
+	for _, p := range perms {
+		items = append(items, permItem{Resource: p.Resource, Action: p.Action})
+	}
+
+	JSON(w, http.StatusOK, map[string]any{
+		"role":        role,
+		"permissions": items,
+	})
 }

@@ -59,7 +59,9 @@ func NewWSHandler(
 // Returns true if allowed. If denied, sends an error reply and returns false.
 func (h *WSHandler) checkProjectPermission(ctx context.Context, conn *websocket.OrgConn, msgID, action string, projectID uuid.UUID, resource, perm string) bool {
 	if h.permResolver == nil {
-		return true // no resolver configured — fail open (shouldn't happen in production)
+		log.Error().Str("action", action).Msg("ws: permResolver is nil — denying request")
+		h.reply(conn, msgID, action, nil, "permission check unavailable")
+		return false
 	}
 	allowed, err := h.permResolver.HasPermission(ctx, conn.UserID, conn.OrgID, domain.ScopeProject, &projectID, resource, perm)
 	if err != nil {
@@ -139,7 +141,7 @@ func (h *WSHandler) dispatch(ctx context.Context, conn *websocket.OrgConn, msg w
 	switch msg.Action {
 	// ──── Project room ────
 	case "project:join":
-		h.handleProjectJoin(conn, msg)
+		h.handleProjectJoin(ctx, conn, msg)
 	case "project:leave":
 		h.handleProjectLeave(conn, msg)
 
@@ -261,7 +263,7 @@ func extractProjectID(raw json.RawMessage) (uuid.UUID, error) {
 //  Project Room Handlers
 // ═══════════════════════════════════════
 
-func (h *WSHandler) handleProjectJoin(conn *websocket.OrgConn, msg websocket.WSMessage) {
+func (h *WSHandler) handleProjectJoin(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {
 	type req struct {
 		ProjectID string `json:"project_id"`
 	}
@@ -269,6 +271,11 @@ func (h *WSHandler) handleProjectJoin(conn *websocket.OrgConn, msg websocket.WSM
 	pid, err := uuid.Parse(r.ProjectID)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, "invalid project_id")
+		return
+	}
+
+	// Verify the user has at least read access to this project (via direct, team, or org membership)
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, pid, "tasks", "read") {
 		return
 	}
 
@@ -314,6 +321,10 @@ func (h *WSHandler) handleTaskList(ctx context.Context, conn *websocket.OrgConn,
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
 		return
 	}
 
@@ -403,6 +414,10 @@ func (h *WSHandler) handleTaskTree(ctx context.Context, conn *websocket.OrgConn,
 		return
 	}
 
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
+		return
+	}
+
 	tasks, err := h.taskSvc.ListTreeByProject(ctx, projectID, 500)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
@@ -413,6 +428,16 @@ func (h *WSHandler) handleTaskTree(ctx context.Context, conn *websocket.OrgConn,
 }
 
 func (h *WSHandler) handleTaskGet(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {
+	projectID, err := extractProjectID(msg.Payload)
+	if err != nil {
+		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
+		return
+	}
+
 	type getReq struct {
 		TaskID string `json:"task_id"`
 	}
@@ -1122,7 +1147,7 @@ func (h *WSHandler) handleCRList(ctx context.Context, conn *websocket.OrgConn, m
 		}
 		h.reply(conn, msg.ID, msg.Action, map[string]any{"data": items, "total": len(items)}, "")
 	} else {
-		items, total, err := h.crSvc.ListByProject(ctx, projectID, r.Status, 50, 0)
+		items, total, err := h.crSvc.ListByProject(ctx, projectID, r.Status, nil, nil, 50, 0)
 		if err != nil {
 			h.reply(conn, msg.ID, msg.Action, nil, err.Error())
 			return
@@ -1138,7 +1163,7 @@ func (h *WSHandler) handleCRApprove(ctx context.Context, conn *websocket.OrgConn
 		return
 	}
 
-	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "review") {
 		return
 	}
 
@@ -1172,7 +1197,7 @@ func (h *WSHandler) handleCRReject(ctx context.Context, conn *websocket.OrgConn,
 		return
 	}
 
-	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "review") {
 		return
 	}
 

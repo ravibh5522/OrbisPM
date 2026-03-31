@@ -8,6 +8,8 @@ import { api, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CheckCircle2,
+  ClipboardCheck,
   Code2,
   Eye,
   KeyRound,
@@ -18,6 +20,7 @@ import {
   Pencil,
   RotateCcw,
   ShieldCheck,
+  XCircle,
 } from "lucide-react";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
@@ -53,6 +56,25 @@ const DEFAULT_TEMPLATES = [
     description: "Sent to new users when they join the organization",
     icon: PartyPopper,
   },
+  {
+    name: "change_request_review",
+    label: "Change Request — Review",
+    description: "Sent to reviewers when a change request needs approval",
+    icon: ClipboardCheck,
+  },
+  {
+    name: "change_request_approved",
+    label: "Change Request — Approved",
+    description:
+      "Sent to requester and assignee when a change request is approved",
+    icon: CheckCircle2,
+  },
+  {
+    name: "change_request_rejected",
+    label: "Change Request — Rejected",
+    description: "Sent to requester when a change request is rejected",
+    icon: XCircle,
+  },
 ];
 
 const SAMPLE_CONTEXT: Record<string, Record<string, string>> = {
@@ -72,6 +94,24 @@ const SAMPLE_CONTEXT: Record<string, Record<string, string>> = {
     priority: "high",
   },
   welcome: { user_name: "John Doe" },
+  change_request_review: {
+    task_title: "Redesign landing page hero section",
+    requester_name: "Jane Smith",
+    reason: "The hero needs a refresh before the Q4 launch.",
+    review_url: "#",
+  },
+  change_request_approved: {
+    task_title: "Redesign landing page hero section",
+    reviewer_name: "Alice Manager",
+    note: "Looks good, approved for implementation.",
+    task_url: "#",
+  },
+  change_request_rejected: {
+    task_title: "Redesign landing page hero section",
+    reviewer_name: "Alice Manager",
+    note: "The proposed changes conflict with brand guidelines.",
+    task_url: "#",
+  },
 };
 
 const GLOBAL_VARS = ["app_name", "frontend_url"];

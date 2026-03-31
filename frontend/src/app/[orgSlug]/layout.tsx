@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
-import type { OrgRole } from "@/types/domain";
 import {
   Activity,
   BarChart3,
@@ -38,12 +37,14 @@ import { useEffect } from "react";
 import { DataPrefetcher } from "@/components/data-prefetcher";
 import { NotificationBell } from "@/components/notification-bell";
 import { StickyNotesPanel } from "@/components/sticky-notes/sticky-notes-panel";
+import { useOrgPolicies } from "@/hooks/use-policies";
 
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
-  roles?: OrgRole[];
+  /** Optional permission check: [resource, action] — item shown only if can(resource, action) */
+  permission?: [string, string];
 }
 
 function getSidebarItems(orgSlug: string): NavItem[] {
@@ -112,7 +113,7 @@ function getSettingsItems(orgSlug: string): NavItem[] {
       href: `/${orgSlug}/settings`,
       label: "Organisation",
       icon: <Building2 className="w-5 h-5" />,
-      roles: ["owner", "admin", "billing_admin"],
+      permission: ["org", "update"],
     },
   ];
 }
@@ -135,7 +136,7 @@ function Sidebar() {
 
   const mainItems = getSidebarItems(currentOrg.slug);
   const settingsItems = getSettingsItems(currentOrg.slug);
-  const userRole = currentMembership?.role as OrgRole | undefined;
+  const orgPolicies = useOrgPolicies();
 
   const handleThemeSwitch = (value: string) => {
     if (themeLocked) return; // fully locked by admin
@@ -151,7 +152,9 @@ function Sidebar() {
   };
 
   const filteredSettings = settingsItems.filter(
-    (item) => !item.roles || (userRole && item.roles.includes(userRole)),
+    (item) =>
+      !item.permission ||
+      orgPolicies.can(item.permission[0], item.permission[1]),
   );
 
   const isActive = (href: string) => {
@@ -224,7 +227,7 @@ function Sidebar() {
                     {currentOrg.name}
                   </div>
                   <div className="text-xs text-base-content/50">
-                    {userRole || "member"}
+                    {orgPolicies.role || "member"}
                   </div>
                 </div>
                 <ChevronDown className="w-4 h-4 text-base-content/50" />
@@ -564,7 +567,7 @@ function MobileSidebar() {
     colorSchemaLocked,
   } = useUIStore();
   const currentMembership = useAuthStore((s) => s.currentMembership);
-  const userRole = currentMembership?.role as OrgRole | undefined;
+  const orgPolicies = useOrgPolicies();
   const orgSlug = currentOrg?.slug || "";
 
   const mainItems: NavItem[] = [
@@ -623,7 +626,9 @@ function MobileSidebar() {
   const settingsItems = getSettingsItems(orgSlug);
 
   const filteredSettings = settingsItems.filter(
-    (item) => !item.roles || (userRole && item.roles.includes(userRole)),
+    (item) =>
+      !item.permission ||
+      orgPolicies.can(item.permission[0], item.permission[1]),
   );
 
   const isActive = (href: string) =>
@@ -680,7 +685,7 @@ function MobileSidebar() {
               <div>
                 <div className="font-semibold text-sm">{currentOrg.name}</div>
                 <div className="text-xs text-base-content/50">
-                  {userRole || "member"}
+                  {orgPolicies.role || "member"}
                 </div>
               </div>
             </div>

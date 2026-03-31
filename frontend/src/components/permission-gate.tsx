@@ -48,10 +48,10 @@ interface RequireAdminProps {
 }
 
 export function RequireAdmin({ children, fallback }: RequireAdminProps) {
-  const { isAdmin, isOwner, isLoading } = usePermissions();
+  const { isAdmin, isLoading } = usePermissions();
 
   if (isLoading) return null;
-  if (!isAdmin && !isOwner) {
+  if (!isAdmin) {
     return (
       <>
         {fallback || (

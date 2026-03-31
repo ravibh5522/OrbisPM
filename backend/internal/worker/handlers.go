@@ -43,8 +43,15 @@ func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, 
 	}
 
 	template := "notification"
-	if notifType == "announcement_created" {
+	switch notifType {
+	case "announcement_created":
 		template = "announcement"
+	case "change_request_review":
+		template = "change_request_review"
+	case "change_request_approved":
+		template = "change_request_approved"
+	case "change_request_rejected":
+		template = "change_request_rejected"
 	}
 
 	payload := map[string]any{

@@ -8,7 +8,6 @@ import { useMemo } from "react";
 export interface ProjectPermissionsApi {
   can: (resource: string, action: string) => boolean;
   role: string | null;
-  isLead: boolean;
   isLoading: boolean;
 }
 
@@ -16,7 +15,9 @@ export interface ProjectPermissionsApi {
  * useProjectPermissions — provides permission checking for the current user
  * within a specific project. Calls the /my-permissions endpoint.
  */
-export function useProjectPermissions(projectId: string | undefined): ProjectPermissionsApi {
+export function useProjectPermissions(
+  projectId: string | undefined,
+): ProjectPermissionsApi {
   const currentOrg = useAuthStore((s) => s.currentOrg);
 
   const { data, isLoading } = useQuery({
@@ -38,7 +39,6 @@ export function useProjectPermissions(projectId: string | undefined): ProjectPer
     return {
       can,
       role,
-      isLead: role === "lead",
       isLoading: !data || isLoading,
     };
   }, [data, isLoading]);

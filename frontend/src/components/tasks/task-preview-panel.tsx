@@ -4,6 +4,7 @@ import {
   RichTextEditor,
   RichTextViewer,
 } from "@/components/editor/rich-text-editor";
+import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
   RecurrenceBadge,
   RecurrenceSelector,
@@ -16,6 +17,8 @@ import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useProjectPolicies } from "@/hooks/use-policies";
+import { useReviewableFields } from "@/hooks/use-reviewable-fields";
 import {
   cn,
   formatDate,
@@ -46,6 +49,7 @@ import {
   Image as ImageIcon,
   Link2,
   ListChecks,
+  Lock,
   MessageSquare,
   Paperclip,
   Play,
@@ -53,7 +57,6 @@ import {
   Send,
   Settings2,
   Square,
-  Tag,
   Trash2,
   Upload,
   Users,
@@ -63,84 +66,8 @@ import {
 const MAX_DEPTH = 3;
 
 /* ═══════════════════════════════════════════════════════
-   Role-based access control helper
+   Role-based access control — uses DB-driven policies
    ═══════════════════════════════════════════════════════ */
-
-interface AccessControl {
-  canEdit: boolean;
-  canDelete: boolean;
-  canManageMembers: boolean;
-  canComment: boolean;
-  canAttach: boolean;
-}
-
-function getAccessControl(
-  role: string | undefined,
-  isAssignee: boolean,
-  isReporter: boolean,
-): AccessControl {
-  const r = role ?? "";
-
-  // Observers and viewers can only read and comment
-  if (r === "viewer" || r === "observer") {
-    return {
-      canEdit: false,
-      canDelete: false,
-      canManageMembers: false,
-      canComment: true,
-      canAttach: false,
-    };
-  }
-
-  // Owners, admins, and project leads have full access
-  if (r === "owner" || r === "admin" || r === "lead") {
-    return {
-      canEdit: true,
-      canDelete: true,
-      canManageMembers: true,
-      canComment: true,
-      canAttach: true,
-    };
-  }
-
-  // Reviewers can read, comment, and attach but not edit task fields
-  if (r === "reviewer") {
-    return {
-      canEdit: false,
-      canDelete: false,
-      canManageMembers: false,
-      canComment: true,
-      canAttach: true,
-    };
-  }
-
-  // Contributors, members, and editors (or assignee/reporter) can edit and attach
-  if (
-    r === "contributor" ||
-    r === "member" ||
-    r === "editor" ||
-    isAssignee ||
-    isReporter
-  ) {
-    return {
-      canEdit: true,
-      canDelete:
-        isAssignee || isReporter || r === "member" || r === "contributor",
-      canManageMembers: false,
-      canComment: true,
-      canAttach: true,
-    };
-  }
-
-  // Default: read-only (unknown/custom roles without explicit mapping)
-  return {
-    canEdit: false,
-    canDelete: false,
-    canManageMembers: false,
-    canComment: true,
-    canAttach: false,
-  };
-}
 
 /* ═══════════════════════════════════════════════════════
    Member helpers
@@ -178,12 +105,11 @@ interface TaskPreviewPanelProps {
   members: OrgMember[];
   projectMembers?: ProjectMember[];
   currentUserId: string;
-  userProjectRole?: string;
   updating: boolean;
   onUpdate: (data: Partial<Task>) => void;
   onDelete: () => void;
   onDuplicate: () => void;
-  onAddSubtask: () => void;
+  onAddSubtask?: () => void;
 }
 
 type TabType =
@@ -201,7 +127,6 @@ export function TaskPreviewPanel({
   members,
   projectMembers,
   currentUserId,
-  userProjectRole,
   updating,
   onUpdate,
   onDelete,
@@ -212,10 +137,18 @@ export function TaskPreviewPanel({
   const [activeTab, setActiveTab] = useState<TabType>("details");
   const [showDelete, setShowDelete] = useState(false);
 
-  // Role-based access
-  const isAssignee = task.assignee_id === currentUserId;
-  const isReporter = task.reporter_id === currentUserId;
-  const access = getAccessControl(userProjectRole, isAssignee, isReporter);
+  // DB-driven role-based access via project policies
+  const policies = useProjectPolicies(projectId);
+  const { hasReviewPipeline, isReviewable } = useReviewableFields(projectId);
+  const canDirectUpdate = policies.canDirectUpdate;
+
+  const access = {
+    canEdit: policies.canEditTask,
+    canDelete: policies.canDeleteTask,
+    canManageMembers: policies.canManageMembers,
+    canComment: policies.canComment,
+    canAttach: policies.canAttach,
+  };
 
   // Inline editing states
   const [editingTitle, setEditingTitle] = useState(false);
@@ -435,6 +368,11 @@ export function TaskPreviewPanel({
               <Eye className="w-3 h-3" /> View Only
             </span>
           )}
+          {hasReviewPipeline && !canDirectUpdate && (
+            <span className="badge badge-sm badge-warning gap-1">
+              <Lock className="w-3 h-3" /> Review
+            </span>
+          )}
         </div>
       </div>
 
@@ -479,6 +417,9 @@ export function TaskPreviewPanel({
             setEditingDesc={setEditingDesc}
             descDraft={descDraft}
             setDescDraft={setDescDraft}
+            hasReviewPipeline={hasReviewPipeline}
+            canDirectUpdate={canDirectUpdate}
+            isReviewable={isReviewable}
           />
         )}
 
@@ -535,7 +476,7 @@ export function TaskPreviewPanel({
 
       {/* Footer Actions */}
       <div className="shrink-0 p-3 border-t border-base-200 space-y-2 bg-base-100">
-        {task.depth < MAX_DEPTH && access.canEdit && (
+        {task.depth < MAX_DEPTH && access.canEdit && onAddSubtask && (
           <button
             className="btn btn-xs btn-outline btn-primary w-full gap-1"
             onClick={onAddSubtask}
@@ -594,6 +535,9 @@ function DetailsTab({
   setEditingDesc,
   descDraft,
   setDescDraft,
+  hasReviewPipeline,
+  canDirectUpdate,
+  isReviewable,
 }: {
   task: Task;
   members: OrgMember[];
@@ -606,6 +550,9 @@ function DetailsTab({
   setEditingDesc: (v: boolean) => void;
   descDraft: string;
   setDescDraft: (v: string) => void;
+  hasReviewPipeline: boolean;
+  canDirectUpdate: boolean;
+  isReviewable: (field: string) => boolean;
 }) {
   // Use project members for pickers (assignee/reporter), org members for name resolution
   const selectableMembers: OrgMember[] = pickerMembers
@@ -623,19 +570,91 @@ function DetailsTab({
   const [newLabel, setNewLabel] = useState("");
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
 
+  // --- Per-field access: "direct" | "review" | "disabled" ---
+  // When user has direct_update or no review pipeline → normal canEdit
+  // When review pipeline active and no direct_update:
+  //   reviewable fields → "review" (opens modal)
+  //   non-reviewable fields → "disabled"
+  type FieldAccess = "direct" | "review" | "disabled";
+
+  const fieldAccess = useCallback(
+    (field: string): FieldAccess => {
+      if (!access.canEdit) return "disabled";
+      if (canDirectUpdate || !hasReviewPipeline) return "direct";
+      return isReviewable(field) ? "review" : "disabled";
+    },
+    [access.canEdit, canDirectUpdate, hasReviewPipeline, isReviewable],
+  );
+
+  // Change request modal state
+  const [crModalOpen, setCrModalOpen] = useState(false);
+  const [pendingChanges, setPendingChanges] = useState<Partial<Task>>({});
+
+  /** Try to update — if field needs review, open modal instead */
+  const handleFieldUpdate = useCallback(
+    (field: string, data: Partial<Task>) => {
+      const fa = fieldAccess(field);
+      if (fa === "disabled") return;
+      if (fa === "review") {
+        setPendingChanges(data);
+        setCrModalOpen(true);
+        return;
+      }
+      onUpdate(data);
+    },
+    [fieldAccess, onUpdate],
+  );
+
+  /** Label with lock icon when field is disabled due to review pipeline */
+  const fieldLabel = (label: string, field: string) => {
+    const fa = fieldAccess(field);
+    return (
+      <label className="text-xs text-base-content/50 flex items-center gap-1 mb-1">
+        {label}
+        {fa === "disabled" && hasReviewPipeline && (
+          <span
+            className="tooltip tooltip-right"
+            data-tip="Not available for review"
+          >
+            <Lock className="w-3 h-3 text-base-content/30" />
+          </span>
+        )}
+      </label>
+    );
+  };
+
   return (
     <div className="p-3 space-y-4">
+      {/* Change Request Modal */}
+      <ChangeRequestModal
+        open={crModalOpen}
+        onClose={() => {
+          setCrModalOpen(false);
+          setPendingChanges({});
+        }}
+        task={task}
+        changes={pendingChanges}
+        orgId={orgId}
+        projectId={projectId}
+        members={selectableMembers}
+        onCreated={() => {
+          setCrModalOpen(false);
+          setPendingChanges({});
+        }}
+      />
       {/* Status & Priority */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Status
-          </label>
+          {fieldLabel("Status", "status")}
           <select
             className="select select-bordered select-xs w-full"
             value={task.status}
-            onChange={(e) => onUpdate({ status: e.target.value as TaskStatus })}
-            disabled={!access.canEdit}
+            onChange={(e) =>
+              handleFieldUpdate("status", {
+                status: e.target.value as TaskStatus,
+              })
+            }
+            disabled={fieldAccess("status") === "disabled"}
           >
             <option value="todo">Todo</option>
             <option value="in_progress">In Progress</option>
@@ -644,16 +663,16 @@ function DetailsTab({
           </select>
         </div>
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Priority
-          </label>
+          {fieldLabel("Priority", "priority")}
           <select
             className="select select-bordered select-xs w-full"
             value={task.priority}
             onChange={(e) =>
-              onUpdate({ priority: e.target.value as TaskPriority })
+              handleFieldUpdate("priority", {
+                priority: e.target.value as TaskPriority,
+              })
             }
-            disabled={!access.canEdit}
+            disabled={fieldAccess("priority") === "disabled"}
           >
             <option value="critical">Critical</option>
             <option value="high">High</option>
@@ -666,9 +685,7 @@ function DetailsTab({
       {/* Assignees & Reporter */}
       <div className="space-y-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Assignees
-          </label>
+          {fieldLabel("Assignees", "assignee_id")}
           <div className="flex items-center gap-1 flex-wrap">
             {(task.assignee_ids || []).map((uid) => {
               const m = members.find((x) => x.user_id === uid);
@@ -696,14 +713,14 @@ function DetailsTab({
                       initials
                     )}
                   </div>
-                  {access.canEdit && (
+                  {fieldAccess("assignee_id") !== "disabled" && (
                     <button
                       className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-error text-error-content text-[8px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
                       onClick={() => {
                         const next = (task.assignee_ids || []).filter(
                           (id) => id !== uid,
                         );
-                        onUpdate({
+                        handleFieldUpdate("assignee_id", {
                           assignee_ids: next,
                           assignee_id: next[0] || null,
                         } as Partial<Task>);
@@ -715,7 +732,7 @@ function DetailsTab({
                 </div>
               );
             })}
-            {access.canEdit && (
+            {fieldAccess("assignee_id") !== "disabled" && (
               <div className="relative">
                 <button
                   className="w-7 h-7 rounded-full border-2 border-dashed border-base-300 flex items-center justify-center text-base-content/40 hover:border-primary hover:text-primary transition-colors"
@@ -724,7 +741,7 @@ function DetailsTab({
                   <Plus className="w-3.5 h-3.5" />
                 </button>
                 {assigneeDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
+                  <div className="absolute top-full left-0 mt-1 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
                     {selectableMembers
                       .filter(
                         (m) => !(task.assignee_ids || []).includes(m.user_id),
@@ -738,7 +755,7 @@ function DetailsTab({
                               ...(task.assignee_ids || []),
                               m.user_id,
                             ];
-                            onUpdate({
+                            handleFieldUpdate("assignee_id", {
                               assignee_ids: next,
                               assignee_id: next[0],
                             } as Partial<Task>);
@@ -773,39 +790,35 @@ function DetailsTab({
       {/* Dates */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Start Date
-          </label>
+          {fieldLabel("Start Date", "start_date")}
           <input
             type="date"
             className="input input-bordered input-xs w-full"
             value={task.start_date ? task.start_date.split("T")[0] : ""}
             onChange={(e) =>
-              onUpdate({
+              handleFieldUpdate("start_date", {
                 start_date: e.target.value
                   ? new Date(e.target.value).toISOString()
                   : null,
               })
             }
-            disabled={!access.canEdit}
+            disabled={fieldAccess("start_date") === "disabled"}
           />
         </div>
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Due Date
-          </label>
+          {fieldLabel("Due Date", "due_date")}
           <input
             type="date"
             className="input input-bordered input-xs w-full"
             value={task.due_date ? task.due_date.split("T")[0] : ""}
             onChange={(e) =>
-              onUpdate({
+              handleFieldUpdate("due_date", {
                 due_date: e.target.value
                   ? new Date(e.target.value).toISOString()
                   : null,
               })
             }
-            disabled={!access.canEdit}
+            disabled={fieldAccess("due_date") === "disabled"}
           />
         </div>
       </div>
@@ -813,9 +826,7 @@ function DetailsTab({
       {/* Hours */}
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Est. Hours
-          </label>
+          {fieldLabel("Est. Hours", "estimated_hours")}
           <input
             type="number"
             className="input input-bordered input-xs w-full"
@@ -824,19 +835,17 @@ function DetailsTab({
             placeholder="0"
             value={task.estimated_hours ?? ""}
             onChange={(e) =>
-              onUpdate({
+              handleFieldUpdate("estimated_hours", {
                 estimated_hours: e.target.value
                   ? parseFloat(e.target.value)
                   : null,
               })
             }
-            disabled={!access.canEdit}
+            disabled={fieldAccess("estimated_hours") === "disabled"}
           />
         </div>
         <div>
-          <label className="text-xs text-base-content/50 block mb-1">
-            Actual Hours
-          </label>
+          {fieldLabel("Actual Hours", "actual_hours")}
           <input
             type="number"
             className="input input-bordered input-xs w-full"
@@ -845,13 +854,13 @@ function DetailsTab({
             placeholder="0"
             value={task.actual_hours ?? ""}
             onChange={(e) =>
-              onUpdate({
+              handleFieldUpdate("actual_hours", {
                 actual_hours: e.target.value
                   ? parseFloat(e.target.value)
                   : null,
               })
             }
-            disabled={!access.canEdit}
+            disabled={fieldAccess("actual_hours") === "disabled"}
           />
         </div>
       </div>
@@ -890,9 +899,7 @@ function DetailsTab({
 
       {/* Labels */}
       <div>
-        <label className="text-xs text-base-content/50 flex items-center gap-1 mb-1">
-          <Tag className="w-3 h-3" /> Labels
-        </label>
+        {fieldLabel("Labels", "labels")}
         <div className="flex flex-wrap gap-1">
           {(task.labels || []).slice(0, 7).map((l) => (
             <span
@@ -901,11 +908,11 @@ function DetailsTab({
               title={l.length > 10 ? l : undefined}
             >
               {l.length > 10 ? l.slice(0, 10) + "…" : l}
-              {access.canEdit && (
+              {fieldAccess("labels") !== "disabled" && (
                 <button
                   className="opacity-0 group-hover:opacity-100"
                   onClick={() =>
-                    onUpdate({
+                    handleFieldUpdate("labels", {
                       labels: (task.labels || []).filter((x) => x !== l),
                     })
                   }
@@ -920,7 +927,7 @@ function DetailsTab({
               +{(task.labels || []).length - 7}
             </span>
           )}
-          {access.canEdit &&
+          {fieldAccess("labels") !== "disabled" &&
             (labelsOpen ? (
               <div className="flex gap-1 items-center">
                 <input
@@ -932,7 +939,7 @@ function DetailsTab({
                   autoFocus
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && newLabel.trim()) {
-                      onUpdate({
+                      handleFieldUpdate("labels", {
                         labels: [...(task.labels || []), newLabel.trim()],
                       });
                       setNewLabel("");

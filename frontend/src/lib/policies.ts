@@ -66,6 +66,9 @@ export interface OrgPolicies {
   role: string | null;
   isLoading: boolean;
 
+  /** Raw permission checker for arbitrary resource/action pairs. */
+  can: (resource: string, action: string) => boolean;
+
   // ── Auto-filter helpers ──
   /** Query params to inject into api.teams.list(). */
   teamListParams: () => Record<string, string>;
@@ -78,12 +81,12 @@ export interface ProjectPolicies {
   canEditTask: boolean;
   canDeleteTask: boolean;
   canCreateTask: boolean;
+  canDirectUpdate: boolean;
   canManageMembers: boolean;
   canComment: boolean;
   canAttach: boolean;
   canReview: boolean;
   role: string | null;
-  isLead: boolean;
   isLoading: boolean;
 }
 
@@ -133,10 +136,10 @@ export function computeOrgPolicies(
     canCreateTeam: can("teams", "create"),
     canCreateProject: can("projects", "create"),
 
-    canManageMembers: can("members", "invite"),
-    canManageRoles: can("roles", "create"),
+    canManageMembers: can("org", "manage_members"),
+    canManageRoles: can("roles", "create") || can("roles", "update"),
     canManageBilling: can("billing", "manage"),
-    canManageSettings: can("settings", "update"),
+    canManageSettings: can("org", "update"),
 
     canDeleteTeam: isAdmin || can("teams", "delete"),
     canDeleteProject: isAdmin || can("projects", "delete"),
@@ -145,6 +148,8 @@ export function computeOrgPolicies(
     isAdmin,
     role,
     isLoading,
+
+    can,
 
     teamListParams: () =>
       canViewAllTeams ? ({} as Record<string, string>) : { mine: "true" },
@@ -163,18 +168,16 @@ export function computeProjectPolicies(
   can: CanFn,
   isLoading: boolean,
 ): ProjectPolicies {
-  const isLead = role === "lead";
-
   return {
     canEditTask: can("tasks", "update"),
     canDeleteTask: can("tasks", "delete"),
     canCreateTask: can("tasks", "create"),
+    canDirectUpdate: can("tasks", "direct_update"),
     canManageMembers: can("members", "manage"),
     canComment: can("comments", "create"),
-    canAttach: can("tasks", "update"),
+    canAttach: can("attachments", "create"),
     canReview: can("tasks", "review"),
     role,
-    isLead,
     isLoading,
   };
 }

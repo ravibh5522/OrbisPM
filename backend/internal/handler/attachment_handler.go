@@ -255,7 +255,9 @@ func (h *AttachmentHandler) CRRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.ListByCR)
 	r.Post("/", h.CreateForCR)
+	r.Post("/upload", h.DirectUploadForCR)
 	r.Route("/{attachmentId}", func(r chi.Router) {
+		r.Get("/content", h.Content)
 		r.Get("/download", h.Download)
 		r.Delete("/", h.Delete)
 	})
@@ -315,4 +317,55 @@ func (h *AttachmentHandler) CreateForCR(w http.ResponseWriter, r *http.Request) 
 		"attachment": att,
 		"upload_url": uploadURL,
 	})
+}
+
+// DirectUploadForCR handles multipart file upload for a change request attachment.
+// The file is stored via the backend so the browser never talks to S3 directly.
+func (h *AttachmentHandler) DirectUploadForCR(w http.ResponseWriter, r *http.Request) {
+	crID, err := uuidParam(r, "crId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid change request id"})
+		return
+	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxAttachmentUploadSize+1024)
+	if err := r.ParseMultipartForm(maxAttachmentUploadSize); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 30 MB)"})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing file field"})
+		return
+	}
+	defer file.Close()
+
+	if header.Size > maxAttachmentUploadSize {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 30 MB)"})
+		return
+	}
+
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	contentType := header.Header.Get("Content-Type")
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	att, err := h.attSvc.DirectUpload(r.Context(), service.CreateAttachmentParams{
+		OrgID:           orgID,
+		ChangeRequestID: &crID,
+		UserID:          userID,
+		Filename:        header.Filename,
+		FileSize:        header.Size,
+		MimeType:        contentType,
+	}, file)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	JSON(w, http.StatusCreated, att)
 }

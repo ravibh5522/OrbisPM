@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
@@ -140,21 +139,10 @@ func RBAC(pool *pgxpool.Pool, requiredRoles ...string) func(http.Handler) http.H
 				}
 			}
 
-			// Check custom roles — if user's org role matches a custom role name,
-			// evaluate its permissions against the required roles.
-			var permsJSON []byte
-			_ = pool.QueryRow(r.Context(),
-				`SELECT permissions FROM custom_roles WHERE org_id = $1 AND name = $2`,
-				orgID, role,
-			).Scan(&permsJSON)
-			if permsJSON != nil {
-				var perms map[string]any
-				if json.Unmarshal(permsJSON, &perms) == nil {
-					// Custom role found — allow through (role-based access is granted)
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
+			// Custom roles are now handled by the PermissionResolver system.
+			// The legacy custom_roles table is deprecated — do not grant
+			// access based on it. Users with custom roles should be checked
+			// via PermissionResolverMiddleware on individual routes.
 
 			http.Error(w, `{"message":"insufficient permissions"}`, http.StatusForbidden)
 		})
@@ -332,23 +320,9 @@ func RequirePermission(pool *pgxpool.Pool, resource, action string) func(http.Ha
 				}
 			}
 
-			// Check custom role permissions
-			var permsJSON []byte
-			_ = pool.QueryRow(r.Context(),
-				`SELECT permissions FROM custom_roles WHERE org_id = $1 AND name = $2`,
-				orgID, orgRole,
-			).Scan(&permsJSON)
-			if permsJSON != nil {
-				var perms map[string]map[string]bool
-				if json.Unmarshal(permsJSON, &perms) == nil {
-					if resPerms, ok := perms[resource]; ok {
-						if resPerms[action] {
-							next.ServeHTTP(w, r)
-							return
-						}
-					}
-				}
-			}
+			// Custom roles are now handled by the PermissionResolver system.
+			// The legacy custom_roles table is deprecated — do not grant
+			// access based on it.
 
 			http.Error(w, `{"message":"insufficient permissions"}`, http.StatusForbidden)
 		})

@@ -447,6 +447,8 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
 /* ── Reviewable Fields Settings ── */
 
 const REVIEWABLE_FIELD_OPTIONS = [
+  { id: "title", label: "Title" },
+  { id: "description", label: "Description" },
   { id: "status", label: "Status" },
   { id: "priority", label: "Priority" },
   { id: "assignee_id", label: "Assignee" },

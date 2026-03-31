@@ -1,8 +1,10 @@
 # ============================================================
 # OrbisPM — Zitadel v4.12.1 (Identity Provider)
 # ============================================================
-# Two containers: zitadel-redis + zitadel
-# Uses AWS RDS PostgreSQL + local Redis for caching.
+# Two containers: zitadel-redis (dedicated) + zitadel.
+# Zitadel has its own Redis so it can run fully independently
+# of the main compose stack. When the main stack is also up,
+# both compose files share orbispm_default network.
 # Run: docker compose -f docker-compose.zitadel.yaml --env-file .env.production up -d
 # ============================================================
 
@@ -10,15 +12,15 @@ services:
   zitadel-redis:
     image: redis:7-alpine
     restart: unless-stopped
+    # No persistence — pure in-memory cache, no AOF/RDB
     command: ["redis-server", "--save", "", "--appendonly", "no"]
-    dns:
-      - 8.8.8.8
-      - 8.8.4.4
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+    networks:
+      - orbispm_default
 
   zitadel:
     image: ghcr.io/zitadel/zitadel:v4.12.1
@@ -27,7 +29,6 @@ services:
     command: >-
       start
       --masterkey "${ZITADEL_MASTERKEY}"
-      --config /zitadel-caches.yaml
     dns:
       - 8.8.8.8
       - 8.8.4.4
@@ -39,42 +40,86 @@ services:
       ZITADEL_EXTERNALSECURE: "true"
       ZITADEL_TLS_ENABLED: "false"
 
-      # ── Database (AWS RDS) ──
+      # ── Database (Local PostgreSQL) ──
       ZITADEL_DATABASE_POSTGRES_HOST: ${POSTGRES_HOST}
       ZITADEL_DATABASE_POSTGRES_PORT: ${POSTGRES_PORT:-5432}
       ZITADEL_DATABASE_POSTGRES_DATABASE: ${POSTGRES_DB:-orbispmdev}
       ZITADEL_DATABASE_POSTGRES_USER_USERNAME: ${POSTGRES_USER}
       ZITADEL_DATABASE_POSTGRES_USER_PASSWORD: ${POSTGRES_PASSWORD}
-      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-require}
+      ZITADEL_DATABASE_POSTGRES_USER_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
       ZITADEL_DATABASE_POSTGRES_ADMIN_USERNAME: ${POSTGRES_USER}
       ZITADEL_DATABASE_POSTGRES_ADMIN_PASSWORD: ${POSTGRES_PASSWORD}
-      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: ${POSTGRES_SSL_MODE:-require}
+      ZITADEL_DATABASE_POSTGRES_ADMIN_SSL_MODE: ${POSTGRES_SSL_MODE:-disable}
+
+      # ── First instance (init) ──
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_USERNAME: ${ZITADEL_ADMIN_USER:-admin@orbispm.local}
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD: "${ZITADEL_ADMIN_PASSWORD:-Admin123!}"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+      ZITADEL_FIRSTINSTANCE_ORG_NAME: ${ZITADEL_ORG_NAME:-OrbisPM}
+      ZITADEL_FIRSTINSTANCE_INSTANCENAME: ${ZITADEL_INSTANCE_NAME:-OrbisPM}
+      ZITADEL_FIRSTINSTANCE_DEFAULTLANGUAGE: en
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_USERNAME: ${ZITADEL_MACHINE_USERNAME:-backend-service}
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_MACHINE_NAME: "${ZITADEL_MACHINE_NAME:-OrbisPM Backend}"
+      ZITADEL_FIRSTINSTANCE_ORG_MACHINE_PAT_EXPIRATIONDATE: "${ZITADEL_MACHINE_PAT_EXPIRY:-2030-01-01T00:00:00Z}"
 
       # ── Features ──
       ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
 
-      # ── Database connection pool (tuned for remote RDS) ──
+      # ── Database connection pool ──
       ZITADEL_DATABASE_POSTGRES_MAXOPENCONNS: 25
       ZITADEL_DATABASE_POSTGRES_MAXIDLECONNS: 10
       ZITADEL_DATABASE_POSTGRES_MAXCONNLIFETIME: "30m"
       ZITADEL_DATABASE_POSTGRES_MAXCONNIDLETIME: "5m"
 
-      # ── Projections (tuned for high-latency remote DB) ──
-      ZITADEL_PROJECTIONS_TRANSACTIONDURATION: "300s"
-      ZITADEL_PROJECTIONS_BULKLIMIT: 100
+      # ── Projections ──
+      ZITADEL_PROJECTIONS_TRANSACTIONDURATION: "120s"
+      ZITADEL_PROJECTIONS_BULKLIMIT: 200
       ZITADEL_PROJECTIONS_MAXFAILURECOUNT: 50
-      ZITADEL_PROJECTIONS_RETRYFAILEDAFTER: "30s"
-      # Override per-projection customizations (defaults.yaml sets these to 2s)
-      ZITADEL_PROJECTIONS_CUSTOMIZATIONS_PASSWORD_COMPLEXITIES_TRANSACTIONDURATION: "120s"
-      ZITADEL_PROJECTIONS_CUSTOMIZATIONS_LOCKOUT_POLICY_TRANSACTIONDURATION: "120s"
+      ZITADEL_PROJECTIONS_RETRYFAILEDAFTER: "10s"
+      ZITADEL_PROJECTIONS_CUSTOMIZATIONS_PASSWORD_COMPLEXITIES_TRANSACTIONDURATION: "60s"
+      ZITADEL_PROJECTIONS_CUSTOMIZATIONS_LOCKOUT_POLICY_TRANSACTIONDURATION: "60s"
 
       # ── Eventstore ──
-      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "120s"
+      ZITADEL_EVENTSTORE_PUSHTIMEOUT: "60s"
       ZITADEL_EVENTSTORE_MAXRETRIES: 5
+
+      # ── Redis caching (dedicated zitadel-redis) ──
+      ZITADEL_CACHES_CONNECTORS_REDIS_ENABLED: "true"
+      ZITADEL_CACHES_CONNECTORS_REDIS_ADDR: "zitadel-redis:6379"
+      ZITADEL_CACHES_CONNECTORS_REDIS_MAXRETRIES: 5
+      ZITADEL_CACHES_CONNECTORS_REDIS_DIALTIMEOUT: "10s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_READTIMEOUT: "5s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_WRITETIMEOUT: "5s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_POOLSIZE: 10
+      ZITADEL_CACHES_CONNECTORS_REDIS_MINIDLE: 0
+      ZITADEL_CACHES_CONNECTORS_REDIS_MAXIDLE: 5
+      ZITADEL_CACHES_CONNECTORS_REDIS_MAXACTIVE: 40
+      ZITADEL_CACHES_CONNECTORS_REDIS_CONNMAXIDLETIME: "30m"
+      ZITADEL_CACHES_CONNECTORS_REDIS_CONNMAXLIFETIME: "0s"
+      # Disable circuit breaker auto-trip.
+      # go-redis 9.16 sends CLIENT MAINT_NOTIFICATIONS during handshake;
+      # Redis 7 rejects it causing CB to trip before any real cache op.
+      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_MAXCONSECUTIVEFAILURES: 0
+      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_MAXFAILURERATIO: 0
+      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_TIMEOUT: "60s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_INTERVAL: "60s"
+      ZITADEL_CACHES_CONNECTORS_REDIS_CIRCUITBREAKER_MAXRETRYREQUESTS: 5
+      ZITADEL_CACHES_INSTANCE_CONNECTOR: "redis"
+      ZITADEL_CACHES_INSTANCE_MAXAGE: "1h"
+      ZITADEL_CACHES_INSTANCE_LASTUSEAGE: "10m"
+      ZITADEL_CACHES_MILESTONES_CONNECTOR: "redis"
+      ZITADEL_CACHES_MILESTONES_MAXAGE: "1h"
+      ZITADEL_CACHES_MILESTONES_LASTUSEAGE: "10m"
+      ZITADEL_CACHES_ORGANIZATION_CONNECTOR: "redis"
+      ZITADEL_CACHES_ORGANIZATION_MAXAGE: "1h"
+      ZITADEL_CACHES_ORGANIZATION_LASTUSEAGE: "10m"
 
       # ── Logging ──
       ZITADEL_LOG_LEVEL: info
       ZITADEL_LOGSTORE_ACCESS_STDOUT_ENABLED: "false"
+
+      # ── OTP ──
+      ZITADEL_SYSTEMDEFAULTS_MULTIFACTORS_OTP_ISSUER: "OrbisPM"
 
     healthcheck:
       test: ["CMD", "/app/zitadel", "ready"]
@@ -84,8 +129,16 @@ services:
       start_period: 120s
     ports:
       - "${ZITADEL_MAPPED_PORT:-8081}:8080"
-    volumes:
-      - ./zitadel-caches.yaml:/zitadel-caches.yaml:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       zitadel-redis:
         condition: service_healthy
+    networks:
+      - orbispm_default
+
+networks:
+  orbispm_default:
+    # Shared with the main docker-compose.yaml stack when both are running.
+    # Docker reuses the network if it already exists with the same name.
+    name: orbispm_default

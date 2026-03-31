@@ -1,5 +1,6 @@
 "use client";
 
+import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -13,12 +14,15 @@ import { useEffect, useRef } from "react";
 export function DataPrefetcher() {
   const orgId = useAuthStore((s) => s.currentOrg?.id);
   const orgRole = useAuthStore((s) => s.currentMembership?.role);
+  const policies = useOrgPolicies();
   const qc = useQueryClient();
-  const ranForOrg = useRef<string | null>(null);
+  const ranForKey = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!orgId || ranForOrg.current === orgId) return;
-    ranForOrg.current = orgId;
+    // Re-run when org OR role changes (e.g. user promoted from viewer to admin)
+    const cacheKey = `${orgId}:${orgRole}`;
+    if (!orgId || ranForKey.current === cacheKey || policies.isLoading) return;
+    ranForKey.current = cacheKey;
 
     // Helper: prefetch only if not already cached
     const pf = <T,>(key: unknown[], fn: () => Promise<T>, stale = 60_000) => {
@@ -27,14 +31,16 @@ export function DataPrefetcher() {
       }
     };
 
-    // Owner/admin sees all, others see only their own
-    const isAdmin = orgRole === "owner" || orgRole === "admin";
-    const mineParam = isAdmin ? {} : { mine: "true" };
+    // Use policy-derived scope instead of hardcoded role checks
+    const mineParam =
+      policies.viewProjectsScope === "all" ? {} : { mine: "true" };
+    const teamMineParam =
+      policies.viewTeamsScope === "all" ? {} : { mine: "true" };
 
     // ── Core org data ─────────────────────────────
     pf(["dashboard-stats", orgId], () => api.dashboard.stats(orgId), 120_000);
     pf(["projects", orgId], () => api.projects.list(orgId, mineParam));
-    pf(["teams", orgId], () => api.teams.list(orgId, mineParam));
+    pf(["teams", orgId], () => api.teams.list(orgId, teamMineParam));
     pf(["org-members", orgId], () => api.members.list(orgId));
 
     // ── Chat sidebar — critical for instant messages page ──
@@ -48,7 +54,19 @@ export function DataPrefetcher() {
 
     // ── Sticky notes ──
     pf(["sticky-notes"], () => api.stickyNotes.list());
-  }, [orgId, qc]);
+
+    // ── Permission roles (used by usePermissions hook in many pages) ──
+    pf(["permissions-roles", orgId, "org"], () =>
+      api.permissions.roles.list(orgId, "org"),
+    );
+  }, [
+    orgId,
+    orgRole,
+    qc,
+    policies.isLoading,
+    policies.viewProjectsScope,
+    policies.viewTeamsScope,
+  ]);
 
   return null;
 }

@@ -1291,6 +1291,8 @@ export const api = {
       get<Permission[]>(
         `${V1}/orgs/${orgId}/permissions${scope ? `?scope=${scope}` : ""}`,
       ),
+    myPermissions: (orgId: string) =>
+      get<ScopePermissionsResponse>(`${V1}/orgs/${orgId}/my-permissions`),
     roles: {
       list: (orgId: string, scope?: string) =>
         get<Role[]>(
@@ -1464,10 +1466,30 @@ export const api = {
         `${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/change-requests`,
         data,
       ),
-    listByProject: (orgId: string, projId: string, params?: string) =>
-      get<ListResponse<TaskChangeRequest>>(
-        `${V1}/orgs/${orgId}/projects/${projId}/change-requests${params ? `?${params}` : ""}`,
-      ),
+    listByProject: (
+      orgId: string,
+      projId: string,
+      params?: {
+        status?: string;
+        search?: string;
+        proposer_id?: string;
+        limit?: number;
+        offset?: number;
+      },
+    ) => {
+      const qs = params
+        ? new URLSearchParams(
+            Object.fromEntries(
+              Object.entries(params)
+                .filter(([, v]) => v !== undefined && v !== "")
+                .map(([k, v]) => [k, String(v)]),
+            ),
+          ).toString()
+        : "";
+      return get<ListResponse<TaskChangeRequest>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/change-requests${qs ? `?${qs}` : ""}`,
+      );
+    },
     approve: (orgId: string, crId: string, note?: string) =>
       post<TaskChangeRequest>(
         `${V1}/orgs/${orgId}/change-requests/${crId}/approve`,
@@ -1492,6 +1514,42 @@ export const api = {
           `${V1}/orgs/${orgId}/change-requests/${crId}/attachments`,
           data,
         ),
+      /** Multipart upload through the backend — avoids S3/MinIO CORS issues. */
+      directUpload: (
+        orgId: string,
+        crId: string,
+        file: File,
+      ): Promise<Attachment> => {
+        const fd = new FormData();
+        fd.append("file", file);
+        return upload<Attachment>(
+          `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/upload`,
+          fd,
+        );
+      },
+      /** URL that streams file content through the backend. */
+      contentUrl: (orgId: string, crId: string, id: string) =>
+        `${API_BASE}${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${id}/content`,
+      /** Fetches file content via backend with auth headers and returns a blob URL safe for <img>/<video>. */
+      fetchBlobUrl: async (
+        orgId: string,
+        crId: string,
+        id: string,
+      ): Promise<string> => {
+        const path = `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${id}/content`;
+        const token = getToken();
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const orgHeader =
+          typeof localStorage !== "undefined"
+            ? localStorage.getItem("current_org_id")
+            : null;
+        if (orgHeader) headers["X-Org-ID"] = orgHeader;
+        const res = await fetch(`${API_BASE}${path}`, { headers });
+        if (!res.ok) throw new Error("Failed to fetch attachment content");
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+      },
       download: (orgId: string, crId: string, attachmentId: string) =>
         get<{ attachment: Attachment; download_url: string }>(
           `${V1}/orgs/${orgId}/change-requests/${crId}/attachments/${attachmentId}/download`,

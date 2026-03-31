@@ -794,21 +794,69 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	if len(reviewableFields) > 0 {
 		directChanges, reviewChanges = partitionChanges(changes, reviewableFields)
 
-		// If there are reviewable changes, check if the actor can bypass review
-		if len(reviewChanges) > 0 && params.ActorID != nil && s.permResolver != nil {
+		// Check if the actor can bypass review (direct_update permission)
+		canBypass := false
+		if params.ActorID != nil && s.permResolver != nil {
 			projectID := task.ProjectID
-			canBypass, _ := s.permResolver.HasPermission(
+			canBypass, _ = s.permResolver.HasPermission(
 				ctx, *params.ActorID, task.OrgID,
 				domain.ScopeProject, &projectID,
 				"tasks", "direct_update",
 			)
-			if canBypass {
-				// Merge review changes back into direct changes
-				for k, v := range reviewChanges {
-					directChanges[k] = v
-				}
-				reviewChanges = nil
+		}
+
+		if canBypass {
+			// User has direct_update — apply everything directly
+			for k, v := range reviewChanges {
+				directChanges[k] = v
 			}
+			reviewChanges = nil
+		} else {
+			// User does NOT have direct_update permission.
+			// Non-reviewable field updates are blocked entirely.
+			if len(directChanges) > 0 {
+				blocked := make([]string, 0, len(directChanges))
+				for k := range directChanges {
+					blocked = append(blocked, k)
+				}
+				return nil, domain.NewAppError(403,
+					fmt.Sprintf("cannot update non-reviewable fields: %s; only reviewable fields (%s) can be changed via review",
+						strings.Join(blocked, ", "), strings.Join(reviewableFields, ", ")))
+			}
+			// All changes are reviewable — skip direct DB update, create CR only
+			if len(reviewChanges) > 0 && s.crRepo != nil {
+				var proposerID uuid.UUID
+				if params.ActorID != nil {
+					proposerID = *params.ActorID
+				}
+				cr := &domain.TaskChangeRequest{
+					OrgID:      task.OrgID,
+					TaskID:     task.ID,
+					ProposerID: proposerID,
+					Changes:    reviewChanges,
+					Reason:     "Field requires review",
+				}
+				var created *domain.TaskChangeRequest
+				crErr := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+					var e error
+					created, e = s.crRepo.Create(ctx, tx, cr)
+					return e
+				})
+				if crErr != nil {
+					return nil, crErr
+				}
+				s.publishEvent(ctx, domain.EventChangeRequestCreated, task.OrgID.String(), created.ID.String(), map[string]any{
+					"task_id":     task.ID.String(),
+					"proposer_id": proposerID.String(),
+				})
+				return &domain.TaskUpdateResult{
+					Task:          task,
+					ChangeRequest: created,
+					PendingReview: true,
+				}, nil
+			}
+			// No reviewable changes either — nothing to update
+			return &domain.TaskUpdateResult{Task: task}, nil
 		}
 	}
 

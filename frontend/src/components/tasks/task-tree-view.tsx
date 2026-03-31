@@ -1,5 +1,6 @@
 "use client";
 
+import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
   ChangeRequestToast,
   PendingReviewBadge,
@@ -8,6 +9,8 @@ import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdow
 import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, ConfirmDialog } from "@/components/ui/shared";
+import { useProjectPolicies } from "@/hooks/use-policies";
+import { useReviewableFields } from "@/hooks/use-reviewable-fields";
 import { cn, formatDate, priorityColor, statusLabel } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
@@ -16,6 +19,7 @@ import type {
   TaskPriority,
   TaskStatus,
   TaskTree,
+  TaskUpdateResult,
 } from "@/types/domain";
 import {
   ChevronDown,
@@ -52,13 +56,21 @@ export function TaskTreeView({
 }: TaskTreeViewProps) {
   const send = useProjectTaskStore((s) => s.send);
   const taskTree = useProjectTaskStore((s) => s.taskTree);
+  const policies = useProjectPolicies(projectId);
+  const { hasReviewPipeline, isReviewable } = useReviewableFields(projectId);
+  const canDirectUpdate = policies.canDirectUpdate;
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const [deleteTask, setDeleteTask] = useState<Task | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
-  const [pendingReviewResult, setPendingReviewResult] = useState<{
-    pending_review?: boolean;
-    change_request?: any;
+  const [pendingReviewResult, setPendingReviewResult] =
+    useState<TaskUpdateResult | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Change request modal state
+  const [crModal, setCrModal] = useState<{
+    taskId: string;
+    changes: Partial<Task>;
   } | null>(null);
 
   // Fetch tree via WS
@@ -133,10 +145,31 @@ export function TaskTreeView({
         }
         fetchTree();
       } catch (e) {
+        if (e instanceof Error && e.message) {
+          setUpdateError(e.message);
+        }
         console.error("[WS] task:update failed", e);
       }
     },
     [send, fetchTree, taskTree],
+  );
+
+  /** Intercepts updates for reviewable fields — shows modal instead of WS send */
+  const handleUpdateWithReviewCheck = useCallback(
+    (taskId: string, data: Partial<Task>) => {
+      if (hasReviewPipeline && !canDirectUpdate) {
+        const changedFields = Object.keys(data);
+        if (
+          changedFields.length > 0 &&
+          changedFields.every((f) => isReviewable(f))
+        ) {
+          setCrModal({ taskId, changes: data });
+          return;
+        }
+      }
+      handleUpdate(taskId, data);
+    },
+    [hasReviewPipeline, canDirectUpdate, isReviewable, handleUpdate],
   );
 
   const handleDelete = useCallback(
@@ -203,7 +236,10 @@ export function TaskTreeView({
         )
           match = false;
         if (globalFilter.labels.length > 0) {
-          if (!t.labels || !t.labels.some((l) => globalFilter.labels.includes(l)))
+          if (
+            !t.labels ||
+            !t.labels.some((l) => globalFilter.labels.includes(l))
+          )
             match = false;
         }
         if (
@@ -246,7 +282,7 @@ export function TaskTreeView({
             ? "No tasks match the current filters."
             : "No tasks yet. Create your first task to get started."}
         </p>
-        {!hasFilter && (
+        {!hasFilter && policies.canCreateTask && (
           <CreateTaskButton parentId={null} onCreated={fetchTree} />
         )}
       </div>
@@ -261,6 +297,46 @@ export function TaskTreeView({
         onDismiss={() => setPendingReviewResult(null)}
       />
 
+      {/* Update error toast */}
+      {updateError && (
+        <div className="alert alert-error shadow-lg text-sm">
+          <span>{updateError}</span>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => setUpdateError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Change request modal for reviewable field edits */}
+      {crModal &&
+        (() => {
+          const findTaskInTree = (nodes: TaskTree[]): Task | undefined => {
+            for (const n of nodes) {
+              if (n.task.id === crModal.taskId) return n.task;
+              if (n.children) {
+                const found = findTaskInTree(n.children);
+                if (found) return found;
+              }
+            }
+            return undefined;
+          };
+          const crTask = findTaskInTree(taskTree);
+          return crTask ? (
+            <ChangeRequestModal
+              open
+              onClose={() => setCrModal(null)}
+              task={crTask}
+              changes={crModal.changes}
+              orgId={orgId}
+              projectId={projectId}
+              onCreated={() => setCrModal(null)}
+            />
+          ) : null;
+        })()}
+
       {/* Toolbar */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex gap-2">
@@ -271,7 +347,9 @@ export function TaskTreeView({
             Collapse All
           </Button>
         </div>
-        <CreateTaskButton parentId={null} onCreated={fetchTree} />
+        {policies.canCreateTask && (
+          <CreateTaskButton parentId={null} onCreated={fetchTree} />
+        )}
       </div>
 
       {/* Tree container */}
@@ -288,11 +366,16 @@ export function TaskTreeView({
               members={members}
               expandedIds={expandedIds}
               toggleExpand={toggleExpand}
-              onUpdate={(taskId, data) => handleUpdate(taskId, data)}
+              onUpdate={(taskId, data) =>
+                handleUpdateWithReviewCheck(taskId, data)
+              }
               onDelete={(task) => setDeleteTask(task)}
               onDuplicate={(taskId) => handleDuplicate(taskId)}
               onOpenTask={onOpenTask}
               onCreated={fetchTree}
+              canEdit={policies.canEditTask}
+              canDelete={policies.canDeleteTask}
+              canCreate={policies.canCreateTask}
             />
           ))}
         </div>
@@ -326,6 +409,9 @@ interface TreeNodeProps {
   onDuplicate: (taskId: string) => void;
   onOpenTask?: (taskId: string) => void;
   onCreated: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
+  canCreate?: boolean;
 }
 
 function TreeNode({
@@ -342,6 +428,9 @@ function TreeNode({
   onDuplicate,
   onOpenTask,
   onCreated,
+  canEdit = true,
+  canDelete = true,
+  canCreate = true,
 }: TreeNodeProps) {
   const { task, children } = node;
   const hasChildren = children && children.length > 0;
@@ -384,6 +473,7 @@ function TreeNode({
           <StatusDropdown
             status={task.status}
             onChange={(status) => onUpdate(task.id, { status })}
+            disabled={!canEdit}
           />
 
           {/* Title — click to expand/collapse if has children */}
@@ -420,6 +510,7 @@ function TreeNode({
           <PriorityDropdown
             priority={task.priority}
             onChange={(priority) => onUpdate(task.id, { priority })}
+            disabled={!canEdit}
           />
 
           {/* Pending review */}
@@ -468,20 +559,28 @@ function TreeNode({
                 <ExternalLink className="w-4 h-4" /> Open
               </a>
             </li>
-            <li>
-              <a onClick={() => onDuplicate(task.id)}>
-                <Copy className="w-4 h-4" /> Duplicate
-              </a>
-            </li>
-            <li>
-              <CreateSubtaskButton parentId={task.id} onCreated={onCreated} />
-            </li>
-            <div className="divider my-1" />
-            <li>
-              <a onClick={() => onDelete(task)} className="text-error">
-                <Trash2 className="w-4 h-4" /> Delete
-              </a>
-            </li>
+            {canEdit && (
+              <li>
+                <a onClick={() => onDuplicate(task.id)}>
+                  <Copy className="w-4 h-4" /> Duplicate
+                </a>
+              </li>
+            )}
+            {canCreate && (
+              <li>
+                <CreateSubtaskButton parentId={task.id} onCreated={onCreated} />
+              </li>
+            )}
+            {canDelete && (
+              <>
+                <div className="divider my-1" />
+                <li>
+                  <a onClick={() => onDelete(task)} className="text-error">
+                    <Trash2 className="w-4 h-4" /> Delete
+                  </a>
+                </li>
+              </>
+            )}
           </ul>
         </div>
       </div>
@@ -505,6 +604,9 @@ function TreeNode({
               onDuplicate={onDuplicate}
               onOpenTask={onOpenTask}
               onCreated={onCreated}
+              canEdit={canEdit}
+              canDelete={canDelete}
+              canCreate={canCreate}
             />
           ))}
         </div>
@@ -518,11 +620,29 @@ function TreeNode({
 function StatusDropdown({
   status,
   onChange,
+  disabled,
 }: {
   status: TaskStatus;
   onChange: (s: TaskStatus) => void;
+  disabled?: boolean;
 }) {
   const statuses: TaskStatus[] = ["todo", "in_progress", "done", "blocked"];
+
+  if (disabled) {
+    return (
+      <div className="btn btn-ghost btn-xs btn-square cursor-default">
+        <Circle
+          className={cn(
+            "w-4 h-4",
+            status === "todo" && "text-base-content/40",
+            status === "in_progress" && "text-info fill-info",
+            status === "done" && "text-success fill-success",
+            status === "blocked" && "text-error fill-error",
+          )}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="dropdown">
@@ -574,11 +694,17 @@ function StatusDropdown({
 function PriorityDropdown({
   priority,
   onChange,
+  disabled,
 }: {
   priority: TaskPriority;
   onChange: (p: TaskPriority) => void;
+  disabled?: boolean;
 }) {
   const priorities: TaskPriority[] = ["critical", "high", "medium", "low"];
+
+  if (disabled) {
+    return <Badge variant={priorityColor(priority)}>{priority}</Badge>;
+  }
 
   return (
     <div className="dropdown">

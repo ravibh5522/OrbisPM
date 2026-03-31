@@ -97,10 +97,19 @@ func (h *ChangeRequestHandler) ListByProject(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	statusFilter := queryStr(r, "status")
+	search := queryStr(r, "search")
 	limit := queryInt(r, "limit", 20)
 	offset := queryInt(r, "offset", 0)
 
-	crs, total, err := h.crSvc.ListByProject(r.Context(), projectID, statusFilter, limit, offset)
+	var proposerID *uuid.UUID
+	if p := r.URL.Query().Get("proposer_id"); p != "" {
+		pid, err := uuid.Parse(p)
+		if err == nil {
+			proposerID = &pid
+		}
+	}
+
+	crs, total, err := h.crSvc.ListByProject(r.Context(), projectID, statusFilter, search, proposerID, limit, offset)
 	if err != nil {
 		Error(w, r, err)
 		return

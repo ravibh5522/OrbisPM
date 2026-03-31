@@ -1,9 +1,8 @@
 "use client";
 
 import { PageHeader } from "@/components/ui/shared";
+import { usePermissions } from "@/hooks/use-permissions";
 import { cn } from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
-import type { OrgRole } from "@/types/domain";
 import {
   Building2,
   CreditCard,
@@ -42,7 +41,11 @@ interface TabDef {
   label: string;
   description: string;
   icon: React.ReactNode;
-  roles: OrgRole[];
+  /** Permission check: (can, role) => boolean. Uses permission system instead of hardcoded role strings. */
+  check: (
+    can: (r: string, a: string) => boolean,
+    role: string | null,
+  ) => boolean;
   component: React.ComponentType;
 }
 
@@ -52,7 +55,7 @@ const TABS: TabDef[] = [
     label: "Organisation",
     description: "Brand, profile, billing identity, and workspace details.",
     icon: <Building2 className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("org", "update"),
     component: OrganisationTab,
   },
   {
@@ -60,7 +63,7 @@ const TABS: TabDef[] = [
     label: "Members",
     description: "Manage who can access the workspace and what they can do.",
     icon: <Users className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("org", "manage_members"),
     component: MembersTab,
   },
   {
@@ -68,7 +71,7 @@ const TABS: TabDef[] = [
     label: "Billing",
     description: "Review plan details, limits, and commercial controls.",
     icon: <CreditCard className="w-4 h-4" />,
-    roles: ["owner", "billing_admin"],
+    check: (can) => can("billing", "read"),
     component: BillingTab,
   },
   {
@@ -77,7 +80,7 @@ const TABS: TabDef[] = [
     description:
       "Define access models across organisation, team, and project scopes.",
     icon: <Shield className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("roles", "read"),
     component: PermissionsTab,
   },
   {
@@ -85,7 +88,7 @@ const TABS: TabDef[] = [
     label: "Webhooks",
     description: "Connect OrbisPM events to your downstream systems.",
     icon: <Webhook className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("webhooks", "manage"),
     component: WebhooksTab,
   },
   {
@@ -94,7 +97,7 @@ const TABS: TabDef[] = [
     description:
       "Create and rotate machine access without exposing raw secrets again.",
     icon: <KeyRound className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("api_keys", "manage"),
     component: ApiKeysTab,
   },
   {
@@ -103,7 +106,7 @@ const TABS: TabDef[] = [
     description:
       "Customize outbound transactional messaging and notifications.",
     icon: <Mail className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("org", "update"),
     component: EmailTemplatesTab,
   },
   {
@@ -112,23 +115,21 @@ const TABS: TabDef[] = [
     description:
       "Set an org-wide theme with custom colours and optionally lock it for all members.",
     icon: <Paintbrush className="w-4 h-4" />,
-    roles: ["owner", "admin"],
+    check: (can) => can("org", "update"),
     component: ThemeTab,
   },
 ];
 
 export default function SettingsPage() {
-  const { currentMembership } = useAuthStore();
+  const { can, role, isLoading: permsLoading } = usePermissions();
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const userRole = currentMembership?.role as OrgRole | undefined;
 
-  const visibleTabs = TABS.filter(
-    (tab) => userRole && tab.roles.includes(userRole),
-  );
+  const visibleTabs = TABS.filter((tab) => tab.check(can, role));
 
   const tabParam = searchParams.get("tab");
+
   const initialTab =
     visibleTabs.find((t) => t.key === tabParam)?.key ||
     visibleTabs[0]?.key ||
@@ -142,6 +143,9 @@ export default function SettingsPage() {
       setActiveTab(nextTab);
     }
   }, [activeTab, tabParam, visibleTabs]);
+
+  // Show nothing while permissions are loading to avoid flash of Access Denied
+  if (permsLoading) return null;
 
   const currentTab =
     visibleTabs.find((t) => t.key === activeTab) || visibleTabs[0];

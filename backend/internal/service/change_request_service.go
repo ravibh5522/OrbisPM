@@ -78,6 +78,29 @@ func (s *TaskChangeRequestService) ProposeChange(ctx context.Context, orgID, tas
 	// Enqueue activity log
 	s.enqueueActivity(orgID.String(), "change_request", created.ID.String(), "created", proposerID.String(), changes)
 
+	// Notify designated approvers about the new change request
+	if s.projectRepo != nil {
+		task, tErr := s.taskRepo.GetByID(ctx, taskID)
+		if tErr == nil {
+			if proj, pErr := s.projectRepo.GetByID(ctx, task.ProjectID); pErr == nil {
+				if approverIDs, ok := proj.Settings["approver_ids"].([]any); ok {
+					for _, aid := range approverIDs {
+						if aidStr, ok := aid.(string); ok && aidStr != proposerID.String() {
+							s.enqueueNotification(aidStr, orgID.String(), "change_request_review",
+								"Change request needs your approval",
+								fmt.Sprintf("A change request for task %q requires your review", task.Title),
+								map[string]any{
+									"task_id":           taskID.String(),
+									"change_request_id": created.ID.String(),
+									"proposer_id":       proposerID.String(),
+								})
+						}
+					}
+				}
+			}
+		}
+	}
+
 	return created, nil
 }
 
@@ -158,6 +181,19 @@ func (s *TaskChangeRequestService) Approve(ctx context.Context, crID, reviewerID
 		"Your change request has been approved",
 		map[string]any{"task_id": cr.TaskID.String(), "change_request_id": cr.ID.String()})
 
+	// Notify all assignees of the task (excluding the proposer to avoid duplicates)
+	task, tErr := s.taskRepo.GetByID(ctx, cr.TaskID)
+	if tErr == nil {
+		for _, aid := range task.AssigneeIDs {
+			if aid != cr.ProposerID {
+				s.enqueueNotification(aid.String(), cr.OrgID.String(), "change_request_approved",
+					"Task updated via approval",
+					"A change request affecting your task has been approved",
+					map[string]any{"task_id": cr.TaskID.String(), "change_request_id": cr.ID.String()})
+			}
+		}
+	}
+
 	return updated, nil
 }
 
@@ -208,9 +244,9 @@ func (s *TaskChangeRequestService) ListByTask(ctx context.Context, taskID uuid.U
 	return s.crRepo.ListByTask(ctx, taskID, status)
 }
 
-// ListByProject returns change requests for a project, optionally filtered by status.
-func (s *TaskChangeRequestService) ListByProject(ctx context.Context, projectID uuid.UUID, status *string, limit, offset int) ([]*domain.TaskChangeRequest, int, error) {
-	return s.crRepo.ListByProject(ctx, projectID, status, limit, offset)
+// ListByProject returns change requests for a project, optionally filtered by status, search, or proposer.
+func (s *TaskChangeRequestService) ListByProject(ctx context.Context, projectID uuid.UUID, status *string, search *string, proposerID *uuid.UUID, limit, offset int) ([]*domain.TaskChangeRequest, int, error) {
+	return s.crRepo.ListByProject(ctx, projectID, status, search, proposerID, limit, offset)
 }
 
 // CountPendingByTask returns the number of pending change requests for a task.

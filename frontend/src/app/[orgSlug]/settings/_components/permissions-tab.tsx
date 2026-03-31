@@ -12,7 +12,12 @@ import {
 import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { Permission, PermissionScope, Role } from "@/types/domain";
+import type {
+  Permission,
+  PermissionScope,
+  Role,
+  ScopePermissionsResponse,
+} from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -185,6 +190,7 @@ export default function PermissionsTab() {
   );
   const [expandedRes, setExpandedRes] = useState<Set<string>>(new Set());
   const [error, setError] = useState("");
+  const [showMyPerms, setShowMyPerms] = useState(false);
 
   const { data: roles, isLoading: rolesLoading } = useQuery({
     queryKey: ["permissions-roles", orgId, scope],
@@ -193,9 +199,16 @@ export default function PermissionsTab() {
   });
 
   const { data: allPermissions } = useQuery({
-    queryKey: ["permissions-list", scope],
+    queryKey: ["permissions-list", orgId, scope],
     queryFn: () => api.permissions.list(orgId, scope),
     enabled: !!orgId,
+  });
+
+  const { data: myPerms } = useQuery<ScopePermissionsResponse>({
+    queryKey: ["org-my-permissions", orgId],
+    queryFn: () => api.permissions.myPermissions(orgId),
+    enabled: !!orgId && showMyPerms,
+    staleTime: 30_000,
   });
 
   const permissionsByResource = useCallback(() => {
@@ -249,6 +262,11 @@ export default function PermissionsTab() {
       qc.invalidateQueries({ queryKey: ["permissions-roles", orgId, scope] });
       setDeleteTarget(null);
       toast.success("Role deleted");
+    },
+    onError: (err: Error) => {
+      const msg =
+        err instanceof ApiError ? err.message : "Failed to delete role";
+      toast.error(msg);
     },
   });
 
@@ -368,6 +386,49 @@ export default function PermissionsTab() {
         >
           <Plus className="w-4 h-4" /> New Role
         </Button>
+      </div>
+
+      {/* Your Effective Permissions */}
+      <div className="collapse collapse-arrow bg-base-200/50 border border-base-300 rounded-lg">
+        <input
+          type="checkbox"
+          checked={showMyPerms}
+          onChange={() => setShowMyPerms((v) => !v)}
+        />
+        <div className="collapse-title text-sm font-medium flex items-center gap-2">
+          <Shield className="w-4 h-4 text-info" /> Your Effective Permissions
+        </div>
+        {showMyPerms && (
+          <div className="collapse-content">
+            {myPerms ? (
+              <div className="space-y-2">
+                <div className="text-xs">
+                  <span className="font-medium">Role:</span>{" "}
+                  <span className="badge badge-sm badge-primary">
+                    {myPerms.role}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1">
+                  {myPerms.permissions.map((p) => (
+                    <span
+                      key={`${p.resource}.${p.action}`}
+                      className="badge badge-ghost badge-xs font-mono"
+                    >
+                      {p.resource}.{p.action}
+                    </span>
+                  ))}
+                </div>
+                {myPerms.permissions.length === 0 && (
+                  <p className="text-xs text-base-content/50">
+                    No permissions resolved.
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-xs text-base-content/50">Loading…</p>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Roles table */}

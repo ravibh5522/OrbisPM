@@ -27,8 +27,9 @@ interface ContextMenuProps {
   task: Task;
   depth: number;
   members: ProjectMember[];
-  userProjectRole?: string;
-  currentUserId?: string;
+  canEditProp: boolean;
+  canDeleteProp: boolean;
+  canCreateProp: boolean;
   onClose: () => void;
   onSelect: () => void;
   onUpdate: (data: Partial<Task>) => void;
@@ -44,8 +45,6 @@ export function TaskContextMenu({
   task,
   depth: _depth,
   members,
-  userProjectRole,
-  currentUserId,
   onClose,
   onSelect,
   onUpdate,
@@ -53,27 +52,17 @@ export function TaskContextMenu({
   onDuplicate,
   onAddSubtask,
   onCopyLink,
+  canEditProp,
+  canDeleteProp,
+  canCreateProp,
 }: ContextMenuProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [subMenu, setSubMenu] = useState<string | null>(null);
 
-  // Determine access based on role
-  const canEdit = [
-    "owner",
-    "admin",
-    "lead",
-    "contributor",
-    "member",
-    "editor",
-    "team_lead",
-  ].includes(userProjectRole ?? "");
-  const canDelete =
-    ["owner", "admin", "lead"].includes(userProjectRole ?? "") ||
-    (canEdit &&
-      currentUserId &&
-      (task.assignee_id === currentUserId ||
-        task.reporter_id === currentUserId ||
-        (task.assignee_ids || []).includes(currentUserId)));
+  // Use policy-based props exclusively — no hardcoded role fallback
+  const canEdit = canEditProp;
+  const canDelete = canDeleteProp;
+  const canCreate = canCreateProp;
 
   // Close on click outside / escape / scroll
   useEffect(() => {
@@ -170,7 +159,7 @@ export function TaskContextMenu({
   return (
     <div
       ref={ref}
-      className="fixed z-[100] bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px]"
+      className="fixed z-[100] bg-base-100 backdrop-blur-none border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px]"
       style={{ left: pos.x, top: pos.y }}
     >
       {menuItem("View / Edit", <Pencil className="w-3.5 h-3.5" />, onSelect)}
@@ -195,7 +184,7 @@ export function TaskContextMenu({
             {subMenu === "status" && (
               <div
                 className={cn(
-                  "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[140px] z-10",
+                  "absolute top-0 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[140px] z-10",
                   flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
                 )}
               >
@@ -240,7 +229,7 @@ export function TaskContextMenu({
             {subMenu === "priority" && (
               <div
                 className={cn(
-                  "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[130px] z-10",
+                  "absolute top-0 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[130px] z-10",
                   flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
                 )}
               >
@@ -280,7 +269,7 @@ export function TaskContextMenu({
             {subMenu === "assign" && (
               <div
                 className={cn(
-                  "absolute top-0 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[170px] max-h-48 overflow-y-auto z-10",
+                  "absolute top-0 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[170px] max-h-48 overflow-y-auto z-10",
                   flipSub ? "right-full mr-0.5" : "left-full ml-0.5",
                 )}
               >
@@ -341,7 +330,7 @@ export function TaskContextMenu({
 
       <div className="border-t border-base-200 my-1" />
 
-      {canEdit &&
+      {canCreate &&
         menuItem(
           "Add Subtask",
           <Plus className="w-3.5 h-3.5" />,

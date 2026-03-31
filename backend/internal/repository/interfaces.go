@@ -357,7 +357,7 @@ type TaskChangeRequestRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.TaskChangeRequest, error)
 	Update(ctx context.Context, tx pgx.Tx, cr *domain.TaskChangeRequest) (*domain.TaskChangeRequest, error)
 	ListByTask(ctx context.Context, taskID uuid.UUID, status *string) ([]*domain.TaskChangeRequest, error)
-	ListByProject(ctx context.Context, projectID uuid.UUID, status *string, limit, offset int) ([]*domain.TaskChangeRequest, int, error)
+	ListByProject(ctx context.Context, projectID uuid.UUID, status *string, search *string, proposerID *uuid.UUID, limit, offset int) ([]*domain.TaskChangeRequest, int, error)
 	CountPendingByTask(ctx context.Context, taskID uuid.UUID) (int, error)
 }
 

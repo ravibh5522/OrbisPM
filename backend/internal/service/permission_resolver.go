@@ -99,23 +99,23 @@ func (r *PermissionResolver) resolvePermission(ctx context.Context, userID, orgI
 			}
 		}
 
-		// Check inherited through project_teams (single query per team instead of listing all members)
+		// Check inherited through project_teams — check ALL team memberships
+		// and grant access if ANY team's mapped project role has the permission.
 		projectTeams, err := r.projectTeamRepo.ListByProject(ctx, *scopeID)
 		if err == nil {
 			roleMap, _ := r.getTeamProjectRoleMap(ctx, orgID)
 			for _, pt := range projectTeams {
-				tm, err := r.teamMemberRepo.GetByTeamAndUser(ctx, pt.TeamID, userID)
-				if err != nil {
+				tm, tmErr := r.teamMemberRepo.GetByTeamAndUser(ctx, pt.TeamID, userID)
+				if tmErr != nil {
 					continue
 				}
-				// Map team role to project role
 				projectRole, ok := roleMap[tm.Role]
 				if !ok {
 					continue
 				}
-				has, err := r.roleHasPermission(ctx, orgID, domain.ScopeProject, projectRole, resource, action)
-				if err != nil {
-					return false, err
+				has, permErr := r.roleHasPermission(ctx, orgID, domain.ScopeProject, projectRole, resource, action)
+				if permErr != nil {
+					continue // try next team instead of failing entirely
 				}
 				if has {
 					return true, nil
@@ -171,18 +171,44 @@ func (r *PermissionResolver) GetEffectiveRole(ctx context.Context, userID, orgID
 			return member.Role, nil
 		}
 
-		// Inherited via teams (single query per team)
+		// Inherited via teams — pick the highest-privilege mapped project role
+		// by counting how many permissions each candidate role has.
 		projectTeams, err := r.projectTeamRepo.ListByProject(ctx, *scopeID)
 		if err == nil {
 			roleMap, _ := r.getTeamProjectRoleMap(ctx, orgID)
+			bestRole := ""
+			bestPermCount := -1
 			for _, pt := range projectTeams {
-				tm, err := r.teamMemberRepo.GetByTeamAndUser(ctx, pt.TeamID, userID)
-				if err != nil {
+				tm, tmErr := r.teamMemberRepo.GetByTeamAndUser(ctx, pt.TeamID, userID)
+				if tmErr != nil {
 					continue
 				}
-				if mapped, ok := roleMap[tm.Role]; ok {
-					return mapped, nil
+				mapped, ok := roleMap[tm.Role]
+				if !ok {
+					continue
 				}
+				// Resolve permission count for this mapped role to pick the most privileged
+				dbRole, roleErr := r.roleRepo.GetBySlug(ctx, orgID, domain.ScopeProject, mapped)
+				if roleErr != nil {
+					if bestRole == "" {
+						bestRole = mapped
+					}
+					continue
+				}
+				perms, permErr := r.roleRepo.GetPermissions(ctx, dbRole.ID)
+				if permErr != nil {
+					if bestRole == "" {
+						bestRole = mapped
+					}
+					continue
+				}
+				if len(perms) > bestPermCount {
+					bestPermCount = len(perms)
+					bestRole = mapped
+				}
+			}
+			if bestRole != "" {
+				return bestRole, nil
 			}
 		}
 	}

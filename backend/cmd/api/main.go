@@ -305,6 +305,9 @@ func main() {
 
 	// --- Services (RBAC / Review) ---
 	permSvc := service.NewPermissionService(permRepo, roleRepo, orgRepo, txm)
+	permSvc.SetMemberChecker(repository.NewRoleMemberChecker(pool))
+	permSvc.SetActivityRepo(activityRepo)
+	permSvc.SetPublisher(publisher)
 	permResolver := service.NewPermissionResolver(orgMemberRepo, teamMemberRepo, projectMemberRepo, projectTeamRepo, roleRepo, orgRepo)
 	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, teamMemberRepo, taskRepo, txm, workerSrv, publisher)
 	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, projectRepo, txm, workerSrv, publisher)
@@ -402,6 +405,7 @@ func main() {
 
 	// --- Handlers (RBAC / Review) ---
 	permHandler := handler.NewPermissionHandler(permSvc)
+	permHandler.SetPermissionResolver(permResolver)
 	projectTeamHandler := handler.NewProjectTeamHandler(projectTeamSvc)
 	changeReqHandler := handler.NewChangeRequestHandler(changeReqSvc)
 
@@ -472,28 +476,10 @@ func main() {
 
 				r.Get("/", orgHandler.Get)
 
-				// Admin-only: org mutation + member management
-				r.Group(func(r chi.Router) {
-					r.Use(middleware.RequireOrgAdmin(pool))
-					r.Patch("/", orgHandler.Update)
-					r.Delete("/", orgHandler.Delete)
+				// Owner-only: org deletion
+				r.With(middleware.RequireResolvedPermission(permResolver, "org", "delete")).Delete("/", orgHandler.Delete)
 
-					// Org members (admin manages)
-					r.Post("/members/invite", orgHandler.InviteMember)
-					r.Post("/members", orgHandler.InviteMember) // alias
-					r.Patch("/members/{userId}", orgHandler.UpdateMemberRole)
-					r.Delete("/members/{userId}", orgHandler.RemoveMember)
-
-					// Settings (admin-only)
-					r.Mount("/webhooks", webhookHandler.Routes())
-					r.Mount("/api-keys", apikeyHandler.Routes())
-					r.Mount("/roles", customRoleHandler.Routes())
-					r.Mount("/billing", billingHandler.Routes())
-					r.Put("/theme", themeHandler.UpdateOrgTheme)
-
-				})
-
-				// Member access: read-only member list + read-accessible resources
+				// Member access: all routes gate-checked via PermissionResolver
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireOrgMember(pool))
 
@@ -502,12 +488,29 @@ func main() {
 						return middleware.PermissionResolverMiddleware(permResolver, scope, paramName, resource, action)
 					}
 
+					// Org mutation (admin+)
+					r.With(prm("org", "", "org", "update")).Patch("/", orgHandler.Update)
+
+					// Org members (admin+)
+					r.With(prm("org", "", "org", "manage_members")).Post("/members/invite", orgHandler.InviteMember)
+					r.With(prm("org", "", "org", "manage_members")).Post("/members", orgHandler.InviteMember) // alias
+					r.With(prm("org", "", "org", "manage_members")).Patch("/members/{userId}", orgHandler.UpdateMemberRole)
+					r.With(prm("org", "", "org", "manage_members")).Delete("/members/{userId}", orgHandler.RemoveMember)
+
+					// Settings (admin+)
+					r.With(prm("org", "", "webhooks", "manage")).Mount("/webhooks", webhookHandler.Routes())
+					r.With(prm("org", "", "api_keys", "manage")).Mount("/api-keys", apikeyHandler.Routes())
+					r.With(prm("org", "", "roles", "update")).Mount("/roles", customRoleHandler.Routes())
+					r.With(prm("org", "", "billing", "manage")).Mount("/billing", billingHandler.Routes())
+					r.With(prm("org", "", "org", "update")).Put("/theme", themeHandler.UpdateOrgTheme)
+
 					r.Get("/me", orgHandler.GetMyMembership)
 					r.Get("/members", orgHandler.ListMembers)
 					r.Get("/theme", themeHandler.GetOrgTheme)
 
 					// Permissions & Roles (combined: reads for members, mutations for admins)
-					r.Mount("/permissions", permHandler.CombinedRoutes(pool))
+					r.Mount("/permissions", permHandler.CombinedRoutes(permResolver))
+					r.Get("/my-permissions", permHandler.GetMyOrgPermissions)
 
 					// Teams
 					r.Route("/teams", func(r chi.Router) {
@@ -523,9 +526,9 @@ func main() {
 							r.With(prm("team", "teamId", "team", "read")).Mount("/analytics", analyticsHandler.TeamAnalyticsRoutes())
 							r.With(prm("team", "teamId", "team", "update")).Put("/manager", teamHandler.SetManager)
 							r.With(prm("team", "teamId", "team", "read")).Get("/members", teamHandler.ListMembers)
-							r.With(prm("team", "teamId", "members", "manage")).Post("/members", teamHandler.AddMember)
-							r.With(prm("team", "teamId", "members", "manage")).Patch("/members/{userId}", teamHandler.UpdateMemberRole)
-							r.With(prm("team", "teamId", "members", "manage")).Delete("/members/{userId}", teamHandler.RemoveMember)
+							r.With(prm("team", "teamId", "team", "manage_members")).Post("/members", teamHandler.AddMember)
+							r.With(prm("team", "teamId", "team", "manage_members")).Patch("/members/{userId}", teamHandler.UpdateMemberRole)
+							r.With(prm("team", "teamId", "team", "manage_members")).Delete("/members/{userId}", teamHandler.RemoveMember)
 						})
 					})
 
@@ -533,7 +536,17 @@ func main() {
 					r.Mount("/activity", activityHandler.Routes())
 
 					// Templates
-					r.Mount("/templates", templateHandler.Routes())
+					r.Route("/templates", func(r chi.Router) {
+						r.With(prm("org", "", "templates", "read")).Get("/", templateHandler.List)
+						r.With(prm("org", "", "templates", "create")).Post("/", templateHandler.Create)
+						r.With(prm("org", "", "templates", "create")).Post("/import", templateHandler.Import)
+						r.Route("/{templateId}", func(r chi.Router) {
+							r.With(prm("org", "", "templates", "read")).Get("/", templateHandler.Get)
+							r.With(prm("org", "", "templates", "update")).Patch("/", templateHandler.Update)
+							r.With(prm("org", "", "templates", "delete")).Delete("/", templateHandler.Delete)
+							r.With(prm("org", "", "templates", "read")).Get("/export", templateHandler.Export)
+						})
+					})
 
 					// Dashboard
 					r.Mount("/dashboard", dashboardHandler.Routes())
@@ -567,11 +580,11 @@ func main() {
 
 					// Email templates (proxy to email service)
 					r.Route("/email-templates", func(r chi.Router) {
-						r.With(prm("org", "", "settings", "read")).Mount("/", emailTemplateHandler.Routes())
+						r.With(prm("org", "", "org", "update")).Mount("/", emailTemplateHandler.Routes())
 					})
 
 					// Change request review actions (org-level)
-					r.Mount("/change-requests", changeReqHandler.ReviewRoutes())
+					r.With(prm("org", "", "tasks", "review")).Mount("/change-requests", changeReqHandler.ReviewRoutes())
 
 					// Change request attachments
 					r.Route("/change-requests/{crId}/attachments", func(r chi.Router) {
@@ -607,13 +620,13 @@ func main() {
 							r.With(prm("project", "projectId", "project", "read")).Mount("/analytics", analyticsHandler.ProjectAnalyticsRoutes())
 
 							// Project teams (multi-team)
-							r.Mount("/teams", projectTeamHandler.Routes())
+							r.With(prm("project", "projectId", "members", "manage")).Mount("/teams", projectTeamHandler.Routes())
 
 							// Project-level change requests
-							r.Mount("/change-requests", changeReqHandler.ProjectRoutes())
+							r.With(prm("project", "projectId", "tasks", "read")).Mount("/change-requests", changeReqHandler.ProjectRoutes())
 
 							// Imports
-							r.Mount("/imports", importHandler.Routes())
+							r.With(prm("project", "projectId", "tasks", "create")).Mount("/imports", importHandler.Routes())
 
 							// Tasks
 							r.Route("/tasks", func(r chi.Router) {

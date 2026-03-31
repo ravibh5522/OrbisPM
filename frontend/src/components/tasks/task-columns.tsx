@@ -1,6 +1,10 @@
 "use client";
 
-import { PendingReviewBadge } from "@/components/tasks/change-requests";
+import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
+import {
+  ChangeRequestToast,
+  PendingReviewBadge,
+} from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
@@ -8,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { AvatarStack, ConfirmDialog } from "@/components/ui/shared";
+import { useProjectPolicies } from "@/hooks/use-policies";
+import { useReviewableFields } from "@/hooks/use-reviewable-fields";
 import { useUndoRedo } from "@/hooks/use-undo-redo";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -19,6 +25,7 @@ import type {
   Task,
   TaskPriority,
   TaskStatus,
+  TaskUpdateResult,
 } from "@/types/domain";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
@@ -176,7 +183,6 @@ export function TaskColumns({
 }: TaskColumnsProps) {
   const send = useProjectTaskStore((s) => s.send);
   const user = useAuthStore((s) => s.user);
-  const orgMembership = useAuthStore((s) => s.currentMembership);
   const currentUserId = user?.id || "";
   const [selected, setSelected] = useState<(string | null)[]>([
     null,
@@ -252,6 +258,19 @@ export function TaskColumns({
   // Mutation state
   const [updatePending, setUpdatePending] = useState(false);
   const [deletePending, setDeletePending] = useState(false);
+
+  // Pending review state for change requests
+  const [pendingReviewResult, setPendingReviewResult] =
+    useState<TaskUpdateResult | null>(null);
+
+  // Update error state (e.g. blocked non-reviewable fields)
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Change request modal state (for reviewable field edits)
+  const [crModal, setCrModal] = useState<{
+    taskId: string;
+    changes: Partial<Task>;
+  } | null>(null);
 
   // Deadline conflict state for updates
   const [updateDeadlineConflicts, setUpdateDeadlineConflicts] = useState<
@@ -508,19 +527,12 @@ export function TaskColumns({
     }
   });
 
-  // Get user's project role, fall back to org role for owners/admins not explicitly added as project members
-  const projectMemberRole = members.find(
-    (m) => m.user_id === currentUserId,
-  )?.role;
-  const userProjectRole =
-    projectMemberRole ??
-    (orgMembership?.role === "owner" || orgMembership?.role === "admin"
-      ? orgMembership.role
-      : undefined);
-  const canEditColumns =
-    userProjectRole === "lead" ||
-    userProjectRole === "admin" ||
-    userProjectRole === "owner";
+  const policies = useProjectPolicies(projectId);
+  const { hasReviewPipeline, isReviewable } = useReviewableFields(projectId);
+  const canDirectUpdate = policies.canDirectUpdate;
+
+  // Use policy-based permission instead of hardcoded role checks
+  const canEditColumns = policies.canEditTask;
 
   // Convert ProjectMember to OrgMember format if orgMembers not provided
   const effectiveMembers: OrgMember[] =
@@ -762,6 +774,19 @@ export function TaskColumns({
           setUpdateDeadlineConflicts(updated.deadline_conflicts);
           return;
         }
+        // Handle pending review — revert optimistic update
+        if (updated?.pending_review) {
+          if (currentTask) {
+            useProjectTaskStore.getState().upsertTask(currentTask);
+            setColumnData((prev) =>
+              prev.map((col) =>
+                col.map((t) => (t.id === taskId ? currentTask : t)),
+              ),
+            );
+          }
+          setPendingReviewResult(updated);
+          return;
+        }
         // Reconcile with server response — handle both direct task and wrapped result
         const task = updated?.task ?? updated;
         if (task?.id) {
@@ -800,13 +825,45 @@ export function TaskColumns({
             refetchAllRef.current();
           },
         });
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message) {
+          setUpdateError(e.message);
+        }
         refetchAll();
       } finally {
         setUpdatePending(false);
       }
     },
     [send, refetchAll, columnData, pushCommand],
+  );
+
+  /**
+   * Wraps handleUpdate to intercept reviewable-field edits:
+   * - If the review pipeline is active AND user lacks direct_update AND
+   *   ALL changed fields are reviewable → open the modal instead of sending WS.
+   * - If ANY field is non-reviewable in that context → let handleUpdate proceed
+   *   (the backend will return 403 with an error message).
+   */
+  const handleUpdateWithReviewCheck = useCallback(
+    (taskId: string, data: Partial<Task>) => {
+      if (!canEditColumns) return;
+      if (hasReviewPipeline && !canDirectUpdate) {
+        const changedFields = Object.keys(data);
+        const allReviewable = changedFields.every((f) => isReviewable(f));
+        if (allReviewable && changedFields.length > 0) {
+          setCrModal({ taskId, changes: data });
+          return;
+        }
+      }
+      handleUpdate(taskId, data);
+    },
+    [
+      canEditColumns,
+      hasReviewPipeline,
+      canDirectUpdate,
+      isReviewable,
+      handleUpdate,
+    ],
   );
 
   const confirmExtendDeadlinesOnUpdate = useCallback(async () => {
@@ -1400,6 +1457,42 @@ export function TaskColumns({
 
   return (
     <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-100 relative">
+      {/* Pending review toast */}
+      <ChangeRequestToast
+        result={pendingReviewResult}
+        onDismiss={() => setPendingReviewResult(null)}
+      />
+
+      {/* Update error toast (e.g. blocked non-reviewable fields) */}
+      {updateError && (
+        <div className="alert alert-error shadow-lg mx-3 mt-2 text-sm">
+          <span>{updateError}</span>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => setUpdateError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Change request modal for reviewable field edits */}
+      {crModal &&
+        (() => {
+          const crTask = columnData.flat().find((t) => t.id === crModal.taskId);
+          return crTask ? (
+            <ChangeRequestModal
+              open
+              onClose={() => setCrModal(null)}
+              task={crTask}
+              changes={crModal.changes}
+              orgId={orgId}
+              projectId={projectId}
+              onCreated={() => setCrModal(null)}
+            />
+          ) : null;
+        })()}
+
       {/* Toolbar: portal to parent row if available, otherwise render inline */}
       {toolbarPortal ? (
         createPortal(toolbarContent, toolbarPortal)
@@ -1436,8 +1529,16 @@ export function TaskColumns({
                     loading={col.loading}
                     selectedId={selected[col.depth]}
                     onSelect={(id) => selectTask(col.depth, id)}
-                    onAdd={() => openCreate(col.depth)}
-                    onBulkAdd={() => openBulkCreate(col.depth)}
+                    onAdd={
+                      policies.canCreateTask
+                        ? () => openCreate(col.depth)
+                        : undefined
+                    }
+                    onBulkAdd={
+                      policies.canCreateTask
+                        ? () => openBulkCreate(col.depth)
+                        : undefined
+                    }
                     members={members}
                     width={columnWidths[col.depth]}
                     canEdit={canEditColumns}
@@ -1490,8 +1591,16 @@ export function TaskColumns({
                       loading={col.loading}
                       selectedId={splitSelected[col.depth]}
                       onSelect={(id) => splitSelectTask(col.depth, id)}
-                      onAdd={() => openCreate(col.depth)}
-                      onBulkAdd={() => openBulkCreate(col.depth)}
+                      onAdd={
+                        policies.canCreateTask
+                          ? () => openCreate(col.depth)
+                          : undefined
+                      }
+                      onBulkAdd={
+                        policies.canCreateTask
+                          ? () => openBulkCreate(col.depth)
+                          : undefined
+                      }
                       members={members}
                       width={columnWidths[col.depth]}
                       canEdit={canEditColumns}
@@ -1534,7 +1643,7 @@ export function TaskColumns({
         </div>
 
         {/* Detail panel — flexible width, shrinks with viewport */}
-        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
+        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none bg-base-100">
           {focusedTask ? (
             <TaskPreviewPanel
               task={focusedTask}
@@ -1544,17 +1653,22 @@ export function TaskColumns({
               members={effectiveMembers}
               projectMembers={members}
               currentUserId={currentUserId}
-              userProjectRole={userProjectRole}
               updating={updatePending}
-              onUpdate={(data) => handleUpdate(focusedTask.id, data)}
+              onUpdate={(data) =>
+                handleUpdateWithReviewCheck(focusedTask.id, data)
+              }
               onDelete={() => setDeleteTarget(focusedTask)}
               onDuplicate={() => handleDuplicate(focusedTask.id)}
-              onAddSubtask={() => {
-                if (focusedTask.depth < MAX_DEPTH) {
-                  setCreateParentId(focusedTask.id);
-                  setCreateDepth(focusedTask.depth + 1);
-                }
-              }}
+              onAddSubtask={
+                policies.canCreateTask
+                  ? () => {
+                      if (focusedTask.depth < MAX_DEPTH) {
+                        setCreateParentId(focusedTask.id);
+                        setCreateDepth(focusedTask.depth + 1);
+                      }
+                    }
+                  : undefined
+              }
             />
           ) : (
             <div className="h-full flex items-center justify-center text-base-content/30 p-6">
@@ -1738,11 +1852,14 @@ export function TaskColumns({
           task={contextMenu.task}
           depth={contextMenu.depth}
           members={members}
-          userProjectRole={userProjectRole}
-          currentUserId={currentUserId}
+          canEditProp={policies.canEditTask}
+          canDeleteProp={policies.canDeleteTask}
+          canCreateProp={policies.canCreateTask}
           onClose={() => setContextMenu(null)}
           onSelect={() => selectTask(contextMenu.depth, contextMenu.task.id)}
-          onUpdate={(data) => handleUpdate(contextMenu.task.id, data)}
+          onUpdate={(data) =>
+            handleUpdateWithReviewCheck(contextMenu.task.id, data)
+          }
           onDelete={() => setDeleteTarget(contextMenu.task)}
           onDuplicate={() => handleDuplicate(contextMenu.task.id)}
           onAddSubtask={() => {
@@ -1759,7 +1876,7 @@ export function TaskColumns({
       )}
 
       {/* Floating bulk actions bar */}
-      {bulkActionMode && multiSelected.size > 0 && (
+      {bulkActionMode && multiSelected.size > 0 && policies.canEditTask && (
         <BulkActionsBar
           selectedCount={multiSelected.size}
           members={members}
@@ -2002,8 +2119,8 @@ function TaskColumn({
   loading: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
-  onAdd: () => void;
-  onBulkAdd: () => void;
+  onAdd?: () => void;
+  onBulkAdd?: () => void;
   members: ProjectMember[];
   width: number;
   canEdit: boolean;
@@ -2130,20 +2247,24 @@ function TaskColumn({
           >
             <Filter className="w-3 h-3" />
           </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
-            onClick={onBulkAdd}
-            title={`Bulk add ${label.toLowerCase()}`}
-          >
-            <ListPlus className="w-3.5 h-3.5" />
-          </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
-            onClick={onAdd}
-            title={`Add ${label.toLowerCase()}`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          {onBulkAdd && (
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              onClick={onBulkAdd}
+              title={`Bulk add ${label.toLowerCase()}`}
+            >
+              <ListPlus className="w-3.5 h-3.5" />
+            </button>
+          )}
+          {onAdd && (
+            <button
+              className="btn btn-ghost btn-xs btn-square"
+              onClick={onAdd}
+              title={`Add ${label.toLowerCase()}`}
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -2179,9 +2300,11 @@ function TaskColumn({
         ) : tasks.length === 0 ? (
           <div className="text-center py-8 px-3">
             <p className="text-xs text-base-content/30">No tasks</p>
-            <button className="btn btn-ghost btn-xs mt-2" onClick={onAdd}>
-              <Plus className="w-3 h-3" /> Add
-            </button>
+            {onAdd && (
+              <button className="btn btn-ghost btn-xs mt-2" onClick={onAdd}>
+                <Plus className="w-3 h-3" /> Add
+              </button>
+            )}
           </div>
         ) : (
           <div
@@ -2429,7 +2552,7 @@ function ColumnFilterDropdown({
   return (
     <div
       ref={ref}
-      className="absolute top-[38px] left-0 right-0 z-50 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-b-lg shadow-xl max-h-[60vh] overflow-y-auto"
+      className="absolute top-[38px] left-0 right-0 z-50 bg-base-100 border border-base-200 rounded-b-lg shadow-xl max-h-[60vh] overflow-y-auto"
     >
       <div className="p-2 space-y-2.5">
         {/* Search */}

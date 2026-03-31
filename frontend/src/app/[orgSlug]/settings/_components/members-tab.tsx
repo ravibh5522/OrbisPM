@@ -42,7 +42,7 @@ import { createPortal } from "react-dom";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
-const ROLE_OPTIONS = [
+const BUILTIN_ROLE_OPTIONS = [
   { value: "owner", label: "Owner" },
   { value: "admin", label: "Admin" },
   { value: "member", label: "Member" },
@@ -75,7 +75,39 @@ interface CreateAccountForm {
 export default function MembersTab() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const currentUser = useAuthStore((s) => s.user);
+  const currentRole = useAuthStore((s) => s.currentMembership?.role);
   const qc = useQueryClient();
+
+  // Fetch org-scope roles from DB to include custom roles in dropdowns
+  const { data: dbOrgRoles } = useQuery({
+    queryKey: ["permissions-roles", currentOrg?.id, "org"],
+    queryFn: () => api.permissions.roles.list(currentOrg!.id, "org"),
+    enabled: !!currentOrg,
+    staleTime: 60_000,
+  });
+
+  // Build role options: use DB roles if available, otherwise built-in defaults
+  // Include description for UI hints
+  const allRoleOptions = dbOrgRoles?.length
+    ? dbOrgRoles.map(
+        (r: { slug: string; name: string; description?: string }) => ({
+          value: r.slug,
+          label: r.name,
+          description: r.description || "",
+        }),
+      )
+    : BUILTIN_ROLE_OPTIONS.map((r) => ({ ...r, description: "" }));
+
+  // For invite/create forms: exclude owner (ownership transferred via dedicated flow)
+  const roleOptions = allRoleOptions.filter(
+    (r: { value: string }) => r.value !== "owner",
+  );
+
+  // For Change Role modal: owners can assign owner, non-owners cannot
+  const changeRoleOptions =
+    currentRole === "owner"
+      ? allRoleOptions
+      : allRoleOptions.filter((r: { value: string }) => r.value !== "owner");
   const [showInvite, setShowInvite] = useState(false);
   const [inviteMode, setInviteMode] = useState<InviteMode>("email");
   const [removeTarget, setRemoveTarget] = useState<OrgMember | null>(null);
@@ -617,7 +649,7 @@ export default function MembersTab() {
             />
             <Select
               label="Role"
-              options={ROLE_OPTIONS}
+              options={roleOptions}
               {...inviteForm.register("role")}
             />
             <p className="text-xs text-base-content/50">
@@ -680,7 +712,7 @@ export default function MembersTab() {
             />
             <Select
               label="Role"
-              options={ROLE_OPTIONS}
+              options={roleOptions}
               {...createForm.register("role")}
             />
             <p className="text-xs text-base-content/50">
@@ -727,22 +759,34 @@ export default function MembersTab() {
                 )}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              {ROLE_OPTIONS.map((r) => (
-                <button
-                  key={r.value}
-                  className={`btn btn-sm ${editTarget.role === r.value ? "btn-primary" : "btn-outline"}`}
-                  onClick={() =>
-                    updateRoleMutation.mutate({
-                      userId: editTarget.user_id,
-                      role: r.value,
-                    })
-                  }
-                  disabled={updateRoleMutation.isPending}
-                >
-                  {r.label}
-                </button>
-              ))}
+            <div className="flex flex-col gap-2">
+              {changeRoleOptions.map(
+                (r: { value: string; label: string; description: string }) => (
+                  <button
+                    key={r.value}
+                    className={`btn btn-sm justify-start text-left ${editTarget.role === r.value ? "btn-primary" : "btn-outline"}`}
+                    onClick={() =>
+                      updateRoleMutation.mutate({
+                        userId: editTarget.user_id,
+                        role: r.value,
+                      })
+                    }
+                    disabled={
+                      updateRoleMutation.isPending ||
+                      editTarget.role === r.value
+                    }
+                  >
+                    <span className="flex flex-col items-start">
+                      <span>{r.label}</span>
+                      {r.description && (
+                        <span className="text-[10px] font-normal opacity-60">
+                          {r.description}
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                ),
+              )}
             </div>
           </div>
           <div className="modal-action">

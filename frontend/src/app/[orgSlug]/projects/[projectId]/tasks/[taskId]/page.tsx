@@ -20,7 +20,7 @@ import {
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { PresenceIndicator } from "@/components/ui/presence-indicator";
-import { useProjectPermissions } from "@/hooks/use-project-permissions";
+import { useProjectPolicies } from "@/hooks/use-policies";
 import {
   cn,
   formatDate,
@@ -116,8 +116,11 @@ export default function TaskDetailPage({
   const qc = useQueryClient();
   const orgId = currentOrg?.id || "";
 
-  const { can } = useProjectPermissions(projectId);
-  const canEdit = can("tasks", "update");
+  const policies = useProjectPolicies(projectId);
+  const canEdit = policies.canEditTask;
+  const canDelete = policies.canDeleteTask;
+  const canComment = policies.canComment;
+  const canAttach = policies.canAttach;
   const { members } = useMemberMap(orgId);
 
   // ── Queries ──
@@ -222,14 +225,41 @@ export default function TaskDetailPage({
         onDismiss={() => setPendingReviewResult(null)}
       />
 
+      {/* Mutation error toast */}
+      {updateTaskMutation.isError && (
+        <div className="alert alert-error shadow-lg mb-4 text-sm">
+          <span>
+            {updateTaskMutation.error instanceof Error
+              ? updateTaskMutation.error.message
+              : "Failed to update task"}
+          </span>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => updateTaskMutation.reset()}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* ── Main content ── */}
         <div className="lg:col-span-2 space-y-6">
+          {/* View Only badge */}
+          {!canEdit && (
+            <div className="flex items-center gap-2">
+              <span className="badge badge-warning badge-sm gap-1">
+                <Eye className="w-3 h-3" /> View Only
+              </span>
+            </div>
+          )}
+
           {/* Editable title + description */}
           <TaskHeaderCard
             task={task}
             onPatch={patchField}
             isPending={updateTaskMutation.isPending}
+            canEdit={canEdit}
           />
 
           {/* Quick status + priority */}
@@ -280,6 +310,7 @@ export default function TaskDetailPage({
           <LabelsEditor
             labels={task.labels || []}
             onSave={(labels) => patchField("labels", labels)}
+            canEdit={canEdit}
           />
 
           {/* Checklists */}
@@ -288,6 +319,7 @@ export default function TaskDetailPage({
             projectId={projectId}
             taskId={taskId}
             items={checklists?.data || []}
+            canEdit={canEdit}
           />
 
           {/* Comments */}
@@ -298,6 +330,7 @@ export default function TaskDetailPage({
             items={comments?.data || []}
             userId={user?.id || ""}
             members={members}
+            canComment={canComment}
           />
 
           {/* Attachments */}
@@ -306,6 +339,7 @@ export default function TaskDetailPage({
             projectId={projectId}
             taskId={taskId}
             items={attachments?.data || []}
+            canAttach={canAttach}
           />
         </div>
 
@@ -328,6 +362,7 @@ export default function TaskDetailPage({
                   })),
                 ]}
                 onSave={(v) => patchField("assignee_id", v || null)}
+                canEdit={canEdit}
               />
               {/* Reporter */}
               <SidebarSelect
@@ -343,18 +378,21 @@ export default function TaskDetailPage({
                   })),
                 ]}
                 onSave={(v) => patchField("reporter_id", v || null)}
+                canEdit={canEdit}
               />
               {/* Due Date */}
               <SidebarDate
                 label="Due Date"
                 value={task.due_date || ""}
                 onSave={(v) => patchField("due_date", v || null)}
+                canEdit={canEdit}
               />
               {/* Start Date */}
               <SidebarDate
                 label="Start Date"
                 value={task.start_date || ""}
                 onSave={(v) => patchField("start_date", v || null)}
+                canEdit={canEdit}
               />
               {/* Estimated Hours */}
               <SidebarNumber
@@ -362,6 +400,7 @@ export default function TaskDetailPage({
                 suffix="h"
                 value={task.estimated_hours ?? null}
                 onSave={(v) => patchField("estimated_hours", v)}
+                canEdit={canEdit}
               />
               {/* Actual Hours */}
               <SidebarNumber
@@ -369,6 +408,7 @@ export default function TaskDetailPage({
                 suffix="h"
                 value={task.actual_hours ?? null}
                 onSave={(v) => patchField("actual_hours", v)}
+                canEdit={canEdit}
               />
             </div>
 
@@ -385,10 +425,15 @@ export default function TaskDetailPage({
               <h4 className="text-sm font-medium flex items-center gap-2">
                 Repeat
               </h4>
-              <RecurrenceSelector
-                value={task.recurrence_rule}
-                onChange={(rule) => patchField("recurrence_rule", rule)}
-              />
+              {canEdit && (
+                <RecurrenceSelector
+                  value={task.recurrence_rule}
+                  onChange={(rule) => patchField("recurrence_rule", rule)}
+                />
+              )}
+              {!canEdit && task.recurrence_rule && (
+                <span className="text-sm text-base-content/60">{task.recurrence_rule}</span>
+              )}
             </div>
             {task.next_occurrence && (
               <div className="text-xs text-base-content/60 mt-1">
@@ -455,10 +500,12 @@ function TaskHeaderCard({
   task,
   onPatch,
   isPending,
+  canEdit = true,
 }: {
   task: Task;
   onPatch: (field: string, value: unknown) => void;
   isPending: boolean;
+  canEdit?: boolean;
 }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -513,15 +560,21 @@ function TaskHeaderCard({
         </div>
       ) : (
         <div
-          className="flex items-start justify-between mb-4 group cursor-pointer"
+          className={cn(
+            "flex items-start justify-between mb-4 group",
+            canEdit && "cursor-pointer",
+          )}
           onClick={() => {
+            if (!canEdit) return;
             setTitleDraft(task.title);
             setEditingTitle(true);
           }}
         >
           <h1 className="text-2xl font-bold">{task.title}</h1>
           <div className="flex gap-2 items-center">
-            <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-60 transition-opacity" />
+            {canEdit && (
+              <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-60 transition-opacity" />
+            )}
             <Badge variant={statusColor(task.status)}>
               {statusLabel(task.status)}
             </Badge>
@@ -565,8 +618,12 @@ function TaskHeaderCard({
         </div>
       ) : (
         <div
-          className="group cursor-pointer min-h-8 rounded-lg hover:bg-base-200/50 p-2 -mx-2 transition-colors"
+          className={cn(
+            "min-h-8 rounded-lg p-2 -mx-2 transition-colors",
+            canEdit && "group cursor-pointer hover:bg-base-200/50",
+          )}
           onClick={() => {
+            if (!canEdit) return;
             setDescDraft(task.description || "");
             setEditingDesc(true);
           }}
@@ -578,10 +635,12 @@ function TaskHeaderCard({
             />
           ) : (
             <p className="text-base-content/40 italic">
-              Click to add description…
+              {canEdit ? "Click to add description…" : "No description"}
             </p>
           )}
-          <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40 mt-1 transition-opacity" />
+          {canEdit && (
+            <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40 mt-1 transition-opacity" />
+          )}
         </div>
       )}
     </Card>
@@ -593,9 +652,11 @@ function TaskHeaderCard({
 function LabelsEditor({
   labels,
   onSave,
+  canEdit = true,
 }: {
   labels: string[];
   onSave: (labels: string[]) => void;
+  canEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [input, setInput] = useState("");
@@ -620,7 +681,7 @@ function LabelsEditor({
       <div className="flex items-center gap-2 mb-2">
         <Tag className="w-4 h-4 text-base-content/50" />
         <span className="text-sm font-semibold">Labels</span>
-        {!editing && (
+        {!editing && canEdit && (
           <button
             className="btn btn-ghost btn-xs"
             onClick={() => setEditing(true)}
@@ -633,9 +694,11 @@ function LabelsEditor({
         {labels.map((l) => (
           <span key={l} className="badge badge-outline badge-sm gap-1">
             {l}
-            <button onClick={() => removeLabel(l)} className="hover:text-error">
-              <X className="w-3 h-3" />
-            </button>
+            {canEdit && (
+              <button onClick={() => removeLabel(l)} className="hover:text-error">
+                <X className="w-3 h-3" />
+              </button>
+            )}
           </span>
         ))}
         {labels.length === 0 && !editing && (
@@ -689,6 +752,7 @@ function SidebarSelect({
   avatarSrc,
   options,
   onSave,
+  canEdit = true,
 }: {
   label: string;
   value: string;
@@ -696,12 +760,13 @@ function SidebarSelect({
   avatarSrc?: string;
   options: { value: string; label: string }[];
   onSave: (v: string) => void;
+  canEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   return (
     <div>
       <span className="text-base-content/60 text-xs">{label}</span>
-      {editing ? (
+      {editing && canEdit ? (
         <select
           className="select select-bordered select-xs w-full mt-1"
           value={value}
@@ -720,14 +785,19 @@ function SidebarSelect({
         </select>
       ) : (
         <div
-          className="flex justify-between items-center cursor-pointer hover:bg-base-200 rounded px-1 py-0.5 -mx-1 group"
-          onClick={() => setEditing(true)}
+          className={cn(
+            "flex justify-between items-center rounded px-1 py-0.5 -mx-1 group",
+            canEdit && "cursor-pointer hover:bg-base-200",
+          )}
+          onClick={() => canEdit && setEditing(true)}
         >
           <div className="flex items-center gap-1.5">
             {value && <Avatar name={displayValue} src={avatarSrc} size="xs" />}
             <span>{displayValue}</span>
           </div>
-          <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
+          {canEdit && (
+            <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
+          )}
         </div>
       )}
     </div>
@@ -738,10 +808,12 @@ function SidebarDate({
   label,
   value,
   onSave,
+  canEdit = true,
 }: {
   label: string;
   value: string;
   onSave: (v: string) => void;
+  canEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   // value is ISO string; extract YYYY-MM-DD
@@ -750,7 +822,7 @@ function SidebarDate({
   return (
     <div>
       <span className="text-base-content/60 text-xs">{label}</span>
-      {editing ? (
+      {editing && canEdit ? (
         <div className="flex gap-1 mt-1">
           <input
             type="date"
@@ -770,11 +842,16 @@ function SidebarDate({
         </div>
       ) : (
         <div
-          className="flex justify-between items-center cursor-pointer hover:bg-base-200 rounded px-1 py-0.5 -mx-1 group"
-          onClick={() => setEditing(true)}
+          className={cn(
+            "flex justify-between items-center rounded px-1 py-0.5 -mx-1 group",
+            canEdit && "cursor-pointer hover:bg-base-200",
+          )}
+          onClick={() => canEdit && setEditing(true)}
         >
           <span>{value ? formatDate(value) : "Not set"}</span>
-          <Calendar className="w-3 h-3 opacity-0 group-hover:opacity-40" />
+          {canEdit && (
+            <Calendar className="w-3 h-3 opacity-0 group-hover:opacity-40" />
+          )}
         </div>
       )}
     </div>
@@ -786,11 +863,13 @@ function SidebarNumber({
   suffix,
   value,
   onSave,
+  canEdit = true,
 }: {
   label: string;
   suffix: string;
   value: number | null;
   onSave: (v: number | null) => void;
+  canEdit?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value?.toString() || "");
@@ -804,7 +883,7 @@ function SidebarNumber({
   return (
     <div>
       <span className="text-base-content/60 text-xs">{label}</span>
-      {editing ? (
+      {editing && canEdit ? (
         <input
           type="number"
           step="0.5"
@@ -821,16 +900,22 @@ function SidebarNumber({
         />
       ) : (
         <div
-          className="flex justify-between items-center cursor-pointer hover:bg-base-200 rounded px-1 py-0.5 -mx-1 group"
+          className={cn(
+            "flex justify-between items-center rounded px-1 py-0.5 -mx-1 group",
+            canEdit && "cursor-pointer hover:bg-base-200",
+          )}
           onClick={() => {
+            if (!canEdit) return;
             setDraft(value?.toString() || "");
             setEditing(true);
           }}
         >
           <span>{value != null ? `${value}${suffix}` : "—"}</span>
-          <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
+          {canEdit && (
+            <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
+          )}
         </div>
-      )}
+      )}}
     </div>
   );
 }
@@ -841,11 +926,13 @@ function ChecklistSection({
   projectId,
   taskId,
   items,
+  canEdit = true,
 }: {
   orgId: string;
   projectId: string;
   taskId: string;
   items: Checklist[];
+  canEdit?: boolean;
 }) {
   const qc = useQueryClient();
   const [newTitle, setNewTitle] = useState("");
@@ -960,11 +1047,12 @@ function ChecklistSection({
             <button
               className="btn btn-ghost btn-xs btn-square"
               onClick={() =>
-                toggleMutation.mutate({
+                canEdit && toggleMutation.mutate({
                   id: item.id,
                   is_checked: !item.is_checked,
                 })
               }
+              disabled={!canEdit}
             >
               {item.is_checked ? (
                 <CheckSquare className="w-4 h-4 text-success" />
@@ -980,37 +1068,41 @@ function ChecklistSection({
             >
               {item.title}
             </span>
-            <button
-              className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
-              onClick={() => deleteMutation.mutate(item.id)}
-            >
-              <Trash2 className="w-3 h-3" />
-            </button>
+            {canEdit && (
+              <button
+                className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
+                onClick={() => deleteMutation.mutate(item.id)}
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            )}
           </li>
         ))}
       </ul>
-      <form
-        className="flex gap-2 mt-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (newTitle.trim()) createMutation.mutate(newTitle.trim());
-        }}
-      >
-        <input
-          className="input input-bordered input-sm flex-1"
-          placeholder="Add item..."
-          value={newTitle}
-          onChange={(e) => setNewTitle(e.target.value)}
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={!newTitle.trim()}
-          loading={createMutation.isPending}
+      {canEdit && (
+        <form
+          className="flex gap-2 mt-3"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (newTitle.trim()) createMutation.mutate(newTitle.trim());
+          }}
         >
-          <Plus className="w-4 h-4" />
-        </Button>
-      </form>
+          <input
+            className="input input-bordered input-sm flex-1"
+            placeholder="Add item..."
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!newTitle.trim()}
+            loading={createMutation.isPending}
+          >
+            <Plus className="w-4 h-4" />
+          </Button>
+        </form>
+      )}
     </Card>
   );
 }
@@ -1182,6 +1274,7 @@ function CommentsSection({
   items,
   userId,
   members,
+  canComment = true,
 }: {
   orgId: string;
   projectId: string;
@@ -1189,6 +1282,7 @@ function CommentsSection({
   items: Comment[];
   userId: string;
   members: OrgMember[];
+  canComment?: boolean;
 }) {
   const qc = useQueryClient();
   const [body, setBody] = useState("");
@@ -1248,28 +1342,30 @@ function CommentsSection({
           </div>
         ))}
       </div>
-      <form
-        className="flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (body.trim()) createMutation.mutate(body.trim());
-        }}
-      >
-        <MentionInput
-          value={body}
-          onChange={setBody}
-          members={members}
-          placeholder="Add a comment... (use @ to mention)"
-        />
-        <Button
-          type="submit"
-          size="sm"
-          disabled={!body.trim()}
-          loading={createMutation.isPending}
+      {canComment && (
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (body.trim()) createMutation.mutate(body.trim());
+          }}
         >
-          <Send className="w-4 h-4" />
-        </Button>
-      </form>
+          <MentionInput
+            value={body}
+            onChange={setBody}
+            members={members}
+            placeholder="Add a comment... (use @ to mention)"
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!body.trim()}
+            loading={createMutation.isPending}
+          >
+            <Send className="w-4 h-4" />
+          </Button>
+        </form>
+      )}
     </Card>
   );
 }
@@ -1280,11 +1376,13 @@ function AttachmentsSection({
   projectId,
   taskId,
   items,
+  canAttach = true,
 }: {
   orgId: string;
   projectId: string;
   taskId: string;
   items: Attachment[];
+  canAttach?: boolean;
 }) {
   const qc = useQueryClient();
   const [uploading, setUploading] = useState(false);
@@ -1417,28 +1515,32 @@ function AttachmentsSection({
                   >
                     <Download className="w-3.5 h-3.5" />
                   </button>
-                  <button
-                    className="btn btn-ghost btn-xs btn-square text-error"
-                    title="Delete"
-                    onClick={() => deleteMutation.mutate(att.id)}
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                  {canAttach && (
+                    <button
+                      className="btn btn-ghost btn-xs btn-square text-error"
+                      title="Delete"
+                      onClick={() => deleteMutation.mutate(att.id)}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
           </div>
         )}
-        <label className="btn btn-outline btn-sm gap-1">
-          <Upload className="w-4 h-4" />
-          {uploading ? "Uploading..." : "Upload File"}
-          <input
-            type="file"
-            className="hidden"
-            onChange={handleUpload}
-            disabled={uploading}
-          />
-        </label>
+        {canAttach && (
+          <label className="btn btn-outline btn-sm gap-1">
+            <Upload className="w-4 h-4" />
+            {uploading ? "Uploading..." : "Upload File"}
+            <input
+              type="file"
+              className="hidden"
+              onChange={handleUpload}
+              disabled={uploading}
+            />
+          </label>
+        )}
       </Card>
 
       {/* Preview Modal / Lightbox */}

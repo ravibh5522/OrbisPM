@@ -1,5 +1,6 @@
 "use client";
 
+import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
   ChangeRequestToast,
   PendingReviewBadge,
@@ -9,6 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/shared";
+import { useProjectPolicies } from "@/hooks/use-policies";
+import { useReviewableFields } from "@/hooks/use-reviewable-fields";
 import { cn, formatDate } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
@@ -16,6 +19,7 @@ import type {
   Task,
   TaskPriority,
   TaskStatus,
+  TaskUpdateResult,
 } from "@/types/domain";
 import {
   closestCenter,
@@ -83,6 +87,9 @@ export function TaskListView({
 }: TaskListViewProps) {
   const send = useProjectTaskStore((s) => s.send);
   const router = useRouter();
+  const policies = useProjectPolicies(projectId);
+  const { hasReviewPipeline, isReviewable } = useReviewableFields(projectId);
+  const canDirectUpdate = policies.canDirectUpdate;
 
   /* ── Sort, filter, pagination state ── */
   const [sortBy, setSortBy] = useState<SortField>("created_at");
@@ -116,9 +123,14 @@ export function TaskListView({
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const [bulkPending, setBulkPending] = useState(false);
-  const [pendingReviewResult, setPendingReviewResult] = useState<{
-    pending_review?: boolean;
-    change_request?: any;
+  const [pendingReviewResult, setPendingReviewResult] =
+    useState<TaskUpdateResult | null>(null);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  // Change request modal state
+  const [crModal, setCrModal] = useState<{
+    taskId: string;
+    changes: Partial<Task>;
   } | null>(null);
 
   /* Fetch via WS */
@@ -193,11 +205,32 @@ export function TaskListView({
           fetchList();
           setPendingReviewResult(result);
         }
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message) {
+          setUpdateError(e.message);
+        }
         fetchList(); // rollback by re-fetching
       }
     },
     [send, fetchList, tasks],
+  );
+
+  /** Intercepts updates for reviewable fields — shows modal instead of WS send */
+  const handleUpdateWithReviewCheck = useCallback(
+    (id: string, changes: Partial<Task>) => {
+      if (hasReviewPipeline && !canDirectUpdate) {
+        const changedFields = Object.keys(changes);
+        if (
+          changedFields.length > 0 &&
+          changedFields.every((f) => isReviewable(f))
+        ) {
+          setCrModal({ taskId: id, changes });
+          return;
+        }
+      }
+      handleUpdate(id, changes);
+    },
+    [hasReviewPipeline, canDirectUpdate, isReviewable, handleUpdate],
   );
 
   /* ── Delete ── */
@@ -355,8 +388,38 @@ export function TaskListView({
         onDismiss={() => setPendingReviewResult(null)}
       />
 
+      {/* Update error toast */}
+      {updateError && (
+        <div className="alert alert-error shadow-lg text-sm">
+          <span>{updateError}</span>
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => setUpdateError(null)}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Change request modal for reviewable field edits */}
+      {crModal &&
+        (() => {
+          const crTask = tasks.find((t) => t.id === crModal.taskId);
+          return crTask ? (
+            <ChangeRequestModal
+              open
+              onClose={() => setCrModal(null)}
+              task={crTask}
+              changes={crModal.changes}
+              orgId={orgId}
+              projectId={projectId}
+              onCreated={() => setCrModal(null)}
+            />
+          ) : null;
+        })()}
+
       {/* ── Bulk action bar ── */}
-      {selectedIds.size > 0 && (
+      {selectedIds.size > 0 && policies.canEditTask && (
         <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-lg">
           <span className="text-sm font-medium">
             {selectedIds.size} selected
@@ -485,9 +548,11 @@ export function TaskListView({
           </button>
         )}
 
-        <Button size="sm" onClick={() => setShowCreate(true)}>
-          <Plus className="w-4 h-4" /> New Task
-        </Button>
+        {policies.canCreateTask && (
+          <Button size="sm" onClick={() => setShowCreate(true)}>
+            <Plus className="w-4 h-4" /> New Task
+          </Button>
+        )}
       </div>
 
       {/* ── Results info ── */}
@@ -599,7 +664,9 @@ export function TaskListView({
                     memberAvatar={memberAvatar}
                     isSelected={selectedIds.has(task.id)}
                     onToggleSelect={() => toggleSelect(task.id)}
-                    onUpdate={(changes) => handleUpdate(task.id, changes)}
+                    onUpdate={(changes) =>
+                      handleUpdateWithReviewCheck(task.id, changes)
+                    }
                     onDelete={() => setDeleteTarget(task)}
                     onDuplicate={() => handleDuplicate(task.id)}
                     onNavigate={() =>
@@ -607,6 +674,8 @@ export function TaskListView({
                         `/${orgSlug}/projects/${projectId}?task=${task.id}`,
                       )
                     }
+                    canEdit={policies.canEditTask}
+                    canDelete={policies.canDeleteTask}
                   />
                 ))}
               </tbody>
@@ -682,6 +751,8 @@ interface TaskRowProps {
   onDelete: () => void;
   onDuplicate: () => void;
   onNavigate: () => void;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 function TaskRow({
@@ -695,6 +766,8 @@ function TaskRow({
   onDelete,
   onDuplicate,
   onNavigate,
+  canEdit = true,
+  canDelete = true,
 }: TaskRowProps) {
   const isOverdue =
     task.due_date &&
@@ -782,6 +855,7 @@ function TaskRow({
           )}
           value={task.status}
           onChange={(e) => onUpdate({ status: e.target.value as TaskStatus })}
+          disabled={!canEdit}
         >
           <option value="todo">Todo</option>
           <option value="in_progress">In Progress</option>
@@ -803,6 +877,7 @@ function TaskRow({
           onChange={(e) =>
             onUpdate({ priority: e.target.value as TaskPriority })
           }
+          disabled={!canEdit}
         >
           <option value="critical">Critical</option>
           <option value="high">High</option>
@@ -813,16 +888,20 @@ function TaskRow({
 
       {/* Assignee — multi-select dropdown */}
       <td>
-        <MultiAssigneeCell
-          assigneeIds={task.assignee_ids || []}
-          members={members}
-          onChange={(next) =>
-            onUpdate({
-              assignee_ids: next,
-              assignee_id: next.length > 0 ? next[0] : "",
-            } as Partial<Task>)
-          }
-        />
+        {canEdit ? (
+          <MultiAssigneeCell
+            assigneeIds={task.assignee_ids || []}
+            members={members}
+            onChange={(next) =>
+              onUpdate({
+                assignee_ids: next,
+                assignee_id: next.length > 0 ? next[0] : "",
+              } as Partial<Task>)
+            }
+          />
+        ) : (
+          <span className="text-sm">{_memberName(task.assignee_id)}</span>
+        )}
       </td>
 
       {/* Due date — inline input */}
@@ -841,6 +920,7 @@ function TaskRow({
                 : null,
             })
           }
+          disabled={!canEdit}
         />
       </td>
 
@@ -867,16 +947,20 @@ function TaskRow({
                 <ExternalLink className="w-3.5 h-3.5" /> Open
               </a>
             </li>
-            <li>
-              <a onClick={onDuplicate} className="text-sm">
-                <Copy className="w-3.5 h-3.5" /> Clone
-              </a>
-            </li>
-            <li>
-              <a onClick={onDelete} className="text-sm text-error">
-                <Trash2 className="w-3.5 h-3.5" /> Delete
-              </a>
-            </li>
+            {canEdit && (
+              <li>
+                <a onClick={onDuplicate} className="text-sm">
+                  <Copy className="w-3.5 h-3.5" /> Clone
+                </a>
+              </li>
+            )}
+            {canDelete && (
+              <li>
+                <a onClick={onDelete} className="text-sm text-error">
+                  <Trash2 className="w-3.5 h-3.5" /> Delete
+                </a>
+              </li>
+            )}
           </ul>
         </div>
       </td>
