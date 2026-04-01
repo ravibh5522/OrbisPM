@@ -69,15 +69,17 @@ func (m *Manager) PreloadProject(ctx context.Context, projectID uuid.UUID, tasks
 		return fmt.Errorf("acquire preload lock: %w", err)
 	}
 	if !ok {
-		// Another process is loading — wait briefly and check
-		time.Sleep(100 * time.Millisecond)
-		if m.IsProjectLoaded(ctx, projectID) {
-			return nil // Another goroutine loaded it
+		// Another process is loading — wait and retry with backoff
+		for i := 0; i < 5; i++ {
+			time.Sleep(time.Duration(100*(i+1)) * time.Millisecond)
+			if m.IsProjectLoaded(ctx, projectID) {
+				return nil // Another goroutine loaded it successfully
+			}
 		}
-		// Try once more
+		// Try once more to acquire the lock (original holder may have crashed)
 		ok, err = m.rdb.SetNX(ctx, lockKey, "1", LockTTL).Result()
 		if err != nil || !ok {
-			return nil // Let it fall through to DB reads
+			return fmt.Errorf("preload lock contention for project %s — falling through to DB", projectID)
 		}
 	}
 	defer m.rdb.Del(ctx, lockKey)
@@ -146,10 +148,27 @@ func (m *Manager) EvictProject(ctx context.Context, projectID uuid.UUID) error {
 	return nil
 }
 
-// RefreshTTL extends the TTL for all project cache keys.
+// RefreshTTL extends the TTL for the project meta key and all task keys.
+// Call this on project access to prevent mid-session cache expiry.
 func (m *Manager) RefreshTTL(ctx context.Context, projectID uuid.UUID) {
 	metaKey := ProjectMetaKey(projectID)
 	m.rdb.Expire(ctx, metaKey, DefaultTTL)
+
+	// Also refresh task keys so they don't expire before meta
+	pattern := ProjectGlobPattern(projectID)
+	iter := m.rdb.Scan(ctx, 0, pattern, 500).Iterator()
+	pipe := m.rdb.Pipeline()
+	count := 0
+	for iter.Next(ctx) {
+		pipe.Expire(ctx, iter.Val(), DefaultTTL)
+		count++
+		if count%100 == 0 {
+			_, _ = pipe.Exec(ctx)
+		}
+	}
+	if count%100 != 0 {
+		_, _ = pipe.Exec(ctx)
+	}
 }
 
 // ─── Task CRUD (Cache Layer) ────────────────────────────────
@@ -227,16 +246,20 @@ func (m *Manager) ListTasks(ctx context.Context, projectID uuid.UUID, parentID s
 }
 
 // SetTask writes a task to cache and updates the children index.
+// Uses delete-before-set to prevent stale reads during the write window.
 func (m *Manager) SetTask(ctx context.Context, projectID uuid.UUID, task *domain.Task) error {
 	data, err := json.Marshal(task)
 	if err != nil {
 		return fmt.Errorf("marshal task: %w", err)
 	}
 
+	taskKey := ProjectTaskKey(projectID, task.ID)
+	// Delete first so concurrent readers fall through to DB instead of seeing stale data
+	m.rdb.Del(ctx, taskKey)
+
 	pipe := m.rdb.Pipeline()
 
 	// Set task data
-	taskKey := ProjectTaskKey(projectID, task.ID)
 	pipe.Set(ctx, taskKey, data, DefaultTTL)
 
 	// Update children index

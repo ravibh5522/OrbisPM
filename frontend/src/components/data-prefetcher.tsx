@@ -8,7 +8,8 @@ import { useEffect, useRef } from "react";
 
 /**
  * Silently prefetches key org data in the background so pages feel instant.
- * Runs once per org switch; skips if data already exists in the query cache.
+ * On initial load (page reload), always fetches fresh data from backend.
+ * On subsequent org/role changes, also refetches.
  * Mounted in OrgLayout — no visible UI.
  */
 export function DataPrefetcher() {
@@ -17,6 +18,7 @@ export function DataPrefetcher() {
   const policies = useOrgPolicies();
   const qc = useQueryClient();
   const ranForKey = useRef<string | null>(null);
+  const isInitialLoad = useRef(true);
 
   useEffect(() => {
     // Re-run when org OR role changes (e.g. user promoted from viewer to admin)
@@ -24,11 +26,16 @@ export function DataPrefetcher() {
     if (!orgId || ranForKey.current === cacheKey || policies.isLoading) return;
     ranForKey.current = cacheKey;
 
-    // Helper: prefetch only if not already cached
+    const forceRefresh = isInitialLoad.current;
+    isInitialLoad.current = false;
+
+    // Helper: prefetch (or invalidate + refetch on page reload)
     const pf = <T,>(key: unknown[], fn: () => Promise<T>, stale = 60_000) => {
-      if (!qc.getQueryData(key)) {
-        qc.prefetchQuery({ queryKey: key, queryFn: fn, staleTime: stale });
+      if (forceRefresh) {
+        // On page reload, invalidate so stale IDB cache is replaced with fresh data
+        qc.invalidateQueries({ queryKey: key });
       }
+      qc.prefetchQuery({ queryKey: key, queryFn: fn, staleTime: stale });
     };
 
     // Use policy-derived scope instead of hardcoded role checks

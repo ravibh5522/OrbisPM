@@ -217,6 +217,13 @@ function handleOrgEvent(
         });
       }
     }
+    // Also update Zustand task store if user has tasks loaded (covers REST-originated updates)
+    const taskStore = useProjectTaskStore.getState();
+    if (type === "task.updated" && event.payload?.task) {
+      taskStore.upsertTask(event.payload.task);
+    } else if (type === "task.deleted" && event.entity_id) {
+      taskStore.removeTask(event.entity_id);
+    }
   }
 
   // Checklists — invalidate task-scoped checklist queries
@@ -269,6 +276,12 @@ function handleOrgEvent(
       qc.invalidateQueries({
         queryKey: ["project-dashboard", orgId, event.entity_id],
       });
+      qc.invalidateQueries({
+        queryKey: ["project-members", orgId, event.entity_id],
+      });
+      qc.invalidateQueries({
+        queryKey: ["project-settings", orgId, event.entity_id],
+      });
     }
   }
 
@@ -277,6 +290,7 @@ function handleOrgEvent(
     qc.invalidateQueries({ queryKey: ["teams", orgId] });
     qc.invalidateQueries({ queryKey: ["teams-all", orgId] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });
+    qc.invalidateQueries({ queryKey: ["analytics-dashboard", orgId] });
     qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
     if (event.entity_id) {
       qc.invalidateQueries({ queryKey: ["team", orgId, event.entity_id] });
@@ -286,25 +300,44 @@ function handleOrgEvent(
       qc.invalidateQueries({
         queryKey: ["team-members", orgId, event.entity_id],
       });
+      qc.invalidateQueries({
+        queryKey: ["team-settings", orgId, event.entity_id],
+      });
+      qc.invalidateQueries({
+        queryKey: ["team-projects", orgId, event.entity_id],
+      });
     }
   }
 
   // Members — use orgId from URL context (event.org_id may be stale on some backends)
   if (type.startsWith("member.")) {
     const scope = event.payload?.scope as string | undefined;
+    const scopeId = event.entity_id;
     qc.invalidateQueries({ queryKey: ["org-members", orgId] });
     if (scope === "team") {
-      // Invalidate all team-members and team-dashboard regardless of which team
+      if (scopeId) {
+        qc.invalidateQueries({ queryKey: ["team-members", orgId, scopeId] });
+        qc.invalidateQueries({ queryKey: ["team-dashboard", orgId, scopeId] });
+      }
+      // Also broad invalidate in case query keys vary
       qc.invalidateQueries({ queryKey: ["team-members"] });
       qc.invalidateQueries({ queryKey: ["team-dashboard"] });
       qc.invalidateQueries({ queryKey: ["teams", orgId] });
     }
     if (scope === "project") {
+      if (scopeId) {
+        qc.invalidateQueries({ queryKey: ["project-members", orgId, scopeId] });
+        qc.invalidateQueries({
+          queryKey: ["project-dashboard", orgId, scopeId],
+        });
+      }
       qc.invalidateQueries({ queryKey: ["project-members"] });
       qc.invalidateQueries({ queryKey: ["project-dashboard"] });
+      qc.invalidateQueries({ queryKey: ["projects", orgId] });
     }
     if (type === "member.role_updated") {
       qc.invalidateQueries({ queryKey: ["custom-roles"] });
+      qc.invalidateQueries({ queryKey: ["permissions-roles", orgId] });
     }
   }
 
@@ -456,8 +489,14 @@ function handleProjectBroadcast(
       }
       break;
     }
-    case "task:reordered":
-      break; // Trigger re-fetch from server
+    case "task:reordered": {
+      // Re-fetch task lists so positions update for all viewers
+      const reorderProject = p.project_id ?? p[0]?.project_id;
+      if (reorderProject) {
+        qc.invalidateQueries({ queryKey: ["tasks"] });
+      }
+      break;
+    }
 
     // ─── Checklist broadcasts ────
     case "checklist:created":
@@ -513,18 +552,23 @@ function handleProjectBroadcast(
 
     // ─── Change request broadcasts ────
     case "cr:approved": {
-      // Task was updated by approval — upsert if we have the task data
       const task = p.task ?? p;
-      if (task?.task_id) {
-        // CR payload has task_id; the task:updated broadcast will handle the actual task upsert
+      if (task?.id) {
+        store.upsertTask(task);
       }
-      // Invalidate change request lists so components re-fetch
-      store.setChangeRequests(p.task_id, []);
+      if (p.task_id) {
+        store.setChangeRequests(p.task_id, []);
+      }
+      // Invalidate related queries so detail pages refresh
+      qc.invalidateQueries({ queryKey: ["change-requests"], exact: false });
+      qc.invalidateQueries({ queryKey: ["tasks"], exact: false });
       break;
     }
     case "cr:rejected": {
-      // No task change, just invalidate CR lists
-      store.setChangeRequests(p.task_id, []);
+      if (p.task_id) {
+        store.setChangeRequests(p.task_id, []);
+      }
+      qc.invalidateQueries({ queryKey: ["change-requests"], exact: false });
       break;
     }
   }

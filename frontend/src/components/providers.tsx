@@ -61,7 +61,8 @@ export function Providers({ children }: { children: ReactNode }) {
             // 24h gcTime — cached data survives long enough for offline / instant loads
             gcTime: 24 * 60 * 60 * 1000,
             retry: 1,
-            refetchOnWindowFocus: false,
+            // Refetch when user returns to tab — ensures data freshness after inactivity
+            refetchOnWindowFocus: "always",
             refetchOnReconnect: true,
           },
           mutations: {
@@ -80,8 +81,8 @@ export function Providers({ children }: { children: ReactNode }) {
         persister,
         // Keep persisted cache for 24 hours
         maxAge: 24 * 60 * 60 * 1000,
-        // Debounce writes to IndexedDB (500ms after last cache change)
-        buster: "",
+        // Bust cache on new deployments to avoid stale data shapes
+        buster: process.env.NEXT_PUBLIC_BUILD_ID || "",
       }}
     >
       <ThemeInitializer>

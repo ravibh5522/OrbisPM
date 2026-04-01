@@ -238,6 +238,33 @@ func (h *WSHandler) broadcastProject(orgID, projectID uuid.UUID, action string, 
 	h.hub.BroadcastProject(orgID, projectID, msg, exclude)
 }
 
+// broadcastAncestorUpdates reads parent tasks from cache and broadcasts their
+// updated progress to project-room subscribers.  Call after bulk create/update
+// operations where RecalcProgressUp ran in the service layer but the handler
+// didn't broadcast individual ancestor updates.
+func (h *WSHandler) broadcastAncestorUpdates(ctx context.Context, orgID, projectID uuid.UUID, tasks []*domain.Task) {
+	if h.taskSvc == nil {
+		return
+	}
+	seen := map[uuid.UUID]struct{}{}
+	for _, t := range tasks {
+		if t.ParentTaskID == nil {
+			continue
+		}
+		pid := *t.ParentTaskID
+		if _, ok := seen[pid]; ok {
+			continue
+		}
+		seen[pid] = struct{}{}
+		parent, err := h.taskSvc.Get(ctx, pid)
+		if err != nil {
+			continue
+		}
+		h.broadcastProject(orgID, projectID, "task:updated",
+			&domain.TaskUpdateResult{Task: parent}, "", nil)
+	}
+}
+
 func mustMarshal(v any) json.RawMessage {
 	data, _ := json.Marshal(v)
 	return data
@@ -612,6 +639,9 @@ func (h *WSHandler) handleTaskBulkCreate(ctx context.Context, conn *websocket.Or
 
 	h.reply(conn, msg.ID, msg.Action, tasks, "")
 	h.broadcastProject(conn.OrgID, projectID, "task:bulk-created", tasks, conn.UserID.String(), conn)
+
+	// Broadcast ancestor progress updates (RecalcProgressUp was called in service layer)
+	h.broadcastAncestorUpdates(ctx, conn.OrgID, projectID, tasks)
 }
 
 func (h *WSHandler) handleTaskBulkUpdate(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {
@@ -639,6 +669,9 @@ func (h *WSHandler) handleTaskBulkUpdate(ctx context.Context, conn *websocket.Or
 
 	h.reply(conn, msg.ID, msg.Action, tasks, "")
 	h.broadcastProject(conn.OrgID, projectID, "task:bulk-updated", tasks, conn.UserID.String(), conn)
+
+	// Broadcast ancestor progress updates
+	h.broadcastAncestorUpdates(ctx, conn.OrgID, projectID, tasks)
 }
 
 func (h *WSHandler) handleTaskReorder(ctx context.Context, conn *websocket.OrgConn, msg websocket.WSMessage) {

@@ -68,6 +68,7 @@ function isOnAuthPage(): boolean {
 
 // Track refresh in progress to avoid concurrent refreshes
 let refreshPromise: Promise<boolean> | null = null;
+let isRedirecting = false;
 
 async function tryRefreshToken(): Promise<boolean> {
   const refreshToken = getRefreshToken();
@@ -99,7 +100,8 @@ async function ensureValidToken(): Promise<void> {
   const success = await refreshPromise;
   if (!success) {
     clearAuth();
-    if (typeof window !== "undefined" && !isOnAuthPage()) {
+    if (typeof window !== "undefined" && !isOnAuthPage() && !isRedirecting) {
+      isRedirecting = true;
       window.location.href = "/login";
     }
   }
@@ -159,7 +161,8 @@ async function request<T>(
       return request<T>(path, options, true);
     }
     clearAuth();
-    if (typeof window !== "undefined" && !isOnAuthPage()) {
+    if (typeof window !== "undefined" && !isOnAuthPage() && !isRedirecting) {
+      isRedirecting = true;
       window.location.href = "/login";
     }
   }
@@ -224,6 +227,7 @@ function upload<T>(path: string, formData: FormData): Promise<T> {
 }
 
 async function downloadBlob(path: string, filename: string): Promise<void> {
+  await ensureValidToken();
   const token = getToken();
   const headers: Record<string, string> = {};
   if (token) headers["Authorization"] = `Bearer ${token}`;

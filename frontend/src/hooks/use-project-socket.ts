@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
@@ -33,6 +34,7 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
   const retryRef = useRef(0);
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const unmountedRef = useRef(false);
+  const qc = useQueryClient();
 
   const store = useProjectTaskStore;
 
@@ -88,7 +90,7 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        handleMessage(msg, pendingRef.current);
+        handleMessage(msg, pendingRef.current, qc, orgId, projectId);
       } catch {
         // ignore non-JSON
       }
@@ -100,6 +102,13 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
       store.getState().setSend(null);
       _send = null;
       wsRef.current = null;
+
+      // Drain pending requests so callers don't hang for 30s
+      for (const [id, p] of pendingRef.current) {
+        clearTimeout(p.timer);
+        p.reject(new Error("WebSocket disconnected"));
+        pendingRef.current.delete(id);
+      }
 
       if (unmountedRef.current) return;
       const delay = Math.min(2000 * Math.pow(2, retryRef.current), 30_000);
@@ -115,7 +124,7 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
     };
 
     wsRef.current = ws;
-  }, [orgId, projectId, send, store]);
+  }, [orgId, projectId, send, store, qc]);
 
   // ─── lifecycle ────────────────────────────────
 
@@ -145,6 +154,9 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
 function handleMessage(
   msg: { id?: string; action: string; payload?: any; error?: string; actor_id?: string },
   pending: Map<string, PendingReq>,
+  qc: ReturnType<typeof useQueryClient>,
+  orgId?: string,
+  projectId?: string,
 ) {
   const store = useProjectTaskStore.getState();
 
@@ -197,9 +209,15 @@ function handleMessage(
       store.bulkUpsertTasks(tasks);
       break;
     }
-    case "task:reordered":
-      // Trigger a re-fetch from the server for reordering
+    case "task:reordered": {
+      // Re-fetch task lists so positions reflect the new order
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      // Also invalidate task tree queries
+      if (orgId && projectId) {
+        qc.invalidateQueries({ queryKey: ["task-tree", orgId, projectId] });
+      }
       break;
+    }
 
     // ─── Checklist broadcasts ────
     case "checklist:created":
@@ -235,9 +253,16 @@ function handleMessage(
       break;
 
     // ─── Change request broadcasts ────
-    case "cr:approved":
-    case "cr:rejected":
-      // These modify task state too; components should re-fetch
+    case "cr:approved": {
+      const crTask = p.task ?? p;
+      if (crTask?.id) store.upsertTask(crTask);
+      qc.invalidateQueries({ queryKey: ["change-requests"], exact: false });
+      qc.invalidateQueries({ queryKey: ["tasks"], exact: false });
       break;
+    }
+    case "cr:rejected": {
+      qc.invalidateQueries({ queryKey: ["change-requests"], exact: false });
+      break;
+    }
   }
 }

@@ -292,8 +292,8 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	s.enqueueActivity(created.OrgID.String(), "task", created.ID.String(), "created", "", nil)
 	// Enqueue search index
 	s.enqueueSearchIndex("tasks", created)
-	// Publish real-time event
-	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), map[string]any{"project_id": created.ProjectID.String()})
+	// Publish real-time event — include task so org socket can update Zustand store
+	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), map[string]any{"project_id": created.ProjectID.String(), "task": created})
 
 	// Notify assigned users
 	for _, aid := range created.AssigneeIDs {
@@ -1094,8 +1094,9 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "updated", "", directChanges)
 	// Enqueue search index update
 	s.enqueueSearchIndex("tasks", updated)
-	// Publish real-time event — include project_id so frontend can invalidate project-dashboard
+	// Publish real-time event — include project_id + full task so frontend can update Zustand store
 	directChanges["project_id"] = task.ProjectID.String()
+	directChanges["task"] = updated
 	s.publishEvent(ctx, domain.EventTaskUpdated, task.OrgID.String(), task.ID.String(), directChanges)
 
 	// ── Notification triggers ──

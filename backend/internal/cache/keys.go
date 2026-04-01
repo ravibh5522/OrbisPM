@@ -6,7 +6,9 @@ import (
 	"github.com/google/uuid"
 )
 
-const keyPrefix = "cache:"
+// keyPrefix includes a version tag so schema changes automatically invalidate old keys.
+// Bump the version (v2 → v3 etc.) when the cached data structure changes.
+const keyPrefix = "cache:v2:"
 
 // ProjectTaskKey returns the Redis key for a single task in a project cache.
 func ProjectTaskKey(projectID, taskID uuid.UUID) string {

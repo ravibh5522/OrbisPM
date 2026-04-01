@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,10 @@ import (
 
 // ─── OrgConn ──────────────────────────────────
 
+// maxConsecutiveDrops is the number of consecutive dropped messages before
+// a connection is considered unresponsive and force-closed.
+const maxConsecutiveDrops = 10
+
 // OrgConn represents a single WebSocket connection scoped to an org.
 type OrgConn struct {
 	UserID    uuid.UUID
@@ -27,6 +32,8 @@ type OrgConn struct {
 
 	projectsMu sync.RWMutex
 	projects   map[uuid.UUID]struct{}
+
+	dropCount int32 // atomic: consecutive messages dropped due to full buffer
 }
 
 // NewOrgConn creates a new OrgConn with initialized channels.
@@ -159,6 +166,27 @@ func (h *OrgHub) ProjectRoomSize(orgID, projectID uuid.UUID) int {
 	return count
 }
 
+// trySend attempts to send data to a connection. Returns true if sent, false if dropped.
+// After maxConsecutiveDrops consecutive drops, force-closes the connection.
+func (h *OrgHub) trySend(conn *OrgConn, data []byte, action string) bool {
+	select {
+	case conn.send <- data:
+		atomic.StoreInt32(&conn.dropCount, 0)
+		return true
+	default:
+		drops := atomic.AddInt32(&conn.dropCount, 1)
+		log.Warn().Str("user_id", conn.UserID.String()).Str("action", action).
+			Int32("consecutive_drops", drops).Msg("ws: send buffer full, dropping message")
+		if drops >= maxConsecutiveDrops {
+			log.Warn().Str("user_id", conn.UserID.String()).
+				Msg("ws: too many consecutive drops — force-closing unresponsive connection")
+			conn.Conn.Close(websocket.StatusGoingAway, "send buffer overflow")
+			conn.Close()
+		}
+		return false
+	}
+}
+
 // SendTo sends a message to a specific connection.
 func (h *OrgHub) SendTo(conn *OrgConn, msg WSMessage) {
 	data, err := json.Marshal(msg)
@@ -166,11 +194,7 @@ func (h *OrgHub) SendTo(conn *OrgConn, msg WSMessage) {
 		log.Error().Err(err).Msg("ws: failed to marshal message")
 		return
 	}
-	select {
-	case conn.send <- data:
-	default:
-		log.Warn().Str("user_id", conn.UserID.String()).Msg("ws: send buffer full, dropping message")
-	}
+	h.trySend(conn, data, msg.Action)
 }
 
 // BroadcastOrg sends a message to all connections in an org.
@@ -188,11 +212,7 @@ func (h *OrgHub) BroadcastOrg(orgID uuid.UUID, msg WSMessage, exclude *OrgConn) 
 		if conn == exclude {
 			continue
 		}
-		select {
-		case conn.send <- data:
-		default:
-			log.Warn().Str("user_id", conn.UserID.String()).Str("action", msg.Action).Msg("ws: BroadcastOrg send buffer full, dropping message")
-		}
+		h.trySend(conn, data, msg.Action)
 	}
 }
 
@@ -214,11 +234,7 @@ func (h *OrgHub) BroadcastProject(orgID, projectID uuid.UUID, msg WSMessage, exc
 		if !conn.InProject(projectID) {
 			continue
 		}
-		select {
-		case conn.send <- data:
-		default:
-			log.Warn().Str("user_id", conn.UserID.String()).Str("action", msg.Action).Msg("ws: BroadcastProject send buffer full, dropping message")
-		}
+		h.trySend(conn, data, msg.Action)
 	}
 }
 
