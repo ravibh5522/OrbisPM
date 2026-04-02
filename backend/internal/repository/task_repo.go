@@ -382,7 +382,9 @@ func collectTasks(rows pgx.Rows) ([]*domain.Task, error) {
 }
 
 // ListByOrgAndAssignee returns tasks assigned to a user across all projects in an org.
-func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, limit, offset int) ([]*domain.Task, int, error) {
+func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error) {
+	limit := filter.Limit
+	offset := filter.Offset
 	if limit <= 0 {
 		limit = 50
 	}
@@ -390,27 +392,41 @@ func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID u
 		offset = 0
 	}
 
+	// Build dynamic WHERE clauses beyond the base assignee filter
+	args := []any{orgID, assigneeID}
+	conds := ""
+
+	if filter.Status != nil && *filter.Status != "" {
+		args = append(args, *filter.Status)
+		conds += fmt.Sprintf(" AND status = $%d", len(args))
+	}
+	if filter.Priority != nil && *filter.Priority != "" {
+		args = append(args, *filter.Priority)
+		conds += fmt.Sprintf(" AND priority = $%d", len(args))
+	}
+	if filter.Search != nil && *filter.Search != "" {
+		args = append(args, "%"+strings.ToLower(*filter.Search)+"%")
+		conds += fmt.Sprintf(" AND LOWER(title) LIKE $%d", len(args))
+	}
+
+	countSQL := `SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)` + conds
 	var total int
-	err := r.pool.QueryRow(ctx,
-		`SELECT COUNT(*) FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)`, orgID, assigneeID,
-	).Scan(&total)
-	if err != nil {
+	if err := r.pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count assigned tasks: %w", err)
 	}
 
-	rows, err := r.pool.Query(ctx,
-		`SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
+	args = append(args, limit, offset)
+	querySQL := `SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
-		 FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)
+		 FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)` + conds + `
 		 ORDER BY
 		   CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'todo' THEN 1 WHEN status = 'blocked' THEN 2 ELSE 3 END,
 		   CASE WHEN due_date IS NOT NULL AND due_date < NOW() THEN 0 ELSE 1 END,
 		   due_date NULLS LAST,
 		   created_at DESC
-		 LIMIT $3 OFFSET $4`,
-		orgID, assigneeID, limit, offset,
-	)
+		 LIMIT $` + fmt.Sprintf("%d", len(args)-1) + ` OFFSET $` + fmt.Sprintf("%d", len(args))
+	rows, err := r.pool.Query(ctx, querySQL, args...)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list assigned tasks: %w", err)
 	}

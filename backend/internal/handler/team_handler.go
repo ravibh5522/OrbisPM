@@ -129,6 +129,7 @@ func (h *TeamHandler) List(w http.ResponseWriter, r *http.Request) {
 			Offset: queryInt(r, "offset", 0),
 		},
 		Search:    queryStr(r, "search"),
+		Status:    queryStr(r, "status"),
 		SortBy:    queryStrDefault(r, "sort_by", "name"),
 		SortOrder: queryStrDefault(r, "sort_order", "asc"),
 	}

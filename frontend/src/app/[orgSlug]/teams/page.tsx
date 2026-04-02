@@ -1,11 +1,10 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/form-fields";
+import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-  Avatar,
   Card,
   ConfirmDialog,
   EmptyState,
@@ -15,22 +14,21 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import type { ListResponse } from "@/lib/api";
 import { api, ApiError } from "@/lib/api";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { Role, Team, TeamMember } from "@/types/domain";
+import type { Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  BarChart3,
   ChevronDown,
   Pencil,
   Plus,
   Search,
+  SlidersHorizontal,
   Trash2,
-  UserPlus,
   Users,
   X,
 } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
@@ -38,29 +36,33 @@ import { toast } from "sonner";
 interface TeamForm {
   name: string;
   description: string;
+  status?: string;
 }
 
-const PAGE_SIZE = 18; // 3 cols × 6 rows
+const PAGE_SIZE = 20;
 
 export default function TeamsPage() {
+  const router = useRouter();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgSlug = currentOrg?.slug || "";
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
   const [editTarget, setEditTarget] = useState<Team | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
-  const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [error, setError] = useState("");
   const { can } = usePermissions();
   const policies = useOrgPolicies();
 
-  // Server-side pagination, search, sort
+  // Server-side pagination, search, filter, sort state
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(0);
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [statusFilter, setStatusFilter] = useState("active");
+  const [showFilters, setShowFilters] = useState(false);
 
+  // Debounce search
   useEffect(() => {
     const t = setTimeout(() => {
       setDebouncedSearch(search);
@@ -77,6 +79,7 @@ export default function TeamsPage() {
       page,
       sortBy,
       sortOrder,
+      statusFilter,
       policies.canViewAllTeams,
     ],
     queryFn: () =>
@@ -84,6 +87,7 @@ export default function TeamsPage() {
         limit: PAGE_SIZE,
         offset: page * PAGE_SIZE,
         search: debouncedSearch || undefined,
+        status: statusFilter || undefined,
         sort_by: sortBy,
         sort_order: sortOrder,
         ...policies.teamListParams(),
@@ -102,28 +106,22 @@ export default function TeamsPage() {
     formState: { errors: formErrors },
   } = useForm<TeamForm>();
 
-  // Helper: update all cache entries whose key starts with ["teams"] immediately,
-  // then also invalidate so TanStack Query does a server sync in the background.
   const refreshTeamCaches = () => {
     qc.invalidateQueries({ queryKey: ["teams"] });
-    qc.invalidateQueries({ queryKey: ["teams-all", currentOrg!.id] });
+    qc.invalidateQueries({ queryKey: ["teams-all"] });
     qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
-    // Force an immediate refetch of any currently-mounted teams query
-    // (invalidateQueries can be skipped when the query's `enabled` gate is
-    // momentarily false due to policies.isLoading, so we also call refetchQueries)
+    qc.invalidateQueries({ queryKey: ["dashboard-stats", currentOrg!.id] });
     qc.refetchQueries({ queryKey: ["teams"], type: "active" });
   };
 
   const createMutation = useMutation({
     mutationFn: (data: TeamForm) => api.teams.create(currentOrg!.id, data),
     onSuccess: (newTeam: Team) => {
-      // 1. Optimistic: immediately prepend the new team to all matching list caches
       qc.setQueriesData<ListResponse<Team>>({ queryKey: ["teams"] }, (old) => {
         if (!old) return old;
         if (old.data?.some((t) => t.id === newTeam.id)) return old;
         return { ...old, data: [newTeam, ...old.data], total: old.total + 1 };
       });
-      // 2. Then sync with server
       refreshTeamCaches();
       setShowCreate(false);
       reset();
@@ -137,7 +135,6 @@ export default function TeamsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.teams.delete(currentOrg!.id, id),
     onSuccess: (_, deletedId: string) => {
-      // Optimistic: immediately remove from all matching list caches
       qc.setQueriesData<ListResponse<Team>>({ queryKey: ["teams"] }, (old) => {
         if (!old) return old;
         return {
@@ -157,9 +154,9 @@ export default function TeamsPage() {
       api.teams.update(currentOrg!.id, data.id, {
         name: data.name,
         description: data.description,
+        status: data.status as Team["status"],
       }),
     onSuccess: (updatedTeam: Team) => {
-      // Optimistic: immediately replace the matching team in all list caches
       qc.setQueriesData<ListResponse<Team>>({ queryKey: ["teams"] }, (old) => {
         if (!old) return old;
         return {
@@ -188,27 +185,28 @@ export default function TeamsPage() {
     setPage(0);
   };
 
-  const SortButton = ({ col, label }: { col: string; label: string }) => (
-    <button
+  const activeFilterCount = [
+    statusFilter && statusFilter !== "active" ? statusFilter : "",
+  ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setStatusFilter("active");
+    setSearch("");
+    setPage(0);
+  };
+
+  const SortIcon = ({ col }: { col: string }) => (
+    <ChevronDown
       className={cn(
-        "btn btn-xs btn-ghost gap-0.5",
-        sortBy === col && "btn-active",
+        "w-3 h-3 inline ml-0.5 transition-transform",
+        sortBy === col ? "opacity-100" : "opacity-30",
+        sortBy === col && sortOrder === "asc" && "rotate-180",
       )}
-      onClick={() => handleSort(col)}
-    >
-      {label}
-      <ChevronDown
-        className={cn(
-          "w-3 h-3 transition-transform",
-          sortBy === col ? "opacity-100" : "opacity-30",
-          sortBy === col && sortOrder === "asc" && "rotate-180",
-        )}
-      />
-    </button>
+    />
   );
 
   return (
-    <div>
+    <div className="flex flex-col min-h-[calc(100vh-8rem)]">
       <PageHeader
         title="Teams"
         description="Organize members into teams"
@@ -221,8 +219,8 @@ export default function TeamsPage() {
         }
       />
 
-      {/* Search + Sort + Count */}
-      <div className="flex items-center gap-2 mb-4">
+      {/* Search bar + Filter toggle */}
+      <div className="flex items-center gap-2 mb-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
           <input
@@ -242,41 +240,85 @@ export default function TeamsPage() {
           )}
         </div>
 
-        <div className="flex items-center gap-1">
-          <span className="text-xs text-base-content/50 mr-1">Sort:</span>
-          <SortButton col="name" label="Name" />
-          <SortButton col="created_at" label="Created" />
-        </div>
+        <button
+          className={cn(
+            "btn btn-sm gap-1",
+            showFilters ? "btn-primary" : "btn-ghost",
+          )}
+          onClick={() => setShowFilters(!showFilters)}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="badge badge-xs badge-secondary">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
 
         <div className="flex-1" />
+
         <span className="text-sm text-base-content/50">
           {total} team{total !== 1 ? "s" : ""}
         </span>
       </div>
 
-      {/* Content */}
+      {/* Filter bar */}
+      {showFilters && (
+        <div className="flex items-center gap-3 mb-3 p-3 bg-base-200 rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium whitespace-nowrap">
+              Status:
+            </span>
+            <select
+              className="select select-bordered select-sm"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="">All</option>
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+              <option value="closed">Closed</option>
+            </select>
+          </div>
+          {(statusFilter !== "active" || search) && (
+            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+              <X className="w-3 h-3" /> Reset
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Loading state */}
       {isLoading ? (
-        <div className="animate-pulse grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
+        <div className="animate-pulse space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="h-32 bg-base-200 rounded-xl border border-base-200"
+              className="h-14 bg-base-200 rounded-lg border border-base-200"
             />
           ))}
         </div>
       ) : teams.length === 0 ? (
         <EmptyState
           icon={<Users className="w-16 h-16" />}
-          title={debouncedSearch ? "No matching teams" : "No teams yet"}
+          title={
+            debouncedSearch || statusFilter !== "active"
+              ? "No matching teams"
+              : "No teams yet"
+          }
           description={
-            debouncedSearch
-              ? "Try a different search term"
-              : "Create your first team to organize members"
+            debouncedSearch || statusFilter !== "active"
+              ? "Try adjusting your search or filters"
+              : "Create your first team to get started"
           }
           action={
-            debouncedSearch ? (
-              <Button variant="ghost" onClick={() => setSearch("")}>
-                Clear search
+            debouncedSearch || statusFilter !== "active" ? (
+              <Button variant="ghost" onClick={clearFilters}>
+                Clear filters
               </Button>
             ) : can("teams", "create") ? (
               <Button onClick={() => setShowCreate(true)}>
@@ -286,73 +328,107 @@ export default function TeamsPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {teams.map((team: Team) => (
-            <Card key={team.id} compact>
-              <div
-                className="cursor-pointer"
-                onClick={() => setSelectedTeam(team)}
-              >
-                <div className="flex items-start justify-between">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-lg truncate">
-                      {team.name}
-                    </h3>
-                    {team.description && (
-                      <p className="text-sm text-base-content/60 mt-1 line-clamp-2">
-                        {team.description}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex gap-1 ml-2 shrink-0">
-                    <Link
-                      href={`/${orgSlug}/teams/${team.id}`}
-                      className="btn btn-ghost btn-xs btn-square"
-                      onClick={(e) => e.stopPropagation()}
-                      title="Team Dashboard"
-                    >
-                      <BarChart3 className="w-3 h-3" />
-                    </Link>
-                    {can("teams", "update") && (
-                      <button
-                        className="btn btn-ghost btn-xs btn-square"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditTarget(team);
-                        }}
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                    )}
-                    {can("teams", "delete") && (
-                      <button
-                        className="btn btn-ghost btn-xs btn-square"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setDeleteTarget(team);
-                        }}
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="flex items-center justify-between mt-3">
-                  <span className="text-sm text-base-content/50">
-                    Created {formatDate(team.created_at)}
-                  </span>
-                  <Link
-                    href={`/${orgSlug}/teams/${team.id}`}
-                    className="btn btn-ghost btn-xs gap-1"
-                    onClick={(e) => e.stopPropagation()}
+        <Card className="flex-1">
+          <div className="w-full overflow-x-auto">
+            <table className="table w-full">
+              <thead>
+                <tr>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("name")}
                   >
-                    <BarChart3 className="w-3 h-3" /> Dashboard
-                  </Link>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
+                    Team Name <SortIcon col="name" />
+                  </th>
+                  <th>Description</th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("status")}
+                  >
+                    Status <SortIcon col="status" />
+                  </th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("member_count")}
+                  >
+                    <Users className="w-3.5 h-3.5 inline mr-1" />
+                    Members <SortIcon col="member_count" />
+                  </th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("created_at")}
+                  >
+                    Created <SortIcon col="created_at" />
+                  </th>
+                  <th className="text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {teams.map((team: Team) => (
+                  <tr
+                    key={team.id}
+                    className="hover cursor-pointer"
+                    onClick={() => router.push(`/${orgSlug}/teams/${team.id}`)}
+                  >
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-primary shrink-0" />
+                        <span className="font-medium">{team.name}</span>
+                      </div>
+                    </td>
+                    <td>
+                      <span className="text-sm text-base-content/60 line-clamp-1 max-w-xs">
+                        {team.description || "\u2014"}
+                      </span>
+                    </td>
+                    <td>
+                      <span
+                        className={cn(
+                          "badge badge-sm",
+                          team.status === "active"
+                            ? "badge-success"
+                            : team.status === "closed"
+                              ? "badge-error"
+                              : "badge-ghost",
+                        )}
+                      >
+                        {statusLabel(team.status ?? "active")}
+                      </span>
+                    </td>
+                    <td>
+                      <span className="text-sm">{team.member_count ?? 0}</span>
+                    </td>
+                    <td className="text-sm text-base-content/60">
+                      {formatDate(team.created_at)}
+                    </td>
+                    <td>
+                      <div
+                        className="flex gap-1 justify-end"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        {can("teams", "update") && (
+                          <button
+                            className="btn btn-ghost btn-xs btn-square"
+                            onClick={() => setEditTarget(team)}
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
+                        {can("teams", "delete") && (
+                          <button
+                            className="btn btn-ghost btn-xs btn-square text-error"
+                            onClick={() => setDeleteTarget(team)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* Pagination */}
@@ -363,31 +439,6 @@ export default function TeamsPage() {
         pageSize={PAGE_SIZE}
         onPageChange={setPage}
       />
-
-      {/* Edit Modal */}
-      {editTarget && (
-        <EditTeamModal
-          team={editTarget}
-          onClose={() => {
-            setEditTarget(null);
-            setError("");
-          }}
-          onSubmit={(data) =>
-            updateMutation.mutate({ ...data, id: editTarget.id })
-          }
-          loading={updateMutation.isPending}
-          error={error}
-        />
-      )}
-
-      {/* Team Detail Modal */}
-      {selectedTeam && (
-        <TeamDetailModal
-          team={selectedTeam}
-          orgId={currentOrg!.id}
-          onClose={() => setSelectedTeam(null)}
-        />
-      )}
 
       {/* Create Modal */}
       <Modal
@@ -437,6 +488,22 @@ export default function TeamsPage() {
         </form>
       </Modal>
 
+      {/* Edit Modal */}
+      {editTarget && (
+        <EditTeamModal
+          team={editTarget}
+          onClose={() => {
+            setEditTarget(null);
+            setError("");
+          }}
+          onSubmit={(data) =>
+            updateMutation.mutate({ ...data, id: editTarget.id })
+          }
+          loading={updateMutation.isPending}
+          error={error}
+        />
+      )}
+
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -470,6 +537,7 @@ function EditTeamModal({
     defaultValues: {
       name: team.name,
       description: team.description || "",
+      status: team.status || "active",
     },
   });
 
@@ -492,6 +560,15 @@ function EditTeamModal({
           placeholder="Optional description"
           {...register("description")}
         />
+        <Select
+          label="Status"
+          options={[
+            { value: "active", label: "Active" },
+            { value: "archived", label: "Archived" },
+            { value: "closed", label: "Closed" },
+          ]}
+          {...register("status")}
+        />
         <div className="modal-action">
           <Button type="button" variant="ghost" onClick={onClose}>
             Cancel
@@ -501,227 +578,6 @@ function EditTeamModal({
           </Button>
         </div>
       </form>
-    </Modal>
-  );
-}
-
-function TeamDetailModal({
-  team,
-  orgId,
-  onClose,
-}: {
-  team: Team;
-  orgId: string;
-  onClose: () => void;
-}) {
-  const qc = useQueryClient();
-  const [addUserId, setAddUserId] = useState("");
-  const [addRole, setAddRole] = useState("member");
-  // Local role state to prevent dirty reads/writes on concurrent updates
-  const [localRoles, setLocalRoles] = useState<Record<string, string>>({});
-
-  const { data: members, isLoading } = useQuery({
-    queryKey: ["team-members", orgId, team.id],
-    queryFn: () => api.teamMembers.list(orgId, team.id),
-  });
-
-  const { data: orgMembers } = useQuery({
-    queryKey: ["org-members", orgId],
-    queryFn: () => api.members.list(orgId),
-  });
-
-  const { data: teamRoles } = useQuery({
-    queryKey: ["team-roles", orgId],
-    queryFn: () => api.permissions.roles.list(orgId, "team"),
-  });
-
-  // Sync local role state when server data arrives (only for roles not in flight)
-  useEffect(() => {
-    if (members?.data) {
-      setLocalRoles((prev) => {
-        const next = { ...prev };
-        for (const m of members.data) {
-          if (!(m.user_id in next)) next[m.user_id] = m.role;
-        }
-        return next;
-      });
-    }
-  }, [members?.data]);
-
-  // Keep addRole in sync with available options
-  useEffect(() => {
-    if (teamRoles && teamRoles.length > 0) {
-      const validSlugs = teamRoles.map((r: Role) => r.slug);
-      if (!validSlugs.includes(addRole)) {
-        setAddRole(validSlugs[0]);
-      }
-    }
-  }, [teamRoles, addRole]);
-
-  const addMutation = useMutation({
-    mutationFn: () =>
-      api.teamMembers.add(orgId, team.id, {
-        user_id: addUserId,
-        role: addRole,
-      }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
-      setAddUserId("");
-      setAddRole(teamRoles?.[0]?.slug ?? "member");
-      toast.success("Member added to team");
-    },
-  });
-
-  const removeMutation = useMutation({
-    mutationFn: (userId: string) =>
-      api.teamMembers.remove(orgId, team.id, userId),
-    onSuccess: (_, userId) => {
-      // Remove from local state
-      setLocalRoles((prev) => {
-        const next = { ...prev };
-        delete next[userId];
-        return next;
-      });
-      qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
-      toast.success("Member removed from team");
-    },
-  });
-
-  const updateRoleMutation = useMutation({
-    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
-      api.teamMembers.update(orgId, team.id, userId, { role }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["team-members", orgId, team.id] });
-      toast.success("Member role updated");
-    },
-  });
-
-  const handleRoleChange = (userId: string, newRole: string) => {
-    const prevRole = localRoles[userId];
-    // Optimistic update
-    setLocalRoles((prev) => ({ ...prev, [userId]: newRole }));
-    updateRoleMutation.mutate(
-      { userId, role: newRole },
-      {
-        onError: () => {
-          // Rollback on failure
-          setLocalRoles((prev) => ({ ...prev, [userId]: prevRole }));
-          toast.error("Failed to update role");
-        },
-      },
-    );
-  };
-
-  const memberIds = new Set(
-    (members?.data || []).map((m: TeamMember) => m.user_id),
-  );
-  const availableOrg = (orgMembers?.data || []).filter(
-    (m) => !memberIds.has(m.user_id),
-  );
-  const roleOptions = (teamRoles || []).map((r: Role) => ({
-    value: r.slug,
-    label: r.name + (r.is_system ? "" : " (Custom)"),
-  }));
-
-  return (
-    <Modal open onClose={onClose} title={team.name} className="max-w-lg">
-      {team.description && (
-        <p className="text-base-content/60 mb-4">{team.description}</p>
-      )}
-
-      <h4 className="font-semibold mb-2">
-        Members ({members?.data?.length ?? 0})
-      </h4>
-      {isLoading ? (
-        <span className="loading loading-spinner loading-sm" />
-      ) : !members?.data || members.data.length === 0 ? (
-        <p className="text-sm text-base-content/50 mb-4">No members yet</p>
-      ) : (
-        <ul className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-          {members.data.map((m: TeamMember) => (
-            <li
-              key={m.user_id}
-              className="flex items-center gap-2 text-sm group"
-            >
-              <Avatar
-                name={m.display_name || m.email || m.user_id.slice(0, 4)}
-                src={m.avatar_url}
-                size="xs"
-              />
-              <span className="text-xs flex-1 truncate">
-                {m.display_name || m.email || m.user_id.slice(0, 12)}
-              </span>
-              <select
-                className="select select-ghost select-xs capitalize"
-                value={localRoles[m.user_id] ?? m.role}
-                onChange={(e) => handleRoleChange(m.user_id, e.target.value)}
-                disabled={roleOptions.length === 0}
-              >
-                {roleOptions.map((r) => (
-                  <option key={r.value} value={r.value}>
-                    {r.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                className="btn btn-ghost btn-xs btn-square text-error opacity-0 group-hover:opacity-100"
-                onClick={() => removeMutation.mutate(m.user_id)}
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-
-      <div className="divider text-xs">Add Member</div>
-      <form
-        className="flex gap-2 items-end"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (addUserId) addMutation.mutate();
-        }}
-      >
-        <div className="flex-1">
-          <select
-            className="select select-bordered select-sm w-full"
-            value={addUserId}
-            onChange={(e) => setAddUserId(e.target.value)}
-          >
-            <option value="">Select org member...</option>
-            {availableOrg.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.display_name || m.email || m.user_id.slice(0, 16)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <select
-          className="select select-bordered select-sm"
-          value={addRole}
-          onChange={(e) => setAddRole(e.target.value)}
-        >
-          {roleOptions.map((r) => (
-            <option key={r.value} value={r.value}>
-              {r.label}
-            </option>
-          ))}
-        </select>
-        <Button
-          type="submit"
-          size="sm"
-          loading={addMutation.isPending}
-          disabled={!addUserId}
-        >
-          <UserPlus className="w-4 h-4" />
-        </Button>
-      </form>
-
-      <div className="modal-action">
-        <Button variant="ghost" onClick={onClose}>
-          Close
-        </Button>
-      </div>
     </Modal>
   );
 }

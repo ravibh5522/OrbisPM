@@ -294,6 +294,7 @@ func main() {
 	importSvc := service.NewImportService(importJobRepo, taskRepo, txm)
 	billingSvc := service.NewBillingService(planRepo, subRepo, txm)
 	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, projectMemberRepo, orgMemberRepo, txm)
+	dashboardSvc.SetRedis(rdb)
 	customRoleSvc := service.NewCustomRoleService(customRoleRepo, txm)
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
 

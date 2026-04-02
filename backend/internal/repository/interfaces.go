@@ -38,8 +38,9 @@ type TaskFilter struct {
 type TeamFilter struct {
 	ListFilter
 	Search    *string
+	Status    *string    // active, archived, closed
 	UserID    *uuid.UUID // when set, only teams where this user is a member
-	SortBy    string     // name, member_count, created_at
+	SortBy    string     // name, member_count, created_at, status
 	SortOrder string     // asc, desc
 }
 
@@ -140,7 +141,7 @@ type TaskRepository interface {
 	ListTreeByProject(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error)
 	ListTreeByProjectLight(ctx context.Context, projectID uuid.UUID, limit int) ([]*domain.Task, error)
 	List(ctx context.Context, projectID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error)
-	ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, limit, offset int) ([]*domain.Task, int, error)
+	ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID uuid.UUID, filter TaskFilter) ([]*domain.Task, int, error)
 	Update(ctx context.Context, tx pgx.Tx, task *domain.Task) (*domain.Task, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	CountByProject(ctx context.Context, projectID uuid.UUID) (int, error)

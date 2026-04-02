@@ -25,6 +25,7 @@ type CreateTeamParams struct {
 type UpdateTeamParams struct {
 	Name        *string `json:"name,omitempty" validate:"omitempty,min=2,max=100"`
 	Description *string `json:"description,omitempty"`
+	Status      *string `json:"status,omitempty" validate:"omitempty,oneof=active archived closed"`
 }
 
 type TeamService struct {
@@ -117,6 +118,9 @@ func (s *TeamService) Update(ctx context.Context, id uuid.UUID, params UpdateTea
 	}
 	if params.Description != nil {
 		team.Description = strings.TrimSpace(*params.Description)
+	}
+	if params.Status != nil {
+		team.Status = *params.Status
 	}
 
 	var updated *domain.Team

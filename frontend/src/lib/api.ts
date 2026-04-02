@@ -126,9 +126,10 @@ async function request<T>(
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Include org context for chat API calls
+  // Include org context on ALL authenticated API calls so the backend RLS
+  // TxManager can set app.current_org_id for every request, not just chat.
   const orgId = localStorage.getItem("current_org_id");
-  if (orgId && path.startsWith(`${V1}/chat`)) {
+  if (orgId) {
     headers["X-Org-ID"] = orgId;
   }
 
@@ -604,6 +605,7 @@ export const api = {
         limit?: number;
         offset?: number;
         search?: string;
+        status?: string;
         mine?: string;
         sort_by?: string;
         sort_order?: string;
@@ -1193,10 +1195,28 @@ export const api = {
   dashboard: {
     stats: (orgId: string) =>
       get<DashboardStats>(`${V1}/orgs/${orgId}/dashboard/stats`),
-    myTasks: (orgId: string, limit = 50, offset = 0) =>
-      get<ListResponse<Task>>(
-        `${V1}/orgs/${orgId}/dashboard/my-tasks?limit=${limit}&offset=${offset}`,
-      ),
+    myTasks: (
+      orgId: string,
+      params: {
+        limit?: number;
+        offset?: number;
+        status?: string;
+        priority?: string;
+        search?: string;
+      } = {},
+    ) => {
+      const { limit = 50, offset = 0, status, priority, search } = params;
+      const qs = new URLSearchParams({
+        limit: String(limit),
+        offset: String(offset),
+      });
+      if (status) qs.set("status", status);
+      if (priority) qs.set("priority", priority);
+      if (search) qs.set("search", search);
+      return get<ListResponse<Task>>(
+        `${V1}/orgs/${orgId}/dashboard/my-tasks?${qs.toString()}`,
+      );
+    },
   },
 
   // Analytics & Performance

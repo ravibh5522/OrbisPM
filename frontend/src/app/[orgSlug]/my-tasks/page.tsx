@@ -55,58 +55,61 @@ export default function MyTasksPage() {
   const [page, setPage] = useState(0);
   const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
 
+  // Reset page when filters change
+  const updateSearch = (v: string) => {
+    setSearch(v);
+    setPage(0);
+  };
+  const updateStatus = (v: string) => {
+    setStatusFilter(v);
+    setPage(0);
+  };
+  const updatePriority = (v: string) => {
+    setPriorityFilter(v);
+    setPage(0);
+  };
+
+  const queryParams = {
+    limit: 200,
+    offset: 0,
+    status: statusFilter || undefined,
+    priority: priorityFilter || undefined,
+    search: search.trim() || undefined,
+  };
+
   const { data: myTasks, isLoading } = useQuery({
-    queryKey: ["my-tasks", orgId],
-    queryFn: () => api.dashboard.myTasks(orgId, 500),
+    queryKey: ["my-tasks", orgId, queryParams],
+    queryFn: () => api.dashboard.myTasks(orgId, queryParams),
     enabled: !!orgId,
   });
 
-  const allTasks = myTasks?.data || [];
+  const allTasks: Task[] = myTasks?.data ?? [];
+  const total = myTasks?.total ?? 0;
 
-  // Client-side filtering
-  const filtered = useMemo(() => {
-    let result = allTasks;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      result = result.filter(
-        (t: Task) =>
-          t.title.toLowerCase().includes(q) ||
-          t.labels?.some((l) => l.toLowerCase().includes(q)),
-      );
-    }
-    if (statusFilter) {
-      result = result.filter((t: Task) => t.status === statusFilter);
-    }
-    if (priorityFilter) {
-      result = result.filter((t: Task) => t.priority === priorityFilter);
-    }
-    return result;
-  }, [allTasks, search, statusFilter, priorityFilter]);
+  // Client-side pagination for flat view only
+  const totalPages = Math.ceil(allTasks.length / PAGE_SIZE);
+  const paginated = allTasks.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  const total = filtered.length;
-  const totalPages = Math.ceil(total / PAGE_SIZE);
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
-
-  // Group for grouped view (uses all filtered, not paginated)
+  // Group for grouped view
   const grouped = useMemo(
     () => ({
-      in_progress: filtered.filter((t: Task) => t.status === "in_progress"),
-      todo: filtered.filter((t: Task) => t.status === "todo"),
-      blocked: filtered.filter((t: Task) => t.status === "blocked"),
-      done: filtered.filter((t: Task) => t.status === "done"),
+      in_progress: allTasks.filter((t: Task) => t.status === "in_progress"),
+      todo: allTasks.filter((t: Task) => t.status === "todo"),
+      blocked: allTasks.filter((t: Task) => t.status === "blocked"),
+      done: allTasks.filter((t: Task) => t.status === "done"),
     }),
-    [filtered],
+    [allTasks],
   );
 
   const overdue = useMemo(
     () =>
-      filtered.filter(
+      allTasks.filter(
         (t: Task) =>
           t.due_date &&
           new Date(t.due_date) < new Date() &&
           t.status !== "done",
       ),
-    [filtered],
+    [allTasks],
   );
 
   const activeFilterCount = [statusFilter, priorityFilter].filter(
@@ -161,7 +164,7 @@ export default function MyTasksPage() {
     <div>
       <PageHeader
         title="My Tasks"
-        description={`${allTasks.length} task${allTasks.length !== 1 ? "s" : ""} assigned to you`}
+        description={`${total} task${total !== 1 ? "s" : ""} assigned to you`}
       />
 
       {/* Quick stats */}
@@ -208,18 +211,12 @@ export default function MyTasksPage() {
             placeholder="Search tasks..."
             className="input input-bordered input-sm w-full pl-9"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => updateSearch(e.target.value)}
           />
           {search && (
             <button
               className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
-              onClick={() => {
-                setSearch("");
-                setPage(0);
-              }}
+              onClick={() => updateSearch("")}
             >
               <X className="w-3 h-3" />
             </button>
@@ -271,10 +268,7 @@ export default function MyTasksPage() {
             <select
               className="select select-bordered select-sm"
               value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(0);
-              }}
+              onChange={(e) => updateStatus(e.target.value)}
             >
               <option value="">All</option>
               <option value="todo">Todo</option>
@@ -290,10 +284,7 @@ export default function MyTasksPage() {
             <select
               className="select select-bordered select-sm"
               value={priorityFilter}
-              onChange={(e) => {
-                setPriorityFilter(e.target.value);
-                setPage(0);
-              }}
+              onChange={(e) => updatePriority(e.target.value)}
             >
               <option value="">All</option>
               <option value="critical">Critical</option>
@@ -310,7 +301,7 @@ export default function MyTasksPage() {
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {allTasks.length === 0 ? (
         <EmptyState
           icon={<ListTodo className="w-16 h-16" />}
           title={

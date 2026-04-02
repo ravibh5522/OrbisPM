@@ -320,6 +320,12 @@ services:
       zitadel:
         condition: service_healthy
         required: false
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   kong:
     build:
@@ -338,9 +344,16 @@ services:
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
+      # Use Docker's embedded DNS so Kong resolves service names like "api" correctly.
+      KONG_DNS_RESOLVER: "127.0.0.11"
+      # Reduce stale DNS TTL so failed lookups are retried quickly after a
+      # service restarts (default is 4s; 1s recovers faster).
+      KONG_DNS_STALE_TTL: "1"
     depends_on:
-      - api
-      - messaging-service
+      api:
+        condition: service_healthy
+      messaging-service:
+        condition: service_started
 
   email-service:
     build:

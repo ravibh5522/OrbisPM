@@ -12,6 +12,7 @@ type Team struct {
 	OrgID         uuid.UUID  `json:"org_id"`
 	Name          string     `json:"name"`
 	Description   string     `json:"description,omitempty"`
+	Status        string     `json:"status"`
 	ManagerID     *uuid.UUID `json:"manager_id,omitempty"`
 	IsAutoManaged bool       `json:"is_auto_managed"`
 	AutoSource    string     `json:"auto_source,omitempty"`

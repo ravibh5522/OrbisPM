@@ -33,11 +33,16 @@ export interface OrgMember {
 
 export type OrgRole = "owner" | "admin" | "member" | "viewer" | "billing_admin";
 
+export type TeamStatus = "active" | "archived" | "closed";
+
 export interface Team {
   id: string;
   org_id: string;
   name: string;
   description?: string;
+  status: TeamStatus;
+  member_count?: number;
+  manager_name?: string;
   created_at: string;
   updated_at: string;
 }

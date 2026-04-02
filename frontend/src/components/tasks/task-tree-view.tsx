@@ -31,7 +31,7 @@ import {
   Plus,
   Trash2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Task Tree View — Collapsible hierarchical tree with inline editing
@@ -73,18 +73,35 @@ export function TaskTreeView({
     changes: Partial<Task>;
   } | null>(null);
 
+  // Track last fetch time so re-mounting (tab switch) doesn't re-fetch within 30s.
+  const lastFetchedAt = useRef<number>(0);
+  const TREE_STALE_MS = 30_000;
+
   // Fetch tree via WS
-  const fetchTree = useCallback(async () => {
-    if (!send) return;
-    try {
-      const data = await send("task:tree", {});
-      useProjectTaskStore.getState().setTaskTree(data || []);
-    } catch (e) {
-      console.error("[WS] task:tree failed", e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [send]);
+  const fetchTree = useCallback(
+    async (force = false) => {
+      if (!send) return;
+      // Skip if data is fresh and we have results already
+      if (
+        !force &&
+        taskTree.length > 0 &&
+        Date.now() - lastFetchedAt.current < TREE_STALE_MS
+      ) {
+        setIsLoading(false);
+        return;
+      }
+      try {
+        const data = await send("task:tree", {});
+        useProjectTaskStore.getState().setTaskTree(data || []);
+        lastFetchedAt.current = Date.now();
+      } catch (e) {
+        console.error("[WS] task:tree failed", e);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [send, taskTree.length],
+  );
 
   useEffect(() => {
     fetchTree();

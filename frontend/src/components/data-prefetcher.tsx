@@ -23,7 +23,13 @@ export function DataPrefetcher() {
   useEffect(() => {
     // Re-run when org OR role changes (e.g. user promoted from viewer to admin)
     const cacheKey = `${orgId}:${orgRole}`;
-    if (!orgId || ranForKey.current === cacheKey || policies.isLoading) return;
+    if (
+      !orgId ||
+      !orgRole ||
+      ranForKey.current === cacheKey ||
+      policies.isLoading
+    )
+      return;
     ranForKey.current = cacheKey;
 
     const forceRefresh = isInitialLoad.current;

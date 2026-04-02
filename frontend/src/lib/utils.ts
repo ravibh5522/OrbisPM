@@ -38,25 +38,36 @@ export function slugify(text: string): string {
 
 export function statusColor(status: string): string {
   switch (status) {
-    case "todo": return "badge-ghost";
-    case "in_progress": return "badge-info";
-    case "done": return "badge-success";
-    case "blocked": return "badge-error";
-    default: return "badge-ghost";
+    case "todo":
+      return "badge-ghost";
+    case "in_progress":
+      return "badge-info";
+    case "done":
+      return "badge-success";
+    case "blocked":
+      return "badge-error";
+    default:
+      return "badge-ghost";
   }
 }
 
 export function priorityColor(priority: string): string {
   switch (priority) {
-    case "critical": return "badge-error";
-    case "high": return "badge-warning";
-    case "medium": return "badge-info";
-    case "low": return "badge-ghost";
-    default: return "badge-ghost";
+    case "critical":
+      return "badge-error";
+    case "high":
+      return "badge-warning";
+    case "medium":
+      return "badge-info";
+    case "low":
+      return "badge-ghost";
+    default:
+      return "badge-ghost";
   }
 }
 
-export function statusLabel(status: string): string {
+export function statusLabel(status: string | undefined | null): string {
+  if (!status) return "";
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 

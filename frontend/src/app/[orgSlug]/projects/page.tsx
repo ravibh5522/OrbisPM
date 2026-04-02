@@ -65,7 +65,7 @@ export default function ProjectsPage() {
   const [page, setPage] = useState(0);
   const [sortBy, setSortBy] = useState("name");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
-  const [statusFilter, setStatusFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("active");
   const [teamFilter, setTeamFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
 
@@ -248,10 +248,13 @@ export default function ProjectsPage() {
     setPage(0);
   };
 
-  const activeFilterCount = [statusFilter, teamFilter].filter(Boolean).length;
+  const activeFilterCount = [
+    statusFilter && statusFilter !== "active" ? statusFilter : "",
+    teamFilter,
+  ].filter(Boolean).length;
 
   const clearFilters = () => {
-    setStatusFilter("");
+    setStatusFilter("active");
     setTeamFilter("");
     setSearch("");
     setPage(0);
@@ -412,17 +415,17 @@ export default function ProjectsPage() {
         <EmptyState
           icon={<FolderKanban className="w-16 h-16" />}
           title={
-            debouncedSearch || statusFilter || teamFilter
+            debouncedSearch || (statusFilter && statusFilter !== "active") || teamFilter
               ? "No matching projects"
               : "No projects yet"
           }
           description={
-            debouncedSearch || statusFilter || teamFilter
+            debouncedSearch || (statusFilter && statusFilter !== "active") || teamFilter
               ? "Try adjusting your search or filters"
               : "Create your first project to get started"
           }
           action={
-            debouncedSearch || statusFilter || teamFilter ? (
+            debouncedSearch || (statusFilter && statusFilter !== "active") || teamFilter ? (
               <Button variant="ghost" onClick={clearFilters}>
                 Clear filters
               </Button>

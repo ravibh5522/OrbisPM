@@ -8,6 +8,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -61,6 +62,9 @@ func (h *DashboardHandler) GetStats(w http.ResponseWriter, r *http.Request) {
 // @Param orgId path string true "Organization ID" format(uuid)
 // @Param limit query int false "Limit" default(50)
 // @Param offset query int false "Offset" default(0)
+// @Param status query string false "Filter by status"
+// @Param priority query string false "Filter by priority"
+// @Param search query string false "Search by title"
 // @Success 200 {object} domain.ListResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /orgs/{orgId}/dashboard/my-tasks [get]
@@ -74,7 +78,20 @@ func (h *DashboardHandler) MyTasks(w http.ResponseWriter, r *http.Request) {
 		limit = 50
 	}
 
-	tasks, total, err := h.taskSvc.ListMyTasks(r.Context(), orgID, userID, limit, offset)
+	filter := repository.TaskFilter{
+		ListFilter: repository.ListFilter{Limit: limit, Offset: offset},
+	}
+	if s := r.URL.Query().Get("status"); s != "" {
+		filter.Status = &s
+	}
+	if p := r.URL.Query().Get("priority"); p != "" {
+		filter.Priority = &p
+	}
+	if q := r.URL.Query().Get("search"); q != "" {
+		filter.Search = &q
+	}
+
+	tasks, total, err := h.taskSvc.ListMyTasks(r.Context(), orgID, userID, filter)
 	if err != nil {
 		Error(w, r, err)
 		return

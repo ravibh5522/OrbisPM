@@ -5,33 +5,46 @@ import {
   Avatar,
   Badge,
   Card,
+  ConfirmDialog,
   LoadingPage,
   PageHeader,
 } from "@/components/ui/shared";
+import { Button } from "@/components/ui/button";
+import type { ListResponse } from "@/lib/api";
 import { api } from "@/lib/api";
 import {
+  cn,
+  formatDate,
   formatRelative,
   priorityColor,
   statusColor,
   statusLabel,
 } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { Task, Team, TeamDashboardStats } from "@/types/domain";
-import { useQuery } from "@tanstack/react-query";
+import { useTeamPolicies } from "@/hooks/use-policies";
+import type { Role, Task, Team, TeamDashboardStats, TeamMember } from "@/types/domain";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
   CalendarDays,
+  ChevronDown,
   Clock,
   FolderKanban,
   ListTodo,
+  Plus,
+  Search,
+  Trash2,
   TrendingDown,
   TrendingUp,
+  UserPlus,
   Users,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { use, useCallback, useMemo, useState } from "react";
+import { use, useCallback, useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 /* ── Stat Card ── */
 function StatCard({
@@ -98,9 +111,9 @@ export default function TeamDashboardPage({
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgId = currentOrg?.id || "";
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"overview" | "calendar">(
-    "overview",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "overview" | "calendar" | "members"
+  >("overview");
 
   // Calendar state
   const calInitRange = useMemo(() => getDateRange(new Date(), "month"), []);
@@ -215,12 +228,24 @@ export default function TeamDashboardPage({
         </button>
         <button
           role="tab"
+          className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`}
+          onClick={() => setActiveTab("members")}
+        >
+          <Users className="w-3.5 h-3.5 mr-1" /> Members
+        </button>
+        <button
+          role="tab"
           className={`tab tab-sm ${activeTab === "calendar" ? "tab-active" : ""}`}
           onClick={() => setActiveTab("calendar")}
         >
           <CalendarDays className="w-3.5 h-3.5 mr-1" /> Calendar
         </button>
       </div>
+
+      {/* Members Tab */}
+      {activeTab === "members" && (
+        <MembersTab orgId={orgId} orgSlug={orgSlug} teamId={teamId} />
+      )}
 
       {/* Calendar Tab */}
       {activeTab === "calendar" && (
@@ -481,6 +506,487 @@ export default function TeamDashboardPage({
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════
+   Members Tab — full CRUD with RBAC
+   ════════════════════════════════════════════════════════ */
+
+const MEMBER_PAGE_SIZE = 20;
+
+function MembersTab({
+  orgId,
+  orgSlug,
+  teamId,
+}: {
+  orgId: string;
+  orgSlug: string;
+  teamId: string;
+}) {
+  const qc = useQueryClient();
+  const policies = useTeamPolicies(teamId);
+
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("");
+  const [page, setPage] = useState(0);
+  const [sortBy, setSortBy] = useState("display_name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addUserId, setAddUserId] = useState("");
+  const [addRole, setAddRole] = useState("");
+  const [removeTarget, setRemoveTarget] = useState<TeamMember | null>(null);
+  const [localRoles, setLocalRoles] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Team members (paginated)
+  const { data: membersResponse, isLoading } = useQuery({
+    queryKey: [
+      "team-members",
+      orgId,
+      teamId,
+      debouncedSearch,
+      roleFilter,
+      page,
+      sortBy,
+      sortOrder,
+    ],
+    queryFn: () =>
+      api.teamMembers.list(orgId, teamId, {
+        limit: MEMBER_PAGE_SIZE,
+        offset: page * MEMBER_PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        role: roleFilter || undefined,
+        sort_by: sortBy,
+        sort_order: sortOrder,
+      }),
+    enabled: !!orgId,
+  });
+
+  const membersList = membersResponse?.data || [];
+  const totalMembers = membersResponse?.total || 0;
+  const totalPages = Math.ceil(totalMembers / MEMBER_PAGE_SIZE);
+
+  // Org members (for add dropdown — exclude existing team members)
+  const { data: orgMembers } = useQuery({
+    queryKey: ["org-members", orgId],
+    queryFn: () => api.members.list(orgId),
+    enabled: !!orgId && showAddForm,
+    staleTime: 5 * 60_000,
+  });
+
+  // Team roles
+  const { data: teamRoles } = useQuery({
+    queryKey: ["team-roles", orgId],
+    queryFn: () => api.permissions.roles.list(orgId, "team"),
+    enabled: !!orgId,
+    staleTime: 5 * 60_000,
+  });
+
+  const roleOptions = (teamRoles || []).map((r: Role) => ({
+    value: r.slug,
+    label: r.name + (r.is_system ? "" : " (Custom)"),
+  }));
+
+  // Keep addRole in sync with available options
+  useEffect(() => {
+    if (teamRoles && teamRoles.length > 0 && !addRole) {
+      setAddRole(teamRoles[0].slug);
+    }
+  }, [teamRoles, addRole]);
+
+  // Sync local role state
+  useEffect(() => {
+    if (membersList.length > 0) {
+      setLocalRoles((prev) => {
+        const next = { ...prev };
+        for (const m of membersList) {
+          if (!(m.user_id in next)) next[m.user_id] = m.role;
+        }
+        return next;
+      });
+    }
+  }, [membersList]);
+
+  const refreshMembers = () => {
+    qc.invalidateQueries({ queryKey: ["team-members", orgId, teamId] });
+    qc.invalidateQueries({ queryKey: ["team-dashboard", orgId, teamId] });
+    qc.invalidateQueries({ queryKey: ["teams"] });
+    qc.refetchQueries({
+      queryKey: ["team-members", orgId, teamId],
+      type: "active",
+    });
+  };
+
+  const addMutation = useMutation({
+    mutationFn: () =>
+      api.teamMembers.add(orgId, teamId, {
+        user_id: addUserId,
+        role: addRole,
+      }),
+    onSuccess: () => {
+      refreshMembers();
+      setAddUserId("");
+      setAddRole(teamRoles?.[0]?.slug ?? "");
+      setShowAddForm(false);
+      toast.success("Member added to team");
+    },
+  });
+
+  const removeMutation = useMutation({
+    mutationFn: (userId: string) =>
+      api.teamMembers.remove(orgId, teamId, userId),
+    onSuccess: (_, userId) => {
+      setLocalRoles((prev) => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      refreshMembers();
+      setRemoveTarget(null);
+      toast.success("Member removed from team");
+    },
+  });
+
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, role }: { userId: string; role: string }) =>
+      api.teamMembers.update(orgId, teamId, userId, { role }),
+    onSuccess: () => {
+      refreshMembers();
+      toast.success("Member role updated");
+    },
+  });
+
+  const handleRoleChange = (userId: string, newRole: string) => {
+    const prevRole = localRoles[userId];
+    setLocalRoles((prev) => ({ ...prev, [userId]: newRole }));
+    updateRoleMutation.mutate(
+      { userId, role: newRole },
+      {
+        onError: () => {
+          setLocalRoles((prev) => ({ ...prev, [userId]: prevRole }));
+          toast.error("Failed to update role");
+        },
+      },
+    );
+  };
+
+  const handleSort = (col: string) => {
+    if (sortBy === col) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(col);
+      setSortOrder("asc");
+    }
+    setPage(0);
+  };
+
+  const memberIds = new Set(membersList.map((m: TeamMember) => m.user_id));
+  const availableOrg = (orgMembers?.data || []).filter(
+    (m) => !memberIds.has(m.user_id),
+  );
+
+  const SortIcon = ({ col }: { col: string }) => (
+    <ChevronDown
+      className={cn(
+        "w-3 h-3 inline ml-0.5 transition-transform",
+        sortBy === col ? "opacity-100" : "opacity-30",
+        sortBy === col && sortOrder === "asc" && "rotate-180",
+      )}
+    />
+  );
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <input
+            type="text"
+            placeholder="Search members..."
+            className="input input-bordered input-sm w-full pl-9"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button
+              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
+              onClick={() => setSearch("")}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+
+        {roleOptions.length > 0 && (
+          <select
+            className="select select-bordered select-sm"
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter(e.target.value);
+              setPage(0);
+            }}
+          >
+            <option value="">All roles</option>
+            {roleOptions.map((r: { value: string; label: string }) => (
+              <option key={r.value} value={r.value}>
+                {r.label}
+              </option>
+            ))}
+          </select>
+        )}
+
+        <div className="flex-1" />
+
+        <span className="text-sm text-base-content/50">
+          {totalMembers} member{totalMembers !== 1 ? "s" : ""}
+        </span>
+
+        {policies.canManageMembers && (
+          <Button size="sm" onClick={() => setShowAddForm(true)}>
+            <UserPlus className="w-4 h-4" /> Add Member
+          </Button>
+        )}
+      </div>
+
+      {/* Add member form */}
+      {showAddForm && policies.canManageMembers && (
+        <Card className="mb-4">
+          <form
+            className="flex items-end gap-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (addUserId) addMutation.mutate();
+            }}
+          >
+            <div className="flex-1">
+              <label className="label">
+                <span className="label-text text-sm font-medium">
+                  Select Org Member
+                </span>
+              </label>
+              <select
+                className="select select-bordered select-sm w-full"
+                value={addUserId}
+                onChange={(e) => setAddUserId(e.target.value)}
+              >
+                <option value="">Choose a member...</option>
+                {availableOrg.map((m) => (
+                  <option key={m.user_id} value={m.user_id}>
+                    {m.display_name || m.email || m.user_id.slice(0, 16)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">
+                <span className="label-text text-sm font-medium">Role</span>
+              </label>
+              <select
+                className="select select-bordered select-sm"
+                value={addRole}
+                onChange={(e) => setAddRole(e.target.value)}
+              >
+                {roleOptions.map((r: { value: string; label: string }) => (
+                  <option key={r.value} value={r.value}>
+                    {r.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              loading={addMutation.isPending}
+              disabled={!addUserId}
+            >
+              <Plus className="w-4 h-4" /> Add
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowAddForm(false)}
+            >
+              Cancel
+            </Button>
+          </form>
+        </Card>
+      )}
+
+      {/* Members table */}
+      {isLoading ? (
+        <div className="animate-pulse space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-14 bg-base-200 rounded-lg border border-base-200"
+            />
+          ))}
+        </div>
+      ) : membersList.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-base-content/50">
+          <Users className="w-12 h-12 mb-3 opacity-30" />
+          <p className="text-sm">No members found</p>
+          {policies.canManageMembers && !showAddForm && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-2"
+              onClick={() => setShowAddForm(true)}
+            >
+              <UserPlus className="w-4 h-4" /> Add first member
+            </Button>
+          )}
+        </div>
+      ) : (
+        <Card>
+          <div className="w-full overflow-x-auto">
+            <table className="table w-full">
+              <thead>
+                <tr>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("display_name")}
+                  >
+                    Member <SortIcon col="display_name" />
+                  </th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("email")}
+                  >
+                    Email <SortIcon col="email" />
+                  </th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("role")}
+                  >
+                    Role <SortIcon col="role" />
+                  </th>
+                  <th
+                    className="cursor-pointer select-none"
+                    onClick={() => handleSort("joined_at")}
+                  >
+                    Joined <SortIcon col="joined_at" />
+                  </th>
+                  {policies.canManageMembers && (
+                    <th className="text-right">Actions</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {membersList.map((m: TeamMember) => (
+                  <tr key={m.user_id} className="hover">
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <Avatar
+                          name={
+                            m.display_name || m.email || m.user_id.slice(0, 4)
+                          }
+                          src={m.avatar_url}
+                          size="sm"
+                        />
+                        <span className="font-medium text-sm">
+                          {m.display_name ||
+                            m.email?.split("@")[0] ||
+                            m.user_id.slice(0, 12)}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="text-sm text-base-content/60">
+                      {m.email || "\u2014"}
+                    </td>
+                    <td>
+                      {policies.canManageMembers ? (
+                        <select
+                          className="select select-ghost select-xs capitalize"
+                          value={localRoles[m.user_id] ?? m.role}
+                          onChange={(e) =>
+                            handleRoleChange(m.user_id, e.target.value)
+                          }
+                          disabled={roleOptions.length === 0}
+                        >
+                          {roleOptions.map(
+                            (r: { value: string; label: string }) => (
+                              <option key={r.value} value={r.value}>
+                                {r.label}
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      ) : (
+                        <span className="badge badge-sm badge-outline capitalize">
+                          {statusLabel(m.role)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-sm text-base-content/60">
+                      {formatDate(m.joined_at)}
+                    </td>
+                    {policies.canManageMembers && (
+                      <td>
+                        <div className="flex gap-1 justify-end">
+                          <button
+                            className="btn btn-ghost btn-xs btn-square text-error"
+                            onClick={() => setRemoveTarget(m)}
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <button
+            className="btn btn-sm"
+            disabled={page === 0}
+            onClick={() => setPage(page - 1)}
+          >
+            Previous
+          </button>
+          <span className="text-sm text-base-content/60">
+            Page {page + 1} of {totalPages}
+          </span>
+          <button
+            className="btn btn-sm"
+            disabled={page >= totalPages - 1}
+            onClick={() => setPage(page + 1)}
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {/* Remove confirmation */}
+      <ConfirmDialog
+        open={!!removeTarget}
+        onClose={() => setRemoveTarget(null)}
+        onConfirm={() =>
+          removeTarget && removeMutation.mutate(removeTarget.user_id)
+        }
+        title="Remove Member"
+        message={`Remove "${removeTarget?.display_name || removeTarget?.email || "this member"}" from the team?`}
+        loading={removeMutation.isPending}
+      />
     </div>
   );
 }

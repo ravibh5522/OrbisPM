@@ -51,6 +51,14 @@ const MERGE_TAGS = [
   },
 ];
 
+/** Detect whether the current DaisyUI/CSS theme is dark-mode. */
+function isDarkTheme(): boolean {
+  if (typeof window === "undefined") return false;
+  const theme = document.documentElement.getAttribute("data-theme") ?? "";
+  if (theme) return theme.includes("dark");
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+}
+
 export interface EmailEditorWrapperProps {
   /** Initial HTML to load into the editor. */
   initialHtml?: string;
@@ -62,10 +70,16 @@ export interface EmailEditorWrapperProps {
 /**
  * TinyMCE-based email template editor hook.
  * Returns the Editor component JSX and an exportTemplate function.
+ *
+ * IMPORTANT: Call this hook inside a component that mounts only when the
+ * editor should be visible (e.g. inside a modal gated by a boolean). Calling
+ * it unconditionally at a parent level means onInit fires with an empty
+ * initialHtml before the user picks a template.
  */
 export function useEmailEditor(props: EmailEditorWrapperProps = {}) {
   const editorRef = useRef<TinyMCEEditor | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const dark = isDarkTheme();
 
   const exportTemplate = useCallback((): Promise<{ html: string }> => {
     return new Promise((resolve, reject) => {
@@ -84,6 +98,10 @@ export function useEmailEditor(props: EmailEditorWrapperProps = {}) {
     }
   }, []);
 
+  const contentStyle = dark
+    ? "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; padding: 16px; background-color: #1e1e2e; color: #cdd6f4; } img { max-width: 100%; height: auto; }"
+    : "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; padding: 16px; background-color: #ffffff; color: #18181b; } img { max-width: 100%; height: auto; }";
+
   const EditorComponent = (
     <Editor
       tinymceScriptSrc="/tinymce/tinymce.min.js"
@@ -98,6 +116,8 @@ export function useEmailEditor(props: EmailEditorWrapperProps = {}) {
       licenseKey="gpl"
       init={{
         height: props.minHeight ?? 600,
+        skin: dark ? "oxide-dark" : "oxide",
+        content_css: dark ? "dark" : "default",
         menubar: "file edit view insert format table",
         plugins: [
           "advlist",
@@ -123,8 +143,7 @@ export function useEmailEditor(props: EmailEditorWrapperProps = {}) {
           "forecolor backcolor | alignleft aligncenter alignright alignjustify | " +
           "bullist numlist outdent indent | link image table | mergetags | " +
           "removeformat | code fullscreen preview | help",
-        content_style:
-          "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 14px; padding: 16px; } img { max-width: 100%; height: auto; }",
+        content_style: contentStyle,
         setup: (editor) => {
           // Custom merge tags dropdown menu
           editor.ui.registry.addMenuButton("mergetags", {

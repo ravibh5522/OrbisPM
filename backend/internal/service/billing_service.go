@@ -2,12 +2,14 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 	"github.com/stripe/stripe-go/v82"
 	"github.com/stripe/stripe-go/v82/subscription"
@@ -221,6 +223,9 @@ func (s *BillingService) HandlePaymentFailed(ctx context.Context, inv *stripe.In
 	return nil
 }
 
+// dashboardCacheTTL is how long dashboard stats are cached in Redis.
+const dashboardCacheTTL = 30 * time.Second
+
 // DashboardService handles dashboard/analytics queries.
 type DashboardService struct {
 	taskRepo       repository.TaskRepository
@@ -228,6 +233,7 @@ type DashboardService struct {
 	projectMemRepo repository.ProjectMemberRepository
 	orgMemberRepo  repository.OrgMemberRepository
 	txm            *repository.TxManager
+	rdb            *redis.Client
 }
 
 // NewDashboardService creates a new DashboardService.
@@ -247,6 +253,11 @@ func NewDashboardService(
 	}
 }
 
+// SetRedis injects the optional Redis client for response caching.
+func (s *DashboardService) SetRedis(rdb *redis.Client) {
+	s.rdb = rdb
+}
+
 // DashboardStats holds aggregated dashboard statistics.
 type DashboardStats struct {
 	TotalProjects   int            `json:"total_projects"`
@@ -261,7 +272,19 @@ type DashboardStats struct {
 
 // GetStats returns aggregated dashboard statistics for an organization (filtered by user's role).
 // If user is org admin/owner, shows all projects. If org member, shows only accessible projects.
+// Results are cached in Redis for dashboardCacheTTL to reduce DB load on busy dashboards.
 func (s *DashboardService) GetStats(ctx context.Context, orgID, userID uuid.UUID) (*DashboardStats, error) {
+	// ── Redis cache read ──────────────────────────────────────────────────────
+	if s.rdb != nil {
+		cacheKey := fmt.Sprintf("dash:stats:%s:%s", orgID, userID)
+		if cached, err := s.rdb.Get(ctx, cacheKey).Bytes(); err == nil {
+			var stats DashboardStats
+			if jsonErr := json.Unmarshal(cached, &stats); jsonErr == nil {
+				return &stats, nil
+			}
+		}
+	}
+
 	pool := s.txm.Pool()
 	stats := &DashboardStats{
 		TasksByStatus:   make(map[string]int),
@@ -436,6 +459,16 @@ func (s *DashboardService) GetStats(ctx context.Context, orgID, userID uuid.UUID
 	}
 	if err := rows3.Err(); err != nil {
 		return nil, fmt.Errorf("recent tasks rows: %w", err)
+	}
+
+	// ── Redis cache write ─────────────────────────────────────────────────────
+	if s.rdb != nil {
+		cacheKey := fmt.Sprintf("dash:stats:%s:%s", orgID, userID)
+		if data, jsonErr := json.Marshal(stats); jsonErr == nil {
+			if setErr := s.rdb.Set(ctx, cacheKey, data, dashboardCacheTTL).Err(); setErr != nil {
+				log.Warn().Err(setErr).Msg("failed to cache dashboard stats")
+			}
+		}
 	}
 
 	return stats, nil

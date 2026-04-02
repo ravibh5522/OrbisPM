@@ -433,8 +433,8 @@ func (s *TaskService) List(ctx context.Context, projectID uuid.UUID, filter repo
 }
 
 // ListMyTasks returns tasks assigned to the user across all projects in the org.
-func (s *TaskService) ListMyTasks(ctx context.Context, orgID, userID uuid.UUID, limit, offset int) ([]*domain.Task, int, error) {
-	return s.taskRepo.ListByOrgAndAssignee(ctx, orgID, userID, limit, offset)
+func (s *TaskService) ListMyTasks(ctx context.Context, orgID, userID uuid.UUID, filter repository.TaskFilter) ([]*domain.Task, int, error) {
+	return s.taskRepo.ListByOrgAndAssignee(ctx, orgID, userID, filter)
 }
 
 // BulkCreateParams defines the shape for a bulk create request.

@@ -5,6 +5,15 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: true },
+  experimental: {
+    // Tree-shake large icon/chart libraries — reduces initial bundle ~30-50 KB
+    optimizePackageImports: [
+      "lucide-react",
+      "recharts",
+      "@tiptap/react",
+      "@tiptap/extension-placeholder",
+    ],
+  },
   images: {
     remotePatterns: [
       { protocol: "http", hostname: "localhost" },
