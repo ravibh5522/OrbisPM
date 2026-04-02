@@ -1,5 +1,6 @@
 "use client";
 
+import { Pagination } from "@/components/ui/pagination";
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
@@ -10,41 +11,63 @@ import {
   statusLabel,
 } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { Project, Task } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { FolderKanban, ListTodo, Search as SearchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
-const SEARCH_LIMIT = 25;
+const PAGE_SIZE = 25;
 
 export default function SearchPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const router = useRouter();
   const orgSlug = currentOrg?.slug || "";
   const policies = useOrgPolicies();
+  const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
   const [query, setQuery] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [taskPage, setTaskPage] = useState(0);
+  const [projectPage, setProjectPage] = useState(0);
+
+  useEffect(() => {
+    setBreadcrumb({ label: "Search", backHref: `/${orgSlug}` });
+    return () => setBreadcrumb(null);
+  }, [orgSlug, setBreadcrumb]);
 
   // Debounce: auto-search after 300ms of inactivity
   useEffect(() => {
     if (query.trim().length < 2) return;
     const timer = setTimeout(() => {
       setSearchTerm(query.trim());
+      setTaskPage(0);
+      setProjectPage(0);
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 
   const { data: taskResults, isFetching: tasksFetching } = useQuery({
-    queryKey: ["search-tasks", currentOrg?.id, searchTerm],
-    queryFn: () => api.search.tasks(currentOrg!.id, searchTerm, SEARCH_LIMIT),
+    queryKey: ["search-tasks", currentOrg?.id, searchTerm, taskPage],
+    queryFn: () =>
+      api.search.tasks(
+        currentOrg!.id,
+        searchTerm,
+        PAGE_SIZE,
+        taskPage * PAGE_SIZE,
+      ),
     enabled: !!currentOrg && searchTerm.length >= 2,
   });
 
   const { data: projectResults, isFetching: projectsFetching } = useQuery({
-    queryKey: ["search-projects", currentOrg?.id, searchTerm],
+    queryKey: ["search-projects", currentOrg?.id, searchTerm, projectPage],
     queryFn: () =>
-      api.search.projects(currentOrg!.id, searchTerm, SEARCH_LIMIT),
+      api.search.projects(
+        currentOrg!.id,
+        searchTerm,
+        PAGE_SIZE,
+        projectPage * PAGE_SIZE,
+      ),
     enabled: !!currentOrg && searchTerm.length >= 2,
   });
 
@@ -71,12 +94,18 @@ export default function SearchPage() {
     e.preventDefault();
     if (query.trim().length >= 2) {
       setSearchTerm(query.trim());
+      setTaskPage(0);
+      setProjectPage(0);
     }
   };
 
   const tasks = taskResults?.data || [];
   const projects = projectResults?.data || [];
-  const totalResults = (taskResults?.total || 0) + (projectResults?.total || 0);
+  const taskTotal = taskResults?.total || 0;
+  const projectTotal = projectResults?.total || 0;
+  const totalResults = taskTotal + projectTotal;
+  const taskTotalPages = Math.ceil(taskTotal / PAGE_SIZE);
+  const projectTotalPages = Math.ceil(projectTotal / PAGE_SIZE);
 
   return (
     <div>
@@ -89,6 +118,7 @@ export default function SearchPage() {
             placeholder="Search tasks and projects..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            autoFocus
           />
           <button className="btn btn-primary join-item" type="submit">
             <SearchIcon className="w-4 h-4" />
@@ -121,12 +151,6 @@ export default function SearchPage() {
           <p className="text-sm text-base-content/50 mb-4">
             {totalResults} result{totalResults !== 1 ? "s" : ""} for &quot;
             {searchTerm}&quot;
-            {(tasks.length >= SEARCH_LIMIT ||
-              projects.length >= SEARCH_LIMIT) && (
-              <span className="ml-1">
-                (showing first {SEARCH_LIMIT} per category)
-              </span>
-            )}
           </p>
 
           {totalResults === 0 ? (
@@ -137,11 +161,11 @@ export default function SearchPage() {
           ) : (
             <div className="space-y-6">
               {/* Project results */}
-              {projects.length > 0 && (
+              {(projectTotal > 0 || projects.length > 0) && (
                 <div>
                   <h3 className="text-sm font-semibold text-base-content/70 mb-2 flex items-center gap-2">
                     <FolderKanban className="w-4 h-4" /> Projects (
-                    {projects.length})
+                    {projectTotal})
                   </h3>
                   <Card>
                     <div className="overflow-x-auto">
@@ -179,14 +203,21 @@ export default function SearchPage() {
                       </table>
                     </div>
                   </Card>
+                  <Pagination
+                    page={projectPage}
+                    totalPages={projectTotalPages}
+                    total={projectTotal}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setProjectPage}
+                  />
                 </div>
               )}
 
               {/* Task results */}
-              {tasks.length > 0 && (
+              {(taskTotal > 0 || tasks.length > 0) && (
                 <div>
                   <h3 className="text-sm font-semibold text-base-content/70 mb-2 flex items-center gap-2">
-                    <ListTodo className="w-4 h-4" /> Tasks ({tasks.length})
+                    <ListTodo className="w-4 h-4" /> Tasks ({taskTotal})
                   </h3>
                   <Card>
                     <div className="overflow-x-auto">
@@ -235,6 +266,13 @@ export default function SearchPage() {
                       </table>
                     </div>
                   </Card>
+                  <Pagination
+                    page={taskPage}
+                    totalPages={taskTotalPages}
+                    total={taskTotal}
+                    pageSize={PAGE_SIZE}
+                    onPageChange={setTaskPage}
+                  />
                 </div>
               )}
             </div>
@@ -244,3 +282,4 @@ export default function SearchPage() {
     </div>
   );
 }
+

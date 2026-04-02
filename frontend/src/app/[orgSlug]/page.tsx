@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useState } from "react";
 
 const DonutChart = dynamic(
   () =>
@@ -122,6 +123,7 @@ export default function DashboardPage() {
   const currentMembership = useAuthStore((s) => s.currentMembership);
   const orgSlug = currentOrg?.slug || "";
   const policies = useOrgPolicies();
+  const [days, setDays] = useState<7 | 30 | 90>(30);
 
   const { data: stats, isLoading } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats", currentOrg?.id],
@@ -138,8 +140,8 @@ export default function DashboardPage() {
 
   const { data: analytics, isLoading: analyticsLoading } =
     useQuery<DashboardAnalytics>({
-      queryKey: ["analytics-dashboard", currentOrg?.id],
-      queryFn: () => api.analytics.dashboard(currentOrg!.id),
+      queryKey: ["analytics-dashboard", currentOrg?.id, days],
+      queryFn: () => api.analytics.dashboard(currentOrg!.id, days),
       enabled: !!currentOrg,
     });
 
@@ -191,11 +193,24 @@ export default function DashboardPage() {
         title="Dashboard"
         description={`Overview of ${currentOrg?.name}`}
         actions={
-          currentMembership ? (
-            <span className="badge badge-outline badge-sm capitalize">
-              {currentMembership.role}
-            </span>
-          ) : undefined
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="join">
+              {([7, 30, 90] as const).map((d) => (
+                <button
+                  key={d}
+                  className={`join-item btn btn-xs ${days === d ? "btn-primary" : "btn-outline"}`}
+                  onClick={() => setDays(d)}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
+            {currentMembership && (
+              <span className="badge badge-outline badge-sm capitalize">
+                {currentMembership.role}
+              </span>
+            )}
+          </div>
         }
       />
 

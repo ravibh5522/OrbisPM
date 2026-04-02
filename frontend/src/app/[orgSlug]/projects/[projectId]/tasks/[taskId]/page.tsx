@@ -432,7 +432,9 @@ export default function TaskDetailPage({
                 />
               )}
               {!canEdit && task.recurrence_rule && (
-                <span className="text-sm text-base-content/60">{task.recurrence_rule}</span>
+                <span className="text-sm text-base-content/60">
+                  {task.recurrence_rule}
+                </span>
               )}
             </div>
             {task.next_occurrence && (
@@ -695,7 +697,10 @@ function LabelsEditor({
           <span key={l} className="badge badge-outline badge-sm gap-1">
             {l}
             {canEdit && (
-              <button onClick={() => removeLabel(l)} className="hover:text-error">
+              <button
+                onClick={() => removeLabel(l)}
+                className="hover:text-error"
+              >
                 <X className="w-3 h-3" />
               </button>
             )}
@@ -915,7 +920,7 @@ function SidebarNumber({
             <Pencil className="w-3 h-3 opacity-0 group-hover:opacity-40" />
           )}
         </div>
-      )}}
+      )}
     </div>
   );
 }
@@ -1047,7 +1052,8 @@ function ChecklistSection({
             <button
               className="btn btn-ghost btn-xs btn-square"
               onClick={() =>
-                canEdit && toggleMutation.mutate({
+                canEdit &&
+                toggleMutation.mutate({
                   id: item.id,
                   is_checked: !item.is_checked,
                 })

@@ -1,17 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { useAuthStore } from "@/stores/auth-store";
-import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { Input, PasswordInput } from "@/components/ui/form-fields";
 import { Button } from "@/components/ui/button";
-import { ApiError, api } from "@/lib/api";
+import { Input, PasswordInput } from "@/components/ui/form-fields";
+import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
+import { api } from "@/lib/api";
 import { parseAuthError } from "@/lib/auth-errors";
+import { useAuthStore } from "@/stores/auth-store";
 import type { IDPInfo } from "@/types/domain";
-import { Shield, Smartphone, Mail, Key } from "lucide-react";
+import { Key, Mail, Shield, Smartphone } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 
 const IDP_ICONS: Record<string, string> = {
   google: "G",
@@ -37,11 +37,30 @@ function getIDPColor(idp: IDPInfo): string {
 }
 
 // MFA method labels and icons for the step-2 UI
-const MFA_METHOD_LABELS: Record<string, { label: string; Icon: React.ElementType; hint: string }> = {
-  totp:          { label: "Authenticator App",  Icon: Smartphone, hint: "Enter the 6-digit code from your authenticator app." },
-  otp_email:     { label: "Email One-Time Code", Icon: Mail,       hint: "A verification code will be sent to your email." },
-  otp_sms:       { label: "SMS One-Time Code",   Icon: Smartphone, hint: "A verification code will be sent to your phone." },
-  recovery_code: { label: "Backup Code",         Icon: Key,        hint: "Use one of your downloaded backup codes." },
+const MFA_METHOD_LABELS: Record<
+  string,
+  { label: string; Icon: React.ElementType; hint: string }
+> = {
+  totp: {
+    label: "Authenticator App",
+    Icon: Smartphone,
+    hint: "Enter the 6-digit code from your authenticator app.",
+  },
+  otp_email: {
+    label: "Email One-Time Code",
+    Icon: Mail,
+    hint: "A verification code will be sent to your email.",
+  },
+  otp_sms: {
+    label: "SMS One-Time Code",
+    Icon: Smartphone,
+    hint: "A verification code will be sent to your phone.",
+  },
+  recovery_code: {
+    label: "Backup Code",
+    Icon: Key,
+    hint: "Use one of your downloaded backup codes.",
+  },
 };
 
 interface LoginForm {
@@ -71,10 +90,17 @@ export default function LoginPage() {
   const [challengeSent, setChallengeSent] = useState(false);
   const [verifying, setVerifying] = useState(false);
 
-  const { register, handleSubmit, formState: { isSubmitting } } = useForm<LoginForm>();
+  const {
+    register,
+    handleSubmit,
+    formState: { isSubmitting, errors },
+  } = useForm<LoginForm>();
 
   useEffect(() => {
-    api.auth.listIDPs().then((res) => setIdps(res.idps || [])).catch(() => {});
+    api.auth
+      .listIDPs()
+      .then((res) => setIdps(res.idps || []))
+      .catch(() => {});
   }, []);
 
   const redirectAfterLogin = () => {
@@ -93,8 +119,15 @@ export default function LoginPage() {
       redirectAfterLogin();
     } catch (err) {
       // Check if this is an MFA challenge (thrown by the store)
-      if (err instanceof Error && (err as unknown as { mfa_required?: boolean }).mfa_required) {
-        const e = err as unknown as { session_id: string; session_token: string; available_methods: string[] };
+      if (
+        err instanceof Error &&
+        (err as unknown as { mfa_required?: boolean }).mfa_required
+      ) {
+        const e = err as unknown as {
+          session_id: string;
+          session_token: string;
+          available_methods: string[];
+        };
         const methods = e.available_methods ?? [];
         setMfaChallenge({
           sessionId: e.session_id,
@@ -114,7 +147,11 @@ export default function LoginPage() {
     setSendingChallenge(true);
     setError("");
     try {
-      await api.auth.sendOTPChallenge(mfaChallenge.sessionId, mfaChallenge.sessionToken, mfaMethod);
+      await api.auth.sendOTPChallenge(
+        mfaChallenge.sessionId,
+        mfaChallenge.sessionToken,
+        mfaMethod,
+      );
       setChallengeSent(true);
     } catch (err) {
       setError(parseAuthError(err));
@@ -193,7 +230,9 @@ export default function LoginPage() {
 
           {mfaChallenge.availableMethods.length > 1 && (
             <div className="mb-4">
-              <label className="text-xs text-base-content/50 mb-1.5 block font-medium">Verification method</label>
+              <label className="text-xs text-base-content/50 mb-1.5 block font-medium">
+                Verification method
+              </label>
               <div className="flex flex-wrap gap-2">
                 {mfaChallenge.availableMethods.map((m) => {
                   const info = MFA_METHOD_LABELS[m] ?? MFA_METHOD_LABELS.totp;
@@ -218,7 +257,9 @@ export default function LoginPage() {
               <methodInfo.Icon className="w-5 h-5 text-primary" />
               <span className="font-medium text-sm">{methodInfo.label}</span>
             </div>
-            <p className="text-xs text-base-content/60 mb-3">{methodInfo.hint}</p>
+            <p className="text-xs text-base-content/60 mb-3">
+              {methodInfo.hint}
+            </p>
 
             {/* Send OTP button for email/SMS */}
             {needsSend && !challengeSent && (
@@ -234,11 +275,15 @@ export default function LoginPage() {
             )}
             {needsSend && challengeSent && (
               <div className="text-xs text-success mb-3 flex items-center gap-1">
-                ✓ Code sent — check your {mfaMethod === "otp_email" ? "email" : "phone"}
+                ✓ Code sent — check your{" "}
+                {mfaMethod === "otp_email" ? "email" : "phone"}
                 <button
                   type="button"
                   className="link link-primary ml-2"
-                  onClick={() => { setChallengeSent(false); handleSendOTPChallenge(); }}
+                  onClick={() => {
+                    setChallengeSent(false);
+                    handleSendOTPChallenge();
+                  }}
                 >
                   Resend
                 </button>
@@ -246,7 +291,9 @@ export default function LoginPage() {
             )}
 
             <Input
-              placeholder={mfaMethod === "recovery_code" ? "XXXX-XXXX-XXXX" : "000000"}
+              placeholder={
+                mfaMethod === "recovery_code" ? "XXXX-XXXX-XXXX" : "000000"
+              }
               value={mfaCode}
               onChange={(e) => setMfaCode(e.target.value)}
               maxLength={mfaMethod === "recovery_code" ? 32 : 8}
@@ -267,7 +314,10 @@ export default function LoginPage() {
           <button
             type="button"
             className="btn btn-ghost btn-sm mt-2 w-full"
-            onClick={() => { setMfaChallenge(null); setError(""); }}
+            onClick={() => {
+              setMfaChallenge(null);
+              setError("");
+            }}
           >
             ← Back to login
           </button>
@@ -282,7 +332,9 @@ export default function LoginPage() {
       <div className="card-body p-8">
         <div className="text-center mb-7">
           <h1 className="text-2xl font-bold text-base-content">Welcome back</h1>
-          <p className="text-base-content/55 mt-1.5 text-sm">Sign in to your OrbisPM account</p>
+          <p className="text-base-content/55 mt-1.5 text-sm">
+            Sign in to your OrbisPM account
+          </p>
         </div>
 
         {error && (
@@ -322,16 +374,21 @@ export default function LoginPage() {
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
+            error={errors.email?.message}
             {...register("email", { required: "Email is required" })}
           />
           <PasswordInput
             label="Password"
             placeholder="••••••••"
             autoComplete="current-password"
+            error={errors.password?.message}
             {...register("password", { required: "Password is required" })}
           />
           <div className="flex justify-end -mt-1">
-            <Link href="/forgot-password" className="text-xs text-primary hover:underline">
+            <Link
+              href="/forgot-password"
+              className="text-xs text-primary hover:underline"
+            >
               Forgot password?
             </Link>
           </div>

@@ -22,6 +22,7 @@ import { useUIStore } from "@/stores/ui-store";
 import type { Task } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarDays, Filter } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 
 export default function OrgCalendarPage({
@@ -35,6 +36,7 @@ export default function OrgCalendarPage({
   const { can } = usePermissions();
   const policies = useOrgPolicies();
   const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
+  const router = useRouter();
 
   const [filter, setFilter] = useState<CalendarFilterState>({
     ...EMPTY_CALENDAR_FILTER,
@@ -220,10 +222,12 @@ export default function OrgCalendarPage({
   const handleTaskClick = useCallback(
     (task: Task) => {
       if (currentOrg) {
-        window.location.href = `/${currentOrg.slug}/projects/${task.project_id}?task=${task.id}`;
+        router.push(
+          `/${currentOrg.slug}/projects/${task.project_id}?task=${task.id}`,
+        );
       }
     },
-    [currentOrg],
+    [currentOrg, router],
   );
 
   return (

@@ -186,7 +186,13 @@ export interface TaskUpdateResult {
   ancestors_updated?: Task[];
 }
 
-export type TaskStatus = "todo" | "in_progress" | "done" | "blocked";
+export type TaskStatus =
+  | "todo"
+  | "in_progress"
+  | "in_review"
+  | "done"
+  | "blocked"
+  | "cancelled";
 export type TaskPriority = "critical" | "high" | "medium" | "low";
 
 export interface Task {

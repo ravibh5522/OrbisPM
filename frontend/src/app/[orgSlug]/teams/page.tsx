@@ -3,6 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Avatar,
   Card,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useOrgPolicies } from "@/hooks/use-policies";
+import type { ListResponse } from "@/lib/api";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -20,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   BarChart3,
   ChevronDown,
+  Pencil,
   Plus,
   Search,
   Trash2,
@@ -44,6 +47,7 @@ export default function TeamsPage() {
   const orgSlug = currentOrg?.slug || "";
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState<Team | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Team | null>(null);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [error, setError] = useState("");
@@ -98,12 +102,29 @@ export default function TeamsPage() {
     formState: { errors: formErrors },
   } = useForm<TeamForm>();
 
+  // Helper: update all cache entries whose key starts with ["teams"] immediately,
+  // then also invalidate so TanStack Query does a server sync in the background.
+  const refreshTeamCaches = () => {
+    qc.invalidateQueries({ queryKey: ["teams"] });
+    qc.invalidateQueries({ queryKey: ["teams-all", currentOrg!.id] });
+    qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+    // Force an immediate refetch of any currently-mounted teams query
+    // (invalidateQueries can be skipped when the query's `enabled` gate is
+    // momentarily false due to policies.isLoading, so we also call refetchQueries)
+    qc.refetchQueries({ queryKey: ["teams"], type: "active" });
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: TeamForm) => api.teams.create(currentOrg!.id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["teams"] });
-      qc.invalidateQueries({ queryKey: ["teams-all", currentOrg!.id] });
-      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+    onSuccess: (newTeam: Team) => {
+      // 1. Optimistic: immediately prepend the new team to all matching list caches
+      qc.setQueriesData<ListResponse<Team>>({ queryKey: ["teams"] }, (old) => {
+        if (!old) return old;
+        if (old.data?.some((t) => t.id === newTeam.id)) return old;
+        return { ...old, data: [newTeam, ...old.data], total: old.total + 1 };
+      });
+      // 2. Then sync with server
+      refreshTeamCaches();
       setShowCreate(false);
       reset();
       setError("");
@@ -115,13 +136,46 @@ export default function TeamsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.teams.delete(currentOrg!.id, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["teams"] });
-      qc.invalidateQueries({ queryKey: ["teams-all", currentOrg!.id] });
-      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+    onSuccess: (_, deletedId: string) => {
+      // Optimistic: immediately remove from all matching list caches
+      qc.setQueriesData<ListResponse<Team>>({ queryKey: ["teams"] }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.filter((t) => t.id !== deletedId),
+          total: Math.max(0, old.total - 1),
+        };
+      });
+      refreshTeamCaches();
       setDeleteTarget(null);
       toast.success("Team deleted");
     },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: TeamForm & { id: string }) =>
+      api.teams.update(currentOrg!.id, data.id, {
+        name: data.name,
+        description: data.description,
+      }),
+    onSuccess: (updatedTeam: Team) => {
+      // Optimistic: immediately replace the matching team in all list caches
+      qc.setQueriesData<ListResponse<Team>>({ queryKey: ["teams"] }, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.map((t) =>
+            t.id === updatedTeam.id ? updatedTeam : t,
+          ),
+        };
+      });
+      refreshTeamCaches();
+      setEditTarget(null);
+      setError("");
+      toast.success("Team updated");
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to update team"),
   });
 
   const handleSort = (col: string) => {
@@ -259,6 +313,17 @@ export default function TeamsPage() {
                     >
                       <BarChart3 className="w-3 h-3" />
                     </Link>
+                    {can("teams", "update") && (
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditTarget(team);
+                        }}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    )}
                     {can("teams", "delete") && (
                       <button
                         className="btn btn-ghost btn-xs btn-square"
@@ -291,46 +356,28 @@ export default function TeamsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
-          <span className="text-sm text-base-content/60">
-            Showing {page * PAGE_SIZE + 1}&ndash;
-            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
-          </span>
-          <div className="join">
-            <button
-              className="join-item btn btn-sm"
-              disabled={page === 0}
-              onClick={() => setPage(0)}
-            >
-              &laquo;
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              &lsaquo;
-            </button>
-            <button className="join-item btn btn-sm">
-              Page {page + 1} of {totalPages}
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              &rsaquo;
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(totalPages - 1)}
-            >
-              &raquo;
-            </button>
-          </div>
-        </div>
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+      />
+
+      {/* Edit Modal */}
+      {editTarget && (
+        <EditTeamModal
+          team={editTarget}
+          onClose={() => {
+            setEditTarget(null);
+            setError("");
+          }}
+          onSubmit={(data) =>
+            updateMutation.mutate({ ...data, id: editTarget.id })
+          }
+          loading={updateMutation.isPending}
+          error={error}
+        />
       )}
 
       {/* Team Detail Modal */}
@@ -399,6 +446,62 @@ export default function TeamsPage() {
         loading={deleteMutation.isPending}
       />
     </div>
+  );
+}
+
+function EditTeamModal({
+  team,
+  onClose,
+  onSubmit,
+  loading,
+  error,
+}: {
+  team: Team;
+  onClose: () => void;
+  onSubmit: (data: TeamForm) => void;
+  loading: boolean;
+  error: string;
+}) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors: formErrors },
+  } = useForm<TeamForm>({
+    defaultValues: {
+      name: team.name,
+      description: team.description || "",
+    },
+  });
+
+  return (
+    <Modal open onClose={onClose} title="Edit Team">
+      {error && (
+        <div className="alert alert-error mb-4">
+          <span>{error}</span>
+        </div>
+      )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <Input
+          label="Team Name"
+          placeholder="Engineering"
+          {...register("name", { required: "Name is required" })}
+          error={formErrors.name?.message}
+        />
+        <Textarea
+          label="Description"
+          placeholder="Optional description"
+          {...register("description")}
+        />
+        <div className="modal-action">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={loading}>
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

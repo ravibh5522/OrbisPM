@@ -1,7 +1,14 @@
 import { Providers } from "@/components/providers";
 import { getBaseUrl } from "@/lib/base-url";
 import type { Metadata } from "next";
+import { Inter } from "next/font/google";
 import "./globals.css";
+
+const inter = Inter({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-inter",
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = await getBaseUrl();
@@ -107,16 +114,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-theme="orbis-light" suppressHydrationWarning>
-      <head>
-        {/* Preconnect to external origins for improved Core Web Vitals */}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link
-          rel="preconnect"
-          href="https://fonts.gstatic.com"
-          crossOrigin="anonymous"
-        />
-      </head>
-      <body className="min-h-screen bg-base-200">
+      <body className={`${inter.variable} font-sans min-h-screen bg-base-200`}>
         <Providers>{children}</Providers>
       </body>
     </html>

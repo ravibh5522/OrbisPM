@@ -4,6 +4,7 @@ import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import type {
   MetricAlert,
   OrgAnalytics,
@@ -19,6 +20,7 @@ import {
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 const AreaChartWidget = dynamic(
   () =>
@@ -73,10 +75,17 @@ function StatCard({
 export default function PerformancePage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const orgSlug = currentOrg?.slug || "";
+  const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
+  const [days, setDays] = useState<7 | 30 | 90>(30);
+
+  useEffect(() => {
+    setBreadcrumb({ label: "Performance", backHref: `/${orgSlug}` });
+    return () => setBreadcrumb(null);
+  }, [orgSlug, setBreadcrumb]);
 
   const { data, isLoading } = useQuery<OrgAnalytics>({
-    queryKey: ["analytics-org", currentOrg?.id],
-    queryFn: () => api.analytics.org(currentOrg!.id),
+    queryKey: ["analytics-org", currentOrg?.id, days],
+    queryFn: () => api.analytics.org(currentOrg!.id, days),
     enabled: !!currentOrg,
   });
 
@@ -109,7 +118,20 @@ export default function PerformancePage() {
         title="Performance"
         description="Organization-wide analytics and insights"
         actions={
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
+            <div className="join">
+              {([7, 30, 90] as const).map((d) => (
+                <button
+                  key={d}
+                  className={`join-item btn btn-sm ${
+                    days === d ? "btn-primary" : "btn-outline"
+                  }`}
+                  onClick={() => setDays(d)}
+                >
+                  {d}d
+                </button>
+              ))}
+            </div>
             <Link
               href={`/${orgSlug}/performance/projects`}
               className="btn btn-sm btn-outline"

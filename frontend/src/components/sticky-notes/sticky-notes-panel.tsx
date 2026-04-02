@@ -1,5 +1,6 @@
 "use client";
 
+import type { ListResponse } from "@/lib/api";
 import { api } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import type { StickyNote, StickyNoteCheckpoint } from "@/types/domain";
@@ -142,12 +143,27 @@ export function StickyNotesPanel() {
 
   const notes = notesData?.data || [];
 
+  // Helper: invalidate + force-refetch both note queries regardless of enabled state.
+  const refreshNoteCache = () => {
+    qc.invalidateQueries({ queryKey: ["sticky-notes"] });
+    qc.invalidateQueries({ queryKey: ["sticky-notes-stats"] });
+    // Force an immediate refetch even if enabled gate is momentarily false.
+    qc.refetchQueries({ queryKey: ["sticky-notes"], type: "active" });
+    qc.refetchQueries({ queryKey: ["sticky-notes-stats"], type: "active" });
+  };
+
   // mutations
   const createMutation = useMutation({
     mutationFn: (data: Partial<StickyNote>) => api.stickyNotes.create(data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sticky-notes"] });
-      qc.invalidateQueries({ queryKey: ["sticky-notes-stats"] });
+    onSuccess: (newNote: StickyNote) => {
+      // 1. Optimistic: immediately append new note to the list cache
+      qc.setQueryData<ListResponse<StickyNote>>(["sticky-notes"], (old) => {
+        if (!old) return old;
+        if (old.data?.some((n) => n.id === newNote.id)) return old;
+        return { ...old, data: [...old.data, newNote], total: old.total + 1 };
+      });
+      // 2. Server sync
+      refreshNoteCache();
       setShowForm(false);
     },
   });
@@ -155,27 +171,56 @@ export function StickyNotesPanel() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<StickyNote> }) =>
       api.stickyNotes.update(id, data),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sticky-notes"] });
-      qc.invalidateQueries({ queryKey: ["sticky-notes-stats"] });
+    onSuccess: (updatedNote: StickyNote) => {
+      // 1. Optimistic: replace the updated note in cache
+      qc.setQueryData<ListResponse<StickyNote>>(["sticky-notes"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.map((n) =>
+            n.id === updatedNote.id ? updatedNote : n,
+          ),
+        };
+      });
+      // 2. Server sync
+      refreshNoteCache();
       setEditingNote(null);
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.stickyNotes.delete(id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sticky-notes"] });
-      qc.invalidateQueries({ queryKey: ["sticky-notes-stats"] });
+    onSuccess: (_, deletedId: string) => {
+      // 1. Optimistic: remove deleted note from cache
+      qc.setQueryData<ListResponse<StickyNote>>(["sticky-notes"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.filter((n) => n.id !== deletedId),
+          total: Math.max(0, old.total - 1),
+        };
+      });
+      // 2. Server sync
+      refreshNoteCache();
     },
   });
 
   const toggleCompleteMutation = useMutation({
     mutationFn: (note: StickyNote) =>
       api.stickyNotes.update(note.id, { ...note, completed: !note.completed }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["sticky-notes"] });
-      qc.invalidateQueries({ queryKey: ["sticky-notes-stats"] });
+    onSuccess: (updatedNote: StickyNote) => {
+      // 1. Optimistic: update completed flag
+      qc.setQueryData<ListResponse<StickyNote>>(["sticky-notes"], (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          data: old.data.map((n) =>
+            n.id === updatedNote.id ? updatedNote : n,
+          ),
+        };
+      });
+      // 2. Server sync
+      refreshNoteCache();
     },
   });
 

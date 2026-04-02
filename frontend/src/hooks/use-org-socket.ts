@@ -2,7 +2,7 @@
 
 import { useChatStore } from "@/stores/chat-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
-import type { ChatMessage, DomainEvent } from "@/types/domain";
+import type { ChatMessage, DomainEvent, Task } from "@/types/domain";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -220,7 +220,7 @@ function handleOrgEvent(
     // Also update Zustand task store if user has tasks loaded (covers REST-originated updates)
     const taskStore = useProjectTaskStore.getState();
     if (type === "task.updated" && event.payload?.task) {
-      taskStore.upsertTask(event.payload.task);
+      taskStore.upsertTask(event.payload.task as Task);
     } else if (type === "task.deleted" && event.entity_id) {
       taskStore.removeTask(event.entity_id);
     }

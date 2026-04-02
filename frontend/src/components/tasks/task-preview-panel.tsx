@@ -65,6 +65,14 @@ import {
 
 const MAX_DEPTH = 3;
 
+type AccessControl = {
+  canEdit: boolean;
+  canDelete: boolean;
+  canManageMembers: boolean;
+  canComment: boolean;
+  canAttach: boolean;
+};
+
 /* ═══════════════════════════════════════════════════════
    Role-based access control — uses DB-driven policies
    ═══════════════════════════════════════════════════════ */

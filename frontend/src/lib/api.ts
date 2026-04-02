@@ -145,6 +145,11 @@ async function request<T>(
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
+    // Bypass the browser's HTTP cache so React Query refetches always hit
+    // the server. Without this, backend Cache-Control max-age headers cause
+    // the browser to serve stale list responses after mutations, making it
+    // look like newly created items don't appear.
+    cache: "no-store",
   });
 
   if (res.status === 204) {
@@ -1174,13 +1179,13 @@ export const api = {
 
   // Search
   search: {
-    tasks: (orgId: string, query: string, limit = 20) =>
+    tasks: (orgId: string, query: string, limit = 20, offset = 0) =>
       get<ListResponse<Task>>(
-        `${V1}/orgs/${orgId}/search/tasks?q=${encodeURIComponent(query)}&limit=${limit}`,
+        `${V1}/orgs/${orgId}/search/tasks?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`,
       ),
-    projects: (orgId: string, query: string, limit = 20) =>
+    projects: (orgId: string, query: string, limit = 20, offset = 0) =>
       get<ListResponse<Project>>(
-        `${V1}/orgs/${orgId}/search/projects?q=${encodeURIComponent(query)}&limit=${limit}`,
+        `${V1}/orgs/${orgId}/search/projects?q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`,
       ),
   },
 

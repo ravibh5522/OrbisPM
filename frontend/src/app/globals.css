@@ -1,6 +1,10 @@
 @import "tailwindcss";
 @plugin "daisyui";
 
+@theme {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Theme 1 — Orbis Light (DEFAULT — must come first as :root)
    Clean minimal light, blue · slate · emerald palette

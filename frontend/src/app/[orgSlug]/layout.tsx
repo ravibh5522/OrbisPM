@@ -25,8 +25,10 @@ import {
   LogOut,
   Menu,
   MessageSquare,
+  Moon,
   Palette,
   Search,
+  Sun,
   UserCircle,
   Users,
 } from "lucide-react";
@@ -34,6 +36,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { CommandPalette } from "@/components/command-palette";
 import { DataPrefetcher } from "@/components/data-prefetcher";
 import { NotificationBell } from "@/components/notification-bell";
 import { StickyNotesPanel } from "@/components/sticky-notes/sticky-notes-panel";
@@ -405,6 +408,41 @@ function Sidebar() {
 
         {/* User footer — dropdown with Profile, Theme, Logout */}
         <div className="border-t border-base-200 transition-all duration-300 ease-in-out p-2">
+          {/* Dark mode quick-toggle */}
+          <button
+            className={cn(
+              "btn btn-ghost btn-sm w-full mb-1 gap-2",
+              sidebarCollapsed ? "btn-square mx-auto w-10" : "",
+            )}
+            onClick={() => {
+              const isDark = theme.includes("dark");
+              const next = isDark
+                ? (theme.replace("dark", "light") as Parameters<
+                    typeof setTheme
+                  >[0])
+                : (theme.replace("light", "dark") as Parameters<
+                    typeof setTheme
+                  >[0]);
+              handleThemeSwitch(next);
+            }}
+            disabled={themeLocked}
+            title={
+              theme.includes("dark")
+                ? "Switch to light mode"
+                : "Switch to dark mode"
+            }
+          >
+            {theme.includes("dark") ? (
+              <Sun className="w-4 h-4" />
+            ) : (
+              <Moon className="w-4 h-4" />
+            )}
+            {!sidebarCollapsed && (
+              <span className="text-sm">
+                {theme.includes("dark") ? "Light mode" : "Dark mode"}
+              </span>
+            )}
+          </button>
           <div className="dropdown dropdown-top w-full">
             <label
               tabIndex={0}
@@ -486,7 +524,12 @@ function Sidebar() {
 }
 
 function TopBar() {
-  const { sidebarCollapsed, breadcrumb, setMobileMenuOpen } = useUIStore();
+  const {
+    sidebarCollapsed,
+    breadcrumb,
+    setMobileMenuOpen,
+    setCommandPaletteOpen,
+  } = useUIStore();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const connected = useProjectTaskStore((s) => s.connected);
   const router = useRouter();
@@ -545,6 +588,17 @@ function TopBar() {
       </div>
 
       <div className="flex-1" />
+
+      {/* Cmd+K shortcut hint */}
+      <button
+        className="hidden md:flex items-center gap-2 btn btn-ghost btn-sm px-3 text-base-content/50 hover:text-base-content"
+        onClick={() => setCommandPaletteOpen(true)}
+        title="Open command palette (Ctrl+K)"
+      >
+        <Search className="w-4 h-4" />
+        <span className="text-xs">Search</span>
+        <kbd className="kbd kbd-xs">⌘K</kbd>
+      </button>
 
       {/* Sticky Notes & Notifications */}
       <StickyNotesPanel />
@@ -983,6 +1037,7 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-base-200/30">
       <DataPrefetcher />
+      <CommandPalette />
       <Sidebar />
       <MobileSidebar />
       <TopBar />

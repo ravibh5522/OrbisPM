@@ -13,10 +13,20 @@ import { useChatSocket } from "@/hooks/use-chat-socket";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
+import { useUIStore } from "@/stores/ui-store";
 import { useEffect, useState } from "react";
 
 export default function MessagesPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
+  const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
+
+  useEffect(() => {
+    setBreadcrumb({
+      label: "Messages",
+      backHref: currentOrg ? `/${currentOrg.slug}` : undefined,
+    });
+    return () => setBreadcrumb(null);
+  }, [currentOrg?.slug, setBreadcrumb]);
   const activeChannelId = useChatStore((s) => s.activeChannelId);
   const detailsOpen = useChatStore((s) => s.detailsOpen);
   const threadParentId = useChatStore((s) => s.threadParentId);

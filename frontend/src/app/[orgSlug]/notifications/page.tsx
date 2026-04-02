@@ -1,25 +1,37 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { Badge, Card, EmptyState, LoadingPage, PageHeader } from "@/components/ui/shared";
+import { Pagination } from "@/components/ui/pagination";
+import {
+  Badge,
+  Card,
+  EmptyState,
+  LoadingPage,
+  PageHeader,
+} from "@/components/ui/shared";
 import { api } from "@/lib/api";
 import { cn, formatRelative } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { Notification, NotificationPreference } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, CheckCheck, ExternalLink, Settings } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type FilterMode = "all" | "unread" | "read";
 type TabMode = "inbox" | "preferences";
 
-function getNotificationHref(notif: Notification, orgSlug: string): string | null {
+function getNotificationHref(
+  notif: Notification,
+  orgSlug: string,
+): string | null {
   const p = notif.payload;
   if (!p) return null;
   const projectId = p.project_id as string | undefined;
   const taskId = p.task_id as string | undefined;
-  if (projectId && taskId) return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
+  if (projectId && taskId)
+    return `/${orgSlug}/projects/${projectId}?task=${taskId}`;
   if (projectId) return `/${orgSlug}/projects/${projectId}`;
   const teamId = p.team_id as string | undefined;
   if (teamId) return `/${orgSlug}/teams`;
@@ -32,8 +44,16 @@ export default function NotificationsPage() {
   const orgSlug = currentOrg?.slug || "";
   const qc = useQueryClient();
   const router = useRouter();
+  const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
   const [tab, setTab] = useState<TabMode>("inbox");
   const [filter, setFilter] = useState<FilterMode>("all");
+  const [page, setPage] = useState(0);
+  const NOTIF_PAGE_SIZE = 20;
+
+  useEffect(() => {
+    setBreadcrumb({ label: "Notifications", backHref: `/${orgSlug}` });
+    return () => setBreadcrumb(null);
+  }, [orgSlug, setBreadcrumb]);
 
   // ── Inbox data ──
   const { data: notificationsRes, isLoading } = useQuery({
@@ -45,12 +65,14 @@ export default function NotificationsPage() {
 
   const markReadMutation = useMutation({
     mutationFn: (id: string) => api.notifications.markRead(orgId, id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", orgId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["notifications", orgId] }),
   });
 
   const markAllReadMutation = useMutation({
     mutationFn: () => api.notifications.markAllRead(orgId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications", orgId] }),
+    onSuccess: () =>
+      qc.invalidateQueries({ queryKey: ["notifications", orgId] }),
   });
 
   // ── Preferences data ──
@@ -70,23 +92,27 @@ export default function NotificationsPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notification-prefs"] }),
   });
 
-  if (isLoading) return (
-    <div className="animate-pulse">
-      <div className="h-8 bg-base-300 rounded w-40 mb-2" />
-      <div className="h-4 bg-base-300 rounded w-52 mb-6" />
-      <div className="bg-base-200 rounded-xl border border-base-200 p-4 space-y-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <div key={i} className="flex items-center gap-3 p-3 rounded-lg bg-base-300/50">
-            <div className="w-2 h-2 rounded-full bg-base-300 shrink-0" />
-            <div className="flex-1 space-y-2">
-              <div className="h-4 bg-base-300 rounded w-5/6" />
-              <div className="h-3 bg-base-300 rounded w-1/4" />
+  if (isLoading)
+    return (
+      <div className="animate-pulse">
+        <div className="h-8 bg-base-300 rounded w-40 mb-2" />
+        <div className="h-4 bg-base-300 rounded w-52 mb-6" />
+        <div className="bg-base-200 rounded-xl border border-base-200 p-4 space-y-3">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex items-center gap-3 p-3 rounded-lg bg-base-300/50"
+            >
+              <div className="w-2 h-2 rounded-full bg-base-300 shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-4 bg-base-300 rounded w-5/6" />
+                <div className="h-3 bg-base-300 rounded w-1/4" />
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
-  );
+    );
 
   const all = notificationsRes?.data || [];
   const unread = all.filter((n: Notification) => !n.read_at);
@@ -96,15 +122,21 @@ export default function NotificationsPage() {
       : filter === "read"
         ? all.filter((n: Notification) => !!n.read_at)
         : all;
+  const totalNotifPages = Math.ceil(filtered.length / NOTIF_PAGE_SIZE);
+  const pagedNotifs = filtered.slice(
+    page * NOTIF_PAGE_SIZE,
+    (page + 1) * NOTIF_PAGE_SIZE,
+  );
   const prefList = prefs?.data || [];
 
   return (
     <div>
       <PageHeader
         title="Notifications"
-        description={tab === "inbox"
-          ? `${unread.length} unread notification${unread.length !== 1 ? "s" : ""}`
-          : "Configure your notification preferences"
+        description={
+          tab === "inbox"
+            ? `${unread.length} unread notification${unread.length !== 1 ? "s" : ""}`
+            : "Configure your notification preferences"
         }
         actions={
           tab === "inbox" && unread.length > 0 ? (
@@ -124,14 +156,20 @@ export default function NotificationsPage() {
       <div role="tablist" className="tabs tabs-bordered mb-4">
         <button
           role="tab"
-          className={cn("tab gap-2", tab === "inbox" && "tab-active font-medium")}
+          className={cn(
+            "tab gap-2",
+            tab === "inbox" && "tab-active font-medium",
+          )}
           onClick={() => setTab("inbox")}
         >
           <Bell className="w-4 h-4" /> Inbox
         </button>
         <button
           role="tab"
-          className={cn("tab gap-2", tab === "preferences" && "tab-active font-medium")}
+          className={cn(
+            "tab gap-2",
+            tab === "preferences" && "tab-active font-medium",
+          )}
           onClick={() => setTab("preferences")}
         >
           <Settings className="w-4 h-4" /> Preferences
@@ -147,9 +185,16 @@ export default function NotificationsPage() {
               <button
                 key={f}
                 className={cn("tab tab-sm", filter === f && "tab-active")}
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  setFilter(f);
+                  setPage(0);
+                }}
               >
-                {f === "all" ? `All (${all.length})` : f === "unread" ? `Unread (${unread.length})` : "Read"}
+                {f === "all"
+                  ? `All (${all.length})`
+                  : f === "unread"
+                    ? `Unread (${unread.length})`
+                    : "Read"}
               </button>
             ))}
           </div>
@@ -157,63 +202,89 @@ export default function NotificationsPage() {
           {filtered.length === 0 ? (
             <EmptyState
               icon={<Bell className="w-16 h-16" />}
-              title={filter === "unread" ? "All caught up!" : "No notifications"}
-              description={filter === "unread" ? "You have no unread notifications" : "Notifications will appear here"}
+              title={
+                filter === "unread" ? "All caught up!" : "No notifications"
+              }
+              description={
+                filter === "unread"
+                  ? "You have no unread notifications"
+                  : "Notifications will appear here"
+              }
             />
           ) : (
-            <Card>
-              <div className="divide-y divide-base-200">
-                {filtered.map((notif: Notification) => {
-                  const href = getNotificationHref(notif, orgSlug);
-                  return (
-                    <div
-                      key={notif.id}
-                      className={cn(
-                        "flex items-start gap-4 py-4 px-2 hover:bg-base-200/50 rounded transition-colors",
-                        !notif.read_at && "bg-primary/5",
-                        href && "cursor-pointer"
-                      )}
-                      onClick={() => {
-                        if (!notif.read_at) markReadMutation.mutate(notif.id);
-                        if (href) router.push(href);
-                      }}
-                    >
-                      <div className="mt-1.5 flex-shrink-0">
-                        {!notif.read_at ? (
-                          <div className="w-2.5 h-2.5 bg-primary rounded-full" />
-                        ) : (
-                          <div className="w-2.5 h-2.5" />
+            <>
+              <Card>
+                <div className="divide-y divide-base-200">
+                  {pagedNotifs.map((notif: Notification) => {
+                    const href = getNotificationHref(notif, orgSlug);
+                    return (
+                      <div
+                        key={notif.id}
+                        className={cn(
+                          "flex items-start gap-4 py-4 px-2 hover:bg-base-200/50 rounded transition-colors",
+                          !notif.read_at && "bg-primary/5",
+                          href && "cursor-pointer",
                         )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-medium text-sm">{notif.title}</span>
-                          {notif.type && (
-                            <Badge variant="badge-ghost">{notif.type.replace(/_/g, " ")}</Badge>
-                          )}
-                          {href && (
-                            <ExternalLink className="w-3 h-3 text-base-content/30" />
+                        onClick={() => {
+                          if (!notif.read_at) markReadMutation.mutate(notif.id);
+                          if (href) router.push(href);
+                        }}
+                      >
+                        <div className="mt-1.5 flex-shrink-0">
+                          {!notif.read_at ? (
+                            <div className="w-2.5 h-2.5 bg-primary rounded-full" />
+                          ) : (
+                            <div className="w-2.5 h-2.5" />
                           )}
                         </div>
-                        <p className="text-sm text-base-content/70">{notif.body}</p>
-                        <p className="text-xs text-base-content/40 mt-1">{formatRelative(notif.created_at)}</p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="font-medium text-sm">
+                              {notif.title}
+                            </span>
+                            {notif.type && (
+                              <Badge variant="badge-ghost">
+                                {notif.type.replace(/_/g, " ")}
+                              </Badge>
+                            )}
+                            {href && (
+                              <ExternalLink className="w-3 h-3 text-base-content/30" />
+                            )}
+                          </div>
+                          <p className="text-sm text-base-content/70">
+                            {notif.body}
+                          </p>
+                          <p className="text-xs text-base-content/40 mt-1">
+                            {formatRelative(notif.created_at)}
+                          </p>
+                        </div>
+                        <div
+                          className="flex-shrink-0"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {!notif.read_at && (
+                            <button
+                              className="btn btn-ghost btn-xs tooltip"
+                              data-tip="Mark as read"
+                              onClick={() => markReadMutation.mutate(notif.id)}
+                            >
+                              <Check className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
-                        {!notif.read_at && (
-                          <button
-                            className="btn btn-ghost btn-xs tooltip"
-                            data-tip="Mark as read"
-                            onClick={() => markReadMutation.mutate(notif.id)}
-                          >
-                            <Check className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </Card>
+                    );
+                  })}
+                </div>
+              </Card>
+              <Pagination
+                page={page}
+                totalPages={totalNotifPages}
+                total={filtered.length}
+                pageSize={NOTIF_PAGE_SIZE}
+                onPageChange={setPage}
+              />
+            </>
           )}
         </>
       )}
@@ -227,8 +298,12 @@ export default function NotificationsPage() {
             <Card>
               <div className="text-center py-8">
                 <Bell className="w-12 h-12 text-base-content/20 mx-auto mb-3" />
-                <p className="text-base-content/50">No notification preferences configured</p>
-                <p className="text-sm text-base-content/40 mt-1">Preferences will appear here once events are generated</p>
+                <p className="text-base-content/50">
+                  No notification preferences configured
+                </p>
+                <p className="text-sm text-base-content/40 mt-1">
+                  Preferences will appear here once events are generated
+                </p>
               </div>
             </Card>
           ) : (
@@ -246,7 +321,11 @@ export default function NotificationsPage() {
                     {prefList.map((pref: NotificationPreference) => (
                       <tr key={pref.id}>
                         <td className="font-medium">{pref.event_type}</td>
-                        <td><span className="badge badge-ghost badge-sm">{pref.channel}</span></td>
+                        <td>
+                          <span className="badge badge-ghost badge-sm">
+                            {pref.channel}
+                          </span>
+                        </td>
                         <td>
                           <input
                             type="checkbox"

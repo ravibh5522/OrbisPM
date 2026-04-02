@@ -76,6 +76,7 @@ func (h *TeamHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	params.OrgID = middleware.OrgIDFromCtx(r.Context())
+	params.UserID = middleware.UserIDFromCtx(r.Context())
 
 	team, err := h.teamSvc.Create(r.Context(), params)
 	if err != nil {

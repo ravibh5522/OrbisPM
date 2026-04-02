@@ -4,6 +4,7 @@ import { PermissionGate } from "@/components/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Card,
   ConfirmDialog,
@@ -14,10 +15,20 @@ import {
 import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { TaskTemplate } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Download, FileText, Plus, Trash2, Upload } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  Download,
+  FileText,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Upload,
+  X,
+} from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -26,20 +37,48 @@ interface TemplateForm {
   description: string;
 }
 
+const PAGE_SIZE = 12;
+
 export default function TemplatesPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
+  const setBreadcrumb = useUIStore((s) => s.setBreadcrumb);
+  const orgSlug = currentOrg?.slug ?? "";
+
+  useEffect(() => {
+    setBreadcrumb({ label: "Templates", backHref: `/${orgSlug}` });
+    return () => setBreadcrumb(null);
+  }, [orgSlug, setBreadcrumb]);
+
   const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState<TaskTemplate | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<TaskTemplate | null>(null);
   const [viewTarget, setViewTarget] = useState<TaskTemplate | null>(null);
   const [error, setError] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ["templates", currentOrg?.id],
     queryFn: () => api.templates.list(currentOrg!.id),
     enabled: !!currentOrg,
   });
+
+  const filtered = useMemo(() => {
+    const all = templates?.data || [];
+    if (!search.trim()) return all;
+    const q = search.toLowerCase();
+    return all.filter(
+      (t: TaskTemplate) =>
+        t.name.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q),
+    );
+  }, [templates?.data, search]);
+
+  const total = filtered.length;
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   const {
     register,
@@ -73,6 +112,22 @@ export default function TemplatesPage() {
       setDeleteTarget(null);
       toast.success("Template deleted");
     },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: TemplateForm & { id: string }) =>
+      api.templates.update(currentOrg!.id, data.id, {
+        name: data.name,
+        description: data.description,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["templates"] });
+      setEditTarget(null);
+      setError("");
+      toast.success("Template updated");
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to update template"),
   });
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,20 +180,68 @@ export default function TemplatesPage() {
         }
       />
 
-      {!templates?.data || templates.data.length === 0 ? (
+      {/* Search bar */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <input
+            type="text"
+            placeholder="Search templates..."
+            className="input input-bordered input-sm w-full pl-9"
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
+          />
+          {search && (
+            <button
+              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
+              onClick={() => {
+                setSearch("");
+                setPage(0);
+              }}
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        <div className="flex-1" />
+        <span className="text-sm text-base-content/50">
+          {total} template{total !== 1 ? "s" : ""}
+        </span>
+      </div>
+
+      {paginated.length === 0 ? (
         <EmptyState
           icon={<FileText className="w-16 h-16" />}
-          title="No templates yet"
-          description="Create templates to quickly scaffold tasks in projects"
+          title={search ? "No matching templates" : "No templates yet"}
+          description={
+            search
+              ? "Try a different search term"
+              : "Create templates to quickly scaffold tasks in projects"
+          }
           action={
-            <Button onClick={() => setShowCreate(true)}>
-              <Plus className="w-4 h-4" /> Create Template
-            </Button>
+            search ? (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSearch("");
+                  setPage(0);
+                }}
+              >
+                Clear search
+              </Button>
+            ) : (
+              <Button onClick={() => setShowCreate(true)}>
+                <Plus className="w-4 h-4" /> Create Template
+              </Button>
+            )
           }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.data.map((tpl: TaskTemplate) => (
+          {paginated.map((tpl: TaskTemplate) => (
             <Card key={tpl.id} compact>
               <div
                 className="cursor-pointer"
@@ -163,26 +266,35 @@ export default function TemplatesPage() {
                 </div>
                 <div className="flex items-center justify-between mt-3 text-sm text-base-content/50">
                   <span>Created {formatDate(tpl.created_at)}</span>
-                  <div className="flex gap-1">
+                  <div
+                    className="flex gap-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <button
                       className="btn btn-ghost btn-xs btn-square"
                       title="Export JSON"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        api.templates.export(currentOrg!.id, tpl.id, tpl.name);
-                      }}
+                      onClick={() =>
+                        api.templates.export(currentOrg!.id, tpl.id, tpl.name)
+                      }
                     >
                       <Download className="w-3 h-3" />
                     </button>
-                    <button
-                      className="btn btn-ghost btn-xs btn-square"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setDeleteTarget(tpl);
-                      }}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
+                    <PermissionGate resource="projects" action="update">
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        onClick={() => setEditTarget(tpl)}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
+                    <PermissionGate resource="projects" action="delete">
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        onClick={() => setDeleteTarget(tpl)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
                   </div>
                 </div>
               </div>
@@ -190,6 +302,15 @@ export default function TemplatesPage() {
           ))}
         </div>
       )}
+
+      {/* Pagination */}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+      />
 
       {/* View modal */}
       {viewTarget && (
@@ -211,6 +332,22 @@ export default function TemplatesPage() {
             </Button>
           </div>
         </Modal>
+      )}
+
+      {/* Edit Modal */}
+      {editTarget && (
+        <EditTemplateModal
+          template={editTarget}
+          onClose={() => {
+            setEditTarget(null);
+            setError("");
+          }}
+          onSubmit={(data) =>
+            updateMutation.mutate({ ...data, id: editTarget.id })
+          }
+          loading={updateMutation.isPending}
+          error={error}
+        />
       )}
 
       <Modal
@@ -269,5 +406,61 @@ export default function TemplatesPage() {
         loading={deleteMutation.isPending}
       />
     </div>
+  );
+}
+
+function EditTemplateModal({
+  template,
+  onClose,
+  onSubmit,
+  loading,
+  error,
+}: {
+  template: TaskTemplate;
+  onClose: () => void;
+  onSubmit: (data: TemplateForm) => void;
+  loading: boolean;
+  error: string;
+}) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors: formErrors },
+  } = useForm<TemplateForm>({
+    defaultValues: {
+      name: template.name,
+      description: template.description || "",
+    },
+  });
+
+  return (
+    <Modal open onClose={onClose} title="Edit Template">
+      {error && (
+        <div className="alert alert-error mb-4">
+          <span>{error}</span>
+        </div>
+      )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <Input
+          label="Template Name"
+          placeholder="Sprint Template"
+          {...register("name", { required: "Name is required" })}
+          error={formErrors.name?.message}
+        />
+        <Textarea
+          label="Description"
+          placeholder="Optional description"
+          {...register("description")}
+        />
+        <div className="modal-action">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={loading}>
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

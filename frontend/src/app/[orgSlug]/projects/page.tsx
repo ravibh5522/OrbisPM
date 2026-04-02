@@ -4,6 +4,7 @@ import { PermissionGate } from "@/components/permission-gate";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Card,
   ConfirmDialog,
@@ -11,6 +12,7 @@ import {
   PageHeader,
 } from "@/components/ui/shared";
 import { useOrgPolicies } from "@/hooks/use-policies";
+import type { ListResponse } from "@/lib/api";
 import { api, ApiError } from "@/lib/api";
 import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -22,6 +24,7 @@ import {
   ChevronDown,
   FolderKanban,
   LayoutGrid,
+  Pencil,
   Plus,
   Search,
   SlidersHorizontal,
@@ -38,6 +41,7 @@ import { toast } from "sonner";
 interface ProjectForm {
   name: string;
   description: string;
+  status?: string;
   team_id: string;
   team_ids: string[];
 }
@@ -49,6 +53,7 @@ export default function ProjectsPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
+  const [editTarget, setEditTarget] = useState<Project | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
   const [error, setError] = useState("");
   const [viewMode, setViewMode] = useState<"grid" | "table">("table");
@@ -128,6 +133,16 @@ export default function ProjectsPage() {
   });
   const selectedTeamIds = watch("team_ids") || [];
 
+  // Helper: update all matching project caches + force server sync.
+  const refreshProjectCaches = () => {
+    qc.invalidateQueries({ queryKey: ["projects"] });
+    qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+    qc.invalidateQueries({ queryKey: ["dashboard-stats", currentOrg!.id] });
+    // Force an immediate refetch of any currently-mounted projects query
+    // so the list updates even if the query's `enabled` gate is momentarily false.
+    qc.refetchQueries({ queryKey: ["projects"], type: "active" });
+  };
+
   const createMutation = useMutation({
     mutationFn: (data: ProjectForm) => {
       const teamIds = data.team_ids?.length
@@ -142,9 +157,22 @@ export default function ProjectsPage() {
         team_ids: teamIds,
       });
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+    onSuccess: (newProject: Project) => {
+      // 1. Optimistic: immediately prepend the new project to all matching list caches
+      qc.setQueriesData<ListResponse<Project>>(
+        { queryKey: ["projects"] },
+        (old) => {
+          if (!old) return old;
+          if (old.data?.some((p) => p.id === newProject.id)) return old;
+          return {
+            ...old,
+            data: [newProject, ...old.data],
+            total: old.total + 1,
+          };
+        },
+      );
+      // 2. Then sync with server
+      refreshProjectCaches();
       setShowCreate(false);
       reset();
       setError("");
@@ -156,12 +184,58 @@ export default function ProjectsPage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.projects.delete(currentOrg!.id, id),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+    onSuccess: (_, deletedId: string) => {
+      // Optimistic: immediately remove from all matching list caches
+      qc.setQueriesData<ListResponse<Project>>(
+        { queryKey: ["projects"] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: old.data.filter((p) => p.id !== deletedId),
+            total: Math.max(0, old.total - 1),
+          };
+        },
+      );
+      refreshProjectCaches();
       setDeleteTarget(null);
       toast.success("Project deleted");
     },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: ProjectForm & { id: string }) =>
+      api.projects.update(currentOrg!.id, data.id, {
+        name: data.name,
+        description: data.description,
+        status: data.status as Project["status"],
+        team_ids: data.team_ids?.length
+          ? data.team_ids
+          : data.team_id
+            ? [data.team_id]
+            : undefined,
+      }),
+    onSuccess: (updatedProject: Project) => {
+      // Optimistic: immediately replace the matching project in all list caches
+      qc.setQueriesData<ListResponse<Project>>(
+        { queryKey: ["projects"] },
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            data: old.data.map((p) =>
+              p.id === updatedProject.id ? updatedProject : p,
+            ),
+          };
+        },
+      );
+      refreshProjectCaches();
+      setEditTarget(null);
+      setError("");
+      toast.success("Project updated");
+    },
+    onError: (e: Error) =>
+      setError(e instanceof ApiError ? e.message : "Failed to update project"),
   });
 
   const handleSort = (col: string) => {
@@ -473,6 +547,14 @@ export default function ProjectsPage() {
                           className="flex gap-1 justify-end"
                           onClick={(e) => e.stopPropagation()}
                         >
+                          <PermissionGate resource="projects" action="update">
+                            <button
+                              className="btn btn-ghost btn-xs btn-square"
+                              onClick={() => setEditTarget(project)}
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          </PermissionGate>
                           <PermissionGate resource="projects" action="delete">
                             <button
                               className="btn btn-ghost btn-xs btn-square text-error"
@@ -531,6 +613,14 @@ export default function ProjectsPage() {
                     className="flex gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
+                    <PermissionGate resource="projects" action="update">
+                      <button
+                        className="btn btn-ghost btn-xs btn-square"
+                        onClick={() => setEditTarget(project)}
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                    </PermissionGate>
                     <PermissionGate resource="projects" action="delete">
                       <button
                         className="btn btn-ghost btn-xs btn-square"
@@ -548,47 +638,13 @@ export default function ProjectsPage() {
       )}
 
       {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
-          <span className="text-sm text-base-content/60">
-            Showing {page * PAGE_SIZE + 1}&ndash;
-            {Math.min((page + 1) * PAGE_SIZE, total)} of {total}
-          </span>
-          <div className="join">
-            <button
-              className="join-item btn btn-sm"
-              disabled={page === 0}
-              onClick={() => setPage(0)}
-            >
-              &laquo;
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              &lsaquo;
-            </button>
-            <button className="join-item btn btn-sm">
-              Page {page + 1} of {totalPages}
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              &rsaquo;
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage(totalPages - 1)}
-            >
-              &raquo;
-            </button>
-          </div>
-        </div>
-      )}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        total={total}
+        pageSize={PAGE_SIZE}
+        onPageChange={setPage}
+      />
 
       {/* Create Modal */}
       <Modal
@@ -680,6 +736,24 @@ export default function ProjectsPage() {
         </form>
       </Modal>
 
+      {/* Edit Modal */}
+      {editTarget && (
+        <EditProjectModal
+          project={editTarget}
+          teamOptions={teamOptions}
+          teamList={teamList}
+          onClose={() => {
+            setEditTarget(null);
+            setError("");
+          }}
+          onSubmit={(data) =>
+            updateMutation.mutate({ ...data, id: editTarget.id })
+          }
+          loading={updateMutation.isPending}
+          error={error}
+        />
+      )}
+
       <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
@@ -689,5 +763,119 @@ export default function ProjectsPage() {
         loading={deleteMutation.isPending}
       />
     </div>
+  );
+}
+
+function EditProjectModal({
+  project,
+  teamOptions,
+  teamList,
+  onClose,
+  onSubmit,
+  loading,
+  error,
+}: {
+  project: Project;
+  teamOptions: { value: string; label: string }[];
+  teamList: Team[];
+  onClose: () => void;
+  onSubmit: (data: ProjectForm) => void;
+  loading: boolean;
+  error: string;
+}) {
+  const {
+    register,
+    handleSubmit,
+    formState: { errors: formErrors },
+    watch,
+    setValue,
+  } = useForm<ProjectForm>({
+    defaultValues: {
+      name: project.name,
+      description: project.description || "",
+      status: project.status,
+      team_id: project.team_ids?.[0] || project.team_id || "",
+      team_ids: project.team_ids || (project.team_id ? [project.team_id] : []),
+    },
+  });
+  const selectedTeamIds = watch("team_ids") || [];
+
+  return (
+    <Modal open onClose={onClose} title="Edit Project">
+      {error && (
+        <div className="alert alert-error mb-4">
+          <span>{error}</span>
+        </div>
+      )}
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <Input
+          label="Project Name"
+          placeholder="My Project"
+          {...register("name", { required: "Name is required" })}
+          error={formErrors.name?.message}
+        />
+        <Textarea
+          label="Description"
+          placeholder="Optional description"
+          {...register("description")}
+        />
+        <Select
+          label="Status"
+          options={[
+            { value: "active", label: "Active" },
+            { value: "archived", label: "Archived" },
+            { value: "completed", label: "Completed" },
+          ]}
+          {...register("status")}
+        />
+        <Select
+          label="Primary Team"
+          placeholder="Select a team"
+          options={teamOptions}
+          {...register("team_id", { required: "Team is required" })}
+          error={formErrors.team_id?.message}
+        />
+        {teamOptions.length > 1 && (
+          <div>
+            <label className="label">
+              <span className="label-text font-medium">
+                Additional Teams (optional)
+              </span>
+            </label>
+            <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto">
+              {teamOptions.map((t) => (
+                <label
+                  key={t.value}
+                  className="flex items-center gap-2 p-2 rounded border border-base-300 cursor-pointer hover:bg-base-200"
+                >
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-sm checkbox-primary"
+                    checked={selectedTeamIds.includes(t.value)}
+                    onChange={(e) => {
+                      const ids = e.target.checked
+                        ? [...selectedTeamIds, t.value]
+                        : selectedTeamIds.filter(
+                            (id: string) => id !== t.value,
+                          );
+                      setValue("team_ids", ids);
+                    }}
+                  />
+                  <span className="text-sm truncate">{t.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="modal-action">
+          <Button type="button" variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" loading={loading}>
+            Save Changes
+          </Button>
+        </div>
+      </form>
+    </Modal>
   );
 }

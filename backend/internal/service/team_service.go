@@ -16,6 +16,7 @@ import (
 
 type CreateTeamParams struct {
 	OrgID       uuid.UUID  `json:"-"`
+	UserID      uuid.UUID  `json:"-"` // creating user — auto-added as team lead
 	Name        string     `json:"name" validate:"required,min=2,max=100"`
 	Description string     `json:"description,omitempty"`
 	ManagerID   *uuid.UUID `json:"manager_id,omitempty"`
@@ -71,7 +72,23 @@ func (s *TeamService) Create(ctx context.Context, params CreateTeamParams) (*dom
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		created, err = s.teamRepo.Create(ctx, tx, team)
-		return err
+		if err != nil {
+			return err
+		}
+
+		// Auto-add creator as team lead so the team appears in their "mine" list.
+		if params.UserID != uuid.Nil {
+			creatorMember := &domain.TeamMember{
+				TeamID: created.ID,
+				UserID: params.UserID,
+				Role:   domain.RoleTeamLead,
+			}
+			if err := s.teamMemberRepo.Add(ctx, tx, creatorMember); err != nil {
+				return fmt.Errorf("add creator as team lead: %w", err)
+			}
+		}
+
+		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create team: %w", err)
