@@ -183,14 +183,15 @@ export function MessageList() {
     queryKey: ["chat-messages", activeChannelId],
     queryFn: async () => {
       if (!activeChannelId) return [];
-      const raw = await api.chat.messages.list(activeChannelId, 50);
+      const raw = await api.chat.messages.list(activeChannelId, 30);
       const data = raw ?? [];
       const sorted = [...data].reverse();
       setMessages(activeChannelId, sorted);
-      setHasMore(activeChannelId, data.length >= 50);
+      setHasMore(activeChannelId, data.length >= 30);
       return sorted;
     },
     enabled: !!activeChannelId,
+    staleTime: 30_000,
   });
 
   // Auto-scroll on new messages

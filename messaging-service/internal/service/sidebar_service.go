@@ -2,17 +2,24 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
+	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/messaging-service/internal/domain"
 	"github.com/orbispm/messaging-service/internal/middleware"
 	"github.com/orbispm/messaging-service/internal/pkg/tenant"
 	"github.com/orbispm/messaging-service/internal/repository"
 )
+
+const sidebarCacheTTL = 30 * time.Second
 
 // SidebarService provides hierarchical channel sidebar data and user search.
 type SidebarService struct {
@@ -21,6 +28,22 @@ type SidebarService struct {
 	channelR repository.ChannelRepository
 	memberR  repository.ChannelMemberRepository
 	catRepo  repository.CategoryRepository
+	rdb      *redis.Client
+}
+
+func sidebarCacheKey(orgID, userID uuid.UUID) string {
+	return fmt.Sprintf("chat:sidebar:%s:%s:v1", orgID, userID)
+}
+
+// InvalidateSidebarCache removes the cached sidebar for a specific user.
+func (s *SidebarService) InvalidateSidebarCache(ctx context.Context, orgID, userID uuid.UUID) {
+	if s.rdb == nil {
+		return
+	}
+	key := sidebarCacheKey(orgID, userID)
+	if err := s.rdb.Del(ctx, key).Err(); err != nil {
+		log.Warn().Err(err).Str("key", key).Msg("failed to invalidate sidebar cache")
+	}
 }
 
 // NewSidebarService creates a new SidebarService.
@@ -30,14 +53,26 @@ func NewSidebarService(
 	channelR repository.ChannelRepository,
 	memberR repository.ChannelMemberRepository,
 	catRepo repository.CategoryRepository,
+	rdb *redis.Client,
 ) *SidebarService {
-	return &SidebarService{pool: pool, txMgr: txMgr, channelR: channelR, memberR: memberR, catRepo: catRepo}
+	return &SidebarService{pool: pool, txMgr: txMgr, channelR: channelR, memberR: memberR, catRepo: catRepo, rdb: rdb}
 }
 
 // GetSidebar returns a hierarchical view of the user's channels.
 func (s *SidebarService) GetSidebar(ctx context.Context) (*domain.SidebarData, error) {
 	userID := middleware.UserIDFromCtx(ctx)
 	orgID := tenant.OrgID(ctx)
+
+	// Serve from cache when available.
+	if s.rdb != nil {
+		key := sidebarCacheKey(orgID, userID)
+		if cached, err := s.rdb.Get(ctx, key).Bytes(); err == nil {
+			var sd domain.SidebarData
+			if json.Unmarshal(cached, &sd) == nil {
+				return &sd, nil
+			}
+		}
+	}
 
 	var sidebar domain.SidebarData
 
@@ -138,8 +173,10 @@ func (s *SidebarService) GetSidebar(ctx context.Context) (*domain.SidebarData, e
 			}
 		}
 
-		// Enrich DM channel names with other user's display name
+		// Enrich DM channel names with other user's display name (batch)
 		if len(sidebar.DMChannels) > 0 {
+			// Collect all other-user UUIDs first
+			otherIDMap := make(map[uuid.UUID][]int) // otherUUID → indices into DMChannels
 			for i := range sidebar.DMChannels {
 				dm := &sidebar.DMChannels[i]
 				if dm.DMPair == "" {
@@ -160,18 +197,37 @@ func (s *SidebarService) GetSidebar(ctx context.Context) (*domain.SidebarData, e
 				if err != nil {
 					continue
 				}
-				var displayName, email, avatarURL string
-				_ = s.pool.QueryRow(ctx,
-					`SELECT COALESCE(display_name, ''), COALESCE(email, ''), COALESCE(avatar_url, '')
-					 FROM users WHERE id = $1`, otherUUID,
-				).Scan(&displayName, &email, &avatarURL)
-				if displayName != "" {
-					dm.Name = displayName
-				} else if email != "" {
-					dm.Name = email
+				otherIDMap[otherUUID] = append(otherIDMap[otherUUID], i)
+			}
+
+			if len(otherIDMap) > 0 {
+				otherUUIDs := make([]uuid.UUID, 0, len(otherIDMap))
+				for id := range otherIDMap {
+					otherUUIDs = append(otherUUIDs, id)
 				}
-				if dm.Description == "" && email != "" {
-					dm.Description = email
+				rows, err := s.pool.Query(ctx,
+					`SELECT id, COALESCE(display_name, ''), COALESCE(email, ''), COALESCE(avatar_url, '')
+					 FROM users WHERE id = ANY($1)`, otherUUIDs)
+				if err == nil {
+					defer rows.Close()
+					for rows.Next() {
+						var uid uuid.UUID
+						var displayName, email, avatarURL string
+						if err := rows.Scan(&uid, &displayName, &email, &avatarURL); err != nil {
+							continue
+						}
+						for _, idx := range otherIDMap[uid] {
+							dm := &sidebar.DMChannels[idx]
+							if displayName != "" {
+								dm.Name = displayName
+							} else if email != "" {
+								dm.Name = email
+							}
+							if dm.Description == "" && email != "" {
+								dm.Description = email
+							}
+						}
+					}
 				}
 			}
 		}
@@ -200,6 +256,16 @@ func (s *SidebarService) GetSidebar(ctx context.Context) (*domain.SidebarData, e
 	}
 	if sidebar.GroupChannels == nil {
 		sidebar.GroupChannels = []domain.Channel{}
+	}
+
+	// Populate cache.
+	if s.rdb != nil {
+		key := sidebarCacheKey(orgID, userID)
+		if data, jsonErr := json.Marshal(sidebar); jsonErr == nil {
+			if setErr := s.rdb.Set(ctx, key, data, sidebarCacheTTL).Err(); setErr != nil {
+				log.Warn().Err(setErr).Str("key", key).Msg("failed to cache sidebar")
+			}
+		}
 	}
 
 	return &sidebar, nil

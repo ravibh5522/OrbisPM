@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>{{ title | default("You were mentioned") }} — {{ app_name }}</title>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #f4f4f6;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto,
+        &quot;Helvetica Neue&quot;, Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    "
+  >
+    <!-- Preheader text (hidden) -->
+    <div style="display: none; max-height: 0; overflow: hidden; mso-hide: all">
+      {{ body | default("You were mentioned in a conversation.") | truncate(90)
+      }}
+    </div>
+
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="background-color: #f4f4f6"
+    >
+      <tr>
+        <td align="center" style="padding: 40px 16px 48px">
+          <table
+            role="presentation"
+            width="100%"
+            cellspacing="0"
+            cellpadding="0"
+            border="0"
+            style="max-width: 600px"
+          >
+            <!-- Header -->
+            <tr>
+              <td style="padding-bottom: 24px">
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td>
+                      <span
+                        style="
+                          font-size: 18px;
+                          font-weight: 700;
+                          color: #6366f1;
+                          letter-spacing: -0.3px;
+                        "
+                        >{{ app_name }}</span
+                      >
+                    </td>
+                    <td align="right">
+                      <span
+                        style="
+                          font-size: 12px;
+                          color: #9ca3af;
+                          font-weight: 500;
+                          letter-spacing: 0.3px;
+                          text-transform: uppercase;
+                        "
+                        >Mention</span
+                      >
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Main card -->
+            <tr>
+              <td
+                style="
+                  background-color: #ffffff;
+                  border-radius: 12px;
+                  box-shadow:
+                    0 1px 4px rgba(0, 0, 0, 0.06),
+                    0 4px 16px rgba(0, 0, 0, 0.04);
+                  overflow: hidden;
+                "
+              >
+                <!-- Indigo top accent bar -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td
+                      style="
+                        background: linear-gradient(
+                          135deg,
+                          #6366f1 0%,
+                          #818cf8 100%
+                        );
+                        height: 4px;
+                        font-size: 0;
+                        line-height: 0;
+                      "
+                    >
+                      &nbsp;
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- @ icon row -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td style="padding: 36px 40px 0; text-align: left">
+                      <table
+                        role="presentation"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              background-color: #eef2ff;
+                              border-radius: 10px;
+                              width: 44px;
+                              height: 44px;
+                              text-align: center;
+                              vertical-align: middle;
+                            "
+                          >
+                            <span
+                              style="
+                                font-size: 22px;
+                                line-height: 44px;
+                                display: block;
+                                color: #6366f1;
+                                font-weight: 700;
+                              "
+                              >@</span
+                            >
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Card body -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td style="padding: 20px 40px 36px">
+                      <!-- Title -->
+                      <h1
+                        style="
+                          margin: 0 0 8px;
+                          font-size: 22px;
+                          font-weight: 700;
+                          color: #111827;
+                          line-height: 1.35;
+                          letter-spacing: -0.2px;
+                        "
+                      >
+                        {{ title | default("You were mentioned") }}
+                      </h1>
+
+                      <!-- Channel badge -->
+                      {% if channel_name %}
+                      <p
+                        style="
+                          margin: 0 0 20px;
+                          font-size: 13px;
+                          color: #6366f1;
+                          font-weight: 600;
+                        "
+                      >
+                        in #{{ channel_name }}
+                      </p>
+                      {% endif %}
+
+                      <!-- Divider -->
+                      <table
+                        role="presentation"
+                        width="100%"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                        style="margin-bottom: 20px"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              border-top: 1px solid #f3f4f6;
+                              font-size: 0;
+                              line-height: 0;
+                            "
+                          >
+                            &nbsp;
+                          </td>
+                        </tr>
+                      </table>
+
+                      <!-- Message preview -->
+                      {% if body %}
+                      <table
+                        role="presentation"
+                        width="100%"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                        style="margin-bottom: 28px"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              background-color: #f8f9ff;
+                              border-left: 3px solid #6366f1;
+                              border-radius: 0 8px 8px 0;
+                              padding: 14px 16px;
+                            "
+                          >
+                            <p
+                              style="
+                                margin: 0;
+                                font-size: 14px;
+                                color: #374151;
+                                line-height: 1.7;
+                                font-style: italic;
+                              "
+                            >
+                              {{ body }}
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                      {% endif %}
+
+                      <!-- Sender attribution -->
+                      {% if sender_name %}
+                      <p
+                        style="
+                          margin: 0 0 28px;
+                          font-size: 13px;
+                          color: #6b7280;
+                        "
+                      >
+                        Sent by
+                        <strong style="color: #374151"
+                          >{{ sender_name }}</strong
+                        >
+                      </p>
+                      {% endif %}
+
+                      <!-- CTA Button -->
+                      <table
+                        role="presentation"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              border-radius: 8px;
+                              background: linear-gradient(
+                                135deg,
+                                #6366f1 0%,
+                                #818cf8 100%
+                              );
+                            "
+                          >
+                            {% if cta_url %}
+                            <a
+                              href="{{ cta_url }}"
+                              style="
+                                display: inline-block;
+                                padding: 13px 28px;
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: #ffffff;
+                                text-decoration: none;
+                                border-radius: 8px;
+                                letter-spacing: 0.1px;
+                              "
+                            >
+                              Go to conversation &rarr;
+                            </a>
+                            {% else %}
+                            <a
+                              href="{{ frontend_url }}"
+                              style="
+                                display: inline-block;
+                                padding: 13px 28px;
+                                font-size: 14px;
+                                font-weight: 600;
+                                color: #ffffff;
+                                text-decoration: none;
+                                border-radius: 8px;
+                                letter-spacing: 0.1px;
+                              "
+                            >
+                              Open OrbisPM &rarr;
+                            </a>
+                            {% endif %}
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding-top: 28px; text-align: center">
+                <p style="margin: 0 0 6px; font-size: 12px; color: #9ca3af">
+                  You received this because you were mentioned in
+                  <strong style="color: #6b7280">{{ app_name }}</strong>.
+                </p>
+                <p style="margin: 0; font-size: 12px; color: #d1d5db">
+                  Manage your notification preferences in your account settings.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

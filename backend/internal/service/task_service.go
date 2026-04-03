@@ -13,6 +13,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/metrics"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
 )
@@ -292,6 +293,8 @@ func (s *TaskService) Create(ctx context.Context, params CreateTaskParams) (*dom
 	s.enqueueActivity(created.OrgID.String(), "task", created.ID.String(), "created", "", nil)
 	// Enqueue search index
 	s.enqueueSearchIndex("tasks", created)
+	// Record business metric
+	metrics.BusinessOpsTotal.WithLabelValues("task", "create").Inc()
 	// Publish real-time event — include task so org socket can update Zustand store
 	s.publishEvent(ctx, domain.EventTaskCreated, created.OrgID.String(), created.ID.String(), map[string]any{"project_id": created.ProjectID.String(), "task": created})
 
@@ -1092,6 +1095,7 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 
 	// Enqueue activity log
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "updated", "", directChanges)
+	metrics.BusinessOpsTotal.WithLabelValues("task", "update").Inc()
 	// Enqueue search index update
 	s.enqueueSearchIndex("tasks", updated)
 	// Publish real-time event — include project_id + full task so frontend can update Zustand store
@@ -1322,6 +1326,7 @@ func (s *TaskService) Delete(ctx context.Context, id uuid.UUID) ([]*domain.Task,
 
 	// Enqueue activity log
 	s.enqueueActivity(task.OrgID.String(), "task", task.ID.String(), "deleted", "", nil)
+	metrics.BusinessOpsTotal.WithLabelValues("task", "delete").Inc()
 	// Enqueue search delete
 	s.enqueueSearchDelete("tasks", id.String())
 	// Publish real-time event

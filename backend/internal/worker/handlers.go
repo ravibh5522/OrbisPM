@@ -52,6 +52,8 @@ func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, 
 		template = "change_request_approved"
 	case "change_request_rejected":
 		template = "change_request_rejected"
+	case "message.mention":
+		template = "mention"
 	}
 
 	payload := map[string]any{

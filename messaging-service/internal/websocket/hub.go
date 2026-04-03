@@ -156,18 +156,40 @@ func (h *ChatHub) HandleEvent(event domain.DomainEvent) {
 	}
 }
 
-// Join adds a connection to an org room.
-func (h *ChatHub) Join(conn *ChatConn) {
+// maxConnsPerUser limits the number of concurrent WebSocket connections per user per org.
+const maxConnsPerUser = 5
+
+// Join adds a connection to an org room. Returns false if the user already has
+// too many connections.
+func (h *ChatHub) Join(conn *ChatConn) bool {
 	h.mu.Lock()
-	if h.orgs[conn.OrgID] == nil {
-		h.orgs[conn.OrgID] = make(map[*ChatConn]struct{})
+	room := h.orgs[conn.OrgID]
+	if room == nil {
+		room = make(map[*ChatConn]struct{})
+		h.orgs[conn.OrgID] = room
 	}
-	h.orgs[conn.OrgID][conn] = struct{}{}
+	count := 0
+	for c := range room {
+		if c.UserID == conn.UserID {
+			count++
+		}
+	}
+	if count >= maxConnsPerUser {
+		h.mu.Unlock()
+		log.Warn().
+			Str("user_id", conn.UserID.String()).
+			Str("org_id", conn.OrgID.String()).
+			Int("count", count).
+			Msg("chat: connection limit reached")
+		return false
+	}
+	room[conn] = struct{}{}
 	h.mu.Unlock()
 	log.Info().
 		Str("user_id", conn.UserID.String()).
 		Str("org_id", conn.OrgID.String()).
 		Msg("chat: user connected")
+	return true
 }
 
 // Leave removes a connection.

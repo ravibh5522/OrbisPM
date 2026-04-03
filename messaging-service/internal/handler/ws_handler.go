@@ -19,10 +19,11 @@ import (
 
 // WSHandler handles WebSocket connections for real-time chat.
 type WSHandler struct {
-	hub         *websocket.ChatHub
-	channelSvc  *service.ChannelService
-	messageSvc  *service.MessageService
-	presenceSvc *service.PresenceService
+	hub            *websocket.ChatHub
+	channelSvc     *service.ChannelService
+	messageSvc     *service.MessageService
+	presenceSvc    *service.PresenceService
+	allowedOrigins []string
 }
 
 // NewWSHandler creates a new WSHandler.
@@ -31,12 +32,27 @@ func NewWSHandler(
 	channelSvc *service.ChannelService,
 	messageSvc *service.MessageService,
 	presenceSvc *service.PresenceService,
+	allowedOrigins []string,
 ) *WSHandler {
+	// Convert full URLs to origin patterns (host:port or just host)
+	patterns := make([]string, 0, len(allowedOrigins))
+	for _, o := range allowedOrigins {
+		// nhooyr.io/websocket OriginPatterns expects host patterns
+		o = strings.TrimPrefix(o, "https://")
+		o = strings.TrimPrefix(o, "http://")
+		if o != "" {
+			patterns = append(patterns, o)
+		}
+	}
+	if len(patterns) == 0 {
+		patterns = []string{"*"} // fallback for dev
+	}
 	return &WSHandler{
-		hub:         hub,
-		channelSvc:  channelSvc,
-		messageSvc:  messageSvc,
-		presenceSvc: presenceSvc,
+		hub:            hub,
+		channelSvc:     channelSvc,
+		messageSvc:     messageSvc,
+		presenceSvc:    presenceSvc,
+		allowedOrigins: patterns,
 	}
 }
 
@@ -56,7 +72,7 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	_ = rc.SetWriteDeadline(time.Time{})
 
 	c, err := ws.Accept(w, r, &ws.AcceptOptions{
-		OriginPatterns: []string{"*"},
+		OriginPatterns: h.allowedOrigins,
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("chat ws: accept failed")
@@ -65,8 +81,13 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 
 	conn := websocket.NewChatConn(userID, orgID, c, 256)
 
-	h.hub.Join(conn)
+	if !h.hub.Join(conn) {
+		c.Close(ws.StatusPolicyViolation, "too many connections")
+		return
+	}
+	middleware.IncWSConnections()
 	defer h.hub.Leave(conn)
+	defer middleware.DecWSConnections()
 
 	// Mark user online
 	if h.presenceSvc != nil {
@@ -117,11 +138,39 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 		Payload: mustMarshal(map[string]any{"org_size": h.hub.OrgSize(orgID)}),
 	})
 
-	// Read pump
+	// Read pump — with per-connection rate limiting (max 30 msgs/sec)
+	msgBucket := 30 // token bucket capacity
+	lastRefill := time.Now()
 	for {
 		_, data, err := c.Read(ctx)
 		if err != nil {
 			break
+		}
+
+		// Refill tokens every second
+		now := time.Now()
+		elapsed := now.Sub(lastRefill)
+		if elapsed >= time.Second {
+			msgBucket = 30
+			lastRefill = now
+		}
+
+		if msgBucket <= 0 {
+			h.hub.SendTo(conn, websocket.WSMessage{
+				Action: "error",
+				Error:  "rate limit exceeded, slow down",
+			})
+			continue
+		}
+		msgBucket--
+
+		// Reject oversized frames (64KB)
+		if len(data) > 65536 {
+			h.hub.SendTo(conn, websocket.WSMessage{
+				Action: "error",
+				Error:  "message too large",
+			})
+			continue
 		}
 
 		var msg websocket.WSMessage
@@ -133,7 +182,10 @@ func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
+		middleware.WSMessagesTotal.WithLabelValues(msg.Action, "inbound").Inc()
+		dispatchStart := time.Now()
 		h.dispatch(ctx, conn, msg)
+		middleware.WSMessageLatency.Observe(time.Since(dispatchStart).Seconds())
 	}
 }
 
@@ -175,6 +227,7 @@ func (h *WSHandler) handleChannelJoin(ctx context.Context, conn *websocket.ChatC
 	}
 
 	conn.JoinChannel(channelID)
+	middleware.ChannelsActiveGauge.Inc()
 	h.reply(conn, msg.ID, "channel:joined", map[string]any{"channel_id": channelID}, "")
 
 	log.Debug().
@@ -197,6 +250,7 @@ func (h *WSHandler) handleChannelLeave(conn *websocket.ChatConn, msg websocket.W
 		return
 	}
 	conn.LeaveChannel(channelID)
+	middleware.ChannelsActiveGauge.Dec()
 	h.reply(conn, msg.ID, "channel:left", map[string]any{"channel_id": channelID}, "")
 }
 
@@ -221,6 +275,11 @@ func (h *WSHandler) handleMessageSend(ctx context.Context, conn *websocket.ChatC
 
 	if strings.TrimSpace(payload.Body) == "" {
 		h.reply(conn, msg.ID, "error", nil, "message body is required")
+		return
+	}
+
+	if len(payload.Body) > 50000 {
+		h.reply(conn, msg.ID, "error", nil, "message body too long")
 		return
 	}
 
@@ -271,6 +330,8 @@ func (h *WSHandler) handleTyping(conn *websocket.ChatConn, msg websocket.WSMessa
 		eventType = domain.EventTypingStop
 	}
 
+	middleware.TypingEventsTotal.Inc()
+
 	// Broadcast to channel members (ephemeral, not persisted via NATS)
 	h.hub.BroadcastChannel(conn.OrgID, channelID, websocket.WSMessage{
 		Action:  "event:" + eventType,
@@ -284,5 +345,6 @@ func (h *WSHandler) reply(conn *websocket.ChatConn, reqID, action string, payloa
 	if payload != nil {
 		msg.Payload = mustMarshal(payload)
 	}
+	middleware.WSMessagesTotal.WithLabelValues(action, "outbound").Inc()
 	h.hub.SendTo(conn, msg)
 }

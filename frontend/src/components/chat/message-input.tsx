@@ -3,12 +3,13 @@
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
-import type { OrgMemberInfo } from "@/types/domain";
+import type { ChatChannelMember } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { Paperclip, Send, Smile, X } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 const EMOJI_QUICK = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏"];
+const EMPTY_MEMBERS: ChatChannelMember[] = [];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_TYPES = [
   "image/jpeg",
@@ -51,24 +52,41 @@ export function MessageInput() {
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
   const [mentionStart, setMentionStart] = useState(0); // cursor position of the "@"
   const [mentionIndex, setMentionIndex] = useState(0); // highlighted option
+  // Tracks the UUID of every user inserted via the mention dropdown
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
 
-  const [debouncedMentionQuery, setDebouncedMentionQuery] = useState("");
-  useEffect(() => {
-    const timer = setTimeout(
-      () => setDebouncedMentionQuery(mentionQuery ?? ""),
-      200,
-    );
-    return () => clearTimeout(timer);
-  }, [mentionQuery]);
+  // Channel members from store (loaded on active channel change)
+  const channelMembers = useChatStore(
+    (s) => s.channelMembers.get(s.activeChannelId || "") ?? EMPTY_MEMBERS,
+  );
+  const setChannelMembers = useChatStore((s) => s.setChannelMembers);
 
-  const { data: mentionResults } = useQuery<OrgMemberInfo[]>({
-    queryKey: ["mention-users", debouncedMentionQuery],
+  // Load members for the active channel (cached per-channel)
+  useQuery({
+    queryKey: ["channel-members-mention", activeChannelId],
     queryFn: async () => {
-      if (!debouncedMentionQuery) return [];
-      return (await api.chat.users.search(debouncedMentionQuery, 6)) ?? [];
+      if (!activeChannelId) return [];
+      const members = (await api.chat.members.list(activeChannelId)) ?? [];
+      setChannelMembers(activeChannelId, members);
+      return members;
     },
-    enabled: mentionQuery !== null && !!debouncedMentionQuery,
+    enabled: !!activeChannelId,
+    staleTime: 60_000,
   });
+
+  // Filter channel members client-side based on mention query
+  const mentionResults = useMemo<ChatChannelMember[]>(() => {
+    if (mentionQuery === null) return [];
+    if (!mentionQuery.trim()) return channelMembers.slice(0, 8);
+    const q = mentionQuery.toLowerCase();
+    return channelMembers
+      .filter(
+        (m) =>
+          m.display_name?.toLowerCase().includes(q) ||
+          m.email?.toLowerCase().includes(q),
+      )
+      .slice(0, 8);
+  }, [mentionQuery, channelMembers]);
 
   const validateFile = (file: File): string | null => {
     if (file.size > MAX_FILE_SIZE) {
@@ -184,10 +202,15 @@ export function MessageInput() {
         await api.chat.messages.send(activeChannelId, {
           body: body.trim(),
           body_format: "text",
+          mentions:
+            mentionedUserIds.length > 0
+              ? [...new Set(mentionedUserIds)]
+              : undefined,
         });
       }
 
       setBody("");
+      setMentionedUserIds([]);
       textareaRef.current?.focus();
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -197,7 +220,7 @@ export function MessageInput() {
     } finally {
       setSending(false);
     }
-  }, [body, activeChannelId, files]);
+  }, [body, activeChannelId, files, mentionedUserIds]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Handle @mention navigation
@@ -272,12 +295,13 @@ export function MessageInput() {
     }
   };
 
-  const insertMention = (user: OrgMemberInfo) => {
+  const insertMention = (user: ChatChannelMember) => {
     const name = user.display_name || user.email;
     const before = body.slice(0, mentionStart);
     const after = body.slice(mentionStart + (mentionQuery?.length ?? 0) + 1); // +1 for @
     const newBody = `${before}@${name} ${after}`;
     setBody(newBody);
+    setMentionedUserIds((prev) => [...prev, user.user_id]);
     setMentionQuery(null);
     textareaRef.current?.focus();
   };
@@ -357,50 +381,50 @@ export function MessageInput() {
 
       <div className="relative flex items-end gap-2 bg-base-200 rounded-2xl px-3 py-2">
         {/* @mention dropdown */}
-        {mentionQuery !== null &&
-          mentionResults &&
-          mentionResults.length > 0 && (
-            <div
-              ref={mentionDropdownRef}
-              className="absolute bottom-full left-0 right-0 mb-1 bg-base-100 border border-base-200 rounded-xl shadow-lg z-30 max-h-48 overflow-y-auto"
-            >
-              <div className="px-2 py-1.5 text-[11px] font-semibold text-base-content/40 uppercase tracking-wider">
-                Members matching &quot;{mentionQuery}&quot;
-              </div>
-              {mentionResults.map((u, i) => (
-                <button
-                  key={u.user_id}
-                  className={cn(
-                    "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-base-200/60 transition-colors",
-                    i === mentionIndex && "bg-base-200/60",
-                  )}
-                  onMouseDown={(e) => {
-                    e.preventDefault(); // prevent blur
-                    insertMention(u);
-                  }}
-                  onMouseEnter={() => setMentionIndex(i)}
-                >
-                  <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] flex-shrink-0">
-                    {u.avatar_url ? (
-                      <img
-                        src={u.avatar_url}
-                        alt=""
-                        className="w-6 h-6 rounded-full object-cover"
-                      />
-                    ) : (
-                      (u.display_name?.[0] || u.email?.[0] || "?").toUpperCase()
-                    )}
-                  </div>
-                  <span className="truncate">{u.display_name || u.email}</span>
-                  {u.display_name && (
-                    <span className="text-xs text-base-content/40 ml-auto truncate">
-                      {u.email}
-                    </span>
-                  )}
-                </button>
-              ))}
+        {mentionQuery !== null && mentionResults.length > 0 && (
+          <div
+            ref={mentionDropdownRef}
+            className="absolute bottom-full left-0 right-0 mb-1 bg-base-100 border border-base-200 rounded-xl shadow-lg z-30 max-h-48 overflow-y-auto"
+          >
+            <div className="px-2 py-1.5 text-[11px] font-semibold text-base-content/40 uppercase tracking-wider">
+              {mentionQuery
+                ? `Members matching "${mentionQuery}"`
+                : "Channel Members"}
             </div>
-          )}
+            {mentionResults.map((u, i) => (
+              <button
+                key={u.user_id}
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-base-200/60 transition-colors",
+                  i === mentionIndex && "bg-base-200/60",
+                )}
+                onMouseDown={(e) => {
+                  e.preventDefault(); // prevent blur
+                  insertMention(u);
+                }}
+                onMouseEnter={() => setMentionIndex(i)}
+              >
+                <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px] flex-shrink-0">
+                  {u.avatar_url ? (
+                    <img
+                      src={u.avatar_url}
+                      alt=""
+                      className="w-6 h-6 rounded-full object-cover"
+                    />
+                  ) : (
+                    (u.display_name?.[0] || u.email?.[0] || "?").toUpperCase()
+                  )}
+                </div>
+                <span className="truncate">{u.display_name || u.email}</span>
+                {u.display_name && (
+                  <span className="text-xs text-base-content/40 ml-auto truncate">
+                    {u.email}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
         {/* File upload */}
         <input
           ref={fileInputRef}

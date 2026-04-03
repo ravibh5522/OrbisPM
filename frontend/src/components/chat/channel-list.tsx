@@ -56,6 +56,12 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
   );
   const [filter, setFilter] = useState("");
 
+  // ─── Pre-load last active channel from localStorage ─
+  // This runs before sidebar loads so MessageList starts fetching immediately
+  useEffect(() => {
+    useChatStore.getState().initFromStorage();
+  }, []);
+
   // ─── Sidebar data ──────────────────────────────────
   const { data: sidebarData, isLoading } = useQuery<SidebarData>({
     queryKey: ["chat-sidebar"],
@@ -79,6 +85,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
       );
     },
     enabled: !!currentOrg,
+    staleTime: 30_000,
     refetchInterval: 30_000,
   });
 
@@ -330,6 +337,32 @@ function ConversationPanel({
   setFilter: (v: string) => void;
 }) {
   const [showCreateOverlay, setShowCreateOverlay] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(10);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Reset visible count when filter changes or items are refreshed
+  useEffect(() => {
+    setVisibleCount(10);
+  }, [filter]);
+
+  // IntersectionObserver: load 10 more when sentinel scrolls into view
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleCount((n) => Math.min(n + 10, items.length));
+        }
+      },
+      { threshold: 0.1 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [items.length]);
+
+  const visibleItems = items.slice(0, visibleCount);
+  const hasMore = visibleCount < items.length;
 
   if (showCreateOverlay) {
     return (
@@ -368,7 +401,7 @@ function ConversationPanel({
             No conversations yet
           </p>
         )}
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <ConversationRow
             key={item.id}
             item={item}
@@ -379,6 +412,15 @@ function ConversationPanel({
             currentUserId={currentUserId}
           />
         ))}
+        {/* Sentinel: triggers loading the next batch when scrolled into view */}
+        {hasMore && (
+          <div ref={sentinelRef} className="flex justify-center py-2">
+            <span className="loading loading-spinner loading-xs text-base-content/30" />
+          </div>
+        )}
+        {!hasMore && items.length > 10 && (
+          <div ref={sentinelRef} className="h-1" />
+        )}
       </div>
     </div>
   );

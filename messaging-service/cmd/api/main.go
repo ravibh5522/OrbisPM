@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	minio "github.com/minio/minio-go/v7"
 	miniocreds "github.com/minio/minio-go/v7/pkg/credentials"
 	"github.com/nats-io/nats.go"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -181,11 +183,11 @@ func main() {
 	messageSvc := service.NewMessageService(
 		txManager, messageRepo, memberRepo, channelRepo,
 		reactionRepo, attachmentRepo, pinRepo, bookmarkRepo, publisher, cfg.EditWindowMinutes,
-		uploadSvc, redisEventPublisher,
+		uploadSvc, redisEventPublisher, rdb,
 	)
 
 	// ─── Sidebar Service ──────────────────────
-	sidebarSvc := service.NewSidebarService(pool, txManager, channelRepo, memberRepo, categoryRepo)
+	sidebarSvc := service.NewSidebarService(pool, txManager, channelRepo, memberRepo, categoryRepo, rdb)
 
 	// ─── Category Service ─────────────────────
 	categorySvc := service.NewCategoryService(txManager, categoryRepo)
@@ -202,7 +204,7 @@ func main() {
 
 	// ─── Handlers ─────────────────────────────
 	restHandler := handler.NewRESTHandler(channelSvc, messageSvc, uploadSvc, presenceSvc, sidebarSvc, categorySvc)
-	wsHandler := handler.NewWSHandler(hub, channelSvc, messageSvc, presenceSvc)
+	wsHandler := handler.NewWSHandler(hub, channelSvc, messageSvc, presenceSvc, cfg.AllowedOrigins)
 
 	// ─── Router ───────────────────────────────
 	r := chi.NewRouter()
@@ -211,6 +213,8 @@ func main() {
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
+	r.Use(mw.RequestLogger)
+	r.Use(mw.Metrics)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   cfg.AllowedOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -227,18 +231,57 @@ func main() {
 		fmt.Fprint(w, `{"status":"ok","service":"messaging"}`)
 	})
 
+	// Deep health check — verifies DB, Redis, NATS
+	r.Get("/health/ready", func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		status := "ok"
+		code := http.StatusOK
+		checks := map[string]string{}
+
+		if err := pool.Ping(ctx); err != nil {
+			checks["db"] = err.Error()
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		} else {
+			checks["db"] = "ok"
+		}
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			checks["redis"] = err.Error()
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		} else {
+			checks["redis"] = "ok"
+		}
+		if !nc.IsConnected() {
+			checks["nats"] = "disconnected"
+			status = "degraded"
+			code = http.StatusServiceUnavailable
+		} else {
+			checks["nats"] = "ok"
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		resp, _ := json.Marshal(map[string]any{"status": status, "checks": checks})
+		w.Write(resp)
+	})
+
+	// Prometheus metrics
+	r.Handle("/metrics", promhttp.Handler())
+
 	// Build JWKS URL from internal URL
 	parsedIssuer, _ := url.Parse(cfg.ZitadelIssuer)
 	jwksURL := cfg.ZitadelInternalURL + "/oauth/v2/keys"
 	hostHeader := parsedIssuer.Host
 
-	authMiddleware := mw.Auth(jwksURL, cfg.ZitadelIssuer, hostHeader, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken)
+	authMiddleware := mw.Auth(jwksURL, cfg.ZitadelIssuer, hostHeader, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, rdb, cfg.JWKSCacheTTL)
 
 	// REST API routes (with timeout)
 	r.Group(func(r chi.Router) {
 		r.Use(chimw.Timeout(30 * time.Second))
 		r.Use(authMiddleware)
 		r.Use(mw.SetOrgFromHeader)
+		r.Use(mw.RateLimiter(cfg.RateLimitPerMinute, cfg.RateLimitBurst))
 
 		r.Route("/api/v1/chat", func(r chi.Router) {
 			restHandler.Routes(r)

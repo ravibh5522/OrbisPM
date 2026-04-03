@@ -13,24 +13,22 @@ data_dir = "/var/lib/vector"
 # -------------------------------------------------------
 [sources.docker_logs]
 type = "docker_logs"
-include_containers = [
-  "orbispm-api",
-  "orbispm-kong",
-  "orbispm-frontend",
-  "orbispm-worker",
-  "orbispm-ws",
-  "orbispm-mcp",
-  "orbispm-postgres",
-  "orbispm-redis",
-  "orbispm-meilisearch",
-  "orbispm-zitadel"
-]
+# Collect from all containers except monitoring stack
 exclude_containers = [
   "orbispm-vector",
   "orbispm-prometheus",
   "orbispm-loki",
   "orbispm-tempo",
-  "orbispm-grafana"
+  "orbispm-grafana",
+  "orbispm-alertmanager",
+  "orbispm-otel-collector",
+  "orbispm-clickhouse",
+  "orbispm-cadvisor",
+  "orbispm-node-exporter",
+  "orbispm-postgres-exporter",
+  "orbispm-redis-exporter",
+  "orbispm-alert-engine",
+  "orbispm-super-admin"
 ]
 
 # -------------------------------------------------------
@@ -45,20 +43,19 @@ source = '''
 # Try to parse message as JSON (zerolog format)
 parsed, err = parse_json(.message)
 if err == null {
-  . = merge(., parsed)
-  del(.message)
+  . = parsed
 }
 
 # Extract trace ID if present
 if exists(.trace_id) {
-  .trace_id = string!(.trace_id)
+  .trace_id = to_string(.trace_id) ?? ""
 }
 
 # Normalize log level
 if exists(.level) {
-  .level = downcase(string!(.level))
+  .level = downcase(to_string(.level) ?? "info")
 } else if exists(.severity) {
-  .level = downcase(string!(.severity))
+  .level = downcase(to_string(.severity) ?? "info")
   del(.severity)
 } else {
   .level = "info"
@@ -70,8 +67,8 @@ if !exists(.timestamp) {
 }
 
 # Add container info
-.service = get!(.container_name) ?? "unknown"
-.container_id = get!(.container_id) ?? ""
+.service = to_string(.container_name) ?? "unknown"
+.container_id = to_string(.container_id) ?? ""
 
 # Add environment
 .environment = get_env_var("ENV") ?? "development"
@@ -100,12 +97,12 @@ del(.privateKey)
 
 # Mask email addresses in message (keep domain for debugging)
 if is_string(.msg) {
-  .msg = replace(.msg, r'[a-zA-Z0-9._%+-]+@', "***@")
+  .msg = replace(to_string(.msg) ?? "", r'[a-zA-Z0-9._%+-]+@', "***@")
 }
 
 # Mask potential JWT tokens
 if is_string(.msg) {
-  .msg = replace(.msg, r'eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*', "[JWT_REDACTED]")
+  .msg = replace(to_string(.msg) ?? "", r'eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*', "[JWT_REDACTED]")
 }
 '''
 
@@ -115,7 +112,7 @@ type = "filter"
 inputs = ["sanitize"]
 condition = '''
 # In production, filter debug logs unless LOG_DEBUG is true
-level != "debug" || get_env_var("LOG_DEBUG") == "true"
+.level != "debug" || (get_env_var("LOG_DEBUG") ?? "false") == "true"
 '''
 
 # Add structured labels for Loki
@@ -123,13 +120,11 @@ level != "debug" || get_env_var("LOG_DEBUG") == "true"
 type = "remap"
 inputs = ["filter_noise"]
 source = '''
-# Add Loki labels
-._loki_labels = {
-  "service": .service,
-  "level": .level,
-  "environment": .environment,
-  "container": .container_name
-}
+# Ensure labels are strings for Loki
+.service = to_string(.service) ?? "unknown"
+.level = to_string(.level) ?? "info"
+.environment = to_string(.environment) ?? "development"
+.container_name = to_string(.container_name) ?? "unknown"
 '''
 
 # -------------------------------------------------------

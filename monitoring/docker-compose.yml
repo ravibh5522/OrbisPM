@@ -24,7 +24,8 @@ networks:
 
   # Connect to main OrbisPM network (external)
   orbispm_default:
-    external: false
+    external: true
+    name: orbispm_default
 
 volumes:
   # Prometheus data

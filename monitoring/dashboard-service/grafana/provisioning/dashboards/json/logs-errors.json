@@ -1,0 +1,408 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 2,
+  "id": null,
+  "links": [
+    { "title": "API Overview", "url": "/d/api-overview", "type": "link" },
+    {
+      "title": "Container Health",
+      "url": "/d/container-health",
+      "type": "link"
+    }
+  ],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Log Volume Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Total Logs/min",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\".+\"}[1m]))",
+          "legendFormat": "logs/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Errors/min",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\".+\"} |= \"error\" [1m]))",
+          "legendFormat": "errors/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Warnings/min",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\".+\"} |= \"warn\" [1m]))",
+          "legendFormat": "warns/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "5xx Errors/min (API)",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) * 60",
+          "legendFormat": "5xx/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "5xx Errors/min (Messaging)",
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_http_requests_total{status=~\"5..\"}[5m])) * 60",
+          "legendFormat": "5xx/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Frontend Errors/min",
+      "targets": [
+        {
+          "expr": "sum(rate(frontend_errors_total[5m])) * 60",
+          "legendFormat": "fe errors/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Log Volume by Service",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Log Volume by Service",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\".+\"}[5m])) by (service)",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "Error Logs by Service",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 15 },
+      "id": 20,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Error Logs by Service",
+      "targets": [
+        {
+          "expr": "sum(count_over_time({service=~\".+\"} |= \"error\" [5m])) by (service)",
+          "legendFormat": "{{service}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "HTTP Error Rates",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 30,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "API Error Rate by Status",
+      "targets": [
+        {
+          "expr": "sum(rate(http_requests_total{status_code=~\"4..\"}[5m])) by (status_code)",
+          "legendFormat": "{{status_code}}"
+        },
+        {
+          "expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) by (status_code)",
+          "legendFormat": "{{status_code}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 31,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Top Error Endpoints (5xx)",
+      "targets": [
+        {
+          "expr": "topk(10, sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) by (route))",
+          "legendFormat": "{{route}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 32 },
+      "id": 104,
+      "title": "Live Log Stream",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 12, "w": 24, "x": 0, "y": 33 },
+      "id": 40,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": true,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "title": "Live Error Logs (all services)",
+      "targets": [
+        {
+          "expr": "{service=~\".+\"} |~ \"error|ERROR|panic|fatal\"",
+          "legendFormat": ""
+        }
+      ],
+      "type": "logs"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["orbispm", "logs", "errors"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "hide": 0,
+        "name": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Logs & Errors",
+  "uid": "logs-errors"
+}

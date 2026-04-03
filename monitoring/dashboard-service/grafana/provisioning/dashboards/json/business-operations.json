@@ -1,0 +1,456 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 2,
+  "id": null,
+  "links": [
+    { "title": "API Overview", "url": "/d/api-overview", "type": "link" },
+    { "title": "User Analytics", "url": "/d/user-analytics", "type": "link" }
+  ],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "Business Activity Summary",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Tasks Created/hr",
+      "targets": [
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"task\",action=\"create\"}[5m])) * 3600",
+          "legendFormat": "tasks/hr"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "blue", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Tasks Updated/hr",
+      "targets": [
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"task\",action=\"update\"}[5m])) * 3600",
+          "legendFormat": "updates/hr"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "orange", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Tasks Deleted/hr",
+      "targets": [
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"task\",action=\"delete\"}[5m])) * 3600",
+          "legendFormat": "deletes/hr"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "purple", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Projects Created/hr",
+      "targets": [
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"project\",action=\"create\"}[5m])) * 3600",
+          "legendFormat": "projects/hr"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Search Queries/hr",
+      "targets": [
+        {
+          "expr": "sum(rate(search_queries_total[5m])) * 3600",
+          "legendFormat": "queries/hr"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "File Uploads/hr",
+      "targets": [
+        {
+          "expr": "sum(rate(file_uploads_total[5m])) * 3600",
+          "legendFormat": "uploads/hr"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Task Operations Over Time",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["sum", "mean"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Task Operations",
+      "targets": [
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"task\",action=\"create\"}[5m])) * 60",
+          "legendFormat": "Created"
+        },
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"task\",action=\"update\"}[5m])) * 60",
+          "legendFormat": "Updated"
+        },
+        {
+          "expr": "sum(rate(business_operations_total{entity=\"task\",action=\"delete\"}[5m])) * 60",
+          "legendFormat": "Deleted"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["sum", "mean"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "All Entity Operations",
+      "targets": [
+        {
+          "expr": "sum(rate(business_operations_total[5m])) by (entity, action) * 60",
+          "legendFormat": "{{entity}}/{{action}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "Background Jobs & Email",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 20,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Asynq Background Jobs",
+      "targets": [
+        {
+          "expr": "sum(rate(asynq_tasks_processed_total{status=\"success\"}[5m])) by (task_type) * 60",
+          "legendFormat": "{{task_type}} OK"
+        },
+        {
+          "expr": "sum(rate(asynq_tasks_processed_total{status=\"failed\"}[5m])) by (task_type) * 60",
+          "legendFormat": "{{task_type}} FAIL"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 21,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Email Delivery",
+      "targets": [
+        {
+          "expr": "sum(rate(email_sent_total{status=\"success\"}[5m])) by (email_type) * 60",
+          "legendFormat": "{{email_type}} sent"
+        },
+        {
+          "expr": "sum(rate(email_sent_total{status=\"failed\"}[5m])) by (email_type) * 60",
+          "legendFormat": "{{email_type}} failed"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "Search & Cache & API Keys",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
+      "id": 30,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["sum"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Search Queries by Entity",
+      "targets": [
+        {
+          "expr": "sum(rate(search_queries_total[5m])) by (entity_type) * 60",
+          "legendFormat": "{{entity_type}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
+      "id": 31,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Cache Hit Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(cache_operations_total{operation=\"hit\"}[5m])) by (cache_name) / (sum(rate(cache_operations_total{operation=\"hit\"}[5m])) by (cache_name) + sum(rate(cache_operations_total{operation=\"miss\"}[5m])) by (cache_name))",
+          "legendFormat": "{{cache_name}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "bytes"
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
+      "id": 32,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        }
+      },
+      "title": "File Upload Size Distribution",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(file_upload_size_bytes_bucket[1h])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(file_upload_size_bytes_bucket[1h])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["orbispm", "business", "operations"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "hide": 0,
+        "name": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Business Operations",
+  "uid": "business-ops"
+}

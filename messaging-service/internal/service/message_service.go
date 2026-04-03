@@ -2,17 +2,26 @@ package service
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/messaging-service/internal/domain"
 	"github.com/orbispm/messaging-service/internal/eventbus"
+	"github.com/orbispm/messaging-service/internal/middleware"
 	natspkg "github.com/orbispm/messaging-service/internal/nats"
 	"github.com/orbispm/messaging-service/internal/pkg/tenant"
 	"github.com/orbispm/messaging-service/internal/repository"
+)
+
+const (
+	msgCacheTTL     = 60 * time.Second
+	msgCacheVersion = "v2"
 )
 
 // Presigner generates presigned download URLs for storage objects.
@@ -34,6 +43,22 @@ type MessageService struct {
 	redisPublisher *eventbus.RedisPublisher
 	editWindow     time.Duration
 	presigner      Presigner
+	rdb            *redis.Client
+}
+
+// msgCacheKey returns the Redis key for the first page of messages in a channel.
+func msgCacheKey(channelID uuid.UUID) string {
+	return fmt.Sprintf("chat:msgs:%s:%s", channelID, msgCacheVersion)
+}
+
+// invalidateMsgCache deletes the cached message list for a channel.
+func (s *MessageService) invalidateMsgCache(ctx context.Context, channelID uuid.UUID) {
+	if s.rdb == nil {
+		return
+	}
+	if err := s.rdb.Del(ctx, msgCacheKey(channelID)).Err(); err != nil {
+		log.Warn().Err(err).Str("channel_id", channelID.String()).Msg("failed to invalidate message cache")
+	}
 }
 
 // NewMessageService creates a new MessageService.
@@ -50,6 +75,7 @@ func NewMessageService(
 	editWindowMinutes int,
 	presigner Presigner,
 	redisPublisher *eventbus.RedisPublisher,
+	rdb *redis.Client,
 ) *MessageService {
 	return &MessageService{
 		txMgr:          txMgr,
@@ -64,6 +90,7 @@ func NewMessageService(
 		redisPublisher: redisPublisher,
 		editWindow:     time.Duration(editWindowMinutes) * time.Minute,
 		presigner:      presigner,
+		rdb:            rdb,
 	}
 }
 
@@ -90,6 +117,8 @@ func (s *MessageService) SendMessage(ctx context.Context, msg *domain.Message) e
 		msg.BodyFormat = domain.MessageFormatText
 	}
 
+	var channelName string
+	var channelType domain.ChannelType
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		// Verify membership
 		ok, err := s.memberR.IsMember(ctx, tx, msg.ChannelID, userID)
@@ -107,6 +136,8 @@ func (s *MessageService) SendMessage(ctx context.Context, msg *domain.Message) e
 		if ch.IsArchived {
 			return domain.ErrChannelArchived
 		}
+		channelName = ch.Name
+		channelType = ch.Type
 		// Create message
 		if err := s.messageR.Create(ctx, tx, msg); err != nil {
 			return err
@@ -123,7 +154,14 @@ func (s *MessageService) SendMessage(ctx context.Context, msg *domain.Message) e
 		return err
 	}
 
+	s.invalidateMsgCache(ctx, msg.ChannelID)
+	middleware.ChannelMessagesTotal.WithLabelValues(string(channelType)).Inc()
 	s.publishEvent(ctx, domain.EventMessageCreated, msg.ChannelID.String(), msg.ID.String(), msg)
+
+	// Dispatch mention notifications for each mentioned user.
+	if len(msg.Mentions) > 0 {
+		s.publishMentionEvent(ctx, msg, channelName)
+	}
 	return nil
 }
 
@@ -159,6 +197,7 @@ func (s *MessageService) EditMessage(ctx context.Context, messageID uuid.UUID, b
 		return nil, err
 	}
 
+	s.invalidateMsgCache(ctx, msg.ChannelID)
 	s.publishEvent(ctx, domain.EventMessageEdited, msg.ChannelID.String(), msg.ID.String(), msg)
 	return msg, nil
 }
@@ -190,6 +229,7 @@ func (s *MessageService) DeleteMessage(ctx context.Context, messageID uuid.UUID)
 		return err
 	}
 
+	s.invalidateMsgCache(ctx, channelID)
 	s.publishEvent(ctx, domain.EventMessageDeleted, channelID.String(), messageID.String(), nil)
 	return nil
 }
@@ -199,6 +239,26 @@ func (s *MessageService) ListMessages(ctx context.Context, channelID uuid.UUID, 
 	userID := tenant.UserID(ctx)
 	if limit <= 0 || limit > 100 {
 		limit = 50
+	}
+
+	// Serve the first page from Redis cache when possible.
+	// We still verify membership via the DB to enforce access control.
+	if before == nil && s.rdb != nil {
+		key := msgCacheKey(channelID)
+		if cached, err := s.rdb.Get(ctx, key).Bytes(); err == nil {
+			var cachedMsgs []domain.Message
+			if json.Unmarshal(cached, &cachedMsgs) == nil {
+				// Verify membership before returning cached data.
+				ok, err := s.memberR.IsMember(ctx, nil, channelID, userID)
+				if err == nil && ok {
+					return cachedMsgs, nil
+				}
+				if err == nil && !ok {
+					return nil, domain.ErrNotChannelMember
+				}
+				// membership check failed (DB error) — fall through to full query
+			}
+		}
 	}
 
 	var messages []domain.Message
@@ -216,7 +276,19 @@ func (s *MessageService) ListMessages(ctx context.Context, channelID uuid.UUID, 
 		}
 		return s.enrichMessages(ctx, tx, messages)
 	})
-	return messages, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Populate cache for first page.
+	if before == nil && s.rdb != nil && len(messages) > 0 {
+		if data, jsonErr := json.Marshal(messages); jsonErr == nil {
+			if setErr := s.rdb.Set(ctx, msgCacheKey(channelID), data, msgCacheTTL).Err(); setErr != nil {
+				log.Warn().Err(setErr).Str("channel_id", channelID.String()).Msg("failed to cache messages")
+			}
+		}
+	}
+	return messages, nil
 }
 
 // ListThread returns thread replies for a parent message.
@@ -507,5 +579,43 @@ func (s *MessageService) publishEvent(ctx context.Context, eventType, channelID,
 		if err := s.redisPublisher.Publish(ctx, event); err != nil {
 			log.Error().Err(err).Str("type", eventType).Msg("failed to publish event to Redis")
 		}
+	}
+}
+
+// publishMentionEvent publishes a single mention event to Redis for each user
+// mentioned in the message. The backend subscribes and creates notifications.
+func (s *MessageService) publishMentionEvent(ctx context.Context, msg *domain.Message, channelName string) {
+	if s.redisPublisher == nil {
+		return
+	}
+
+	mentionedIDs := make([]string, len(msg.Mentions))
+	for i, id := range msg.Mentions {
+		mentionedIDs[i] = id.String()
+	}
+
+	snippet := msg.Body
+	if len(snippet) > 150 {
+		snippet = snippet[:147] + "..."
+	}
+
+	event := domain.DomainEvent{
+		Type:      domain.EventMentionCreated,
+		OrgID:     msg.OrgID.String(),
+		ChannelID: msg.ChannelID.String(),
+		ActorID:   msg.UserID.String(),
+		EntityID:  msg.ID.String(),
+		Payload: map[string]any{
+			"mentioned_user_ids": mentionedIDs,
+			"sender_name":        msg.SenderName,
+			"channel_id":         msg.ChannelID.String(),
+			"channel_name":       channelName,
+			"message_body":       snippet,
+			"message_id":         msg.ID.String(),
+		},
+	}
+
+	if err := s.redisPublisher.Publish(ctx, event); err != nil {
+		log.Error().Err(err).Str("message_id", msg.ID.String()).Msg("failed to publish mention event")
 	}
 }

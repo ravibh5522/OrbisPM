@@ -343,6 +343,7 @@ services:
       KONG_PROXY_ERROR_LOG: /dev/stderr
       KONG_ADMIN_ERROR_LOG: /dev/stderr
       KONG_PROXY_LISTEN: "0.0.0.0:8000, 0.0.0.0:8443 ssl"
+      KONG_STATUS_LISTEN: "0.0.0.0:8100"
       KONG_LOG_LEVEL: ${KONG_LOG_LEVEL:-info}
       # Use Docker's embedded DNS so Kong resolves service names like "api" correctly.
       KONG_DNS_RESOLVER: "127.0.0.11"

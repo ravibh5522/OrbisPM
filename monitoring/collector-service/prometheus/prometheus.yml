@@ -7,8 +7,8 @@ global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'orbispm'
-    env: 'development'
+    cluster: "orbispm"
+    env: "development"
 
 # Recording and alerting rules
 rule_files:
@@ -17,85 +17,85 @@ rule_files:
 # Scrape configurations
 scrape_configs:
   # OrbisPM API Server
-  - job_name: 'orbispm-api'
+  - job_name: "orbispm-api"
     static_configs:
-      - targets: ['api:8080']
+      - targets: ["api:8080"]
     metrics_path: /metrics
     scrape_interval: 15s
 
-  # Kong API Gateway
-  - job_name: 'kong'
+  # Kong API Gateway (status endpoint)
+  - job_name: "kong"
     static_configs:
-      - targets: ['kong:8001']
+      - targets: ["kong:8100"]
     metrics_path: /metrics
     scrape_interval: 15s
 
-  # WebSocket Server
-  - job_name: 'orbispm-ws'
+  # Messaging / WebSocket Server
+  - job_name: "orbispm-messaging"
     static_configs:
-      - targets: ['ws:8081']
+      - targets: ["messaging-service:8082"]
     metrics_path: /metrics
     scrape_interval: 15s
 
   # PostgreSQL Exporter
-  - job_name: 'postgres-exporter'
+  - job_name: "postgres-exporter"
     static_configs:
-      - targets: ['postgres-exporter:9187']
+      - targets: ["postgres-exporter:9187"]
     scrape_interval: 30s
 
   # Redis Exporter
-  - job_name: 'redis-exporter'
+  - job_name: "redis-exporter"
     static_configs:
-      - targets: ['redis-exporter:9121']
+      - targets: ["redis-exporter:9121"]
     scrape_interval: 15s
 
   # Node Exporter (host metrics)
-  - job_name: 'node-exporter'
+  - job_name: "node-exporter"
     static_configs:
-      - targets: ['node-exporter:9100']
+      - targets: ["node-exporter:9100"]
     scrape_interval: 15s
 
   # cAdvisor (container metrics)
-  - job_name: 'cadvisor'
+  - job_name: "cadvisor"
     static_configs:
-      - targets: ['cadvisor:8080']
+      - targets: ["cadvisor:8080"]
     scrape_interval: 15s
 
   # Loki
-  - job_name: 'loki'
+  - job_name: "loki"
     static_configs:
-      - targets: ['loki:3100']
+      - targets: ["loki:3100"]
     scrape_interval: 30s
 
   # Tempo
-  - job_name: 'tempo'
+  - job_name: "tempo"
     static_configs:
-      - targets: ['tempo:3200']
+      - targets: ["tempo:3200"]
     scrape_interval: 30s
 
   # OTel Collector
-  - job_name: 'otel-collector'
+  - job_name: "otel-collector"
     static_configs:
-      - targets: ['otel-collector:8888']
+      - targets: ["otel-collector:8888"]
     scrape_interval: 15s
 
   # Alertmanager
-  - job_name: 'alertmanager'
+  - job_name: "alertmanager"
     static_configs:
-      - targets: ['alertmanager:9093']
+      - targets: ["alertmanager:9093"]
     scrape_interval: 30s
 
   # Prometheus self-monitoring
-  - job_name: 'prometheus'
+  - job_name: "prometheus"
     static_configs:
-      - targets: ['localhost:9090']
+      - targets: ["localhost:9090"]
     scrape_interval: 15s
 
 # Alertmanager configuration
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: ['alertmanager:9093']
+        - targets: ["alertmanager:9093"]
       timeout: 10s
 
 # Remote write configuration (for long-term storage)

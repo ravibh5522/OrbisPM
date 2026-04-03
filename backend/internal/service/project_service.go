@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/orbispm/internal/domain"
+	"github.com/orbispm/orbispm/internal/metrics"
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/worker"
@@ -169,6 +170,7 @@ func (s *ProjectService) Create(ctx context.Context, params CreateProjectParams)
 
 	// Enqueue activity log
 	s.enqueueActivity(created.OrgID.String(), "project", created.ID.String(), "created", "")
+	metrics.BusinessOpsTotal.WithLabelValues("project", "create").Inc()
 
 	s.publishEvent(ctx, domain.EventProjectCreated, created.OrgID.String(), created.ID.String(), map[string]any{"name": created.Name})
 

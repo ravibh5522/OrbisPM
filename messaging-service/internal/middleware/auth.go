@@ -15,6 +15,7 @@ import (
 
 	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/messaging-service/internal/pkg/tenant"
@@ -25,17 +26,22 @@ type JWKSCache struct {
 	url        string
 	httpClient *http.Client
 	hostHeader string
+	ttl        time.Duration
 	mu         sync.RWMutex
 	keys       map[string]*rsa.PublicKey
 	exp        time.Time
 }
 
 // NewJWKSCache creates a new JWKS cache.
-func NewJWKSCache(url string, httpClient *http.Client, hostHeader string) *JWKSCache {
+func NewJWKSCache(url string, httpClient *http.Client, hostHeader string, ttl time.Duration) *JWKSCache {
+	if ttl <= 0 {
+		ttl = 5 * time.Minute
+	}
 	return &JWKSCache{
 		url:        url,
 		httpClient: httpClient,
 		hostHeader: hostHeader,
+		ttl:        ttl,
 		keys:       make(map[string]*rsa.PublicKey),
 	}
 }
@@ -114,15 +120,22 @@ func (c *JWKSCache) refresh() error {
 
 	c.mu.Lock()
 	c.keys = newKeys
-	c.exp = time.Now().Add(5 * time.Minute)
+	c.exp = time.Now().Add(c.ttl)
 	c.mu.Unlock()
 
 	return nil
 }
 
+// sessionCacheEntry stores a successfully validated session in Redis.
+type sessionCacheEntry struct {
+	UserID      string `json:"user_id"`
+	Email       string `json:"email"`
+	DisplayName string `json:"display_name"`
+}
+
 // Auth middleware validates Zitadel-issued JWTs or session tokens and sets user context.
-func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string) func(http.Handler) http.Handler {
-	cache := NewJWKSCache(jwksURL, &http.Client{Timeout: 10 * time.Second}, hostHeader)
+func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, rdb *redis.Client, jwksTTL time.Duration) func(http.Handler) http.Handler {
+	cache := NewJWKSCache(jwksURL, &http.Client{Timeout: 10 * time.Second}, hostHeader, jwksTTL)
 	sessionClient := &http.Client{Timeout: 10 * time.Second}
 
 	return func(next http.Handler) http.Handler {
@@ -177,12 +190,39 @@ func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string) 
 				return
 			}
 
-			// Fallback: try session token (base64-encoded sessionID:sessionToken)
+			// Fallback: try session token — check Redis cache first
+			if rdb != nil {
+				cacheKey := "session:validated:" + tokenStr[:min(len(tokenStr), 64)]
+				if cached, err := rdb.Get(r.Context(), cacheKey).Bytes(); err == nil {
+					var entry sessionCacheEntry
+					if json.Unmarshal(cached, &entry) == nil && entry.UserID != "" {
+						userID, _ := uuid.Parse(entry.UserID)
+						if userID == uuid.Nil {
+							userID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(entry.UserID))
+						}
+						ctx := tenant.SetUserID(r.Context(), userID)
+						ctx = tenant.SetEmail(ctx, entry.Email)
+						ctx = tenant.SetDisplayName(ctx, entry.DisplayName)
+						next.ServeHTTP(w, r.WithContext(ctx))
+						return
+					}
+				}
+			}
+
 			userID, email, displayName, err := validateSessionToken(r.Context(), sessionClient, zitadelInternalURL, hostHeader, serviceToken, tokenStr)
 			if err != nil {
 				log.Debug().Err(jwtErr).Str("session_err", err.Error()).Msg("token validation failed")
 				http.Error(w, `{"message":"invalid token"}`, http.StatusUnauthorized)
 				return
+			}
+
+			// Cache the validated session in Redis for 30s
+			if rdb != nil {
+				cacheKey := "session:validated:" + tokenStr[:min(len(tokenStr), 64)]
+				entry := sessionCacheEntry{UserID: userID.String(), Email: email, DisplayName: displayName}
+				if data, jsonErr := json.Marshal(entry); jsonErr == nil {
+					_ = rdb.Set(r.Context(), cacheKey, data, 30*time.Second).Err()
+				}
 			}
 
 			ctx := tenant.SetUserID(r.Context(), userID)

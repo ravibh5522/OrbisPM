@@ -1,0 +1,461 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 2,
+  "id": null,
+  "links": [
+    { "title": "API Overview", "url": "/d/api-overview", "type": "link" },
+    { "title": "User Analytics", "url": "/d/user-analytics", "type": "link" }
+  ],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "WebSocket Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "API WS Connections",
+      "targets": [
+        { "expr": "ws_connections_active", "legendFormat": "API WS" }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Chat WS Connections",
+      "targets": [
+        { "expr": "messaging_ws_connections_active", "legendFormat": "Chat WS" }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Total WS Connections",
+      "targets": [
+        {
+          "expr": "ws_connections_active + messaging_ws_connections_active",
+          "legendFormat": "total"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "WS Messages/s",
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_ws_messages_total[5m]))",
+          "legendFormat": "msg/s"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Chat Messages/s",
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_channel_messages_total[5m]))",
+          "legendFormat": "msg/s"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Typing Events/s",
+      "targets": [
+        {
+          "expr": "rate(messaging_typing_events_total[5m])",
+          "legendFormat": "typing/s"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "WebSocket Connections Over Time",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max", "last"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "WebSocket Connections",
+      "targets": [
+        { "expr": "ws_connections_active", "legendFormat": "API WS" },
+        {
+          "expr": "messaging_ws_connections_active",
+          "legendFormat": "Chat WS"
+        },
+        {
+          "expr": "ws_connections_active + messaging_ws_connections_active",
+          "legendFormat": "Total"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "WS Message Rate by Type",
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_ws_messages_total[5m])) by (msg_type)",
+          "legendFormat": "{{msg_type}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "Messaging HTTP API",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 20,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Messaging API Request Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_http_requests_total{status=~\"2..\"}[5m]))",
+          "legendFormat": "2xx"
+        },
+        {
+          "expr": "sum(rate(messaging_http_requests_total{status=~\"4..\"}[5m]))",
+          "legendFormat": "4xx"
+        },
+        {
+          "expr": "sum(rate(messaging_http_requests_total{status=~\"5..\"}[5m]))",
+          "legendFormat": "5xx"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 21,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Messaging API Latency",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(messaging_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(messaging_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(messaging_http_request_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+      "id": 22,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        }
+      },
+      "title": "WS Message Processing Latency",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(messaging_ws_message_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+      "id": 23,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["mean"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Chat Messages by Channel Type",
+      "targets": [
+        {
+          "expr": "sum(rate(messaging_channel_messages_total[5m])) by (channel_type)",
+          "legendFormat": "{{channel_type}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+      "id": 24,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean"]
+        }
+      },
+      "title": "Active Channels",
+      "targets": [
+        {
+          "expr": "messaging_channels_active",
+          "legendFormat": "active channels"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "reqps"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+      "id": 25,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean"]
+        }
+      },
+      "title": "Reactions & Typing Events",
+      "targets": [
+        {
+          "expr": "rate(messaging_typing_events_total[5m])",
+          "legendFormat": "typing events/s"
+        },
+        {
+          "expr": "rate(messaging_reaction_events_total[5m])",
+          "legendFormat": "reactions/s"
+        }
+      ],
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["orbispm", "messaging", "websocket"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "hide": 0,
+        "name": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "title": "Messaging & WebSocket",
+  "uid": "messaging-ws"
+}

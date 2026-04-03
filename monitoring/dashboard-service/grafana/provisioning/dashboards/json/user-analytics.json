@@ -1,0 +1,489 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "graphTooltip": 2,
+  "id": null,
+  "links": [
+    { "title": "API Overview", "url": "/d/api-overview", "type": "link" },
+    { "title": "Business Ops", "url": "/d/business-ops", "type": "link" }
+  ],
+  "liveNow": true,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 100,
+      "title": "User Activity Overview",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Page Views/min",
+      "targets": [
+        {
+          "expr": "sum(rate(page_views_total[5m])) * 60",
+          "legendFormat": "views/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Feature Events/min",
+      "targets": [
+        {
+          "expr": "sum(rate(feature_usage_total[5m])) * 60",
+          "legendFormat": "events/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 5 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Frontend Errors/min",
+      "targets": [
+        {
+          "expr": "sum(rate(frontend_errors_total[5m])) * 60",
+          "legendFormat": "errors/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Avg Session Duration",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(session_duration_seconds_bucket[1h])) by (le))",
+          "legendFormat": "median"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{ "color": "green", "value": null }]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "Auth Success/min",
+      "targets": [
+        {
+          "expr": "sum(rate(auth_events_total{result=\"success\"}[5m])) * 60",
+          "legendFormat": "logins/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        }
+      },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+      "id": 6,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "textMode": "auto"
+      },
+      "title": "RBAC Denials/min",
+      "targets": [
+        {
+          "expr": "sum(rate(rbac_denied_total[5m])) * 60",
+          "legendFormat": "denials/min"
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
+      "id": 101,
+      "title": "Page Views & Navigation",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 20, "lineWidth": 2 },
+          "unit": "cpm"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 6 },
+      "id": 10,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Page Views Over Time",
+      "targets": [
+        {
+          "expr": "sum(rate(page_views_total[5m])) * 60",
+          "legendFormat": "views/min"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 80 } }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 6 },
+      "id": 11,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Most Visited Pages",
+      "targets": [
+        {
+          "expr": "topk(15, sum(increase(page_views_total[1h])) by (path))",
+          "legendFormat": "{{path}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "id": 102,
+      "title": "Feature Usage",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 15 },
+      "id": 20,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Feature Usage by Feature",
+      "targets": [
+        {
+          "expr": "topk(15, sum(increase(feature_usage_total[1h])) by (feature))",
+          "legendFormat": "{{feature}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 15 },
+      "id": 21,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Feature Usage by Action",
+      "targets": [
+        {
+          "expr": "topk(15, sum(increase(feature_usage_total[1h])) by (feature, action))",
+          "legendFormat": "{{feature}} / {{action}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 23 },
+      "id": 103,
+      "title": "Session & Error Analytics",
+      "type": "row"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 15, "lineWidth": 2 },
+          "unit": "s"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 30,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean", "max"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Session Duration Distribution",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.25, sum(rate(session_duration_seconds_bucket[1h])) by (le))",
+          "legendFormat": "p25"
+        },
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(session_duration_seconds_bucket[1h])) by (le))",
+          "legendFormat": "p50 (median)"
+        },
+        {
+          "expr": "histogram_quantile(0.75, sum(rate(session_duration_seconds_bucket[1h])) by (le))",
+          "legendFormat": "p75"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(session_duration_seconds_bucket[1h])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 31,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Frontend Errors by Type",
+      "targets": [
+        {
+          "expr": "sum(increase(frontend_errors_total[1h])) by (error_type)",
+          "legendFormat": "{{error_type}}"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "fillOpacity": 10, "lineWidth": 2 },
+          "unit": "cpm"
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
+      "id": 32,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": ["mean"]
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "title": "Auth Events",
+      "targets": [
+        {
+          "expr": "sum(rate(auth_events_total{result=\"success\"}[5m])) * 60",
+          "legendFormat": "success"
+        },
+        {
+          "expr": "sum(rate(auth_events_total{result=\"failure\"}[5m])) * 60",
+          "legendFormat": "failure"
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "${datasource}" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": { "mode": "normal" }
+          }
+        }
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
+      "id": 33,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["sum"],
+          "sortBy": "Total",
+          "sortDesc": true
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "RBAC Denials by Resource",
+      "targets": [
+        {
+          "expr": "sum(increase(rbac_denied_total[1h])) by (resource)",
+          "legendFormat": "{{resource}}"
+        }
+      ],
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 39,
+  "tags": ["orbispm", "analytics", "users"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "Prometheus",
+          "value": "Prometheus"
+        },
+        "hide": 0,
+        "name": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "User Analytics & Engagement",
+  "uid": "user-analytics"
+}

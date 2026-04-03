@@ -2,12 +2,12 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
 	"github.com/orbispm/messaging-service/internal/domain"
+	"github.com/orbispm/messaging-service/internal/middleware"
 	"github.com/orbispm/messaging-service/internal/pkg/tenant"
 	"github.com/orbispm/messaging-service/internal/service"
 )
@@ -133,6 +133,19 @@ func (h *RESTHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.Name == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "name is required"})
+		return
+	}
+	if len(req.Name) > 100 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "channel name too long (max 100 chars)"})
+		return
+	}
+	if len(req.Description) > 500 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "description too long (max 500 chars)"})
+		return
+	}
+
 	ch := &domain.Channel{
 		OrgID:       tenant.OrgID(r.Context()),
 		Name:        req.Name,
@@ -178,11 +191,8 @@ func (h *RESTHandler) GetChannel(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RESTHandler) ListChannels(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if limit <= 0 {
-		limit = 50
-	}
+	limit := clampLimit(atoiOrZero(r.URL.Query().Get("limit")), 50, 100)
+	offset := clampOffset(atoiOrZero(r.URL.Query().Get("offset")))
 
 	channels, total, err := h.channelSvc.ListUserChannels(r.Context(), limit, offset)
 	if err != nil {
@@ -205,6 +215,18 @@ func (h *RESTHandler) UpdateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := parseBody(r, &req); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body"})
+		return
+	}
+	if len(req.Name) > 100 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "channel name too long (max 100 chars)"})
+		return
+	}
+	if len(req.Description) > 500 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "description too long (max 500 chars)"})
+		return
+	}
+	if len(req.AvatarURL) > 2048 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "avatar URL too long (max 2048 chars)"})
 		return
 	}
 	ch := &domain.Channel{ID: channelID, Name: req.Name, Description: req.Description, AvatarURL: req.AvatarURL}
@@ -402,6 +424,10 @@ func (h *RESTHandler) SendMessage(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "body is required"})
 		return
 	}
+	if len(req.Body) > 50000 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "message too long (max 50000 chars)"})
+		return
+	}
 
 	msg := &domain.Message{
 		ChannelID:  channelID,
@@ -437,7 +463,7 @@ func (h *RESTHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid channel_id"})
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	limit := clampLimit(atoiOrZero(r.URL.Query().Get("limit")), 30, 100)
 	var before *uuid.UUID
 	if b := r.URL.Query().Get("before"); b != "" {
 		id, err := uuid.Parse(b)
@@ -470,6 +496,14 @@ func (h *RESTHandler) EditMessage(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body"})
 		return
 	}
+	if req.Body == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "body is required"})
+		return
+	}
+	if len(req.Body) > 50000 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "message too long (max 50000 chars)"})
+		return
+	}
 	msg, err := h.messageSvc.EditMessage(r.Context(), messageID, req.Body, domain.MessageFormat(req.BodyFormat))
 	if err != nil {
 		Error(w, r, err)
@@ -497,8 +531,8 @@ func (h *RESTHandler) ListThread(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid message_id"})
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	limit := clampLimit(atoiOrZero(r.URL.Query().Get("limit")), 50, 100)
+	offset := clampOffset(atoiOrZero(r.URL.Query().Get("offset")))
 
 	messages, total, err := h.messageSvc.ListThread(r.Context(), parentID, limit, offset)
 	if err != nil {
@@ -519,8 +553,12 @@ func (h *RESTHandler) SearchMessages(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "query is required"})
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+	if len(query) > 200 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "query too long (max 200 chars)"})
+		return
+	}
+	limit := clampLimit(atoiOrZero(r.URL.Query().Get("limit")), 50, 100)
+	offset := clampOffset(atoiOrZero(r.URL.Query().Get("offset")))
 
 	messages, total, err := h.messageSvc.SearchMessages(r.Context(), channelID, query, limit, offset)
 	if err != nil {
@@ -550,6 +588,7 @@ func (h *RESTHandler) ToggleReaction(w http.ResponseWriter, r *http.Request) {
 		Error(w, r, err)
 		return
 	}
+	middleware.ReactionEventsTotal.Inc()
 	JSON(w, http.StatusOK, map[string]bool{"added": added})
 }
 
@@ -648,6 +687,10 @@ func (h *RESTHandler) AddBookmark(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body"})
 		return
 	}
+	if len(req.Note) > 500 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "note too long (max 500 chars)"})
+		return
+	}
 	if err := h.messageSvc.AddBookmark(r.Context(), messageID, req.Note); err != nil {
 		Error(w, r, err)
 		return
@@ -669,11 +712,8 @@ func (h *RESTHandler) RemoveBookmark(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *RESTHandler) ListBookmarks(w http.ResponseWriter, r *http.Request) {
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	if limit <= 0 {
-		limit = 50
-	}
+	limit := clampLimit(atoiOrZero(r.URL.Query().Get("limit")), 50, 100)
+	offset := clampOffset(atoiOrZero(r.URL.Query().Get("offset")))
 
 	bookmarks, total, err := h.messageSvc.ListBookmarks(r.Context(), limit, offset)
 	if err != nil {
@@ -698,10 +738,11 @@ func (h *RESTHandler) GetSidebar(w http.ResponseWriter, r *http.Request) {
 
 func (h *RESTHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query().Get("q")
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	if limit <= 0 {
-		limit = 20
+	if len(query) > 100 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "query too long (max 100 chars)"})
+		return
 	}
+	limit := clampLimit(atoiOrZero(r.URL.Query().Get("limit")), 20, 50)
 
 	users, err := h.sidebarSvc.SearchOrgMembers(r.Context(), query, limit)
 	if err != nil {
@@ -853,6 +894,13 @@ func (h *RESTHandler) CreateCategory(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "name is required"})
 		return
 	}
+	if len(req.Name) > 50 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "category name too long (max 50 chars)"})
+		return
+	}
+	if req.Position < 0 {
+		req.Position = 0
+	}
 	cat, err := h.categorySvc.Create(r.Context(), req.Name, req.Position)
 	if err != nil {
 		Error(w, r, err)
@@ -874,6 +922,13 @@ func (h *RESTHandler) UpdateCategory(w http.ResponseWriter, r *http.Request) {
 	if err := parseBody(r, &req); err != nil {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body"})
 		return
+	}
+	if len(req.Name) > 50 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "category name too long (max 50 chars)"})
+		return
+	}
+	if req.Position < 0 {
+		req.Position = 0
 	}
 	if err := h.categorySvc.Update(r.Context(), categoryID, req.Name, req.Position); err != nil {
 		Error(w, r, err)

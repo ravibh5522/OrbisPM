@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 
 	"github.com/rs/zerolog/log"
 
@@ -50,6 +51,32 @@ func mustMarshal(v any) json.RawMessage {
 }
 
 func parseBody(r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20) // 1 MB max request body
 	defer r.Body.Close()
 	return json.NewDecoder(r.Body).Decode(dst)
+}
+
+// clampLimit ensures limit falls within [1, max] with a sensible default.
+func clampLimit(raw, defaultVal, max int) int {
+	if raw <= 0 {
+		return defaultVal
+	}
+	if raw > max {
+		return max
+	}
+	return raw
+}
+
+// clampOffset ensures offset is non-negative.
+func clampOffset(raw int) int {
+	if raw < 0 {
+		return 0
+	}
+	return raw
+}
+
+// atoiOrZero converts a string to int, returning 0 on error.
+func atoiOrZero(s string) int {
+	n, _ := strconv.Atoi(s)
+	return n
 }

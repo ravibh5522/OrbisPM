@@ -31,7 +31,7 @@ services:
           "CMD",
           "/otelcol-contrib",
           "validate",
-          "--config=/etc/otelcol-contrib/config.yaml",
+          "--config=/etc/otelcol-contrib/otel-config.yml",
         ]
       interval: 30s
       timeout: 10s
@@ -159,7 +159,8 @@ networks:
     external: false
     name: orbispm-monitoring_monitoring
   orbispm_default:
-    external: false
+    external: true
+    name: orbispm_default
 
 volumes:
   prometheus-data:

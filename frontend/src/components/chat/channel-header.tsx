@@ -34,9 +34,19 @@ export function ChannelHeader() {
   const setSearchQuery = useChatStore((s) => s.setSearchQuery);
   const connected = useChatStore((s) => s.connected);
 
-  const channel = channels.find((c) => c.id === activeChannelId);
+  const storeChannel = channels.find((c) => c.id === activeChannelId);
 
-  // Show skeleton when a channel is selected but sidebar data hasn't loaded yet
+  // Fetch channel info independently so the header doesn't wait for the full sidebar
+  const { data: fetchedChannel } = useQuery({
+    queryKey: ["chat-channel", activeChannelId],
+    queryFn: () => api.chat.channels.get(activeChannelId!),
+    enabled: !!activeChannelId && !storeChannel,
+    staleTime: 60_000,
+  });
+
+  const channel = storeChannel ?? fetchedChannel ?? null;
+
+  // Show skeleton only while both store and fetch are unavailable
   if (!channel) {
     if (!activeChannelId) return null;
     return (

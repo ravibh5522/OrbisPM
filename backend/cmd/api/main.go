@@ -215,7 +215,6 @@ func main() {
 		}
 	}()
 	log.Info().Msg("Org WebSocket hub started")
-
 	// --- Background Worker (Asynq) ---
 	workerSrv := worker.NewServer(asynq.RedisClientOpt{
 		Addr:     redisOpts.Addr,
@@ -225,6 +224,16 @@ func main() {
 	})
 	defer workerSrv.Stop()
 	log.Info().Msg("Asynq worker configured")
+
+	// --- Chat Mention Handler (subscribes to messaging-service mention events) ---
+	mentionSubscriber := eventbus.NewRedisSubscriber(rdb)
+	chatMentionHandler := service.NewChatMentionHandler(workerSrv.Client(), mentionSubscriber)
+	go func() {
+		if err := chatMentionHandler.Start(ctx); err != nil {
+			log.Error().Err(err).Msg("chat mention handler error")
+		}
+	}()
+	log.Info().Msg("chat mention handler started")
 
 	// --- Transaction Manager ---
 	txm := repository.NewTxManager(pool)
@@ -437,8 +446,17 @@ func main() {
 	r.Use(middleware.Metrics)
 	r.Use(middleware.CacheControl)
 
-	// Prometheus metrics (no auth)
-	r.Handle("/metrics", promhttp.Handler())
+	// Prometheus metrics — strip Accept-Encoding so Compress middleware skips gzip
+	r.Handle("/metrics", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Header.Del("Accept-Encoding")
+		promhttp.Handler().ServeHTTP(w, r)
+	}))
+
+	// Frontend telemetry (no auth — fire-and-forget from browser)
+	telemetryHandler := handler.NewTelemetryHandler()
+	r.Route("/api/v1/telemetry", func(r chi.Router) {
+		r.Mount("/", telemetryHandler.Routes())
+	})
 
 	// Health endpoints (no auth)
 	r.Mount("/health", healthHandler.Routes())

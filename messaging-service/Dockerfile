@@ -14,7 +14,8 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/migrate ./cmd/mig
 # ─── Runtime ───────────────────────────────
 FROM alpine:3.20
 
-RUN apk add --no-cache ca-certificates tzdata curl
+RUN apk add --no-cache ca-certificates tzdata curl && \
+    addgroup -g 1001 app && adduser -u 1001 -G app -s /bin/sh -D app
 
 WORKDIR /app
 
@@ -23,6 +24,8 @@ COPY --from=builder /app/migrate .
 COPY --from=builder /build/db/migrations ./db/migrations
 COPY --from=builder /build/entrypoint.sh .
 RUN chmod +x /app/entrypoint.sh
+
+USER app
 
 EXPOSE 8082
 

@@ -20,6 +20,7 @@ const (
 	EventMessageDeleted  = "message.deleted"
 	EventMessagePinned   = "message.pinned"
 	EventMessageUnpinned = "message.unpinned"
+	EventMentionCreated  = "message.mention"
 
 	// Reaction events.
 	EventReactionAdded   = "reaction.added"

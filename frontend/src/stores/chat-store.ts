@@ -48,6 +48,7 @@ interface ChatState {
   removeChannel: (channelId: string) => void;
   setActiveChannel: (channelId: string | null) => void;
   setChannelMembers: (channelId: string, members: ChatChannelMember[]) => void;
+  initFromStorage: () => void;
   decrementUnread: (channelId: string) => void;
   incrementUnread: (channelId: string) => void;
   clearUnread: (channelId: string) => void;
@@ -122,7 +123,26 @@ export const useChatStore = create<ChatState>((set, get) => ({
         s.activeChannelId === channelId ? null : s.activeChannelId,
     })),
 
-  setActiveChannel: (channelId) => set({ activeChannelId: channelId }),
+  setActiveChannel: (channelId) => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        if (channelId)
+          window.localStorage.setItem("chat:activeChannelId", channelId);
+        else window.localStorage.removeItem("chat:activeChannelId");
+      }
+    } catch {}
+    set({ activeChannelId: channelId });
+  },
+
+  initFromStorage: () => {
+    try {
+      const id =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("chat:activeChannelId")
+          : null;
+      if (id) set({ activeChannelId: id });
+    } catch {}
+  },
 
   setChannelMembers: (channelId, members) =>
     set((s) => {
@@ -273,5 +293,9 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setWs: (ws) => set({ ws }),
 
   // ── Reset ─────────────────────────────────────
-  reset: () => set(initialState),
+  reset: () => {
+    // Preserve activeChannelId for faster reload on navigation back
+    const saved = get().activeChannelId;
+    set({ ...initialState, activeChannelId: saved });
+  },
 }));

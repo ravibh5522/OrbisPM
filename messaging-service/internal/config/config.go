@@ -49,6 +49,9 @@ type Config struct {
 	RateLimitPerMinute int
 	RateLimitBurst     int
 
+	// Auth cache
+	JWKSCacheTTL time.Duration
+
 	// Server Timeouts
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
@@ -79,6 +82,7 @@ func Load() (*Config, error) {
 		MaxFileSizeMB:       getEnvInt("MAX_FILE_SIZE_MB", 50),
 		RateLimitPerMinute:  getEnvInt("RATE_LIMIT_PER_MINUTE", 300),
 		RateLimitBurst:      getEnvInt("RATE_LIMIT_BURST", 30),
+		JWKSCacheTTL:        time.Duration(getEnvInt("JWKS_CACHE_TTL_SECONDS", 300)) * time.Second,
 		ReadTimeout:         time.Duration(getEnvInt("READ_TIMEOUT_SECONDS", 15)) * time.Second,
 		WriteTimeout:        time.Duration(getEnvInt("WRITE_TIMEOUT_SECONDS", 15)) * time.Second,
 		IdleTimeout:         time.Duration(getEnvInt("IDLE_TIMEOUT_SECONDS", 60)) * time.Second,

@@ -2,6 +2,7 @@
 
 import { OfflineIndicator } from "@/components/offline-indicator";
 import { ServiceWorkerRegistrar } from "@/components/sw-registrar";
+import { TelemetryTracker } from "@/components/telemetry-tracker";
 import { ApiError } from "@/lib/api";
 import { createIDBPersister } from "@/lib/offline/persister";
 import { useAuthStore } from "@/stores/auth-store";
@@ -90,6 +91,7 @@ export function Providers({ children }: { children: ReactNode }) {
       </ThemeInitializer>
       <OfflineIndicator />
       <ServiceWorkerRegistrar />
+      <TelemetryTracker />
       <Toaster
         position="bottom-right"
         richColors
