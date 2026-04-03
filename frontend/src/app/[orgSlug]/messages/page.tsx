@@ -72,7 +72,7 @@ export default function MessagesPage() {
   }, []);
 
   return (
-    <div className="flex h-[calc(100vh-5rem)] bg-base-100 rounded-2xl border border-base-200 shadow-sm overflow-hidden">
+    <div className="flex h-[calc(100vh-5rem)] rounded-2xl border border-base-200 shadow-sm overflow-hidden">
       {/* Left: Conversation List + Channel Panel */}
       <div
         className={cn(

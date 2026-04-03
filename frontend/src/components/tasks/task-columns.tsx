@@ -1456,7 +1456,7 @@ export function TaskColumns({
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-100 relative">
+    <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-200/30 relative">
       {/* Pending review toast */}
       <ChangeRequestToast
         result={pendingReviewResult}
@@ -1643,7 +1643,7 @@ export function TaskColumns({
         </div>
 
         {/* Detail panel — flexible width, shrinks with viewport */}
-        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none bg-base-100">
+        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none bg-base-200/30">
           {focusedTask ? (
             <TaskPreviewPanel
               task={focusedTask}

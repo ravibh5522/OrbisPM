@@ -1204,3 +1204,95 @@
   --tw-gradient-from: oklch(28% 0.02 260);
   background-color: oklch(28% 0.02 260) !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ORBIS DARK — hardcoded Tailwind colour overrides
+   Mirrors the glass-dark overrides so orbis-dark also handles
+   any component that uses vanilla Tailwind colour classes
+   instead of DaisyUI semantic tokens.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Orbis Dark — text overrides ── */
+[data-theme="orbis-dark"] .text-gray-400,
+[data-theme="orbis-dark"] .text-gray-500,
+[data-theme="orbis-dark"] .text-gray-600,
+[data-theme="orbis-dark"] .text-gray-700,
+[data-theme="orbis-dark"] .text-gray-800,
+[data-theme="orbis-dark"] .text-slate-500,
+[data-theme="orbis-dark"] .text-slate-600,
+[data-theme="orbis-dark"] .text-slate-700,
+[data-theme="orbis-dark"] .text-slate-800,
+[data-theme="orbis-dark"] .text-zinc-500,
+[data-theme="orbis-dark"] .text-zinc-600,
+[data-theme="orbis-dark"] .text-zinc-700 {
+  color: oklch(92% 0.01 260 / 0.7) !important;
+}
+[data-theme="orbis-dark"] .text-gray-900,
+[data-theme="orbis-dark"] .text-slate-900,
+[data-theme="orbis-dark"] .text-black {
+  color: oklch(92% 0.01 260) !important;
+}
+
+/* ── Orbis Dark — bg overrides ── */
+[data-theme="orbis-dark"] .bg-white,
+[data-theme="orbis-dark"] .bg-gray-50,
+[data-theme="orbis-dark"] .bg-gray-100,
+[data-theme="orbis-dark"] .bg-slate-50,
+[data-theme="orbis-dark"] .bg-slate-100 {
+  background-color: oklch(22% 0.015 260) !important;
+}
+[data-theme="orbis-dark"] .bg-gray-200,
+[data-theme="orbis-dark"] .bg-slate-200 {
+  background-color: oklch(25% 0.018 260) !important;
+}
+
+/* ── Orbis Dark — border overrides ── */
+[data-theme="orbis-dark"] .border-gray-200,
+[data-theme="orbis-dark"] .border-gray-300,
+[data-theme="orbis-dark"] .border-slate-200,
+[data-theme="orbis-dark"] .border-slate-300 {
+  border-color: oklch(28% 0.02 260) !important;
+}
+
+/* ── Orbis Dark — semantic colour-50 tints (hover states, etc.) ── */
+[data-theme="orbis-dark"] .bg-pink-50,
+[data-theme="orbis-dark"] .hover\:bg-pink-50:hover {
+  background-color: oklch(25% 0.04 350) !important;
+}
+[data-theme="orbis-dark"] .bg-red-50,
+[data-theme="orbis-dark"] .hover\:bg-red-50:hover {
+  background-color: oklch(24% 0.04 20) !important;
+}
+[data-theme="orbis-dark"] .bg-green-50,
+[data-theme="orbis-dark"] .hover\:bg-green-50:hover {
+  background-color: oklch(24% 0.04 155) !important;
+}
+[data-theme="orbis-dark"] .bg-blue-50,
+[data-theme="orbis-dark"] .hover\:bg-blue-50:hover {
+  background-color: oklch(24% 0.03 235) !important;
+}
+[data-theme="orbis-dark"] .bg-yellow-50,
+[data-theme="orbis-dark"] .bg-amber-50,
+[data-theme="orbis-dark"] .hover\:bg-yellow-50:hover,
+[data-theme="orbis-dark"] .hover\:bg-amber-50:hover {
+  background-color: oklch(25% 0.04 85) !important;
+}
+[data-theme="orbis-dark"] .bg-purple-50,
+[data-theme="orbis-dark"] .hover\:bg-purple-50:hover {
+  background-color: oklch(24% 0.04 280) !important;
+}
+
+/* ── Orbis Dark — hover state overrides ── */
+[data-theme="orbis-dark"] .hover\:bg-base-200:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-200\/20:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-200\/40:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-200\/50:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-200\/60:hover {
+  background-color: oklch(30% 0.02 260) !important;
+}
+[data-theme="orbis-dark"] .hover\:bg-base-300:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-300\/30:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-300\/40:hover,
+[data-theme="orbis-dark"] .hover\:bg-base-300\/60:hover {
+  background-color: oklch(34% 0.024 262) !important;
+}
