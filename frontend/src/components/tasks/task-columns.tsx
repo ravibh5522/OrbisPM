@@ -2,8 +2,8 @@
 
 import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
-  ChangeRequestToast,
-  PendingReviewBadge,
+    ChangeRequestToast,
+    PendingReviewBadge,
 } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
@@ -19,30 +19,30 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
-  DeadlineConflict,
-  OrgMember,
-  ProjectMember,
-  Task,
-  TaskPriority,
-  TaskStatus,
-  TaskUpdateResult,
+    DeadlineConflict,
+    OrgMember,
+    ProjectMember,
+    Task,
+    TaskPriority,
+    TaskStatus,
+    TaskUpdateResult,
 } from "@/types/domain";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-  Check,
-  ChevronRight,
-  Filter,
-  GripVertical,
-  ListPlus,
-  Loader2,
-  Pencil,
-  Plus,
-  Redo2,
-  Tags,
-  Trash2,
-  Undo2,
-  UserPlus,
-  X,
+    Check,
+    ChevronRight,
+    Filter,
+    GripVertical,
+    ListPlus,
+    Loader2,
+    Pencil,
+    Plus,
+    Redo2,
+    Tags,
+    Trash2,
+    Undo2,
+    UserPlus,
+    X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";

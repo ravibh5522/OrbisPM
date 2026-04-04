@@ -4,27 +4,27 @@ import { Pagination } from "@/components/ui/pagination";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/shared";
 import { api } from "@/lib/api";
 import {
-  formatDate,
-  formatRelative,
-  priorityColor,
-  statusLabel,
+    formatDate,
+    formatRelative,
+    priorityColor,
+    statusLabel,
 } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { Task, TaskStatus } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
-  CheckCircle,
-  Circle,
-  Clock,
-  LayoutGrid,
-  ListTodo,
-  PlayCircle,
-  Rows3,
-  Search,
-  SlidersHorizontal,
-  X,
+    AlertTriangle,
+    CheckCircle,
+    Circle,
+    Clock,
+    LayoutGrid,
+    ListTodo,
+    PlayCircle,
+    Rows3,
+    Search,
+    SlidersHorizontal,
+    X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
