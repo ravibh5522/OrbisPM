@@ -6,10 +6,10 @@ import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-  Card,
-  ConfirmDialog,
-  EmptyState,
-  PageHeader,
+    Card,
+    ConfirmDialog,
+    EmptyState,
+    PageHeader,
 } from "@/components/ui/shared";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import type { ListResponse } from "@/lib/api";
@@ -19,19 +19,19 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { Project, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Activity,
-  Calendar,
-  ChevronDown,
-  FolderKanban,
-  LayoutGrid,
-  Pencil,
-  Plus,
-  Search,
-  SlidersHorizontal,
-  Table2,
-  Trash2,
-  Users,
-  X,
+    Activity,
+    Calendar,
+    ChevronDown,
+    FolderKanban,
+    LayoutGrid,
+    Pencil,
+    Plus,
+    Search,
+    SlidersHorizontal,
+    Table2,
+    Trash2,
+    Users,
+    X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -68,6 +68,21 @@ export default function ProjectsPage() {
   const [statusFilter, setStatusFilter] = useState("active");
   const [teamFilter, setTeamFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+
+  const updateSearch = (v: string) => {
+    setSearch(v);
+    setPage(0);
+  };
+
+  const updateStatus = (v: string) => {
+    setStatusFilter(v);
+    setPage(0);
+  };
+
+  const updateTeam = (v: string) => {
+    setTeamFilter(v);
+    setPage(0);
+  };
 
   // Debounce search
   useEffect(() => {
@@ -260,6 +275,18 @@ export default function ProjectsPage() {
     setPage(0);
   };
 
+  const statusFilterOptions: { value: string; label: string }[] = [
+    { value: "", label: "All" },
+    { value: "active", label: "Active" },
+    { value: "archived", label: "Archived" },
+    { value: "on_hold", label: "On Hold" },
+  ];
+
+  const teamFilterOptions = [
+    { value: "", label: "All teams" },
+    ...teamList.map((t: Team) => ({ value: t.id, label: t.name })),
+  ];
+
   const SortIcon = ({ col }: { col: string }) => (
     <ChevronDown
       className={cn(
@@ -292,18 +319,19 @@ export default function ProjectsPage() {
       {/* Search bar + Filter toggle + View toggle */}
       <div className="flex items-center gap-2 mb-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/85" />
           <input
             type="text"
             placeholder="Search projects..."
-            className="input input-bordered input-sm w-full pl-9"
+            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => updateSearch(e.target.value)}
           />
           {search && (
             <button
-              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
-              onClick={() => setSearch("")}
+              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base-content/60 transition-colors hover:bg-base-100/45 hover:text-base-content"
+              onClick={() => updateSearch("")}
+              aria-label="Clear search"
             >
               <X className="w-3 h-3" />
             </button>
@@ -332,24 +360,32 @@ export default function ProjectsPage() {
           {total} project{total !== 1 ? "s" : ""}
         </span>
 
-        <div className="join">
+        <div className="inline-flex items-center rounded-xl border border-base-200/55 bg-base-100/26 p-1 backdrop-blur-xl">
           <button
             className={cn(
-              "btn btn-sm join-item",
-              viewMode === "table" && "btn-active",
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+              viewMode === "table"
+                ? "bg-base-100/70 text-base-content shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.16)]"
+                : "text-base-content/70 hover:bg-base-100/30",
             )}
             onClick={() => setViewMode("table")}
           >
             <Table2 className="w-4 h-4" />
+            <span>Table</span>
+            {viewMode === "table" ? <span className="text-[10px]">✓</span> : null}
           </button>
           <button
             className={cn(
-              "btn btn-sm join-item",
-              viewMode === "grid" && "btn-active",
+              "inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all",
+              viewMode === "grid"
+                ? "bg-base-100/70 text-base-content shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.16)]"
+                : "text-base-content/70 hover:bg-base-100/30",
             )}
             onClick={() => setViewMode("grid")}
           >
             <LayoutGrid className="w-4 h-4" />
+            <span>Grid</span>
+            {viewMode === "grid" ? <span className="text-[10px]">✓</span> : null}
           </button>
         </div>
       </div>
@@ -361,38 +397,100 @@ export default function ProjectsPage() {
             <span className="text-sm font-medium whitespace-nowrap">
               Status:
             </span>
-            <select
-              className="select select-bordered select-sm"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="">All</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-              <option value="on_hold">On Hold</option>
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span>
+                  {statusFilterOptions.find((o) => o.value === statusFilter)
+                    ?.label || "All"}
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-32 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                {statusFilterOptions.map((opt) => (
+                  <li key={opt.value || "all"}>
+                    <button
+                      className={cn(
+                        "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        statusFilter === opt.value
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35",
+                      )}
+                      onClick={() => updateStatus(opt.value)}
+                    >
+                      <span>{opt.label}</span>
+                      {statusFilter === opt.value ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium whitespace-nowrap">Team:</span>
-            <select
-              className="select select-bordered select-sm max-w-[200px]"
-              value={teamFilter}
-              onChange={(e) => {
-                setTeamFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="">All teams</option>
-              {teamList.map((t: Team) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-44 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span className="truncate">
+                  {teamFilterOptions.find((o) => o.value === teamFilter)?.label ||
+                    "All teams"}
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 max-h-64 w-44 overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                {teamFilterOptions.map((opt) => (
+                  <li key={opt.value || "all"}>
+                    <button
+                      className={cn(
+                        "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        teamFilter === opt.value
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35",
+                      )}
+                      onClick={() => updateTeam(opt.value)}
+                    >
+                      <span className="truncate">{opt.label}</span>
+                      {teamFilter === opt.value ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+
           {activeFilterCount > 0 && (
             <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
               <X className="w-3 h-3" /> Clear all
@@ -439,8 +537,8 @@ export default function ProjectsPage() {
       ) : viewMode === "table" ? (
         <Card className="flex-1">
           <div className="w-full overflow-x-auto">
-            <table className="table w-full">
-              <thead>
+            <table className="table w-full border-separate border-spacing-y-1">
+              <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
                 <tr>
                   <th
                     className="cursor-pointer select-none"
@@ -476,7 +574,7 @@ export default function ProjectsPage() {
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="[&_tr]:transition-colors [&_tr]:duration-150 [&_tr:hover]:bg-base-200/32 [&_tr:hover>td:first-child]:rounded-l-xl [&_tr:hover>td:last-child]:rounded-r-xl">
                 {projects.map((project: Project) => {
                   const projectTeams = teamList.filter(
                     (t: Team) =>
@@ -486,7 +584,7 @@ export default function ProjectsPage() {
                   return (
                     <tr
                       key={project.id}
-                      className="hover cursor-pointer"
+                      className="cursor-pointer"
                       onClick={() =>
                         router.push(
                           `/${currentOrg!.slug}/projects/${project.id}`,
@@ -626,7 +724,7 @@ export default function ProjectsPage() {
                     </PermissionGate>
                     <PermissionGate resource="projects" action="delete">
                       <button
-                        className="btn btn-ghost btn-xs btn-square"
+                        className="btn btn-ghost btn-xs btn-square text-error"
                         onClick={() => setDeleteTarget(project)}
                       >
                         <Trash2 className="w-3 h-3" />

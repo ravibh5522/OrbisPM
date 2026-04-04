@@ -18,8 +18,10 @@ import {
   CheckCircle,
   Circle,
   Clock,
+  LayoutGrid,
   ListTodo,
-  Loader2,
+  PlayCircle,
+  Rows3,
   Search,
   SlidersHorizontal,
   X,
@@ -54,6 +56,9 @@ export default function MyTasksPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(0);
   const [viewMode, setViewMode] = useState<"grouped" | "flat">("grouped");
+  const [groupedTab, setGroupedTab] = useState<
+    "overdue" | "in_progress" | "blocked"
+  >("overdue");
 
   // Reset page when filters change
   const updateSearch = (v: string) => {
@@ -123,10 +128,26 @@ export default function MyTasksPage() {
     setPage(0);
   };
 
+  const statusFilterOptions: { value: string; label: string }[] = [
+    { value: "", label: "All" },
+    { value: "todo", label: "Todo" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "blocked", label: "Blocked" },
+    { value: "done", label: "Done" },
+  ];
+
+  const priorityFilterOptions: { value: string; label: string }[] = [
+    { value: "", label: "All" },
+    { value: "critical", label: "Critical" },
+    { value: "high", label: "High" },
+    { value: "medium", label: "Medium" },
+    { value: "low", label: "Low" },
+  ];
+
   const statusIcon = (s: TaskStatus) => {
     switch (s) {
       case "in_progress":
-        return <Loader2 className="w-4 h-4 text-info animate-spin" />;
+        return <PlayCircle className="w-4 h-4 text-info" />;
       case "todo":
         return <Circle className="w-4 h-4 text-base-content/40" />;
       case "blocked":
@@ -205,18 +226,19 @@ export default function MyTasksPage() {
       {/* Search + Filters + View toggle */}
       <div className="flex items-center gap-2 mb-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/85" />
           <input
             type="text"
             placeholder="Search tasks..."
-            className="input input-bordered input-sm w-full pl-9"
+            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
             onChange={(e) => updateSearch(e.target.value)}
           />
           {search && (
             <button
-              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
+              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base-content/60 transition-colors hover:bg-base-100/45 hover:text-base-content"
               onClick={() => updateSearch("")}
+              aria-label="Clear search"
             >
               <X className="w-3 h-3" />
             </button>
@@ -242,18 +264,30 @@ export default function MyTasksPage() {
           {total} task{total !== 1 ? "s" : ""}
         </span>
 
-        <div className="join">
+        <div className="inline-flex items-center rounded-xl border border-base-200/55 bg-base-100/26 p-1 backdrop-blur-xl">
           <button
-            className={`btn btn-sm join-item ${viewMode === "grouped" ? "btn-active" : ""}`}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+              viewMode === "grouped"
+                ? "bg-base-100/70 text-base-content shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.16)]"
+                : "text-base-content/70 hover:bg-base-100/30"
+            }`}
             onClick={() => setViewMode("grouped")}
           >
+            <LayoutGrid className="h-3.5 w-3.5" />
             Grouped
+            {viewMode === "grouped" ? <span className="text-[10px]">✓</span> : null}
           </button>
           <button
-            className={`btn btn-sm join-item ${viewMode === "flat" ? "btn-active" : ""}`}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
+              viewMode === "flat"
+                ? "bg-base-100/70 text-base-content shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.16)]"
+                : "text-base-content/70 hover:bg-base-100/30"
+            }`}
             onClick={() => setViewMode("flat")}
           >
+            <Rows3 className="h-3.5 w-3.5" />
             Flat
+            {viewMode === "flat" ? <span className="text-[10px]">✓</span> : null}
           </button>
         </div>
       </div>
@@ -265,33 +299,97 @@ export default function MyTasksPage() {
             <span className="text-sm font-medium whitespace-nowrap">
               Status:
             </span>
-            <select
-              className="select select-bordered select-sm"
-              value={statusFilter}
-              onChange={(e) => updateStatus(e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="todo">Todo</option>
-              <option value="in_progress">In Progress</option>
-              <option value="blocked">Blocked</option>
-              <option value="done">Done</option>
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span>
+                  {statusFilterOptions.find((o) => o.value === statusFilter)
+                    ?.label || "All"}
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-32 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                {statusFilterOptions.map((opt) => (
+                  <li key={opt.value || "all"}>
+                    <button
+                      className={`task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                        statusFilter === opt.value
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35"
+                      }`}
+                      onClick={() => updateStatus(opt.value)}
+                    >
+                      <span>{opt.label}</span>
+                      {statusFilter === opt.value ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium whitespace-nowrap">
               Priority:
             </span>
-            <select
-              className="select select-bordered select-sm"
-              value={priorityFilter}
-              onChange={(e) => updatePriority(e.target.value)}
-            >
-              <option value="">All</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span>
+                  {priorityFilterOptions.find((o) => o.value === priorityFilter)
+                    ?.label || "All"}
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-32 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                {priorityFilterOptions.map((opt) => (
+                  <li key={opt.value || "all"}>
+                    <button
+                      className={`task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                        priorityFilter === opt.value
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35"
+                      }`}
+                      onClick={() => updatePriority(opt.value)}
+                    >
+                      <span>{opt.label}</span>
+                      {priorityFilter === opt.value ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
           {activeFilterCount > 0 && (
             <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
@@ -323,11 +421,12 @@ export default function MyTasksPage() {
           }
         />
       ) : viewMode === "flat" ? (
-        <>
-          <Card>
+        <div className="flex h-[calc(100vh-18rem)] min-h-[24rem] flex-col gap-2 overflow-hidden">
+          <Card className="flex-1 overflow-hidden">
             <TaskTable
               tasks={paginated}
               statusIcon={statusIcon}
+              scrollable
               onNavigate={(t) =>
                 router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)
               }
@@ -336,133 +435,107 @@ export default function MyTasksPage() {
               }
             />
           </Card>
-          <Pagination
-            page={page}
-            totalPages={totalPages}
-            total={total}
-            pageSize={PAGE_SIZE}
-            onPageChange={setPage}
-          />
-        </>
+          <div className="shrink-0 rounded-xl border border-base-200/55 bg-base-100/52 px-2 py-0.5 backdrop-blur-md">
+            <Pagination
+              page={page}
+              totalPages={totalPages}
+              total={total}
+              pageSize={PAGE_SIZE}
+              onPageChange={setPage}
+              className="!mt-1 !pt-1 [&>span]:text-xs [&_.btn]:btn-xs [&_.btn]:h-7 [&_.btn]:min-h-7 [&_.btn]:px-2"
+            />
+          </div>
+        </div>
       ) : (
-        <div className="space-y-6">
-          {/* Overdue section */}
-          {overdue.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-5 h-5 text-error" />
-                <h3 className="font-semibold text-error">
-                  Overdue ({overdue.length})
-                </h3>
-              </div>
+        <div className="flex h-[calc(100vh-18rem)] min-h-[24rem] flex-col overflow-hidden">
+          <Card className="flex-1 overflow-hidden">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-xl bg-base-100/22 p-1">
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                groupedTab === "overdue"
+                  ? "bg-error/20 text-error"
+                  : "text-base-content/70 hover:bg-base-100/24"
+              }`}
+              onClick={() => setGroupedTab("overdue")}
+            >
+              Overdue ({overdue.length})
+            </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                groupedTab === "in_progress"
+                  ? "bg-info/20 text-info"
+                  : "text-base-content/70 hover:bg-base-100/24"
+              }`}
+              onClick={() => setGroupedTab("in_progress")}
+            >
+              In Progress ({grouped.in_progress.length})
+            </button>
+            <button
+              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                groupedTab === "blocked"
+                  ? "bg-warning/20 text-warning"
+                  : "text-base-content/70 hover:bg-base-100/24"
+              }`}
+              onClick={() => setGroupedTab("blocked")}
+            >
+              Blocked ({grouped.blocked.length})
+            </button>
+            </div>
+
+            <div className="mb-3 flex items-center gap-2">
+            {groupedTab === "overdue" ? (
+              <AlertTriangle className="w-5 h-5 text-error" />
+            ) : groupedTab === "in_progress" ? (
+                <PlayCircle className="w-5 h-5 text-info" />
+            ) : (
+              <AlertTriangle className="w-5 h-5 text-warning" />
+            )}
+            <h3
+              className={`font-semibold ${
+                groupedTab === "overdue"
+                  ? "text-error"
+                  : groupedTab === "in_progress"
+                    ? "text-info"
+                    : "text-warning"
+              }`}
+            >
+              {groupedTab === "overdue"
+                ? `Overdue (${overdue.length})`
+                : groupedTab === "in_progress"
+                  ? `In Progress (${grouped.in_progress.length})`
+                  : `Blocked (${grouped.blocked.length})`}
+            </h3>
+            </div>
+
+            {(groupedTab === "overdue"
+              ? overdue
+              : groupedTab === "in_progress"
+                ? grouped.in_progress
+                : grouped.blocked
+            ).length > 0 ? (
               <TaskTable
-                tasks={overdue}
+                tasks={
+                  groupedTab === "overdue"
+                    ? overdue
+                    : groupedTab === "in_progress"
+                      ? grouped.in_progress
+                      : grouped.blocked
+                }
                 statusIcon={statusIcon}
+                scrollable
                 onNavigate={(t) =>
-                  router.push(
-                    `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
-                  )
+                  router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)
                 }
                 onStatusChange={(t, s) =>
                   statusMutation.mutate({ task: t, status: s })
                 }
               />
-            </Card>
-          )}
-
-          {/* In Progress */}
-          {grouped.in_progress.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 mb-3">
-                <Loader2 className="w-5 h-5 text-info animate-spin" />
-                <h3 className="font-semibold">
-                  In Progress ({grouped.in_progress.length})
-                </h3>
+            ) : (
+              <div className="rounded-xl border border-base-200/50 bg-base-100/20 p-6 text-center text-sm text-base-content/65">
+                No tasks in this tab.
               </div>
-              <TaskTable
-                tasks={grouped.in_progress}
-                statusIcon={statusIcon}
-                onNavigate={(t) =>
-                  router.push(
-                    `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
-                  )
-                }
-                onStatusChange={(t, s) =>
-                  statusMutation.mutate({ task: t, status: s })
-                }
-              />
-            </Card>
-          )}
-
-          {/* Todo */}
-          {grouped.todo.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 mb-3">
-                <Circle className="w-5 h-5 text-base-content/40" />
-                <h3 className="font-semibold">Todo ({grouped.todo.length})</h3>
-              </div>
-              <TaskTable
-                tasks={grouped.todo}
-                statusIcon={statusIcon}
-                onNavigate={(t) =>
-                  router.push(
-                    `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
-                  )
-                }
-                onStatusChange={(t, s) =>
-                  statusMutation.mutate({ task: t, status: s })
-                }
-              />
-            </Card>
-          )}
-
-          {/* Blocked */}
-          {grouped.blocked.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="w-5 h-5 text-warning" />
-                <h3 className="font-semibold">
-                  Blocked ({grouped.blocked.length})
-                </h3>
-              </div>
-              <TaskTable
-                tasks={grouped.blocked}
-                statusIcon={statusIcon}
-                onNavigate={(t) =>
-                  router.push(
-                    `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
-                  )
-                }
-                onStatusChange={(t, s) =>
-                  statusMutation.mutate({ task: t, status: s })
-                }
-              />
-            </Card>
-          )}
-
-          {/* Done (collapsed by default) */}
-          {grouped.done.length > 0 && (
-            <details className="collapse collapse-arrow bg-base-100 border border-base-200 rounded-lg">
-              <summary className="collapse-title font-semibold flex items-center gap-2">
-                <CheckCircle className="w-5 h-5 text-success" />
-                Done ({grouped.done.length})
-              </summary>
-              <div className="collapse-content">
-                <TaskTable
-                  tasks={grouped.done}
-                  statusIcon={statusIcon}
-                  onNavigate={(t) =>
-                    router.push(
-                      `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
-                    )
-                  }
-                  onStatusChange={(t, s) =>
-                    statusMutation.mutate({ task: t, status: s })
-                  }
-                />
-              </div>
-            </details>
-          )}
+            )}
+          </Card>
         </div>
       )}
     </div>
@@ -472,50 +545,154 @@ export default function MyTasksPage() {
 function TaskTable({
   tasks,
   statusIcon,
+  scrollable,
   onNavigate,
   onStatusChange,
 }: {
   tasks: Task[];
   statusIcon: (s: TaskStatus) => React.ReactNode;
+  scrollable?: boolean;
   onNavigate: (t: Task) => void;
   onStatusChange: (task: Task, status: TaskStatus) => void;
 }) {
+  const statusOptions: { value: TaskStatus; label: string }[] = [
+    { value: "todo", label: "Todo" },
+    { value: "in_progress", label: "In Progress" },
+    { value: "blocked", label: "Blocked" },
+    { value: "in_review", label: "In Review" },
+    { value: "done", label: "Done" },
+    { value: "cancelled", label: "Cancelled" },
+  ];
+
+  const statusTone: Record<
+    TaskStatus,
+    { trigger: string; dot: string; text: string }
+  > = {
+    todo: {
+      trigger: "border-slate-400/30 bg-slate-500/12",
+      dot: "bg-slate-400",
+      text: "text-slate-300",
+    },
+    in_progress: {
+      trigger: "border-sky-400/35 bg-sky-500/12",
+      dot: "bg-sky-400",
+      text: "text-sky-300",
+    },
+    blocked: {
+      trigger: "border-rose-400/35 bg-rose-500/12",
+      dot: "bg-rose-400",
+      text: "text-rose-300",
+    },
+    in_review: {
+      trigger: "border-violet-400/35 bg-violet-500/12",
+      dot: "bg-violet-400",
+      text: "text-violet-300",
+    },
+    done: {
+      trigger: "border-emerald-400/35 bg-emerald-500/12",
+      dot: "bg-emerald-400",
+      text: "text-emerald-300",
+    },
+    cancelled: {
+      trigger: "border-zinc-400/35 bg-zinc-500/12",
+      dot: "bg-zinc-400",
+      text: "text-zinc-300",
+    },
+  };
+
   return (
-    <div className="overflow-x-auto">
+    <div
+      className={
+        scrollable
+          ? "h-full overflow-x-auto overflow-y-auto rounded-xl pr-1"
+          : "overflow-x-auto overflow-y-visible rounded-xl"
+      }
+    >
       <table className="table table-sm">
-        <thead>
-          <tr>
-            <th>Status</th>
-            <th>Title</th>
-            <th>Priority</th>
-            <th>Due Date</th>
-            <th>Updated</th>
+        <thead className={scrollable ? "sticky top-0 z-20" : ""}>
+          <tr className="bg-base-200/82 backdrop-blur-none">
+            <th className="rounded-l-xl text-base-content/82">Status</th>
+            <th className="text-base-content/82">Title</th>
+            <th className="text-base-content/82">Priority</th>
+            <th className="text-base-content/82">Due Date</th>
+            <th className="rounded-r-xl text-base-content/82">Updated</th>
           </tr>
         </thead>
         <tbody>
           {tasks.map((task) => (
             <tr
               key={task.id}
-              className="hover cursor-pointer"
+              className="group cursor-pointer"
               onClick={() => onNavigate(task)}
             >
-              <td onClick={(e) => e.stopPropagation()}>
-                <select
-                  className="select select-bordered select-xs w-28"
-                  value={task.status}
-                  onChange={(e) =>
-                    onStatusChange(task, e.target.value as TaskStatus)
-                  }
-                >
-                  <option value="todo">Todo</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="blocked">Blocked</option>
-                  <option value="in_review">In Review</option>
-                  <option value="done">Done</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
+              <td
+                className="rounded-l-lg transition-colors group-hover:bg-base-100/24"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="dropdown dropdown-right" onClick={(e) => e.stopPropagation()}>
+                  <div
+                    tabIndex={0}
+                    role="button"
+                    data-status={task.status}
+                    className={`task-status-trigger inline-flex h-9 min-h-9 w-36 items-center justify-between rounded-xl border px-3 text-sm backdrop-blur-md ${statusTone[task.status].trigger}`}
+                  >
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        data-status={task.status}
+                        className="task-status-dot h-2 w-2 rounded-full"
+                      />
+                      <span
+                        data-status={task.status}
+                        className={`task-status-label ${statusTone[task.status].text}`}
+                      >
+                        {statusLabel(task.status)}
+                      </span>
+                    </span>
+                    <svg
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      className="h-3.5 w-3.5 text-base-content/60"
+                      aria-hidden="true"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                  <ul className="dropdown-content task-status-menu z-[80] mt-1 w-40 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                    {statusOptions.map((opt) => (
+                      <li key={opt.value}>
+                        <button
+                          data-status={opt.value}
+                          className={`task-status-item task-status-option flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                            task.status === opt.value
+                              ? `task-status-item-active ${statusTone[opt.value].text}`
+                              : `${statusTone[opt.value].text} hover:bg-base-200/35`
+                          }`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStatusChange(task, opt.value);
+                          }}
+                        >
+                          <span className="inline-flex items-center gap-2">
+                            <span
+                              data-status={opt.value}
+                              className="task-status-dot h-2 w-2 rounded-full"
+                            />
+                            <span>{opt.label}</span>
+                          </span>
+                          {task.status === opt.value ? (
+                            <span className="text-xs">✓</span>
+                          ) : null}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </td>
-              <td>
+              <td className="transition-colors group-hover:bg-base-100/24">
                 <div>
                   <span className="font-medium">{task.title}</span>
                   {task.labels && task.labels.length > 0 && (
@@ -529,12 +706,12 @@ function TaskTable({
                   )}
                 </div>
               </td>
-              <td>
+              <td className="transition-colors group-hover:bg-base-100/24">
                 <Badge variant={priorityColor(task.priority)}>
                   {statusLabel(task.priority)}
                 </Badge>
               </td>
-              <td className="text-sm text-base-content/60">
+              <td className="text-sm text-base-content/60 transition-colors group-hover:bg-base-100/24">
                 {task.due_date ? (
                   <span
                     className={
@@ -550,7 +727,7 @@ function TaskTable({
                   "\u2014"
                 )}
               </td>
-              <td className="text-sm text-base-content/60">
+              <td className="rounded-r-lg text-sm text-base-content/60 transition-colors group-hover:bg-base-100/24">
                 <div className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   {formatRelative(task.updated_at)}

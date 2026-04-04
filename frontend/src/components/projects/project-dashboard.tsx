@@ -1,35 +1,35 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { Avatar, Badge, Card, LoadingPage } from "@/components/ui/shared";
 import { api } from "@/lib/api";
-import { Card, Badge, Avatar, LoadingPage } from "@/components/ui/shared";
-import { formatRelative, statusColor, statusLabel, formatDate, cn } from "@/lib/utils";
+import { cn, formatDate, formatRelative, statusColor, statusLabel } from "@/lib/utils";
 import type { ProjectDashboardStats } from "@/types/domain";
+import { useQuery } from "@tanstack/react-query";
 import {
-  AreaChart,
+  AlertTriangle,
+  CalendarClock,
+  CheckCircle2,
+  Clock,
+  Gauge,
+  ListTodo,
+  TrendingDown,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import {
   Area,
-  BarChart,
+  AreaChart,
   Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
 } from "recharts";
-import {
-  TrendingUp,
-  TrendingDown,
-  Clock,
-  AlertTriangle,
-  CheckCircle2,
-  Users,
-  CalendarClock,
-  ListTodo,
-  Gauge,
-} from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   todo: "#94a3b8",
@@ -51,6 +51,47 @@ const PRIORITY_COLORS: Record<string, string> = {
 
 const LABEL_COLORS = ["#6366f1", "#ec4899", "#14b8a6", "#f59e0b", "#8b5cf6", "#06b6d4"];
 
+const CHART_TOOLTIP_STYLE: React.CSSProperties = {
+  borderRadius: 10,
+  fontSize: 12,
+  backgroundColor: "var(--color-base-100)",
+  border: "1px solid var(--color-base-300)",
+  color: "var(--color-base-content)",
+  boxShadow: "0 10px 24px rgba(0, 0, 0, 0.2)",
+};
+
+const CHART_TOOLTIP_LABEL_STYLE: React.CSSProperties = {
+  color: "var(--color-base-content)",
+  opacity: 0.9,
+  fontWeight: 600,
+};
+
+const CHART_TOOLTIP_ITEM_STYLE: React.CSSProperties = {
+  color: "var(--color-base-content)",
+};
+
+const CHART_AXIS_TICK_STYLE = {
+  fontSize: 11,
+  fill: "var(--color-base-content)",
+  opacity: 0.72,
+};
+
+const CHART_AXIS_LINE_STYLE = {
+  stroke: "var(--color-base-content)",
+  strokeOpacity: 0.2,
+};
+
+const CHART_TICK_LINE_STYLE = {
+  stroke: "var(--color-base-content)",
+  strokeOpacity: 0.2,
+};
+
+const LABEL_CHART_AXIS_TICK_STYLE = {
+  fontSize: 12,
+  fill: "var(--color-base-content)",
+  opacity: 0.9,
+};
+
 function KPI({ label, value, icon, accent }: { label: string; value: string | number; icon: React.ReactNode; accent: string }) {
   return (
     <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 shadow-sm glass-card">
@@ -71,20 +112,25 @@ function MiniDonut({ data, colors, centerLabel }: { data: { name: string; value:
 
   return (
     <div className="flex items-center gap-3">
-      <div className="w-28 h-28 flex-shrink-0 relative">
+      <div className="w-36 h-36 flex-shrink-0 relative">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
-            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={28} outerRadius={48} paddingAngle={2} strokeWidth={0}>
+            <Pie data={data} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={38} outerRadius={64} paddingAngle={2} strokeWidth={0}>
               {data.map((entry) => (
                 <Cell key={entry.name} fill={colors[entry.name] || "#94a3b8"} />
               ))}
             </Pie>
-            <Tooltip formatter={(value) => [value, "Tasks"]} />
+            <Tooltip
+              formatter={(value) => [value, "Tasks"]}
+              contentStyle={CHART_TOOLTIP_STYLE}
+              labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+              itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+            />
           </PieChart>
         </ResponsiveContainer>
         {centerLabel && (
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-[10px] font-semibold text-base-content/60">{centerLabel}</span>
+            <span className="text-sm font-bold text-base-content/85">{centerLabel}</span>
           </div>
         )}
       </div>
@@ -174,10 +220,25 @@ export function ProjectDashboard({ orgId, projectId }: { orgId: string; projectI
                     <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.02} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-base-300/50" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={Math.max(1, Math.floor((stats.burndown_data.length) / 6))} />
-                <YAxis tick={{ fontSize: 10 }} width={30} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" className="stroke-base-300/70" />
+                <XAxis
+                  dataKey="date"
+                  tick={CHART_AXIS_TICK_STYLE}
+                  axisLine={CHART_AXIS_LINE_STYLE}
+                  tickLine={CHART_TICK_LINE_STYLE}
+                  interval={Math.max(1, Math.floor((stats.burndown_data.length) / 6))}
+                />
+                <YAxis
+                  tick={CHART_AXIS_TICK_STYLE}
+                  axisLine={CHART_AXIS_LINE_STYLE}
+                  tickLine={CHART_TICK_LINE_STYLE}
+                  width={34}
+                />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                  itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+                />
                 <Area type="monotone" dataKey="count" name="Remaining" stroke="#3b82f6" fill="url(#burnGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -196,10 +257,26 @@ export function ProjectDashboard({ orgId, projectId }: { orgId: string; projectI
                     <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0.4} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-base-300/50" />
-                <XAxis dataKey="date" tick={{ fontSize: 10 }} interval={Math.max(1, Math.floor((stats.created_over_time.length) / 6))} />
-                <YAxis tick={{ fontSize: 10 }} width={30} allowDecimals={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+                <CartesianGrid strokeDasharray="3 3" className="stroke-base-300/70" />
+                <XAxis
+                  dataKey="date"
+                  tick={CHART_AXIS_TICK_STYLE}
+                  axisLine={CHART_AXIS_LINE_STYLE}
+                  tickLine={CHART_TICK_LINE_STYLE}
+                  interval={Math.max(1, Math.floor((stats.created_over_time.length) / 6))}
+                />
+                <YAxis
+                  tick={CHART_AXIS_TICK_STYLE}
+                  axisLine={CHART_AXIS_LINE_STYLE}
+                  tickLine={CHART_TICK_LINE_STYLE}
+                  width={34}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={CHART_TOOLTIP_STYLE}
+                  labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                  itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+                />
                 <Bar dataKey="count" name="Created" fill="url(#barGrad)" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -219,17 +296,17 @@ export function ProjectDashboard({ orgId, projectId }: { orgId: string; projectI
         </Card>
         {/* Completion ring */}
         <Card title="Progress" compact>
-          <div className="flex flex-col items-center justify-center py-4 gap-2">
-            <div className="radial-progress text-primary" style={{ "--value": completionPct, "--size": "4.5rem", "--thickness": "5px" } as React.CSSProperties} role="progressbar">
-              <span className="text-base font-bold">{completionPct}%</span>
+          <div className="flex flex-col items-center justify-center py-5 gap-2.5">
+            <div className="radial-progress text-primary" style={{ "--value": completionPct, "--size": "5.75rem", "--thickness": "7px" } as React.CSSProperties} role="progressbar">
+              <span className="text-xl font-extrabold">{completionPct}%</span>
             </div>
-            <p className="text-xs text-base-content/50">
+            <p className="text-sm text-base-content/70">
               {stats.tasks_by_status?.done || 0} of {stats.total_tasks} done
             </p>
             {stats.estimated_hours > 0 && (
               <>
                 <progress className="progress progress-primary w-full mt-1" value={stats.actual_hours} max={stats.estimated_hours} />
-                <p className="text-[10px] text-base-content/40">{timeUsedPct}% time used</p>
+                <p className="text-xs text-base-content/55">{timeUsedPct}% time used</p>
               </>
             )}
           </div>
@@ -239,12 +316,33 @@ export function ProjectDashboard({ orgId, projectId }: { orgId: string; projectI
       {/* Label distribution */}
       {stats.label_counts && stats.label_counts.length > 0 && (
         <Card title="Labels" compact>
-          <ResponsiveContainer width="100%" height={Math.max(120, stats.label_counts.length * 28)}>
-            <BarChart data={stats.label_counts} layout="vertical" margin={{ left: 10 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-base-300/50" />
-              <XAxis type="number" tick={{ fontSize: 10 }} allowDecimals={false} />
-              <YAxis dataKey="label" type="category" tick={{ fontSize: 10 }} width={90} />
-              <Tooltip contentStyle={{ borderRadius: 8, fontSize: 12 }} />
+          <ResponsiveContainer width="100%" height={Math.max(170, stats.label_counts.length * 34)}>
+            <BarChart data={stats.label_counts} layout="vertical" margin={{ left: 14, right: 8 }}>
+              <CartesianGrid
+                strokeDasharray="2 4"
+                className="stroke-base-300/65"
+                horizontal={false}
+              />
+              <XAxis
+                type="number"
+                tick={CHART_AXIS_TICK_STYLE}
+                axisLine={CHART_AXIS_LINE_STYLE}
+                tickLine={CHART_TICK_LINE_STYLE}
+                allowDecimals={false}
+              />
+              <YAxis
+                dataKey="label"
+                type="category"
+                tick={LABEL_CHART_AXIS_TICK_STYLE}
+                axisLine={CHART_AXIS_LINE_STYLE}
+                tickLine={CHART_TICK_LINE_STYLE}
+                width={118}
+              />
+              <Tooltip
+                contentStyle={CHART_TOOLTIP_STYLE}
+                labelStyle={CHART_TOOLTIP_LABEL_STYLE}
+                itemStyle={CHART_TOOLTIP_ITEM_STYLE}
+              />
               <Bar dataKey="count" name="Tasks" radius={[0, 4, 4, 0]}>
                 {stats.label_counts.map((_, i) => (
                   <Cell key={i} fill={LABEL_COLORS[i % LABEL_COLORS.length]} />

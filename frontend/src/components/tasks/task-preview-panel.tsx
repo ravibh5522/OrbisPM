@@ -1,13 +1,13 @@
 "use client";
 
 import {
-  RichTextEditor,
-  RichTextViewer,
+    RichTextEditor,
+    RichTextViewer,
 } from "@/components/editor/rich-text-editor";
 import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
-  RecurrenceBadge,
-  RecurrenceSelector,
+    RecurrenceBadge,
+    RecurrenceSelector,
 } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { Button } from "@/components/ui/button";
@@ -20,50 +20,127 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { useReviewableFields } from "@/hooks/use-reviewable-fields";
 import {
-  cn,
-  formatDate,
-  formatRelative,
-  priorityColor,
-  statusColor,
-  statusLabel,
+    cn,
+    formatDate,
+    formatRelative,
+    priorityColor,
+    statusColor,
+    statusLabel,
 } from "@/lib/utils";
 import type {
-  Attachment,
-  Checklist,
-  Comment,
-  OrgMember,
-  ProjectMember,
-  Task,
-  TaskDependency,
-  TaskPriority,
-  TaskStatus,
-  TaskWatcher,
+    Attachment,
+    Checklist,
+    Comment,
+    OrgMember,
+    ProjectMember,
+    Task,
+    TaskDependency,
+    TaskPriority,
+    TaskStatus,
+    TaskWatcher,
 } from "@/types/domain";
 import {
-  CheckSquare,
-  Clock,
-  Copy,
-  Download,
-  Eye,
-  FileText,
-  Image as ImageIcon,
-  Link2,
-  ListChecks,
-  Lock,
-  MessageSquare,
-  Paperclip,
-  Play,
-  Plus,
-  Send,
-  Settings2,
-  Square,
-  Trash2,
-  Upload,
-  Users,
-  X,
+    CheckSquare,
+    Clock,
+    Copy,
+    Download,
+    Eye,
+    FileText,
+    Image as ImageIcon,
+    Link2,
+    ListChecks,
+    Lock,
+    MessageSquare,
+    Paperclip,
+    Play,
+    Plus,
+    Send,
+    Settings2,
+    Square,
+    Trash2,
+    Upload,
+    Users,
+    X,
 } from "lucide-react";
 
 const MAX_DEPTH = 3;
+
+const STATUS_OPTIONS: { value: TaskStatus; label: string }[] = [
+  { value: "todo", label: "Todo" },
+  { value: "in_progress", label: "In Progress" },
+  { value: "done", label: "Done" },
+  { value: "blocked", label: "Blocked" },
+];
+
+const PRIORITY_OPTIONS: { value: TaskPriority; label: string }[] = [
+  { value: "critical", label: "Critical" },
+  { value: "high", label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low", label: "Low" },
+];
+
+function ThemedDropdownSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  disabled?: boolean;
+}) {
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label || options[0]?.label || "";
+
+  return (
+    <details
+      className={cn(
+        "dropdown dropdown-bottom relative w-full",
+        disabled && "pointer-events-none opacity-60",
+      )}
+    >
+      <summary className="bulk-create-select inline-flex h-7 min-h-7 w-full cursor-pointer list-none items-center justify-between rounded-lg border border-base-200/55 bg-base-100/45 px-2.5 text-xs backdrop-blur-md">
+        <span className="truncate">{selectedLabel}</span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-3.5 w-3.5 text-base-content/60"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </summary>
+      <ul className="dropdown-content task-status-menu z-[220] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+        {options.map((opt) => (
+          <li key={opt.value}>
+            <button
+              type="button"
+              className={cn(
+                "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                value === opt.value
+                  ? "task-status-item-active"
+                  : "text-base-content/80 hover:bg-base-200/35",
+              )}
+              onClick={(e) => {
+                onChange(opt.value);
+                const details = e.currentTarget.closest("details");
+                if (details) details.removeAttribute("open");
+              }}
+            >
+              <span className="truncate">{opt.label}</span>
+              {value === opt.value ? <span className="text-xs">✓</span> : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 type AccessControl = {
   canEdit: boolean;
@@ -144,6 +221,14 @@ export function TaskPreviewPanel({
   const send = useProjectTaskStore((s) => s.send);
   const [activeTab, setActiveTab] = useState<TabType>("details");
   const [showDelete, setShowDelete] = useState(false);
+  const tabStripRef = useRef<HTMLDivElement | null>(null);
+  const tabButtonRefs = useRef<Record<TabType, HTMLButtonElement | null>>({
+    details: null,
+    checklist: null,
+    comments: null,
+    attachments: null,
+    relations: null,
+  });
 
   // DB-driven role-based access via project policies
   const policies = useProjectPolicies(projectId);
@@ -296,6 +381,18 @@ export function TaskPreviewPanel({
     },
   ];
 
+  useEffect(() => {
+    const activeBtn = tabButtonRefs.current[activeTab];
+    const strip = tabStripRef.current;
+    if (!activeBtn || !strip) return;
+
+    activeBtn.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+      inline: "center",
+    });
+  }, [activeTab]);
+
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -386,10 +483,16 @@ export function TaskPreviewPanel({
 
       {/* Tabs */}
       <div className="shrink-0 border-b border-base-200">
-        <div className="flex overflow-x-auto scrollbar-hide">
+        <div
+          ref={tabStripRef}
+          className="flex overflow-x-auto scrollbar-hide scroll-smooth"
+        >
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              ref={(el) => {
+                tabButtonRefs.current[tab.id] = el;
+              }}
               className={cn(
                 "flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap",
                 activeTab === tab.id
@@ -577,6 +680,7 @@ function DetailsTab({
   const [labelsOpen, setLabelsOpen] = useState(false);
   const [newLabel, setNewLabel] = useState("");
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
+  const assigneeDropdownRef = useRef<HTMLDivElement | null>(null);
 
   // --- Per-field access: "direct" | "review" | "disabled" ---
   // When user has direct_update or no review pipeline → normal canEdit
@@ -631,6 +735,19 @@ function DetailsTab({
     );
   };
 
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!assigneeDropdownRef.current) return;
+      const targetNode = event.target as Node;
+      if (!assigneeDropdownRef.current.contains(targetNode)) {
+        setAssigneeDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, []);
+
   return (
     <div className="p-3 space-y-4">
       {/* Change Request Modal */}
@@ -654,39 +771,29 @@ function DetailsTab({
       <div className="grid grid-cols-2 gap-2">
         <div>
           {fieldLabel("Status", "status")}
-          <select
-            className="select select-bordered select-xs w-full"
+          <ThemedDropdownSelect<TaskStatus>
             value={task.status}
-            onChange={(e) =>
+            onChange={(value) =>
               handleFieldUpdate("status", {
-                status: e.target.value as TaskStatus,
+                status: value,
               })
             }
             disabled={fieldAccess("status") === "disabled"}
-          >
-            <option value="todo">Todo</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-            <option value="blocked">Blocked</option>
-          </select>
+            options={STATUS_OPTIONS}
+          />
         </div>
         <div>
           {fieldLabel("Priority", "priority")}
-          <select
-            className="select select-bordered select-xs w-full"
+          <ThemedDropdownSelect<TaskPriority>
             value={task.priority}
-            onChange={(e) =>
+            onChange={(value) =>
               handleFieldUpdate("priority", {
-                priority: e.target.value as TaskPriority,
+                priority: value,
               })
             }
             disabled={fieldAccess("priority") === "disabled"}
-          >
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
+            options={PRIORITY_OPTIONS}
+          />
         </div>
       </div>
 
@@ -741,7 +848,7 @@ function DetailsTab({
               );
             })}
             {fieldAccess("assignee_id") !== "disabled" && (
-              <div className="relative">
+              <div ref={assigneeDropdownRef} className="relative z-30">
                 <button
                   className="w-7 h-7 rounded-full border-2 border-dashed border-base-300 flex items-center justify-center text-base-content/40 hover:border-primary hover:text-primary transition-colors"
                   onClick={() => setAssigneeDropdownOpen(!assigneeDropdownOpen)}
@@ -749,7 +856,7 @@ function DetailsTab({
                   <Plus className="w-3.5 h-3.5" />
                 </button>
                 {assigneeDropdownOpen && (
-                  <div className="absolute top-full left-0 mt-1 bg-base-100 border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-20">
+                  <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[22px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-40 overflow-y-auto z-50">
                     {selectableMembers
                       .filter(
                         (m) => !(task.assignee_ids || []).includes(m.user_id),
@@ -912,7 +1019,7 @@ function DetailsTab({
           {(task.labels || []).slice(0, 7).map((l) => (
             <span
               key={l}
-              className="badge badge-xs badge-outline gap-1 group"
+              className="badge badge-sm badge-outline gap-1.5 group"
               title={l.length > 10 ? l : undefined}
             >
               {l.length > 10 ? l.slice(0, 10) + "…" : l}
@@ -925,13 +1032,13 @@ function DetailsTab({
                     })
                   }
                 >
-                  <X className="w-2 h-2" />
+                  <X className="w-2.5 h-2.5" />
                 </button>
               )}
             </span>
           ))}
           {(task.labels || []).length > 7 && (
-            <span className="badge badge-xs badge-ghost">
+            <span className="badge badge-sm badge-ghost">
               +{(task.labels || []).length - 7}
             </span>
           )}
@@ -965,7 +1072,7 @@ function DetailsTab({
               </div>
             ) : (
               <button
-                className="badge badge-xs badge-ghost"
+                className="badge badge-sm badge-ghost"
                 onClick={() => setLabelsOpen(true)}
               >
                 <Plus className="w-2 h-2" />

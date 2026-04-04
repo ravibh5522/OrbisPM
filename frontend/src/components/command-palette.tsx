@@ -20,7 +20,14 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 
 const NAV_ITEMS = (orgSlug: string) => [
   {
@@ -92,11 +99,13 @@ interface ResultItem {
 export function CommandPalette() {
   const open = useUIStore((s) => s.commandPaletteOpen);
   const setOpen = useUIStore((s) => s.setCommandPaletteOpen);
+  const query = useUIStore((s) => s.commandPaletteQuery);
+  const setQuery = useUIStore((s) => s.setCommandPaletteQuery);
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const router = useRouter();
-  const [query, setQuery] = useState("");
   const [activeIdx, setActiveIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [anchorStyle, setAnchorStyle] = useState<CSSProperties | null>(null);
+  const [isEntered, setIsEntered] = useState(false);
   const listRef = useRef<HTMLUListElement>(null);
 
   const orgSlug = currentOrg?.slug ?? "";
@@ -117,13 +126,46 @@ export function CommandPalette() {
     return () => window.removeEventListener("keydown", handler);
   }, [open, setOpen]);
 
-  // Focus input when opened
+  // Focus navbar input when opened
   useEffect(() => {
     if (open) {
-      setQuery("");
       setActiveIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      setTimeout(() => {
+        const el = document.getElementById(
+          "topbar-search-input",
+        ) as HTMLInputElement | null;
+        el?.focus();
+      }, 50);
     }
+  }, [open]);
+
+  // Position palette directly under navbar search input.
+  useEffect(() => {
+    if (!open) return;
+
+    const updatePosition = () => {
+      const anchor = document.getElementById("topbar-search-anchor");
+      if (!anchor) {
+        setAnchorStyle(null);
+        return;
+      }
+
+      const rect = anchor.getBoundingClientRect();
+      setAnchorStyle({
+        left: rect.left,
+        top: rect.bottom + 8,
+        width: rect.width,
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
   }, [open]);
 
   // Debounced query for API calls (only when query length >= 2)
@@ -230,18 +272,43 @@ export function CommandPalette() {
     [router, setOpen],
   );
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActiveIdx((i) => Math.min(i + 1, results.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter") {
-      const item = results[activeIdx];
-      if (item) navigate(item.href);
+  useEffect(() => {
+    if (!open) return;
+
+    const handleNav = (e: KeyboardEvent) => {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.min(i + 1, results.length - 1));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIdx((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (e.key === "Enter") {
+        const item = results[activeIdx];
+        if (item) {
+          e.preventDefault();
+          navigate(item.href);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleNav);
+    return () => window.removeEventListener("keydown", handleNav);
+  }, [open, results, activeIdx, navigate]);
+
+  // Smooth entrance for palette panel (fade + slight lift).
+  useEffect(() => {
+    if (!open) {
+      setIsEntered(false);
+      return;
     }
-  };
+
+    const frame = requestAnimationFrame(() => setIsEntered(true));
+    return () => cancelAnimationFrame(frame);
+  }, [open]);
 
   if (!open) return null;
 
@@ -257,42 +324,39 @@ export function CommandPalette() {
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-[200] backdrop-blur-sm"
+        className={`fixed inset-0 z-[200] frosted-dialog-backdrop transition-opacity duration-200 ${
+          isEntered ? "opacity-100" : "opacity-0"
+        }`}
         onClick={() => setOpen(false)}
       />
 
-      {/* Modal */}
-      <div className="fixed inset-x-0 top-20 z-[201] flex justify-center px-4">
-        <div className="w-full max-w-xl bg-base-100 rounded-xl shadow-2xl border border-base-200 overflow-hidden">
-          {/* Search input */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-base-200">
-            <Search className="w-5 h-5 text-base-content/40 flex-shrink-0" />
-            <input
-              ref={inputRef}
-              type="text"
-              className="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/40"
-              placeholder="Search pages, projects, tasks…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              autoComplete="off"
-            />
-            <div className="flex items-center gap-1 flex-shrink-0">
-              <kbd className="kbd kbd-sm">Esc</kbd>
-              <button
-                className="btn btn-ghost btn-xs btn-square"
-                onClick={() => setOpen(false)}
-                aria-label="Close command palette"
-              >
-                <X className="w-3 h-3" />
-              </button>
-            </div>
-          </div>
+      {/* Palette panel anchored below topbar search */}
+      <div className="fixed inset-0 z-[201] pointer-events-none">
+        <div
+          className={`${
+            anchorStyle
+              ? "absolute pointer-events-auto"
+              : "absolute left-1/2 top-20 -translate-x-1/2 w-[min(92vw,42rem)] pointer-events-auto"
+          } transition-all duration-220 ease-out ${
+            isEntered
+              ? "opacity-100 translate-y-0 scale-100"
+              : "opacity-0 -translate-y-1 scale-[0.985]"
+          }`}
+          style={anchorStyle ?? undefined}
+        >
+          <div className="w-full rounded-box notes-dialog-surface overflow-hidden relative">
+            <button
+              className="btn btn-ghost btn-xs btn-square absolute right-2 top-2 z-10"
+              onClick={() => setOpen(false)}
+              aria-label="Close command palette"
+            >
+              <X className="w-3 h-3" />
+            </button>
 
           {/* Results */}
           <ul
             ref={listRef}
-            className="max-h-80 overflow-y-auto py-2"
+            className="max-h-96 overflow-y-auto py-2"
             role="listbox"
           >
             {results.length === 0 && (
@@ -319,8 +383,8 @@ export function CommandPalette() {
                         <button
                           className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
                             idx === activeIdx
-                              ? "bg-primary text-primary-content"
-                              : "hover:bg-base-200"
+                              ? "bg-base-200/80 text-base-content"
+                              : "hover:bg-base-200/60"
                           }`}
                           onClick={() => navigate(item.href)}
                           onMouseEnter={() => setActiveIdx(idx)}
@@ -365,6 +429,7 @@ export function CommandPalette() {
             </span>
           </div>
         </div>
+      </div>
       </div>
     </>
   );

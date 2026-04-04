@@ -5,12 +5,12 @@ import { Avatar, Badge, Card, EmptyState, PageHeader } from "@/components/ui/sha
 import { api } from "@/lib/api";
 import { formatRelative } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { useUIStore } from "@/stores/ui-store";
 import type { ActivityLog, OrgMember } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { Activity, Search, SlidersHorizontal, X } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { useUIStore } from "@/stores/ui-store";
 
 const ACTION_COLOR: Record<string, string> = {
   created: "badge-success",
@@ -73,6 +73,21 @@ export default function ActivityPage() {
   const [entityTypeFilter, setEntityTypeFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(0);
+
+  const updateSearch = (v: string) => {
+    setSearch(v);
+    setPage(0);
+  };
+
+  const updateAction = (v: string) => {
+    setActionFilter(v);
+    setPage(0);
+  };
+
+  const updateEntity = (v: string) => {
+    setEntityTypeFilter(v);
+    setPage(0);
+  };
 
   const clearFilters = () => {
     setSearch("");
@@ -143,16 +158,20 @@ export default function ActivityPage() {
       {/* Search + Filter bar */}
       <div className="flex items-center gap-2 mb-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/85" />
           <input
             type="text"
             placeholder="Search activity..."
-            className="input input-bordered input-sm w-full pl-9"
+            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            onChange={(e) => updateSearch(e.target.value)}
           />
           {search && (
-            <button className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle" onClick={() => { setSearch(""); setPage(0); }}>
+            <button
+              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base-content/60 transition-colors hover:bg-base-100/45 hover:text-base-content"
+              onClick={() => updateSearch("")}
+              aria-label="Clear search"
+            >
               <X className="w-3 h-3" />
             </button>
           )}
@@ -179,29 +198,122 @@ export default function ActivityPage() {
         <div className="flex items-center gap-3 mb-3 p-3 bg-base-200 rounded-lg flex-wrap">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium whitespace-nowrap">Action:</span>
-            <select
-              className="select select-bordered select-sm"
-              value={actionFilter}
-              onChange={(e) => { setActionFilter(e.target.value); setPage(0); }}
-            >
-              <option value="">All</option>
-              {actionTypes.map((a) => (
-                <option key={a} value={a}>{a}</option>
-              ))}
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span className="truncate">{actionFilter || "All"}</span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 max-h-64 w-40 overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                <li>
+                  <button
+                    className={cn(
+                      "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                      actionFilter === ""
+                        ? "task-status-item-active"
+                        : "text-base-content/80 hover:bg-base-200/35",
+                    )}
+                    onClick={() => updateAction("")}
+                  >
+                    <span>All</span>
+                    {actionFilter === "" ? <span className="text-xs">✓</span> : null}
+                  </button>
+                </li>
+                {actionTypes.map((a) => (
+                  <li key={a}>
+                    <button
+                      className={cn(
+                        "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        actionFilter === a
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35",
+                      )}
+                      onClick={() => updateAction(a)}
+                    >
+                      <span className="truncate">{a}</span>
+                      {actionFilter === a ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
+
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium whitespace-nowrap">Entity:</span>
-            <select
-              className="select select-bordered select-sm"
-              value={entityTypeFilter}
-              onChange={(e) => { setEntityTypeFilter(e.target.value); setPage(0); }}
-            >
-              <option value="">All</option>
-              {entityTypes.map((e) => (
-                <option key={e} value={e}>{e}</option>
-              ))}
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span className="truncate capitalize">{entityTypeFilter || "All"}</span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 max-h-64 w-40 overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                <li>
+                  <button
+                    className={cn(
+                      "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                      entityTypeFilter === ""
+                        ? "task-status-item-active"
+                        : "text-base-content/80 hover:bg-base-200/35",
+                    )}
+                    onClick={() => updateEntity("")}
+                  >
+                    <span>All</span>
+                    {entityTypeFilter === "" ? (
+                      <span className="text-xs">✓</span>
+                    ) : null}
+                  </button>
+                </li>
+                {entityTypes.map((entityType) => (
+                  <li key={entityType}>
+                    <button
+                      className={cn(
+                        "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        entityTypeFilter === entityType
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35",
+                      )}
+                      onClick={() => updateEntity(entityType)}
+                    >
+                      <span className="truncate capitalize">{entityType}</span>
+                      {entityTypeFilter === entityType ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
           {activeFilterCount > 0 && (
             <button className="btn btn-ghost btn-xs" onClick={clearFilters}>

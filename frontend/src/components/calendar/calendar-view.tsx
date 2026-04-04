@@ -10,6 +10,7 @@ import type {
 } from "@/types/domain";
 import {
   CalendarDays,
+  Check,
   ChevronLeft,
   ChevronRight,
   Clock,
@@ -519,26 +520,29 @@ export function CalendarView({
       {/* ── Toolbar ── */}
       <div
         className={cn(
-          "flex items-center justify-between gap-2 flex-wrap border-b border-base-200/60 bg-base-100",
-          compact ? "pb-2" : "pb-2.5 mb-2",
+          "flex items-center justify-between gap-2 flex-wrap rounded-xl bg-base-100/14 px-2 backdrop-blur-md",
+          compact ? "py-1.5 mb-2" : "py-2 mb-2.5",
         )}
       >
         <div className="flex items-center gap-1.5">
-          <div className="join">
+          <div className="inline-flex items-center rounded-lg border border-base-200/55 bg-base-100/24 p-0.5">
             <button
-              className="join-item btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square rounded-md ml-1 mr-1 mt-0.5 mb-0.5"
               onClick={() => handleNavigate(-1)}
             >
               <ChevronLeft className="w-4 h-4" />
             </button>
             <button
-              className="join-item btn btn-ghost btn-sm btn-square"
+              className="btn btn-ghost btn-sm btn-square rounded-md mt-0.5 mb-0.5 mr-1 ml-1"
               onClick={() => handleNavigate(1)}
             >
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
-          <button className="btn btn-ghost btn-xs" onClick={handleToday}>
+          <button
+            className="rounded-lg border border-base-200/55 bg-base-100/24 px-2.5 py-1 text-xs font-medium text-base-content/80 transition-colors hover:bg-base-100/38"
+            onClick={handleToday}
+          >
             Today
           </button>
           <h2
@@ -551,13 +555,20 @@ export function CalendarView({
           </h2>
         </div>
 
-        <div className="join">
+        <div className="inline-flex items-center rounded-xl border border-base-200/55 bg-base-100/24 p-1 backdrop-blur-xl">
           {(["month", "week", "day"] as CalendarViewMode[]).map((m) => (
             <button
               key={m}
-              className={cn("join-item btn btn-sm", mode === m && "btn-active")}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
+                mode === m
+                  ? "calendar-segment-active"
+                  : "text-base-content/70 hover:bg-base-100/30",
+              )}
+              aria-pressed={mode === m}
               onClick={() => handleModeChange(m)}
             >
+              {mode === m && <Check className="calendar-segment-check h-3 w-3" />}
               {m.charAt(0).toUpperCase() + m.slice(1)}
             </button>
           ))}
@@ -658,7 +669,7 @@ function TimelineMonthGridView({
   );
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 rounded-xl bg-base-100/10 overflow-hidden">
       {/* Legend */}
       {entries.length > 0 && (
         <div className="flex items-center gap-2 flex-wrap px-2 py-2 border-b border-base-200/40">
@@ -682,11 +693,11 @@ function TimelineMonthGridView({
       )}
 
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-base-200/60">
+      <div className="sticky top-0 z-30 grid grid-cols-7 border-b border-base-200/60 bg-base-100/72 backdrop-blur-md">
         {weekdays.map((wd) => (
           <div
             key={wd}
-            className="text-[10px] font-semibold text-base-content/40 uppercase text-center py-1.5 tracking-wider"
+            className="text-[10px] font-bold text-base-content/78 uppercase text-center py-1.5 tracking-[0.12em]"
           >
             {wd}
           </div>
@@ -728,7 +739,6 @@ function TimelineSummaryView({
   const rangeStart = new Date(range.from);
   const rangeEnd = new Date(range.to);
   rangeStart.setHours(0, 0, 0, 0);
-  rangeEnd.setHours(23, 59, 59, 999);
 
   const activeEntries = entries.filter((e) => {
     return e.endDate >= rangeStart && e.startDate <= rangeEnd;
@@ -753,7 +763,7 @@ function TimelineSummaryView({
     d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
   return (
-    <div className="max-w-3xl mx-auto py-4">
+    <div className="w-full py-4 px-1">
       {uniqueEntries.length > 0 && (
         <div className="text-sm text-base-content/50 mb-3">
           {uniqueEntries.length} active{" "}
@@ -761,9 +771,14 @@ function TimelineSummaryView({
           {uniqueEntries.length !== 1 ? "s" : ""}
         </div>
       )}
-      <div className="space-y-2">
+      <div
+        className="grid gap-3 items-start"
+        style={{
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+        }}
+      >
         {uniqueEntries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+          <div className="col-span-full flex flex-col items-center justify-center py-20 text-base-content/40">
             <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
             <p className="text-sm font-medium">No active timelines</p>
           </div>
@@ -775,7 +790,7 @@ function TimelineSummaryView({
               <button
                 key={entry.id}
                 onClick={() => onClickEntry?.(entry)}
-                className="w-full text-left p-3 rounded-xl border border-base-200 bg-base-100
+                className="w-full h-full text-left p-3 rounded-xl border border-base-200/60 bg-base-100/85
                   hover:shadow-md transition-all cursor-pointer flex items-center gap-3"
               >
                 <div
@@ -826,13 +841,13 @@ function MonthGridView({
   );
 
   return (
-    <div className="flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0 rounded-xl bg-base-100/10 overflow-hidden">
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 border-b border-base-200/60">
+      <div className="sticky top-0 z-30 grid grid-cols-7 border-b border-base-200/60 bg-base-100/72 backdrop-blur-md">
         {weekdays.map((wd) => (
           <div
             key={wd}
-            className="text-[10px] font-semibold text-base-content/40 uppercase text-center py-1.5 tracking-wider"
+            className="text-[10px] font-bold text-base-content/78 uppercase text-center py-1.5 tracking-[0.12em]"
           >
             {wd}
           </div>
@@ -937,35 +952,40 @@ function DayGridView({
   const grid = useMemo(() => getDayGrid(viewDate, tasks), [viewDate, tasks]);
 
   return (
-    <div className="max-w-2xl mx-auto py-2">
+    <div className="w-full py-2">
       {grid[0] && (
         <>
           {grid[0].tasks.length > 0 && (
             <div className="text-sm text-base-content/50 mb-3">
-              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""}{" "}
-              scheduled
+              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""} scheduled
             </div>
           )}
-          <div className="space-y-2 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
-            {grid[0].tasks.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
-                <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
-                <p className="text-sm font-medium">No tasks for this day</p>
-                <p className="text-xs mt-1 text-base-content/30">
-                  Try navigating to another date
-                </p>
-              </div>
-            ) : (
-              sortTasksByPriority(grid[0].tasks).map((task) => (
+
+          {grid[0].tasks.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+              <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
+              <p className="text-sm font-medium">No tasks for this day</p>
+              <p className="text-xs mt-1 text-base-content/30">
+                Try navigating to another date
+              </p>
+            </div>
+          ) : (
+            <div
+              className="grid gap-3 items-start max-h-[calc(100vh-260px)] overflow-y-auto pr-1"
+              style={{
+                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              }}
+            >
+              {sortTasksByPriority(grid[0].tasks).map((task) => (
                 <TaskCard
                   key={task.id}
                   task={task}
                   onClick={onClickTask}
                   members={members}
                 />
-              ))
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </>
       )}
     </div>

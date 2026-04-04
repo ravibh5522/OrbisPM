@@ -9,24 +9,24 @@ import { api } from "@/lib/api"; // kept for CR attachment binary ops
 import { cn, formatRelative } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
-  Attachment,
-  ChangeRequestStatus,
-  OrgMember,
-  TaskChangeRequest,
+    Attachment,
+    ChangeRequestStatus,
+    OrgMember,
+    TaskChangeRequest,
 } from "@/types/domain";
 import {
-  AlertCircle,
-  Check,
-  Clock,
-  Download,
-  FileText,
-  GitPullRequest,
-  Image as ImageIcon,
-  Paperclip,
-  Play,
-  Trash2,
-  Upload,
-  X,
+    AlertCircle,
+    Check,
+    Clock,
+    Download,
+    FileText,
+    GitPullRequest,
+    Image as ImageIcon,
+    Paperclip,
+    Play,
+    Trash2,
+    Upload,
+    X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -183,6 +183,91 @@ interface ProjectChangeRequestsProps {
 
 const PAGE_SIZE = 20;
 
+function ProposerFilterDropdown({
+  value,
+  onChange,
+  members,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  members: OrgMember[];
+}) {
+  const selected =
+    value === "all" ? null : members.find((m) => m.user_id === value) || null;
+  const selectedLabel =
+    value === "all"
+      ? "All proposers"
+      : selected?.display_name || selected?.email || "Unknown proposer";
+
+  return (
+    <details className="dropdown dropdown-bottom dropdown-end relative z-[40] open:z-[260] min-w-[220px]">
+      <summary className="inline-flex h-10 min-h-10 w-full cursor-pointer list-none items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md task-filter-select">
+        <span className="truncate">{selectedLabel}</span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-3.5 w-3.5 text-base-content/60"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </summary>
+
+      <ul className="dropdown-content task-status-menu z-[300] mt-1 max-h-72 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+        <li>
+          <button
+            type="button"
+            className={cn(
+              "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+              value === "all"
+                ? "task-status-item-active"
+                : "text-base-content/80 hover:bg-base-200/35",
+            )}
+            onClick={(e) => {
+              onChange("all");
+              const details = e.currentTarget.closest("details");
+              if (details) details.removeAttribute("open");
+            }}
+          >
+            <span className="truncate">All proposers</span>
+            {value === "all" ? <span className="text-xs">✓</span> : null}
+          </button>
+        </li>
+
+        {members.map((m) => {
+          const isActive = value === m.user_id;
+          const label = m.display_name || m.email || m.user_id;
+          return (
+            <li key={m.user_id}>
+              <button
+                type="button"
+                className={cn(
+                  "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                  isActive
+                    ? "task-status-item-active"
+                    : "text-base-content/80 hover:bg-base-200/35",
+                )}
+                onClick={(e) => {
+                  onChange(m.user_id);
+                  const details = e.currentTarget.closest("details");
+                  if (details) details.removeAttribute("open");
+                }}
+              >
+                <span className="truncate">{label}</span>
+                {isActive ? <span className="text-xs">✓</span> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
 export function ProjectChangeRequests({
   orgId,
   projectId,
@@ -251,7 +336,7 @@ export function ProjectChangeRequests({
 
   return (
     <div className="space-y-4">
-      <Card>
+      <Card allowOverflow className="relative z-20">
         {/* ── Header row ── */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <h3 className="font-semibold flex items-center gap-2 mr-auto">
@@ -262,13 +347,19 @@ export function ProjectChangeRequests({
           </h3>
 
           {/* Status filter pills */}
-          <div className="join">
+          <div
+            role="tablist"
+            className="project-tabs-shell tabs tabs-boxed rounded-2xl p-1"
+          >
             {(["pending", "approved", "rejected", "all"] as const).map((s) => (
               <button
                 key={s}
+                role="tab"
                 className={cn(
-                  "join-item btn btn-xs",
-                  statusFilter === s ? "btn-active" : "",
+                  "project-tab-btn tab tab-xs rounded-xl",
+                  statusFilter === s
+                    ? "project-tab-active"
+                    : "project-tab-inactive",
                 )}
                 onClick={() => {
                   setStatusFilter(s);
@@ -282,7 +373,7 @@ export function ProjectChangeRequests({
         </div>
 
         {/* ── Filter / Search bar ── */}
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="relative z-30 flex flex-wrap gap-2 mb-4">
           {/* Search box */}
           <div className="relative flex-1 min-w-[160px]">
             <span className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
@@ -303,7 +394,7 @@ export function ProjectChangeRequests({
             <input
               type="text"
               placeholder="Search reason or task title…"
-              className="input input-bordered input-xs pl-7 w-full"
+              className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-8 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -318,21 +409,14 @@ export function ProjectChangeRequests({
           </div>
 
           {/* Proposer filter */}
-          <select
-            className="select select-bordered select-xs min-w-[130px]"
+          <ProposerFilterDropdown
             value={proposerFilter}
-            onChange={(e) => {
-              setProposerFilter(e.target.value);
+            members={members}
+            onChange={(v) => {
+              setProposerFilter(v);
               setPage(1);
             }}
-          >
-            <option value="all">All proposers</option>
-            {members.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.display_name || m.email}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         {/* ── Table ── */}

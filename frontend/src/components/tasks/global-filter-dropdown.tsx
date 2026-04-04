@@ -110,24 +110,24 @@ export function GlobalFilterDropdown({
   return (
     <div
       ref={ref}
-      className="absolute top-full right-0 mt-1 z-50 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl w-72 max-h-[70vh] overflow-y-auto"
+      className="absolute top-full right-0 mt-1 z-50 w-[26rem] max-w-[calc(100vw-1rem)] max-h-[78vh] overflow-y-auto rounded-2xl border border-base-200/70 bg-base-100/92 shadow-xl backdrop-blur-[22px]"
     >
-      <div className="p-3 space-y-3">
+      <div className="p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold">Global Filters</span>
-          <button className="btn btn-ghost btn-xs" onClick={clearFilter}>
+          <span className="text-sm font-semibold">Global Filters</span>
+          <button className="btn btn-ghost btn-sm h-8 min-h-8 px-3" onClick={clearFilter}>
             Clear All
           </button>
         </div>
 
         {/* Search */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+          <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
             Search
           </label>
           <input
             type="text"
-            className="input input-bordered input-xs w-full mt-0.5"
+            className="input input-bordered h-10 w-full rounded-xl px-3 text-sm mt-1"
             placeholder="Filter by title..."
             value={local.search}
             onChange={(e) =>
@@ -138,16 +138,18 @@ export function GlobalFilterDropdown({
 
         {/* Status */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+          <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
             Status
           </label>
-          <div className="flex flex-wrap gap-1 mt-0.5">
+          <div className="mt-1 flex flex-wrap gap-2">
             {(["todo", "in_progress", "done", "blocked"] as const).map((s) => (
               <button
                 key={s}
                 className={cn(
-                  "badge badge-sm cursor-pointer gap-1",
-                  local.statuses.includes(s) ? "badge-primary" : "badge-ghost",
+                  "rounded-full border px-3 py-1.5 text-sm leading-none transition-colors",
+                  local.statuses.includes(s)
+                    ? "border-primary/45 bg-primary/20 text-base-content"
+                    : "border-base-300/70 bg-base-100/25 text-base-content/78 hover:bg-base-200/45",
                 )}
                 onClick={() => toggleStatus(s)}
               >
@@ -161,18 +163,18 @@ export function GlobalFilterDropdown({
 
         {/* Priority */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+          <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
             Priority
           </label>
-          <div className="flex flex-wrap gap-1 mt-0.5">
+          <div className="mt-1 flex flex-wrap gap-2">
             {(["critical", "high", "medium", "low"] as const).map((p) => (
               <button
                 key={p}
                 className={cn(
-                  "badge badge-sm cursor-pointer gap-1",
+                  "rounded-full border px-3 py-1.5 text-sm leading-none transition-colors",
                   local.priorities.includes(p)
-                    ? "badge-primary"
-                    : "badge-ghost",
+                    ? "border-primary/45 bg-primary/20 text-base-content"
+                    : "border-base-300/70 bg-base-100/25 text-base-content/78 hover:bg-base-200/45",
                 )}
                 onClick={() => togglePriority(p)}
               >
@@ -184,31 +186,43 @@ export function GlobalFilterDropdown({
 
         {/* Assignee */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+          <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
             Assignee
           </label>
-          <div className="flex flex-col gap-0.5 mt-0.5 max-h-28 overflow-y-auto">
-            <label className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
+          <div className="mt-1 flex max-h-36 flex-col gap-1 overflow-y-auto pr-1">
+            <label
+              className={cn(
+                "flex items-center gap-2 cursor-pointer rounded-xl px-2.5 py-1.5 transition-colors",
+                local.assigneeIds.includes("")
+                  ? "bg-primary/12"
+                  : "hover:bg-base-200/45",
+              )}
+            >
               <input
                 type="checkbox"
-                className="checkbox checkbox-xs"
+                className="checkbox checkbox-sm"
                 checked={local.assigneeIds.includes("")}
                 onChange={() => toggleAssignee("")}
               />
-              <span className="text-xs text-base-content/60">Unassigned</span>
+              <span className="text-sm text-base-content/78">Unassigned</span>
             </label>
             {members.map((m) => (
               <label
                 key={m.user_id}
-                className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200"
+                className={cn(
+                  "flex items-center gap-2 cursor-pointer rounded-xl px-2.5 py-1.5 transition-colors",
+                  local.assigneeIds.includes(m.user_id)
+                    ? "bg-primary/12"
+                    : "hover:bg-base-200/45",
+                )}
               >
                 <input
                   type="checkbox"
-                  className="checkbox checkbox-xs"
+                  className="checkbox checkbox-sm"
                   checked={local.assigneeIds.includes(m.user_id)}
                   onChange={() => toggleAssignee(m.user_id)}
                 />
-                <span className="text-xs truncate">
+                <span className="text-sm truncate">
                   {m.display_name || m.email || m.user_id.slice(0, 8)}
                 </span>
               </label>
@@ -218,12 +232,12 @@ export function GlobalFilterDropdown({
 
         {/* Labels */}
         <div>
-          <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+          <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
             Labels
           </label>
           <input
             type="text"
-            className="input input-bordered input-xs w-full mt-0.5"
+            className="input input-bordered h-10 w-full rounded-xl px-3 text-sm mt-1"
             placeholder="label1, label2 (comma-separated)"
             value={local.labels.join(", ")}
             onChange={(e) =>
@@ -239,14 +253,14 @@ export function GlobalFilterDropdown({
         </div>
 
         {/* Due date range */}
-        <div className="grid grid-cols-2 gap-1.5">
+        <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
               Due From
             </label>
             <input
               type="date"
-              className="input input-bordered input-xs w-full mt-0.5"
+              className="input input-bordered h-10 w-full rounded-xl px-3 text-sm mt-1"
               value={local.dueDateFrom}
               onChange={(e) =>
                 setLocal((p) => ({ ...p, dueDateFrom: e.target.value }))
@@ -254,12 +268,12 @@ export function GlobalFilterDropdown({
             />
           </div>
           <div>
-            <label className="text-[10px] font-semibold text-base-content/50 uppercase">
+            <label className="text-[11px] font-semibold text-base-content/55 uppercase tracking-wide">
               Due To
             </label>
             <input
               type="date"
-              className="input input-bordered input-xs w-full mt-0.5"
+              className="input input-bordered h-10 w-full rounded-xl px-3 text-sm mt-1"
               value={local.dueDateTo}
               onChange={(e) =>
                 setLocal((p) => ({ ...p, dueDateTo: e.target.value }))
@@ -269,14 +283,17 @@ export function GlobalFilterDropdown({
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-1 pt-2 border-t border-base-200">
+        <div className="flex items-center gap-2 pt-2 border-t border-base-200/70">
           <button
-            className="btn btn-primary btn-xs flex-1"
+            className="btn btn-primary btn-sm h-10 min-h-10 flex-1 rounded-xl"
             onClick={applyFilter}
           >
             Apply
           </button>
-          <button className="btn btn-ghost btn-xs flex-1" onClick={onClose}>
+          <button
+            className="btn btn-ghost btn-sm h-10 min-h-10 flex-1 rounded-xl"
+            onClick={onClose}
+          >
             Cancel
           </button>
         </div>

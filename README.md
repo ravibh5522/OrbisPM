@@ -2,6 +2,29 @@
 
 Small guide to build and start the stack locally.
 
+## One Command Setup (Ubuntu and Windows)
+
+Use the cross-platform setup script. It builds the stack, starts local profile
+services, runs Zitadel bootstrap, and refreshes app services with updated env values.
+
+Ubuntu/macOS:
+
+```bash
+bash scripts/local-setup.sh
+```
+
+Windows (PowerShell):
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/local-setup.ps1
+```
+
+Direct (all OS, Python 3):
+
+```bash
+python scripts/setup-local.py
+```
+
 ## 1) Build images
 
 ```bash

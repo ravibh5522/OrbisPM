@@ -8,23 +8,23 @@ import { api } from "@/lib/api";
 import { cn, formatRelative, priorityColor, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
-  DashboardAnalytics,
-  DashboardStats,
-  MetricAlert,
-  Project,
+    DashboardAnalytics,
+    DashboardStats,
+    MetricAlert,
+    Project,
 } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import {
-  AlertTriangle,
-  ArrowRight,
-  Bell,
-  CheckCircle2,
-  Clock,
-  FolderKanban,
-  ListTodo,
-  ShieldAlert,
-  TrendingUp,
-  Users2,
+    AlertTriangle,
+    ArrowRight,
+    Bell,
+    CheckCircle2,
+    Clock,
+    FolderKanban,
+    ListTodo,
+    ShieldAlert,
+    TrendingUp,
+    Users2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -193,20 +193,30 @@ export default function DashboardPage() {
         title="Dashboard"
         description={`Overview of ${currentOrg?.name}`}
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="join">
-              {([7, 30, 90] as const).map((d) => (
-                <button
-                  key={d}
-                  className={`join-item btn btn-xs ${days === d ? "btn-primary" : "btn-outline"}`}
-                  onClick={() => setDays(d)}
-                >
-                  {d}d
-                </button>
-              ))}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="inline-flex items-center rounded-full border border-base-200/55 bg-base-100/36 p-1 shadow-[inset_0_1px_0_oklch(100%_0_0_/_0.16)] backdrop-blur-xl">
+              {([7, 30, 90] as const).map((d) => {
+                const active = days === d;
+                return (
+                  <button
+                    key={d}
+                    className={cn(
+                      "rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-wide transition-all",
+                      active
+                        ? "bg-gradient-to-br from-oklch(45% 0.12 282 / 0.4) to-oklch(48% 0.14 270 / 0.35) text-base-content shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.15)] border border-oklch(100%_0_0_/_0.12)"
+                        : "text-base-content/72 hover:bg-oklch(100%_0_0_/_0.18) hover:text-base-content",
+                    )}
+                    onClick={() => setDays(d)}
+                  >
+                    {d}d
+                  </button>
+                );
+              })}
             </div>
+
             {currentMembership && (
-              <span className="badge badge-outline badge-sm capitalize">
+              <span className="inline-flex items-center rounded-full border border-base-200/55 bg-base-100/36 px-3 py-1.5 text-[11px] font-semibold tracking-wide text-base-content/80 capitalize backdrop-blur-xl shadow-[inset_0_1px_0_oklch(100%_0_0_/_0.16)]">
+                <span className="mr-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
                 {currentMembership.role}
               </span>
             )}
@@ -273,31 +283,35 @@ export default function DashboardPage() {
         </Card>
         {/* Completion overview */}
         <Card title="Completion" compact>
-          <div className="flex flex-col items-center justify-center h-full py-4 gap-3">
+          <div className="flex flex-col items-center justify-center h-full py-4 gap-4">
             <div
-              className="radial-progress text-primary"
+              className="radial-progress text-lg font-bold"
               style={
                 {
                   "--value": completionPct,
                   "--size": "5rem",
-                  "--thickness": "6px",
+                  "--thickness": "8px",
+                  "--color": "oklch(64% 0.18 180)",
                 } as React.CSSProperties
               }
               role="progressbar"
             >
-              <span className="text-lg font-bold">{completionPct}%</span>
+              <span>{completionPct}%</span>
             </div>
-            <div className="text-center">
-              <p className="text-sm font-medium">
+            <div className="text-center space-y-1">
+              <p className="text-sm font-medium leading-tight">
                 {completedTasks} of {stats.total_tasks} tasks done
               </p>
               <p className="text-xs text-base-content/50">
                 {stats.total_members} members • {stats.total_teams} teams
               </p>
             </div>
-            <div className="w-full mt-2">
+            <div className="w-full px-2">
               <progress
-                className="progress progress-primary w-full"
+                className="progress w-full h-1.5"
+                style={{
+                  "--progress-value": "oklch(64% 0.18 180)",
+                } as React.CSSProperties}
                 value={completedTasks}
                 max={stats.total_tasks || 1}
               />
@@ -430,7 +444,7 @@ export default function DashboardPage() {
       {/* Projects + Recent tasks */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
         {/* Projects */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 overflow-hidden">
           <Card title="Projects" compact>
             {projectList.length === 0 ? (
               <div className="text-center py-8">
@@ -447,7 +461,7 @@ export default function DashboardPage() {
               <VirtualScrollList<Project>
                 items={projectList}
                 itemHeight={52}
-                containerHeight={280}
+                containerHeight={260}
                 renderItem={(p) => (
                   <Link
                     href={`/${orgSlug}/projects/${p.id}`}
@@ -479,7 +493,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Recent Tasks */}
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-3 overflow-hidden">
           <Card title="Recent Tasks" compact>
             {!stats.recent_tasks || stats.recent_tasks.length === 0 ? (
               <div className="text-center py-8">
@@ -490,7 +504,7 @@ export default function DashboardPage() {
               <VirtualScrollList<(typeof stats.recent_tasks)[0]>
                 items={stats.recent_tasks}
                 itemHeight={44}
-                containerHeight={300}
+                containerHeight={260}
                 renderItem={(task) => (
                   <Link
                     href={`/${orgSlug}/projects/${task.project_id}/tasks/${task.id}`}

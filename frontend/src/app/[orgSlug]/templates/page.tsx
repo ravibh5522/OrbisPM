@@ -6,11 +6,11 @@ import { Input, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-  Card,
-  ConfirmDialog,
-  EmptyState,
-  LoadingPage,
-  PageHeader,
+    Card,
+    ConfirmDialog,
+    EmptyState,
+    LoadingPage,
+    PageHeader,
 } from "@/components/ui/shared";
 import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
@@ -19,14 +19,15 @@ import { useUIStore } from "@/stores/ui-store";
 import type { TaskTemplate } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  Download,
-  FileText,
-  Pencil,
-  Plus,
-  Search,
-  Trash2,
-  Upload,
-  X,
+    Download,
+    FileText,
+    Pencil,
+    Plus,
+    Search,
+    SlidersHorizontal,
+    Trash2,
+    Upload,
+    X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -57,7 +58,25 @@ export default function TemplatesPage() {
   const [error, setError] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
+  const [sharedFilter, setSharedFilter] = useState<"" | "shared" | "private">("");
+  const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(0);
+
+  const updateSearch = (v: string) => {
+    setSearch(v);
+    setPage(0);
+  };
+
+  const updateSharedFilter = (v: "" | "shared" | "private") => {
+    setSharedFilter(v);
+    setPage(0);
+  };
+
+  const clearFilters = () => {
+    setSearch("");
+    setSharedFilter("");
+    setPage(0);
+  };
 
   const { data: templates, isLoading } = useQuery({
     queryKey: ["templates", currentOrg?.id],
@@ -67,14 +86,24 @@ export default function TemplatesPage() {
 
   const filtered = useMemo(() => {
     const all = templates?.data || [];
-    if (!search.trim()) return all;
+    let result = all;
+
+    if (sharedFilter === "shared") {
+      result = result.filter((t: TaskTemplate) => t.is_shared);
+    } else if (sharedFilter === "private") {
+      result = result.filter((t: TaskTemplate) => !t.is_shared);
+    }
+
+    if (!search.trim()) return result;
     const q = search.toLowerCase();
-    return all.filter(
+    return result.filter(
       (t: TaskTemplate) =>
         t.name.toLowerCase().includes(q) ||
         t.description?.toLowerCase().includes(q),
     );
-  }, [templates?.data, search]);
+  }, [templates?.data, search, sharedFilter]);
+
+  const activeFilterCount = [sharedFilter].filter(Boolean).length;
 
   const total = filtered.length;
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -180,57 +209,131 @@ export default function TemplatesPage() {
         }
       />
 
-      {/* Search bar */}
+      {/* Search + Filters */}
       <div className="flex items-center gap-2 mb-4">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/85" />
           <input
             type="text"
             placeholder="Search templates..."
-            className="input input-bordered input-sm w-full pl-9"
+            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(0);
-            }}
+            onChange={(e) => updateSearch(e.target.value)}
           />
           {search && (
             <button
-              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
-              onClick={() => {
-                setSearch("");
-                setPage(0);
-              }}
+              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base-content/60 transition-colors hover:bg-base-100/45 hover:text-base-content"
+              onClick={() => updateSearch("")}
+              aria-label="Clear search"
             >
               <X className="w-3 h-3" />
             </button>
           )}
         </div>
+
+        <button
+          className={`btn btn-sm gap-1 ${showFilters ? "btn-primary" : "btn-ghost"}`}
+          onClick={() => setShowFilters((p) => !p)}
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="badge badge-xs badge-secondary">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+
         <div className="flex-1" />
         <span className="text-sm text-base-content/50">
           {total} template{total !== 1 ? "s" : ""}
         </span>
       </div>
 
+      {showFilters && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-base-200 p-3">
+          <div className="flex items-center gap-2">
+            <span className="whitespace-nowrap text-sm font-medium">Type:</span>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-36 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span>
+                  {sharedFilter === "shared"
+                    ? "Shared"
+                    : sharedFilter === "private"
+                      ? "Private"
+                      : "All"}
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-36 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                {[
+                  { value: "", label: "All" },
+                  { value: "shared", label: "Shared" },
+                  { value: "private", label: "Private" },
+                ].map((opt) => (
+                  <li key={opt.value || "all"}>
+                    <button
+                      className={`task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                        sharedFilter === opt.value
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35"
+                      }`}
+                      onClick={() =>
+                        updateSharedFilter(
+                          opt.value as "" | "shared" | "private",
+                        )
+                      }
+                    >
+                      <span>{opt.label}</span>
+                      {sharedFilter === opt.value ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+              <X className="w-3 h-3" /> Clear all
+            </button>
+          )}
+        </div>
+      )}
+
       {paginated.length === 0 ? (
         <EmptyState
           icon={<FileText className="w-16 h-16" />}
-          title={search ? "No matching templates" : "No templates yet"}
+          title={search || sharedFilter ? "No matching templates" : "No templates yet"}
           description={
-            search
-              ? "Try a different search term"
+            search || sharedFilter
+              ? "Try adjusting your search or filters"
               : "Create templates to quickly scaffold tasks in projects"
           }
           action={
-            search ? (
+            search || sharedFilter ? (
               <Button
                 variant="ghost"
-                onClick={() => {
-                  setSearch("");
-                  setPage(0);
-                }}
+                onClick={clearFilters}
               >
-                Clear search
+                Clear filters
               </Button>
             ) : (
               <Button onClick={() => setShowCreate(true)}>

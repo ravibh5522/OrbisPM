@@ -17,18 +17,22 @@ export function DonutChart({
   const total = data.reduce((s, d) => s + d.value, 0);
   if (total === 0) return <DonutChartSkeleton />;
 
+  const chartSize = 170;
+  const innerRadius = 40;
+  const outerRadius = 82;
+
   return (
     <div className="flex items-center gap-4">
-      <div className="flex h-32 w-32 flex-shrink-0 items-center justify-center rounded-2xl bg-base-200/60">
-        <PieChart width={128} height={128}>
+      <div className="flex h-[152px] w-[152px] flex-shrink-0 items-center justify-center rounded-2xl">
+        <PieChart width={chartSize} height={chartSize}>
           <Pie
             data={data}
             dataKey="value"
             nameKey="name"
             cx="50%"
             cy="50%"
-            innerRadius={30}
-            outerRadius={52}
+            innerRadius={innerRadius}
+            outerRadius={outerRadius}
             paddingAngle={2}
             strokeWidth={0}
           >
@@ -39,24 +43,24 @@ export function DonutChart({
           <Tooltip formatter={(value) => [value, "Tasks"]} />
         </PieChart>
       </div>
-      <div className="flex-1 space-y-1.5 min-w-0">
+      <div className="flex-1 space-y-2 min-w-0">
         {data.map((entry) => (
           <div
             key={entry.name}
-            className="flex items-center justify-between text-xs gap-2"
+            className="flex items-center justify-between text-xs gap-2 px-2 py-1 rounded-md hover:bg-white/5 transition-colors"
           >
-            <div className="flex items-center gap-1.5 min-w-0">
+            <div className="flex items-center gap-2 min-w-0">
               <span
-                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{
                   backgroundColor: colors[entry.name] || "#94a3b8",
                 }}
               />
-              <span className="truncate capitalize">
+              <span className="truncate capitalize font-medium">
                 {statusLabel(entry.name)}
               </span>
             </div>
-            <span className="font-semibold tabular-nums">{entry.value}</span>
+            <span className="font-semibold tabular-nums flex-shrink-0">{entry.value}</span>
           </div>
         ))}
       </div>

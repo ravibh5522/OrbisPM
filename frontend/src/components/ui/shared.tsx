@@ -58,6 +58,7 @@ interface CardProps {
   children: React.ReactNode;
   className?: string;
   compact?: boolean;
+  allowOverflow?: boolean;
 }
 
 export function Card({
@@ -67,20 +68,33 @@ export function Card({
   children,
   className,
   compact,
+  allowOverflow,
 }: CardProps) {
   return (
     <div
       className={cn(
-        "card bg-base-100 shadow-sm border border-base-200",
+        "card bg-base-100/36 border border-base-200/55 backdrop-blur-xl transition-all duration-300",
+        allowOverflow ? "overflow-visible" : "overflow-hidden",
+        "shadow-[inset_0_1px_0_oklch(100%_0_0_/_0.12),0_12px_32px_oklch(0%_0_0_/_0.14)]",
+        "hover:shadow-[inset_0_1px_0_oklch(100%_0_0_/_0.16),0_16px_40px_oklch(0%_0_0_/_0.18)]",
         compact && "card-compact",
         className,
       )}
     >
-      <div className="card-body">
+      <div
+        className={cn(
+          "card-body",
+          allowOverflow ? "overflow-visible" : "overflow-hidden",
+        )}
+      >
         {(title || actions) && (
           <div className="flex items-center justify-between">
             <div>
-              {title && <h2 className="card-title">{title}</h2>}
+              {title && (
+                <h2 className="card-title text-[1.05rem] font-semibold tracking-tight">
+                  {title}
+                </h2>
+              )}
               {description && (
                 <p className="text-sm text-base-content/60">{description}</p>
               )}
@@ -211,7 +225,7 @@ export function Avatar({ name, src, size = "md", className }: AvatarProps) {
   const sizeMap = {
     xs: "w-6 h-6 text-xs",
     sm: "w-8 h-8 text-sm",
-    md: "w-10 h-10",
+    md: "w-10 h-10 text-sm",
     lg: "w-16 h-16 text-lg",
   };
   const initials = (name || "?")
@@ -234,11 +248,11 @@ export function Avatar({ name, src, size = "md", className }: AvatarProps) {
     <div className={cn("avatar placeholder", className)}>
       <div
         className={cn(
-          "bg-primary text-primary-content rounded-full",
+          "bg-primary text-primary-content rounded-full inline-flex items-center justify-center",
           sizeMap[size],
         )}
       >
-        <span>{initials}</span>
+        <span className="block leading-none font-medium">{initials}</span>
       </div>
     </div>
   );

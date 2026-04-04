@@ -237,7 +237,7 @@ function Sidebar() {
               </label>
               <ul
                 tabIndex={0}
-                className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-56 border border-base-200"
+                className="dropdown-content org-switcher-dropdown z-50 menu p-2 shadow-lg bg-base-100 rounded-box w-56 border border-base-200"
               >
                 {orgs.map((org) => (
                   <li key={org.id}>
@@ -290,10 +290,9 @@ function Sidebar() {
                   href={item.href}
                   className={cn(
                     "relative flex flex-row items-center rounded-xl transition-all duration-300 ease-in-out",
-                    "hover:bg-base-200",
                     isActive(item.href)
-                      ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90"
-                      : "text-base-content",
+                      ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90 hover:text-primary-content"
+                      : "text-base-content hover:bg-base-200 hover:text-base-content",
                     sidebarCollapsed
                       ? "justify-center mx-auto w-14 pt-2 pb-4"
                       : "gap-2 px-3 py-2.5",
@@ -360,10 +359,9 @@ function Sidebar() {
                       href={item.href}
                       className={cn(
                         "relative flex flex-row items-center rounded-xl transition-all duration-300 ease-in-out",
-                        "hover:bg-base-200",
                         isActive(item.href)
-                          ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90"
-                          : "text-base-content",
+                          ? "bg-primary text-primary-content shadow-sm hover:bg-primary/90 hover:text-primary-content"
+                          : "text-base-content hover:bg-base-200 hover:text-base-content",
                         sidebarCollapsed
                           ? "justify-center mx-auto w-14 pt-2 pb-4"
                           : "gap-2 px-3 py-2.5",
@@ -476,7 +474,7 @@ function Sidebar() {
             </label>
             <ul
               tabIndex={0}
-              className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-52 border border-base-200 mb-2"
+              className="dropdown-content user-menu-dropdown z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-52 border border-base-200 mb-2"
             >
               <li>
                 <Link href={`/${currentOrg.slug}/profile`}>
@@ -485,19 +483,19 @@ function Sidebar() {
                 </Link>
               </li>
               <li>
-                <details>
+                <details className="theme-selector-dropdown">
                   <summary className="flex items-center gap-1">
                     <Palette className="w-4 h-4" /> Theme
                     {themeLocked && (
                       <Lock className="w-3 h-3 text-warning ml-auto" />
                     )}
                   </summary>
-                  <ul>
+                  <ul className="theme-selector-dropdown-list">
                     {THEMES.map((t) => (
                       <li key={t.value}>
                         <button
                           className={cn(
-                            theme === t.value && "active",
+                            theme === t.value && "theme-option-active",
                             themeLocked && "opacity-50 cursor-not-allowed",
                           )}
                           onClick={() => handleThemeSwitch(t.value)}
@@ -511,7 +509,7 @@ function Sidebar() {
                 </details>
               </li>
               <li className="border-t border-base-200 mt-1 pt-1">
-                <button className="text-error" onClick={logout}>
+                <button className="user-menu-logout-action" onClick={logout}>
                   <LogOut className="w-4 h-4" /> Logout
                 </button>
               </li>
@@ -529,6 +527,8 @@ function TopBar() {
     breadcrumb,
     setMobileMenuOpen,
     setCommandPaletteOpen,
+    commandPaletteQuery,
+    setCommandPaletteQuery,
   } = useUIStore();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const connected = useProjectTaskStore((s) => s.connected);
@@ -589,16 +589,38 @@ function TopBar() {
 
       <div className="flex-1" />
 
-      {/* Cmd+K shortcut hint */}
-      <button
-        className="hidden md:flex items-center gap-2 btn btn-ghost btn-sm px-3 text-base-content/50 hover:text-base-content"
-        onClick={() => setCommandPaletteOpen(true)}
-        title="Open command palette (Ctrl+K)"
+      {/* Navbar search input (drives command palette) */}
+      <div
+        id="topbar-search-anchor"
+        className="hidden md:flex items-center gap-2 h-10 w-[22rem] lg:w-[30rem] rounded-xl search-anchor-surface px-3 text-base-content/70"
       >
-        <Search className="w-4 h-4" />
-        <span className="text-xs">Search</span>
-        <kbd className="kbd kbd-xs">⌘K</kbd>
-      </button>
+        <Search className="w-4 h-4 flex-shrink-0 text-base-content/50" />
+        <input
+          id="topbar-search-input"
+          type="text"
+          value={commandPaletteQuery}
+          onFocus={() => setCommandPaletteOpen(true)}
+          onChange={(e) => {
+            setCommandPaletteQuery(e.target.value);
+            setCommandPaletteOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setCommandPaletteOpen(false);
+            }
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+              e.preventDefault();
+              setCommandPaletteOpen(true);
+            }
+          }}
+          className="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/45"
+          placeholder="Search pages, projects, tasks..."
+          autoComplete="off"
+        />
+        <kbd className="kbd kbd-xs flex-shrink-0 border-base-200/60 bg-base-100/30 text-base-content/60">
+          ⌘K
+        </kbd>
+      </div>
 
       {/* Sticky Notes & Notifications */}
       <StickyNotesPanel />
@@ -852,7 +874,7 @@ function MobileSidebar() {
               </label>
               <ul
                 tabIndex={0}
-                className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-56 border border-base-200 mb-2"
+                className="dropdown-content user-menu-dropdown z-[999] menu p-2 shadow-lg bg-base-100 rounded-box w-56 border border-base-200 mb-2"
               >
                 <li>
                   <Link
@@ -864,19 +886,19 @@ function MobileSidebar() {
                   </Link>
                 </li>
                 <li>
-                  <details>
+                  <details className="theme-selector-dropdown">
                     <summary className="flex items-center gap-1">
                       <Palette className="w-4 h-4" /> Theme
                       {themeLocked && (
                         <Lock className="w-3 h-3 text-warning ml-auto" />
                       )}
                     </summary>
-                    <ul>
+                    <ul className="theme-selector-dropdown-list">
                       {THEMES.map((t) => (
                         <li key={t.value}>
                           <button
                             className={cn(
-                              theme === t.value && "active",
+                              theme === t.value && "theme-option-active",
                               themeLocked && "opacity-50 cursor-not-allowed",
                             )}
                             onClick={() => handleThemeSwitch(t.value)}
@@ -891,7 +913,7 @@ function MobileSidebar() {
                 </li>
                 <li className="border-t border-base-200 mt-1 pt-1">
                   <button
-                    className="text-error"
+                    className="user-menu-logout-action"
                     onClick={() => {
                       setMobileMenuOpen(false);
                       logout();

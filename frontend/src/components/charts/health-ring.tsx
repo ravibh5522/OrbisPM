@@ -11,10 +11,10 @@ interface HealthRingProps {
 }
 
 function getScoreColor(score: number): string {
-  if (score >= 80) return "#22c55e";
-  if (score >= 60) return "#f59e0b";
-  if (score >= 40) return "#f97316";
-  return "#ef4444";
+  if (score >= 80) return "oklch(64% 0.18 180)";
+  if (score >= 60) return "oklch(56% 0.16 270)";
+  if (score >= 40) return "oklch(52% 0.14 282)";
+  return "oklch(48% 0.12 300)";
 }
 
 function getScoreLabel(score: number): string {
@@ -40,7 +40,7 @@ export function HealthRing({
   return (
     <div className={cn("flex flex-col items-center gap-1", className)}>
       <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90">
+        <svg width={size} height={size} className="-rotate-90" style={{ backgroundColor: "transparent" }}>
           <circle
             cx={size / 2}
             cy={size / 2}
@@ -48,7 +48,7 @@ export function HealthRing({
             fill="none"
             stroke="currentColor"
             strokeWidth={strokeWidth}
-            className="text-base-200"
+            className="text-base-200/30"
           />
           <circle
             cx={size / 2}
@@ -60,7 +60,7 @@ export function HealthRing({
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={offset}
-            className="transition-all duration-700 ease-out"
+            className="transition-all duration-700 ease-out drop-shadow-lg"
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">

@@ -231,7 +231,7 @@ export default function OrgCalendarPage({
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-base-100">
+    <div className="h-full flex flex-col overflow-hidden bg-base-100 rounded-2xl p-4">
       {/* Header bar */}
       <div className="flex items-center justify-between gap-2 pb-3 flex-wrap">
         <div className="flex items-center gap-2">
@@ -252,8 +252,10 @@ export default function OrgCalendarPage({
           <div className="relative">
             <button
               className={cn(
-                "btn btn-sm gap-1",
-                isCalendarFilterActive(filter) ? "btn-primary" : "btn-ghost",
+                "inline-flex h-8 items-center gap-1 rounded-xl border border-base-200/55 bg-base-100/26 px-2.5 text-xs font-medium backdrop-blur-xl transition-colors",
+                isCalendarFilterActive(filter)
+                  ? "text-primary bg-primary/10 border-primary/30"
+                  : "text-base-content/80 hover:bg-base-100/36",
               )}
               onClick={() => setShowFilter((p) => !p)}
             >
@@ -312,6 +314,7 @@ export default function OrgCalendarPage({
           projectNames={projectNames}
           teamNames={teamNames}
           projectTeamMap={projectTeamMap}
+          className="rounded-2xl border border-base-200/40 bg-base-100/14 p-2 backdrop-blur-lg"
         />
       </div>
     </div>

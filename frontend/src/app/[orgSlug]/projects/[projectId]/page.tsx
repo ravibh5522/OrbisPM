@@ -6,11 +6,11 @@ import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import {
-  activeFilterCount,
-  EMPTY_GLOBAL_FILTER,
-  GlobalFilterDropdown,
-  isGlobalFilterActive,
-  type GlobalFilterState,
+    activeFilterCount,
+    EMPTY_GLOBAL_FILTER,
+    GlobalFilterDropdown,
+    isGlobalFilterActive,
+    type GlobalFilterState,
 } from "@/components/tasks/global-filter-dropdown";
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
@@ -25,24 +25,24 @@ import { useUIStore } from "@/stores/ui-store";
 import type { ProjectMember, ProjectTeam, Role, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CalendarDays,
-  Columns3,
-  Download,
-  Filter,
-  GitFork,
-  GitPullRequest,
-  Link2,
-  List,
-  ListTodo,
-  Megaphone,
-  Search,
-  Settings,
-  Trash2,
-  Unlink,
-  Upload,
-  UserPlus,
-  Users,
-  X,
+    CalendarDays,
+    Columns3,
+    Download,
+    Filter,
+    GitFork,
+    GitPullRequest,
+    Link2,
+    List,
+    ListTodo,
+    Megaphone,
+    Search,
+    Settings,
+    Trash2,
+    Unlink,
+    Upload,
+    UserPlus,
+    Users,
+    X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -231,18 +231,28 @@ export default function ProjectDetailPage({
         {/* Tabs */}
         <div
           role="tablist"
-          className="tabs tabs-boxed bg-base-200/50 flex-shrink-0"
+          className="project-tabs-shell tabs tabs-boxed flex-shrink-0 rounded-2xl p-1"
         >
           <button
             role="tab"
-            className={`tab tab-sm ${activeTab === "dashboard" ? "tab-active" : ""}`}
+            className={cn(
+              "project-tab-btn tab tab-sm rounded-xl",
+              activeTab === "dashboard"
+                ? "project-tab-active"
+                : "project-tab-inactive",
+            )}
             onClick={() => setActiveTab("dashboard")}
           >
             <ListTodo className="w-3.5 h-3.5 mr-1" /> Dashboard
           </button>
           <button
             role="tab"
-            className={`tab tab-sm ${activeTab === "tasks" ? "tab-active" : ""}`}
+            className={cn(
+              "project-tab-btn tab tab-sm rounded-xl",
+              activeTab === "tasks"
+                ? "project-tab-active"
+                : "project-tab-inactive",
+            )}
             onClick={() => setActiveTab("tasks")}
           >
             <Columns3 className="w-3.5 h-3.5 mr-1" /> Tasks
@@ -250,7 +260,12 @@ export default function ProjectDetailPage({
           {projPerms.can("members", "manage") && (
             <button
               role="tab"
-              className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`}
+              className={cn(
+                "project-tab-btn tab tab-sm rounded-xl",
+                activeTab === "members"
+                  ? "project-tab-active"
+                  : "project-tab-inactive",
+              )}
               onClick={() => setActiveTab("members")}
             >
               <Users className="w-3.5 h-3.5 mr-1" /> Members
@@ -259,7 +274,12 @@ export default function ProjectDetailPage({
           {projPerms.can("members", "manage") && (
             <button
               role="tab"
-              className={`tab tab-sm ${activeTab === "teams" ? "tab-active" : ""}`}
+              className={cn(
+                "project-tab-btn tab tab-sm rounded-xl",
+                activeTab === "teams"
+                  ? "project-tab-active"
+                  : "project-tab-inactive",
+              )}
               onClick={() => setActiveTab("teams")}
             >
               <Link2 className="w-3.5 h-3.5 mr-1" /> Teams
@@ -267,14 +287,24 @@ export default function ProjectDetailPage({
           )}
           <button
             role="tab"
-            className={`tab tab-sm ${activeTab === "reviews" ? "tab-active" : ""}`}
+            className={cn(
+              "project-tab-btn tab tab-sm rounded-xl",
+              activeTab === "reviews"
+                ? "project-tab-active"
+                : "project-tab-inactive",
+            )}
             onClick={() => setActiveTab("reviews")}
           >
             <GitPullRequest className="w-3.5 h-3.5 mr-1" /> Reviews
           </button>
           <button
             role="tab"
-            className={`tab tab-sm ${activeTab === "announcements" ? "tab-active" : ""}`}
+            className={cn(
+              "project-tab-btn tab tab-sm rounded-xl",
+              activeTab === "announcements"
+                ? "project-tab-active"
+                : "project-tab-inactive",
+            )}
             onClick={() => setActiveTab("announcements")}
           >
             <Megaphone className="w-3.5 h-3.5 mr-1" /> Announcements
@@ -282,7 +312,12 @@ export default function ProjectDetailPage({
           {projPerms.can("project", "update") && (
             <button
               role="tab"
-              className={`tab tab-sm ${activeTab === "settings" ? "tab-active" : ""}`}
+              className={cn(
+                "project-tab-btn tab tab-sm rounded-xl",
+                activeTab === "settings"
+                  ? "project-tab-active"
+                  : "project-tab-inactive",
+              )}
               onClick={() => setActiveTab("settings")}
             >
               <Settings className="w-3.5 h-3.5 mr-1" /> Settings
@@ -290,113 +325,142 @@ export default function ProjectDetailPage({
           )}
         </div>
 
-        {/* Global filter button — affects all task views */}
-        {(activeTab === "tasks" || activeTab === "dashboard") && (
-          <div className="relative">
-            <button
-              className={cn(
-                "btn btn-sm gap-1",
-                isGlobalFilterActive(globalFilter)
-                  ? "btn-primary"
-                  : "btn-ghost",
-              )}
-              onClick={() => setShowGlobalFilter((p) => !p)}
-            >
-              <Filter className="w-3.5 h-3.5" />
-              Filter
-              {isGlobalFilterActive(globalFilter) && (
-                <span className="badge badge-xs badge-neutral">
-                  {activeFilterCount(globalFilter)}
-                </span>
-              )}
-            </button>
-            {showGlobalFilter && (
-              <GlobalFilterDropdown
-                filter={globalFilter}
-                members={members?.data || []}
-                onChange={setGlobalFilter}
-                onClose={() => setShowGlobalFilter(false)}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Actions: Import/Export + View toggle (only visible when Tasks tab is active) */}
-        {activeTab === "tasks" && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Toolbar buttons portaled from TaskColumns */}
-            {taskView === "columns" && (
-              <div ref={setToolbarEl} className="flex items-center gap-2" />
-            )}
-            <Button
-              variant="outline"
-              size="xs"
-              onClick={() => setImportOpen(true)}
-            >
-              <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
-            </Button>
-            <div className="dropdown dropdown-end">
-              <div
-                tabIndex={0}
-                role="button"
-                className="btn btn-outline btn-xs"
-              >
-                <Download className="w-3.5 h-3.5 mr-1" /> Export
+          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+            {/* Global filter button — affects all task views */}
+            {(activeTab === "tasks" || activeTab === "dashboard") && (
+              <div className="relative">
+                <button
+                  className={cn(
+                    "btn btn-sm gap-1",
+                    isGlobalFilterActive(globalFilter)
+                      ? "btn-primary"
+                      : "btn-ghost",
+                  )}
+                  onClick={() => setShowGlobalFilter((p) => !p)}
+                >
+                  <Filter className="w-3.5 h-3.5" />
+                  Filter
+                  {isGlobalFilterActive(globalFilter) && (
+                    <span className="badge badge-xs badge-neutral">
+                      {activeFilterCount(globalFilter)}
+                    </span>
+                  )}
+                </button>
+                {showGlobalFilter && (
+                  <GlobalFilterDropdown
+                    filter={globalFilter}
+                    members={members?.data || []}
+                    onChange={setGlobalFilter}
+                    onClose={() => setShowGlobalFilter(false)}
+                  />
+                )}
               </div>
-              <ul
-                tabIndex={0}
-                className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-44"
-              >
-                <li>
-                  <a
-                    onClick={() => api.tasks.export(currentOrg!.id, projectId)}
+            )}
+
+            {/* Actions: Import/Export + View toggle (only visible when Tasks tab is active) */}
+            {activeTab === "tasks" && (
+              <div className="flex items-center gap-2">
+                {/* Toolbar buttons portaled from TaskColumns */}
+                {taskView === "columns" && (
+                  <div ref={setToolbarEl} className="flex items-center gap-2" />
+                )}
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setImportOpen(true)}
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
+                </Button>
+                <div className="dropdown dropdown-end">
+                  <div
+                    tabIndex={0}
+                    role="button"
+                    className="btn btn-outline btn-xs"
                   >
-                    <Download className="w-4 h-4" /> CSV
-                  </a>
-                </li>
-                <li>
-                  <a
-                    onClick={() =>
-                      api.tasks.exportCalendar(currentOrg!.id, projectId)
-                    }
+                    <Download className="w-3.5 h-3.5 mr-1" /> Export
+                  </div>
+                  <ul
+                    tabIndex={0}
+                    className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-44"
                   >
-                    <CalendarDays className="w-4 h-4" /> iCal (.ics)
-                  </a>
-                </li>
-              </ul>
-            </div>
-            <div className="join">
-              <button
-                className={`join-item btn btn-sm ${taskView === "columns" ? "btn-active" : ""}`}
-                onClick={() => setTaskView("columns")}
-                title="Miller Columns"
-              >
-                <Columns3 className="w-4 h-4" />
-              </button>
-              <button
-                className={`join-item btn btn-sm ${taskView === "tree" ? "btn-active" : ""}`}
-                onClick={() => setTaskView("tree")}
-                title="Tree View"
-              >
-                <GitFork className="w-4 h-4" />
-              </button>
-              <button
-                className={`join-item btn btn-sm ${taskView === "list" ? "btn-active" : ""}`}
-                onClick={() => setTaskView("list")}
-                title="Sortable List"
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                className={`join-item btn btn-sm ${taskView === "calendar" ? "btn-active" : ""}`}
-                onClick={() => setTaskView("calendar")}
-                title="Calendar View"
-              >
-                <CalendarDays className="w-4 h-4" />
-              </button>
-            </div>
+                    <li>
+                      <a
+                        onClick={() => api.tasks.export(currentOrg!.id, projectId)}
+                      >
+                        <Download className="w-4 h-4" /> CSV
+                      </a>
+                    </li>
+                    <li>
+                      <a
+                        onClick={() =>
+                          api.tasks.exportCalendar(currentOrg!.id, projectId)
+                        }
+                      >
+                        <CalendarDays className="w-4 h-4" /> iCal (.ics)
+                      </a>
+                    </li>
+                  </ul>
+                </div>
+                <div
+                  role="tablist"
+                  className="project-tabs-shell tabs tabs-boxed rounded-2xl p-1"
+                >
+                  <button
+                    role="tab"
+                    className={cn(
+                      "project-tab-btn tab tab-sm rounded-xl",
+                      taskView === "columns"
+                        ? "project-tab-active"
+                        : "project-tab-inactive",
+                    )}
+                    onClick={() => setTaskView("columns")}
+                    title="Miller Columns"
+                  >
+                    <Columns3 className="w-4 h-4" />
+                  </button>
+                  <button
+                    role="tab"
+                    className={cn(
+                      "project-tab-btn tab tab-sm rounded-xl",
+                      taskView === "tree"
+                        ? "project-tab-active"
+                        : "project-tab-inactive",
+                    )}
+                    onClick={() => setTaskView("tree")}
+                    title="Tree View"
+                  >
+                    <GitFork className="w-4 h-4" />
+                  </button>
+                  <button
+                    role="tab"
+                    className={cn(
+                      "project-tab-btn tab tab-sm rounded-xl",
+                      taskView === "list"
+                        ? "project-tab-active"
+                        : "project-tab-inactive",
+                    )}
+                    onClick={() => setTaskView("list")}
+                    title="Sortable List"
+                  >
+                    <List className="w-4 h-4" />
+                  </button>
+                  <button
+                    role="tab"
+                    className={cn(
+                      "project-tab-btn tab tab-sm rounded-xl",
+                      taskView === "calendar"
+                        ? "project-tab-active"
+                        : "project-tab-inactive",
+                    )}
+                    onClick={() => setTaskView("calendar")}
+                    title="Calendar View"
+                  >
+                    <CalendarDays className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        )}
       </div>
 
       {/* Dashboard tab */}
@@ -526,6 +590,79 @@ export default function ProjectDetailPage({
 }
 
 /* ─── Project Members Section (Internal / External tabs) ─── */
+
+function MembersDropdownSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+  widthClass = "w-full",
+  size = "sm",
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  disabled?: boolean;
+  widthClass?: string;
+  size?: "xs" | "sm";
+}) {
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label || options[0]?.label || "";
+
+  return (
+    <details
+      className={cn(
+        "dropdown dropdown-bottom relative isolate z-[30] open:z-[360]",
+        widthClass,
+        disabled && "pointer-events-none opacity-60",
+      )}
+    >
+      <summary
+        className={cn(
+          "inline-flex w-full cursor-pointer list-none items-center justify-between rounded-xl border border-base-200/55 px-3 backdrop-blur-md task-filter-select",
+          size === "xs" ? "h-8 min-h-8 text-xs" : "h-10 min-h-10 text-sm",
+        )}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-3.5 w-3.5 text-base-content/60"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </summary>
+      <ul className="dropdown-content task-status-menu z-[380] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+        {options.map((opt) => (
+          <li key={opt.value}>
+            <button
+              type="button"
+              className={cn(
+                "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                value === opt.value
+                  ? "task-status-item-active"
+                  : "text-base-content/80 hover:bg-base-200/35",
+              )}
+              onClick={(e) => {
+                onChange(opt.value);
+                const details = e.currentTarget.closest("details");
+                if (details) details.removeAttribute("open");
+              }}
+            >
+              <span className="truncate">{opt.label}</span>
+              {value === opt.value ? <span className="text-xs">✓</span> : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function ProjectMembersSection({
   orgId,
@@ -793,13 +930,18 @@ function ProjectMembersSection({
           <input
             type="text"
             placeholder="Search members..."
-            className="input input-bordered input-sm w-full pl-9"
+            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-9 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
         <button
-          className={`btn btn-sm ${showFilter ? "btn-primary" : "btn-ghost"}`}
+          className={cn(
+            "btn btn-sm rounded-xl border border-base-200/70",
+            showFilter
+              ? "btn-warning text-warning-content"
+              : "btn-ghost text-base-content/70",
+          )}
           onClick={() => setShowFilter(!showFilter)}
         >
           <Filter className="w-4 h-4" />
@@ -810,23 +952,23 @@ function ProjectMembersSection({
       </div>
 
       {showFilter && (
-        <div className="mb-4 p-3 bg-base-200 rounded-lg flex items-center gap-3">
+        <div className="relative z-[340] mb-4 flex items-center gap-3 rounded-xl border border-base-200/60 bg-base-200/35 p-3 backdrop-blur-xl">
           <span className="text-sm font-medium">Role:</span>
-          <select
-            className="select select-bordered select-sm"
+          <MembersDropdownSelect
             value={filterRole}
-            onChange={(e) => {
-              setFilterRole(e.target.value);
+            onChange={(v) => {
+              setFilterRole(v);
               setPage(0);
             }}
-          >
-            <option value="">All roles</option>
-            {(projectRoles || []).map((r: Role) => (
-              <option key={r.slug} value={r.slug}>
-                {r.name}
-              </option>
-            ))}
-          </select>
+            widthClass="w-44"
+            options={[
+              { value: "", label: "All roles" },
+              ...(projectRoles || []).map((r: Role) => ({
+                value: r.slug,
+                label: r.name,
+              })),
+            ]}
+          />
           {filterRole && (
             <button
               className="btn btn-ghost btn-xs"
@@ -842,10 +984,16 @@ function ProjectMembersSection({
       )}
 
       {/* Sub-tabs */}
-      <div role="tablist" className="tabs tabs-bordered">
+      <div
+        role="tablist"
+        className="relative z-10 project-tabs-shell tabs tabs-boxed w-fit rounded-2xl p-1"
+      >
         <button
           role="tab"
-          className={cn("tab", subTab === "internal" && "tab-active")}
+          className={cn(
+            "project-tab-btn tab tab-sm rounded-xl",
+            subTab === "internal" ? "project-tab-active" : "project-tab-inactive",
+          )}
           onClick={() => setSubTab("internal")}
         >
           <Users className="w-3.5 h-3.5 mr-1" /> Internal (
@@ -853,7 +1001,10 @@ function ProjectMembersSection({
         </button>
         <button
           role="tab"
-          className={cn("tab", subTab === "external" && "tab-active")}
+          className={cn(
+            "project-tab-btn tab tab-sm rounded-xl",
+            subTab === "external" ? "project-tab-active" : "project-tab-inactive",
+          )}
           onClick={() => setSubTab("external")}
         >
           <UserPlus className="w-3.5 h-3.5 mr-1" /> External (
@@ -897,18 +1048,18 @@ function ProjectMembersSection({
                   Choose a member to reassign their tasks, or skip to unassign
                   them from all tasks.
                 </p>
-                <select
-                  className="select select-bordered select-sm w-full mt-2"
+                <MembersDropdownSelect
                   value={removeReassignTo}
-                  onChange={(e) => setRemoveReassignTo(e.target.value)}
-                >
-                  <option value="">Skip — unassign all tasks</option>
-                  {reassignCandidates.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.display_name || m.email || m.user_id.slice(0, 12)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setRemoveReassignTo}
+                  widthClass="w-full mt-2"
+                  options={[
+                    { value: "", label: "Skip — unassign all tasks" },
+                    ...reassignCandidates.map((m) => ({
+                      value: m.user_id,
+                      label: m.display_name || m.email || m.user_id.slice(0, 12),
+                    })),
+                  ]}
+                />
               </div>
             ) : (
               <p className="text-sm text-base-content/60 py-1">
@@ -948,7 +1099,7 @@ function ProjectMembersSection({
       {subTab === "internal" && !membersLoading && (
         <>
           {/* Add Internal Member form */}
-          <Card>
+          <Card allowOverflow className="relative z-20 focus-within:z-[360]">
             <h3 className="font-semibold mb-1">Add Internal Member</h3>
             <p className="text-xs text-base-content/50 mb-3">
               Select a linked team and pick a member to add to this project.
@@ -965,55 +1116,51 @@ function ProjectMembersSection({
                 <label className="label">
                   <span className="label-text text-xs">Team</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm w-full"
+                <MembersDropdownSelect
                   value={addInternalTeamId}
-                  onChange={(e) => {
-                    setAddInternalTeamId(e.target.value);
+                  onChange={(v) => {
+                    setAddInternalTeamId(v);
                     setAddInternalUserId("");
                   }}
-                >
-                  <option value="">Select team…</option>
-                  {(linkedTeams || []).map((pt: ProjectTeam) => (
-                    <option key={pt.team_id} value={pt.team_id}>
-                      {pt.team_name || pt.team_id.slice(0, 12)}
-                    </option>
-                  ))}
-                </select>
+                  widthClass="w-full"
+                  options={[
+                    { value: "", label: "Select team..." },
+                    ...(linkedTeams || []).map((pt: ProjectTeam) => ({
+                      value: pt.team_id,
+                      label: pt.team_name || pt.team_id.slice(0, 12),
+                    })),
+                  ]}
+                />
               </div>
               <div className="flex-1 min-w-[140px]">
                 <label className="label">
                   <span className="label-text text-xs">Member</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm w-full"
+                <MembersDropdownSelect
                   value={addInternalUserId}
-                  onChange={(e) => setAddInternalUserId(e.target.value)}
+                  onChange={setAddInternalUserId}
                   disabled={!addInternalTeamId}
-                >
-                  <option value="">Select member…</option>
-                  {availableTeamMembers.map((tm) => (
-                    <option key={tm.user_id} value={tm.user_id}>
-                      {tm.display_name || tm.email || tm.user_id.slice(0, 16)}
-                    </option>
-                  ))}
-                </select>
+                  widthClass="w-full"
+                  options={[
+                    { value: "", label: "Select member..." },
+                    ...availableTeamMembers.map((tm) => ({
+                      value: tm.user_id,
+                      label:
+                        tm.display_name || tm.email || tm.user_id.slice(0, 16),
+                    })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="label">
                   <span className="label-text text-xs">Role</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm"
+                <MembersDropdownSelect
                   value={addInternalRole}
-                  onChange={(e) => setAddInternalRole(e.target.value)}
-                >
-                  {roleOptions.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAddInternalRole}
+                  widthClass="w-44"
+                  options={roleOptions}
+                />
               </div>
               <Button
                 type="submit"
@@ -1034,13 +1181,13 @@ function ProjectMembersSection({
             </Card>
           ) : (
             Array.from(teamGroups.entries()).map(([teamId, group]) => (
-              <Card key={teamId}>
+              <Card key={teamId} allowOverflow className="relative z-10">
                 <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
                   <Link2 className="w-3.5 h-3.5" /> {group.teamName}
                 </h4>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto overflow-y-visible">
                   <table className="table table-sm">
-                    <thead>
+                    <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
                       <tr>
                         <th>User</th>
                         <th>Role</th>
@@ -1077,31 +1224,25 @@ function ProjectMembersSection({
                             </div>
                           </td>
                           <td>
-                            <select
-                              className="select select-ghost select-xs capitalize"
+                            <MembersDropdownSelect
                               value={localRoles[m.user_id] ?? m.role}
-                              onChange={(e) =>
-                                handleRoleChange(m.user_id, e.target.value)
-                              }
+                              onChange={(v) => handleRoleChange(m.user_id, v)}
                               disabled={roleOptions.length === 0}
-                            >
-                              {roleOptions.map((r) => (
-                                <option key={r.value} value={r.value}>
-                                  {r.label}
-                                </option>
-                              ))}
-                            </select>
+                              widthClass="w-44"
+                              size="xs"
+                              options={roleOptions}
+                            />
                           </td>
                           <td className="text-sm text-base-content/60">
                             {formatDate(m.joined_at)}
                           </td>
                           <td>
                             <button
-                              className="btn btn-ghost btn-xs text-error"
+                              className="btn btn-ghost btn-xs text-error hover:bg-error/15"
                               onClick={() => openRemoveDialog(m)}
                               title="Remove from project"
                             >
-                              <Trash2 className="w-3 h-3" />
+                              <Trash2 className="w-3 h-3 text-error" />
                             </button>
                           </td>
                         </tr>
@@ -1118,7 +1259,7 @@ function ProjectMembersSection({
       {/* External tab — directly-added members with add/remove/role */}
       {subTab === "external" && !membersLoading && (
         <>
-          <Card>
+          <Card allowOverflow className="relative z-20 focus-within:z-[360]">
             <h3 className="font-semibold mb-1">Add External Member</h3>
             <p className="text-xs text-base-content/50 mb-3">
               Add an organisation member who is not in any linked team directly
@@ -1135,34 +1276,30 @@ function ProjectMembersSection({
                 <label className="label">
                   <span className="label-text text-xs">Select Member</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm w-full"
+                <MembersDropdownSelect
                   value={addUserId}
-                  onChange={(e) => setAddUserId(e.target.value)}
-                >
-                  <option value="">Select member…</option>
-                  {availableExternal.map((m) => (
-                    <option key={m.user_id} value={m.user_id}>
-                      {m.display_name || m.email || m.user_id.slice(0, 16)}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAddUserId}
+                  widthClass="w-full"
+                  options={[
+                    { value: "", label: "Select member..." },
+                    ...availableExternal.map((m) => ({
+                      value: m.user_id,
+                      label:
+                        m.display_name || m.email || m.user_id.slice(0, 16),
+                    })),
+                  ]}
+                />
               </div>
               <div>
                 <label className="label">
                   <span className="label-text text-xs">Role</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm"
+                <MembersDropdownSelect
                   value={addRole}
-                  onChange={(e) => setAddRole(e.target.value)}
-                >
-                  {roleOptions.map((r) => (
-                    <option key={r.value} value={r.value}>
-                      {r.label}
-                    </option>
-                  ))}
-                </select>
+                  onChange={setAddRole}
+                  widthClass="w-44"
+                  options={roleOptions}
+                />
               </div>
               <Button
                 type="submit"
@@ -1175,15 +1312,15 @@ function ProjectMembersSection({
             </form>
           </Card>
 
-          <Card>
+          <Card allowOverflow className="relative z-10">
             {externalMembers.length === 0 ? (
               <p className="text-center py-6 text-base-content/50">
                 No external members yet. Add members above.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto overflow-y-visible">
                 <table className="table">
-                  <thead>
+                  <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
                     <tr>
                       <th>User</th>
                       <th>Role</th>
@@ -1220,31 +1357,25 @@ function ProjectMembersSection({
                           </div>
                         </td>
                         <td>
-                          <select
-                            className="select select-ghost select-xs capitalize"
+                          <MembersDropdownSelect
                             value={localRoles[m.user_id] ?? m.role}
-                            onChange={(e) =>
-                              handleRoleChange(m.user_id, e.target.value)
-                            }
+                            onChange={(v) => handleRoleChange(m.user_id, v)}
                             disabled={roleOptions.length === 0}
-                          >
-                            {roleOptions.map((r) => (
-                              <option key={r.value} value={r.value}>
-                                {r.label}
-                              </option>
-                            ))}
-                          </select>
+                            widthClass="w-44"
+                            size="xs"
+                            options={roleOptions}
+                          />
                         </td>
                         <td className="text-sm text-base-content/60">
                           {formatDate(m.joined_at)}
                         </td>
                         <td>
                           <button
-                            className="btn btn-ghost btn-xs text-error"
+                            className="btn btn-ghost btn-xs text-error hover:bg-error/15"
                             onClick={() => openRemoveDialog(m)}
                             title="Remove member"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3 h-3 text-error" />
                           </button>
                         </td>
                       </tr>

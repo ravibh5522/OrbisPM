@@ -108,6 +108,7 @@ export function StickyNotesPanel() {
   const [selectedDate, setSelectedDate] = useState<string>(dateKey(new Date()));
   const [showForm, setShowForm] = useState(false);
   const [editingNote, setEditingNote] = useState<StickyNote | null>(null);
+  const [isEntered, setIsEntered] = useState(false);
 
   // close on outside click
   useEffect(() => {
@@ -124,6 +125,33 @@ export function StickyNotesPanel() {
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  // Close panel with Escape key.
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        setShowForm(false);
+        setEditingNote(null);
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  // Smooth entrance animation.
+  useEffect(() => {
+    if (!open) {
+      setIsEntered(false);
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => setIsEntered(true));
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
   // queries
@@ -309,8 +337,11 @@ export function StickyNotesPanel() {
         <div
           className={cn(
             "absolute right-0 top-full mt-2 z-50",
-            "w-[720px] max-h-[85vh] rounded-box border border-base-200 bg-base-100/95 backdrop-blur-[20px] shadow-2xl",
-            "flex flex-col",
+            "w-[720px] max-h-[85vh] rounded-box notes-dialog-surface",
+            "flex flex-col transition-all duration-220 ease-out",
+            isEntered
+              ? "opacity-100 translate-y-0 scale-100"
+              : "opacity-0 -translate-y-1 scale-[0.985]",
           )}
         >
           {/* Header */}

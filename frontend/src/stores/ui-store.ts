@@ -1,8 +1,8 @@
 import {
-  DEFAULT_PROFILE_ID,
-  findProfile,
-  PROFILES_BY_THEME,
-  ThemeColorProfile,
+    DEFAULT_PROFILE_ID,
+    findProfile,
+    PROFILES_BY_THEME,
+    ThemeColorProfile,
 } from "@/lib/theme-profiles";
 import { create } from "zustand";
 
@@ -38,6 +38,7 @@ interface UIState {
   /** The admin-enforced colour schema (from org_theme_configs.custom_colors) */
   orgCustomisation: ThemeCustomisation | null;
   commandPaletteOpen: boolean;
+  commandPaletteQuery: string;
   mobileMenuOpen: boolean;
   breadcrumb: { label: string; backHref?: string } | null;
 
@@ -63,6 +64,7 @@ interface UIState {
     customisation: ThemeCustomisation | null;
   }) => void;
   setCommandPaletteOpen: (v: boolean) => void;
+  setCommandPaletteQuery: (q: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
   setBreadcrumb: (b: { label: string; backHref?: string } | null) => void;
   setProjectTab: (projectId: string, tab: ProjectTab) => void;
@@ -196,6 +198,7 @@ export const useUIStore = create<UIState>((set, get) => {
     colorSchemaLocked: false,
     orgCustomisation: null,
     commandPaletteOpen: false,
+    commandPaletteQuery: "",
     mobileMenuOpen: false,
     breadcrumb: null,
     projectTabs: stored.tabs,
@@ -274,6 +277,7 @@ export const useUIStore = create<UIState>((set, get) => {
     },
 
     setCommandPaletteOpen: (v) => set({ commandPaletteOpen: v }),
+    setCommandPaletteQuery: (q) => set({ commandPaletteQuery: q }),
     setMobileMenuOpen: (v) => set({ mobileMenuOpen: v }),
     setBreadcrumb: (b) => set({ breadcrumb: b }),
 
@@ -335,3 +339,4 @@ export const THEMES: {
 /** Re-export for convenience */
 export { DEFAULT_PROFILE_ID, findProfile, PROFILES_BY_THEME };
 export type { ThemeColorProfile };
+

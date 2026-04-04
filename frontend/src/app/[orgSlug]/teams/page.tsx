@@ -5,10 +5,10 @@ import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-  Card,
-  ConfirmDialog,
-  EmptyState,
-  PageHeader,
+    Card,
+    ConfirmDialog,
+    EmptyState,
+    PageHeader,
 } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useOrgPolicies } from "@/hooks/use-policies";
@@ -19,14 +19,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ChevronDown,
-  Pencil,
-  Plus,
-  Search,
-  SlidersHorizontal,
-  Trash2,
-  Users,
-  X,
+    ChevronDown,
+    Pencil,
+    Plus,
+    Search,
+    SlidersHorizontal,
+    Trash2,
+    Users,
+    X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -61,6 +61,16 @@ export default function TeamsPage() {
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const [statusFilter, setStatusFilter] = useState("active");
   const [showFilters, setShowFilters] = useState(false);
+
+  const updateSearch = (v: string) => {
+    setSearch(v);
+    setPage(0);
+  };
+
+  const updateStatus = (v: string) => {
+    setStatusFilter(v);
+    setPage(0);
+  };
 
   // Debounce search
   useEffect(() => {
@@ -195,6 +205,13 @@ export default function TeamsPage() {
     setPage(0);
   };
 
+  const statusFilterOptions: { value: string; label: string }[] = [
+    { value: "", label: "All" },
+    { value: "active", label: "Active" },
+    { value: "archived", label: "Archived" },
+    { value: "closed", label: "Closed" },
+  ];
+
   const SortIcon = ({ col }: { col: string }) => (
     <ChevronDown
       className={cn(
@@ -222,18 +239,19 @@ export default function TeamsPage() {
       {/* Search bar + Filter toggle */}
       <div className="flex items-center gap-2 mb-3">
         <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 z-10 h-4 w-4 -translate-y-1/2 text-base-content/85" />
           <input
             type="text"
             placeholder="Search teams..."
-            className="input input-bordered input-sm w-full pl-9"
+            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => updateSearch(e.target.value)}
           />
           {search && (
             <button
-              className="absolute right-2 top-2 btn btn-ghost btn-xs btn-circle"
-              onClick={() => setSearch("")}
+              className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base-content/60 transition-colors hover:bg-base-100/45 hover:text-base-content"
+              onClick={() => updateSearch("")}
+              aria-label="Clear search"
             >
               <X className="w-3 h-3" />
             </button>
@@ -270,23 +288,54 @@ export default function TeamsPage() {
             <span className="text-sm font-medium whitespace-nowrap">
               Status:
             </span>
-            <select
-              className="select select-bordered select-sm"
-              value={statusFilter}
-              onChange={(e) => {
-                setStatusFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="">All</option>
-              <option value="active">Active</option>
-              <option value="archived">Archived</option>
-              <option value="closed">Closed</option>
-            </select>
+            <div className="dropdown dropdown-bottom">
+              <div
+                tabIndex={0}
+                role="button"
+                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
+              >
+                <span>
+                  {statusFilterOptions.find((o) => o.value === statusFilter)
+                    ?.label || "All"}
+                </span>
+                <svg
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                  className="h-3.5 w-3.5 text-base-content/60"
+                  aria-hidden="true"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </div>
+              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-32 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+                {statusFilterOptions.map((opt) => (
+                  <li key={opt.value || "all"}>
+                    <button
+                      className={cn(
+                        "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                        statusFilter === opt.value
+                          ? "task-status-item-active"
+                          : "text-base-content/80 hover:bg-base-200/35",
+                      )}
+                      onClick={() => updateStatus(opt.value)}
+                    >
+                      <span>{opt.label}</span>
+                      {statusFilter === opt.value ? (
+                        <span className="text-xs">✓</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </div>
           {(statusFilter !== "active" || search) && (
             <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
-              <X className="w-3 h-3" /> Reset
+              <X className="w-3 h-3" /> Clear all
             </button>
           )}
         </div>
@@ -330,8 +379,8 @@ export default function TeamsPage() {
       ) : (
         <Card className="flex-1">
           <div className="w-full overflow-x-auto">
-            <table className="table w-full">
-              <thead>
+            <table className="table w-full border-separate border-spacing-y-1">
+              <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
                 <tr>
                   <th
                     className="cursor-pointer select-none"
@@ -362,11 +411,11 @@ export default function TeamsPage() {
                   <th className="text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="[&_tr]:transition-colors [&_tr]:duration-150 [&_tr:hover]:bg-base-200/32 [&_tr:hover>td:first-child]:rounded-l-xl [&_tr:hover>td:last-child]:rounded-r-xl">
                 {teams.map((team: Team) => (
                   <tr
                     key={team.id}
-                    className="hover cursor-pointer"
+                    className="cursor-pointer"
                     onClick={() => router.push(`/${orgSlug}/teams/${team.id}`)}
                   >
                     <td>

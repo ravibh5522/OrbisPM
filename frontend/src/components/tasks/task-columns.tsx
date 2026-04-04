@@ -9,7 +9,7 @@ import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdow
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
 import { Button } from "@/components/ui/button";
-import { Input, Select } from "@/components/ui/form-fields";
+import { Input } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { AvatarStack, ConfirmDialog } from "@/components/ui/shared";
 import { useProjectPolicies } from "@/hooks/use-policies";
@@ -2218,7 +2218,7 @@ function TaskColumn({
             >
               <input
                 type="checkbox"
-                className="checkbox checkbox-xs checkbox-primary"
+                className="checkbox checkbox-xs checkbox-primary [--chkfg:oklch(98%_0.005_270)]"
                 checked={
                   tasks.length > 0 &&
                   tasks.every((t) => multiSelected.has(t.id))
@@ -2374,7 +2374,7 @@ function TaskColumn({
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                   className={cn(
-                    "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2",
+                    "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2 rounded-2xl",
                     "hover:bg-pink-50 dark:hover:bg-pink-950/20",
                     isSelected && !bulkMode
                       ? "bg-primary/20 border-l-primary shadow-sm"
@@ -2391,7 +2391,7 @@ function TaskColumn({
                     {bulkMode && (
                       <input
                         type="checkbox"
-                        className="checkbox checkbox-xs checkbox-primary shrink-0"
+                        className="checkbox checkbox-xs checkbox-primary shrink-0 [--chkfg:oklch(98%_0.005_270)]"
                         checked={isMultiSelected}
                         readOnly
                       />
@@ -2626,7 +2626,7 @@ function ColumnFilterDropdown({
             <label className="flex items-center gap-1.5 cursor-pointer px-1 py-0.5 rounded hover:bg-base-200">
               <input
                 type="checkbox"
-                className="checkbox checkbox-xs"
+                className="checkbox checkbox-xs checkbox-primary [--chkfg:oklch(98%_0.005_270)]"
                 checked={local.assigneeIds.includes("")}
                 onChange={() => toggleAssignee("")}
               />
@@ -2639,7 +2639,7 @@ function ColumnFilterDropdown({
               >
                 <input
                   type="checkbox"
-                  className="checkbox checkbox-xs"
+                  className="checkbox checkbox-xs checkbox-primary [--chkfg:oklch(98%_0.005_270)]"
                   checked={local.assigneeIds.includes(m.user_id)}
                   onChange={() => toggleAssignee(m.user_id)}
                 />
@@ -2783,7 +2783,10 @@ function CreateTaskModal({
     string,
     unknown
   > | null>(null);
+  const watchedStatus = watch("status");
+  const watchedPriority = watch("priority");
   const watchedAssignees = watch("assignee_ids");
+  const watchedReporter = watch("reporter_id");
 
   const toggleAssignee = (userId: string) => {
     const current = watchedAssignees || [];
@@ -2886,26 +2889,40 @@ function CreateTaskModal({
             error={formErrors.title?.message}
           />
           <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Status"
-              options={[
-                { value: "todo", label: "Todo" },
-                { value: "in_progress", label: "In Progress" },
-                { value: "done", label: "Done" },
-                { value: "blocked", label: "Blocked" },
-              ]}
-              {...register("status")}
-            />
-            <Select
-              label="Priority"
-              options={[
-                { value: "critical", label: "Critical" },
-                { value: "high", label: "High" },
-                { value: "medium", label: "Medium" },
-                { value: "low", label: "Low" },
-              ]}
-              {...register("priority")}
-            />
+            <div>
+              <label className="text-xs text-base-content/50 block mb-1">
+                Status
+              </label>
+              <ThemedDropdownSelect<TaskStatus>
+                value={watchedStatus || "todo"}
+                onChange={(v) => setValue("status", v, { shouldDirty: true })}
+                options={[
+                  { value: "todo", label: "Todo" },
+                  { value: "in_progress", label: "In Progress" },
+                  { value: "done", label: "Done" },
+                  { value: "blocked", label: "Blocked" },
+                ]}
+                disabled={creating}
+              />
+            </div>
+            <div>
+              <label className="text-xs text-base-content/50 block mb-1">
+                Priority
+              </label>
+              <ThemedDropdownSelect<TaskPriority>
+                value={watchedPriority || "medium"}
+                onChange={(v) =>
+                  setValue("priority", v, { shouldDirty: true })
+                }
+                options={[
+                  { value: "critical", label: "Critical" },
+                  { value: "high", label: "High" },
+                  { value: "medium", label: "Medium" },
+                  { value: "low", label: "Low" },
+                ]}
+                disabled={creating}
+              />
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -2934,24 +2951,27 @@ function CreateTaskModal({
             <label className="text-xs text-base-content/50 block mb-1">
               Reporter
             </label>
-            <select
-              className="select select-bordered select-sm w-full"
-              {...register("reporter_id")}
-            >
-              <option value="">None</option>
-              {members.map((m) => (
-                <option key={m.user_id} value={m.user_id}>
-                  {m.display_name || m.email || m.user_id.slice(0, 12)}
-                </option>
-              ))}
-            </select>
+            <ThemedDropdownSelect<string>
+              value={watchedReporter || ""}
+              onChange={(v) =>
+                setValue("reporter_id", v, { shouldDirty: true })
+              }
+              options={[
+                { value: "", label: "None" },
+                ...members.map((m) => ({
+                  value: m.user_id,
+                  label: m.display_name || m.email || m.user_id.slice(0, 12),
+                })),
+              ]}
+              disabled={creating}
+            />
           </div>
           {/* Multi-assignee selector */}
           <div>
             <label className="text-xs text-base-content/50 block mb-1">
               Assignees
             </label>
-            <div className="border border-base-300 rounded-lg max-h-28 overflow-y-auto">
+            <div className="border border-base-300/80 rounded-xl bg-base-100/20 max-h-32 overflow-y-auto p-1">
               {members.length === 0 && (
                 <div className="px-3 py-2 text-xs text-base-content/40">
                   No members
@@ -2960,11 +2980,16 @@ function CreateTaskModal({
               {members.map((m) => (
                 <label
                   key={m.user_id}
-                  className="flex items-center gap-2 px-3 py-1.5 hover:bg-base-200 cursor-pointer text-sm"
+                  className={cn(
+                    "flex items-center gap-2 rounded-lg px-3 py-1.5 cursor-pointer text-sm transition-colors",
+                    watchedAssignees?.includes(m.user_id)
+                      ? "bg-primary/12"
+                      : "hover:bg-base-200/55",
+                  )}
                 >
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-xs checkbox-primary"
+                    className="checkbox checkbox-xs checkbox-primary [--chkfg:oklch(98%_0.005_270)]"
                     checked={watchedAssignees?.includes(m.user_id) || false}
                     onChange={() => toggleAssignee(m.user_id)}
                   />
@@ -3096,6 +3121,76 @@ const SEPARATOR_OPTIONS: { value: SeparatorType; label: string }[] = [
   { value: "semicolon", label: "Semicolon (;)" },
   { value: "custom", label: "Custom…" },
 ];
+
+function ThemedDropdownSelect<T extends string>({
+  value,
+  onChange,
+  options,
+  disabled,
+  widthClass = "w-full",
+}: {
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  disabled?: boolean;
+  widthClass?: string;
+}) {
+  const selectedLabel =
+    options.find((o) => o.value === value)?.label || options[0]?.label || "";
+
+  return (
+    <details
+      className={cn(
+        "dropdown dropdown-bottom relative",
+        widthClass,
+        disabled && "pointer-events-none opacity-60",
+      )}
+    >
+      <summary
+        className={cn(
+          "bulk-create-select inline-flex h-9 min-h-9 w-full cursor-pointer list-none items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md",
+        )}
+      >
+        <span className="truncate">{selectedLabel}</span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-3.5 w-3.5 text-base-content/60"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </summary>
+      <ul className="dropdown-content task-status-menu z-[220] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+        {options.map((opt) => (
+          <li key={opt.value}>
+            <button
+              type="button"
+              className={cn(
+                "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
+                value === opt.value
+                  ? "task-status-item-active"
+                  : "text-base-content/80 hover:bg-base-200/35",
+              )}
+              onClick={(e) => {
+                onChange(opt.value);
+                const details = e.currentTarget.closest("details");
+                if (details) details.removeAttribute("open");
+              }}
+            >
+              <span className="truncate">{opt.label}</span>
+              {value === opt.value ? <span className="text-xs">✓</span> : null}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function BulkCreateTaskModal({
   projectId: _projectId,
@@ -3266,20 +3361,12 @@ function BulkCreateTaskModal({
             <label className="label">
               <span className="label-text">Separator</span>
             </label>
-            <select
-              className="select select-bordered select-sm w-full"
+            <ThemedDropdownSelect<SeparatorType>
               value={separatorType}
-              onChange={(e) =>
-                setSeparatorType(e.target.value as SeparatorType)
-              }
+              onChange={setSeparatorType}
+              options={SEPARATOR_OPTIONS}
               disabled={creating}
-            >
-              {SEPARATOR_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            />
           </div>
           {separatorType === "custom" && (
             <div className="form-control flex-1">
@@ -3319,62 +3406,61 @@ function BulkCreateTaskModal({
         )}
 
         {/* Shared properties */}
-        <details className="collapse collapse-arrow border border-base-200 rounded-lg">
+        <details className="collapse collapse-arrow overflow-visible border border-base-200 rounded-lg">
           <summary className="collapse-title text-sm font-medium py-2 min-h-0">
             Properties (applied to all)
           </summary>
-          <div className="collapse-content space-y-3 pb-3">
+          <div className="collapse-content overflow-visible space-y-3 pb-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="form-control">
                 <label className="label py-0.5">
                   <span className="label-text text-xs">Status</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm w-full"
+                <ThemedDropdownSelect<TaskStatus>
                   value={status}
-                  onChange={(e) => setStatus(e.target.value as TaskStatus)}
+                  onChange={setStatus}
+                  options={[
+                    { value: "todo", label: "Todo" },
+                    { value: "in_progress", label: "In Progress" },
+                    { value: "done", label: "Done" },
+                    { value: "blocked", label: "Blocked" },
+                  ]}
                   disabled={creating}
-                >
-                  <option value="todo">Todo</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="done">Done</option>
-                  <option value="blocked">Blocked</option>
-                </select>
+                />
               </div>
               <div className="form-control">
                 <label className="label py-0.5">
                   <span className="label-text text-xs">Priority</span>
                 </label>
-                <select
-                  className="select select-bordered select-sm w-full"
+                <ThemedDropdownSelect<TaskPriority>
                   value={priority}
-                  onChange={(e) => setPriority(e.target.value as TaskPriority)}
+                  onChange={setPriority}
+                  options={[
+                    { value: "critical", label: "Critical" },
+                    { value: "high", label: "High" },
+                    { value: "medium", label: "Medium" },
+                    { value: "low", label: "Low" },
+                  ]}
                   disabled={creating}
-                >
-                  <option value="critical">Critical</option>
-                  <option value="high">High</option>
-                  <option value="medium">Medium</option>
-                  <option value="low">Low</option>
-                </select>
+                />
               </div>
             </div>
             <div className="form-control">
               <label className="label py-0.5">
                 <span className="label-text text-xs">Assignee</span>
               </label>
-              <select
-                className="select select-bordered select-sm w-full"
+              <ThemedDropdownSelect<string>
                 value={assigneeId}
-                onChange={(e) => setAssigneeId(e.target.value)}
+                onChange={setAssigneeId}
+                options={[
+                  { value: "", label: "Unassigned" },
+                  ...members.map((m) => ({
+                    value: m.user_id,
+                    label: m.display_name || m.email || m.user_id.slice(0, 12),
+                  })),
+                ]}
                 disabled={creating}
-              >
-                <option value="">Unassigned</option>
-                {members.map((m) => (
-                  <option key={m.user_id} value={m.user_id}>
-                    {m.display_name || m.email || m.user_id.slice(0, 12)}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="form-control">

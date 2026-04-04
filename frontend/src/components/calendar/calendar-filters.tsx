@@ -10,6 +10,7 @@ import type {
   Team,
 } from "@/types/domain";
 import {
+  Check,
   ChevronDown,
   ChevronRight,
   FolderTree,
@@ -199,7 +200,7 @@ export function GroupBySelector({
   onChange: (v: CalendarGroupBy) => void;
 }) {
   return (
-    <div className="join">
+    <div className="inline-flex items-center rounded-xl border border-base-200/55 bg-base-100/26 p-1 backdrop-blur-xl">
       {[
         { key: "none" as const, label: "All Tasks" },
         { key: "project" as const, label: "By Project" },
@@ -208,11 +209,15 @@ export function GroupBySelector({
         <button
           key={opt.key}
           className={cn(
-            "join-item btn btn-xs",
-            value === opt.key && "btn-active",
+            "inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium transition-all",
+            value === opt.key
+              ? "calendar-segment-active"
+              : "text-base-content/72 hover:bg-base-100/30",
           )}
+          aria-pressed={value === opt.key}
           onClick={() => onChange(opt.key)}
         >
+          {value === opt.key && <Check className="calendar-segment-check h-3 w-3" />}
           {opt.label}
         </button>
       ))}
@@ -244,6 +249,10 @@ export function CalendarFilterDropdown({
 }) {
   const [local, setLocal] = useState<CalendarFilterState>({ ...filter });
   const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setLocal({ ...filter });
+  }, [filter]);
 
   // Auto-extract filter options from loaded tasks
   const autoOptions = useMemo(() => extractFilterOptions(tasks || []), [tasks]);
@@ -330,242 +339,303 @@ export function CalendarFilterDropdown({
   return (
     <div
       ref={ref}
-      className="absolute right-0 top-full mt-1 z-[100] w-80 bg-base-100 backdrop-blur-[20px] border border-base-200/80 rounded-xl shadow-2xl p-4 max-h-[70vh] overflow-y-auto ring-1 ring-base-content/5"
+      className={cn(
+        "absolute right-0 top-full mt-1 z-[100] w-[22rem] max-h-[72vh] overflow-hidden",
+        "rounded-2xl border border-base-200/55 bg-base-100/88 shadow-2xl ring-1 ring-base-content/5 backdrop-blur-2xl",
+      )}
     >
-      <div className="flex items-center justify-between mb-3">
-        <span className="font-semibold text-sm">
-          {groupBy === "none"
-            ? "Task Filters"
-            : groupBy === "project"
-              ? "Project Filters"
-              : "Team Filters"}
-        </span>
-        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
-          <X className="w-3.5 h-3.5" />
-        </button>
+      <div className="sticky top-0 z-10 border-b border-base-200/50 bg-base-100/88 px-4 py-3 backdrop-blur-2xl">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <span className="block text-sm font-semibold text-base-content">
+              {groupBy === "none"
+                ? "Task Filters"
+                : groupBy === "project"
+                  ? "Project Filters"
+                  : "Team Filters"}
+            </span>
+            <span className="text-[11px] text-base-content/45">
+              Refine what appears on the calendar
+            </span>
+          </div>
+          <button
+            className="btn btn-ghost btn-sm btn-circle border border-base-200/50 bg-base-100/50 shadow-sm"
+            onClick={onClose}
+            aria-label="Close filters"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
 
-      {/* ── Task mode filters ── */}
-      {groupBy === "none" && (
-        <>
-          {/* Projects */}
-          {sortedProjects.length > 0 && (
-            <SearchableFilterSection
-              title="Projects"
-              items={sortedProjects}
-              selectedIds={local.projectIds}
-              getId={(p) => p.id}
-              getLabel={(p) => p.name}
-              onToggle={(id) => toggle("projectIds", id)}
-              defaultCollapsed={sortedProjects.length > 10}
-            />
-          )}
+      <div className="max-h-[calc(72vh-7.5rem)] overflow-y-auto bg-base-100/82 px-4 py-3">
+        {/* ── Task mode filters ── */}
+        {groupBy === "none" && (
+          <>
+            {/* Projects */}
+            {sortedProjects.length > 0 && (
+              <SearchableFilterSection
+                title="Projects"
+                items={sortedProjects}
+                selectedIds={local.projectIds}
+                getId={(p) => p.id}
+                getLabel={(p) => p.name}
+                onToggle={(id) => toggle("projectIds", id)}
+                defaultCollapsed={sortedProjects.length > 10}
+              />
+            )}
 
-          {/* Teams */}
-          {sortedTeams.length > 0 && (
-            <SearchableFilterSection
-              title="Teams"
-              items={sortedTeams}
-              selectedIds={local.teamIds}
-              getId={(t) => t.id}
-              getLabel={(t) => t.name}
-              onToggle={(id) => toggle("teamIds", id)}
-              defaultCollapsed={sortedTeams.length > 10}
-            />
-          )}
+            {/* Teams */}
+            {sortedTeams.length > 0 && (
+              <SearchableFilterSection
+                title="Teams"
+                items={sortedTeams}
+                selectedIds={local.teamIds}
+                getId={(t) => t.id}
+                getLabel={(t) => t.name}
+                onToggle={(id) => toggle("teamIds", id)}
+                defaultCollapsed={sortedTeams.length > 10}
+              />
+            )}
 
-          {/* Members / Assignees */}
-          {sortedMembers.length > 0 && (
-            <SearchableFilterSection
-              title="Assignees"
-              items={sortedMembers}
-              selectedIds={local.assigneeIds}
-              getId={(m) => m.user_id}
-              getLabel={(m) =>
-                m.display_name || m.email?.split("@")[0] || "Unknown"
-              }
-              onToggle={(id) => toggle("assigneeIds", id)}
-              defaultCollapsed={sortedMembers.length > 10}
-            />
-          )}
+            {/* Members / Assignees */}
+            {sortedMembers.length > 0 && (
+              <SearchableFilterSection
+                title="Assignees"
+                items={sortedMembers}
+                selectedIds={local.assigneeIds}
+                getId={(m) => m.user_id}
+                getLabel={(m) =>
+                  m.display_name || m.email?.split("@")[0] || "Unknown"
+                }
+                onToggle={(id) => toggle("assigneeIds", id)}
+                defaultCollapsed={sortedMembers.length > 10}
+              />
+            )}
 
-          {/* Status */}
-          <FilterSection title="Status">
-            {ALL_STATUSES.map((s) => (
-              <label
-                key={s}
-                className="flex items-center gap-2 cursor-pointer py-0.5"
-              >
-                <input
-                  type="checkbox"
-                  className="checkbox checkbox-xs checkbox-primary"
-                  checked={local.statuses.includes(s)}
-                  onChange={() => toggle("statuses", s)}
-                />
-                <span className="text-xs capitalize">
-                  {s.replace(/_/g, " ")}
-                </span>
-              </label>
-            ))}
-          </FilterSection>
-
-          {/* Priority */}
-          <FilterSection title="Priority">
-            {ALL_PRIORITIES.map((p) => (
-              <label
-                key={p}
-                className="flex items-center gap-2 cursor-pointer py-0.5"
-              >
-                <input
-                  type="checkbox"
-                  className="checkbox checkbox-xs checkbox-primary"
-                  checked={local.priorities.includes(p)}
-                  onChange={() => toggle("priorities", p)}
-                />
-                <span className="text-xs capitalize">{p}</span>
-              </label>
-            ))}
-          </FilterSection>
-
-          {/* Labels */}
-          {autoOptions.labels.length > 0 && (
-            <FilterSection title="Labels">
-              {autoOptions.labels.map((l) => (
+            {/* Status */}
+            <FilterSection title="Status">
+              {ALL_STATUSES.map((s) => (
                 <label
-                  key={l}
-                  className="flex items-center gap-2 cursor-pointer py-0.5"
+                  key={s}
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
+                    local.statuses.includes(s) && "bg-primary/12 border border-primary/20",
+                  )}
                 >
                   <input
                     type="checkbox"
-                    className="checkbox checkbox-xs checkbox-primary"
-                    checked={local.labels.includes(l)}
-                    onChange={() => toggle("labels", l)}
+                    className="checkbox checkbox-xs checkbox-primary border-base-content/30 checked:border-primary"
+                    checked={local.statuses.includes(s)}
+                    onChange={() => toggle("statuses", s)}
                   />
-                  <Tag className="w-3 h-3 text-base-content/40" />
-                  <span className="text-xs truncate">{l}</span>
+                  <span className="text-xs capitalize">
+                    {s.replace(/_/g, " ")}
+                  </span>
+                  {local.statuses.includes(s) && (
+                    <Check className="ml-auto h-3 w-3 text-primary" />
+                  )}
                 </label>
               ))}
             </FilterSection>
-          )}
 
-          {/* Parent Task */}
-          {rootTasks.length > 0 && (
-            <FilterSection title="Parent Task" defaultCollapsed>
-              <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                <input
-                  type="radio"
-                  name="parentTask"
-                  className="radio radio-xs radio-primary"
-                  checked={local.parentTaskId === null}
-                  onChange={() =>
-                    setLocal((p) => ({ ...p, parentTaskId: null }))
-                  }
-                />
-                <span className="text-xs">All tasks</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer py-0.5">
-                <input
-                  type="radio"
-                  name="parentTask"
-                  className="radio radio-xs radio-primary"
-                  checked={local.parentTaskId === "root"}
-                  onChange={() =>
-                    setLocal((p) => ({ ...p, parentTaskId: "root" }))
-                  }
-                />
-                <FolderTree className="w-3 h-3 text-base-content/40" />
-                <span className="text-xs">Root tasks only</span>
-              </label>
-              {rootTasks.slice(0, 20).map((t) => (
+            {/* Priority */}
+            <FilterSection title="Priority">
+              {ALL_PRIORITIES.map((p) => (
                 <label
-                  key={t.id}
-                  className="flex items-center gap-2 cursor-pointer py-0.5"
+                  key={p}
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
+                    local.priorities.includes(p) && "bg-primary/12 border border-primary/20",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-xs checkbox-primary border-base-content/30 checked:border-primary"
+                    checked={local.priorities.includes(p)}
+                    onChange={() => toggle("priorities", p)}
+                  />
+                  <span className="text-xs capitalize">{p}</span>
+                  {local.priorities.includes(p) && (
+                    <Check className="ml-auto h-3 w-3 text-primary" />
+                  )}
+                </label>
+              ))}
+            </FilterSection>
+
+            {/* Labels */}
+            {autoOptions.labels.length > 0 && (
+              <FilterSection title="Labels">
+                {autoOptions.labels.map((l) => (
+                  <label
+                    key={l}
+                    className={cn(
+                      "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
+                      local.labels.includes(l) && "bg-primary/12 border border-primary/20",
+                    )}
+                  >
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-xs checkbox-primary border-base-content/30 checked:border-primary"
+                      checked={local.labels.includes(l)}
+                      onChange={() => toggle("labels", l)}
+                    />
+                    <Tag className="w-3 h-3 text-base-content/40" />
+                    <span className="text-xs truncate">{l}</span>
+                    {local.labels.includes(l) && (
+                      <Check className="ml-auto h-3 w-3 text-primary" />
+                    )}
+                  </label>
+                ))}
+              </FilterSection>
+            )}
+
+            {/* Parent Task */}
+            {rootTasks.length > 0 && (
+              <FilterSection title="Parent Task" defaultCollapsed>
+                <label
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
+                    local.parentTaskId === null && "bg-primary/12 border border-primary/20",
+                  )}
                 >
                   <input
                     type="radio"
                     name="parentTask"
-                    className="radio radio-xs radio-primary"
-                    checked={local.parentTaskId === t.id}
+                    className="radio radio-xs radio-primary border-base-content/30 checked:border-primary"
+                    checked={local.parentTaskId === null}
                     onChange={() =>
-                      setLocal((p) => ({ ...p, parentTaskId: t.id }))
+                      setLocal((p) => ({ ...p, parentTaskId: null }))
                     }
                   />
-                  <span className="text-xs truncate">{t.title}</span>
+                  <span className="text-xs">All tasks</span>
+                  {local.parentTaskId === null && (
+                    <Check className="ml-auto h-3 w-3 text-primary" />
+                  )}
                 </label>
-              ))}
-            </FilterSection>
-          )}
-        </>
-      )}
+                <label
+                  className={cn(
+                    "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
+                    local.parentTaskId === "root" && "bg-primary/12 border border-primary/20",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="parentTask"
+                    className="radio radio-xs radio-primary border-base-content/30 checked:border-primary"
+                    checked={local.parentTaskId === "root"}
+                    onChange={() =>
+                      setLocal((p) => ({ ...p, parentTaskId: "root" }))
+                    }
+                  />
+                  <FolderTree className="w-3 h-3 text-base-content/40" />
+                  <span className="text-xs">Root tasks only</span>
+                  {local.parentTaskId === "root" && (
+                    <Check className="ml-auto h-3 w-3 text-primary" />
+                  )}
+                </label>
+                {rootTasks.slice(0, 20).map((t) => (
+                  <label
+                    key={t.id}
+                    className={cn(
+                      "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
+                      local.parentTaskId === t.id && "bg-primary/12 border border-primary/20",
+                    )}
+                  >
+                    <input
+                      type="radio"
+                      name="parentTask"
+                      className="radio radio-xs radio-primary border-base-content/30 checked:border-primary"
+                      checked={local.parentTaskId === t.id}
+                      onChange={() =>
+                        setLocal((p) => ({ ...p, parentTaskId: t.id }))
+                      }
+                    />
+                    <span className="text-xs truncate">{t.title}</span>
+                    {local.parentTaskId === t.id && (
+                      <Check className="ml-auto h-3 w-3 text-primary" />
+                    )}
+                  </label>
+                ))}
+              </FilterSection>
+            )}
+          </>
+        )}
 
-      {/* ── Project mode filters ── */}
-      {groupBy === "project" && (
-        <>
-          {sortedProjects.length > 0 && (
-            <SearchableFilterSection
-              title="Show Projects"
-              items={sortedProjects}
-              selectedIds={local.projectIds}
-              getId={(p) => p.id}
-              getLabel={(p) => p.name}
-              onToggle={(id) => toggle("projectIds", id)}
-              defaultCollapsed={false}
-            />
-          )}
+        {/* ── Project mode filters ── */}
+        {groupBy === "project" && (
+          <>
+            {sortedProjects.length > 0 && (
+              <SearchableFilterSection
+                title="Show Projects"
+                items={sortedProjects}
+                selectedIds={local.projectIds}
+                getId={(p) => p.id}
+                getLabel={(p) => p.name}
+                onToggle={(id) => toggle("projectIds", id)}
+                defaultCollapsed={false}
+              />
+            )}
 
-          {sortedTeams.length > 0 && (
-            <SearchableFilterSection
-              title="Filter by Team"
-              items={sortedTeams}
-              selectedIds={local.teamIds}
-              getId={(t) => t.id}
-              getLabel={(t) => t.name}
-              onToggle={(id) => toggle("teamIds", id)}
-              defaultCollapsed={sortedTeams.length > 10}
-            />
-          )}
-        </>
-      )}
+            {sortedTeams.length > 0 && (
+              <SearchableFilterSection
+                title="Filter by Team"
+                items={sortedTeams}
+                selectedIds={local.teamIds}
+                getId={(t) => t.id}
+                getLabel={(t) => t.name}
+                onToggle={(id) => toggle("teamIds", id)}
+                defaultCollapsed={sortedTeams.length > 10}
+              />
+            )}
+          </>
+        )}
 
-      {/* ── Team mode filters ── */}
-      {groupBy === "team" && (
-        <>
-          {sortedTeams.length > 0 && (
-            <SearchableFilterSection
-              title="Show Teams"
-              items={sortedTeams}
-              selectedIds={local.teamIds}
-              getId={(t) => t.id}
-              getLabel={(t) => t.name}
-              onToggle={(id) => toggle("teamIds", id)}
-              defaultCollapsed={false}
-            />
-          )}
+        {/* ── Team mode filters ── */}
+        {groupBy === "team" && (
+          <>
+            {sortedTeams.length > 0 && (
+              <SearchableFilterSection
+                title="Show Teams"
+                items={sortedTeams}
+                selectedIds={local.teamIds}
+                getId={(t) => t.id}
+                getLabel={(t) => t.name}
+                onToggle={(id) => toggle("teamIds", id)}
+                defaultCollapsed={false}
+              />
+            )}
 
-          {sortedMembers.length > 0 && (
-            <SearchableFilterSection
-              title="Filter by Member"
-              items={sortedMembers}
-              selectedIds={local.assigneeIds}
-              getId={(m) => m.user_id}
-              getLabel={(m) =>
-                m.display_name || m.email?.split("@")[0] || "Unknown"
-              }
-              onToggle={(id) => toggle("assigneeIds", id)}
-              defaultCollapsed={sortedMembers.length > 10}
-            />
-          )}
-        </>
-      )}
+            {sortedMembers.length > 0 && (
+              <SearchableFilterSection
+                title="Filter by Member"
+                items={sortedMembers}
+                selectedIds={local.assigneeIds}
+                getId={(m) => m.user_id}
+                getLabel={(m) =>
+                  m.display_name || m.email?.split("@")[0] || "Unknown"
+                }
+                onToggle={(id) => toggle("assigneeIds", id)}
+                defaultCollapsed={sortedMembers.length > 10}
+              />
+            )}
+          </>
+        )}
+      </div>
 
       {/* Actions */}
-      <div className="flex gap-2 mt-3 pt-3 border-t border-base-200">
-        <button className="btn btn-ghost btn-xs flex-1" onClick={reset}>
-          Reset
-        </button>
-        <button className="btn btn-primary btn-xs flex-1" onClick={apply}>
-          Apply
-        </button>
+      <div className="sticky bottom-0 z-10 border-t border-base-200/50 bg-base-100/88 px-4 py-3 backdrop-blur-2xl">
+        <div className="flex flex-wrap gap-2">
+          <button className="btn btn-ghost btn-sm flex-1" onClick={reset}>
+            Reset Filters
+          </button>
+          <button className="btn btn-ghost btn-sm flex-1" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn btn-primary btn-sm flex-1" onClick={apply}>
+            Apply
+          </button>
+        </div>
       </div>
     </div>
   );

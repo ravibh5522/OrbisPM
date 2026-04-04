@@ -432,8 +432,51 @@
 }
 
 /* ── Glass Light — Progress, Range ── */
+[data-theme="glass-light"] .radial-progress {
+  --value: 50;
+  --size: 5rem;
+  --thickness: 8px;
+  --color: oklch(64% 0.18 180);
+  --bg: oklch(0% 0 0 / 0.08);
+}
+
+[data-theme="glass-light"] .radial-progress::before {
+  background-color: var(--bg) !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 0 0 1px oklch(0% 0 0 / 0.1) !important;
+}
+
 [data-theme="glass-light"] .progress {
-  background-color: oklch(0% 0 0 / 0.06) !important;
+  background-color: oklch(0% 0 0 / 0.08) !important;
+  border-radius: 9999px;
+  height: 6px;
+  box-shadow: inset 0 0 0 1px oklch(0% 0 0 / 0.1) !important;
+}
+
+[data-theme="glass-light"] .progress::-webkit-progress-bar {
+  background-color: oklch(0% 0 0 / 0.08) !important;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px oklch(0% 0 0 / 0.1) !important;
+}
+
+[data-theme="glass-light"] .progress::-webkit-progress-value {
+  background: linear-gradient(
+    90deg,
+    oklch(64% 0.18 180 / 0.8),
+    oklch(64% 0.18 180)
+  ) !important;
+  border-radius: 9999px;
+  box-shadow: 0 0 12px oklch(64% 0.18 180 / 0.4) !important;
+}
+
+[data-theme="glass-light"] .progress::-moz-progress-bar {
+  background: linear-gradient(
+    90deg,
+    oklch(64% 0.18 180 / 0.8),
+    oklch(64% 0.18 180)
+  ) !important;
+  border-radius: 9999px;
+  box-shadow: 0 0 12px oklch(64% 0.18 180 / 0.4) !important;
 }
 
 /* ── Glass Light — Collapse / Accordion ── */
@@ -605,6 +648,468 @@
     inset 0 1px 0 oklch(100% 0 0 / 0.12),
     0 16px 48px oklch(0% 0 0 / 0.5),
     0 4px 16px oklch(0% 0 0 / 0.3) !important;
+}
+
+/* Dedicated dropdowns: keep readability but preserve glassmorphism. */
+:is(.org-switcher-dropdown, .user-menu-dropdown) {
+  background-color: var(--color-base-100) !important;
+}
+
+[data-theme="glass-dark"] :is(.org-switcher-dropdown, .user-menu-dropdown) {
+  background:
+    linear-gradient(
+      145deg,
+      oklch(22% 0.03 275 / 0.5) 0%,
+      oklch(14% 0.02 270 / 0.34) 100%
+    ) !important;
+  color: oklch(95% 0.005 270) !important;
+  border-color: oklch(100% 0 0 / 0.1) !important;
+  backdrop-filter: blur(34px) saturate(1.32) !important;
+  -webkit-backdrop-filter: blur(34px) saturate(1.32) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.14),
+    0 10px 26px oklch(0% 0 0 / 0.36),
+    0 2px 8px oklch(0% 0 0 / 0.24) !important;
+}
+
+[data-theme="glass-light"] :is(.org-switcher-dropdown, .user-menu-dropdown) {
+  background:
+    linear-gradient(
+      145deg,
+      oklch(100% 0 0 / 0.58) 0%,
+      oklch(96% 0.01 265 / 0.4) 100%
+    ) !important;
+  color: oklch(18% 0.02 270) !important;
+  border-color: oklch(0% 0 0 / 0.08) !important;
+  backdrop-filter: blur(26px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(1.1) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.62),
+    0 8px 20px oklch(0% 0 0 / 0.1),
+    0 2px 8px oklch(0% 0 0 / 0.07) !important;
+}
+
+[data-theme="glass-dark"]
+  .user-menu-dropdown
+  .theme-selector-dropdown
+  .theme-selector-dropdown-list {
+  background:
+    linear-gradient(
+      145deg,
+      oklch(24% 0 0 / 0.58) 0%,
+      oklch(15% 0 0 / 0.44) 100%
+    ),
+    radial-gradient(
+      circle at 14% 14%,
+      oklch(100% 0 0 / 0.08) 0%,
+      transparent 52%
+    ) !important;
+  border: 1px solid oklch(100% 0 0 / 0.12) !important;
+  backdrop-filter: blur(28px) saturate(1.24) !important;
+  -webkit-backdrop-filter: blur(28px) saturate(1.24) !important;
+  border-radius: 0.75rem;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.12),
+    0 10px 22px oklch(0% 0 0 / 0.34) !important;
+}
+
+[data-theme="glass-light"]
+  .user-menu-dropdown
+  .theme-selector-dropdown
+  .theme-selector-dropdown-list {
+  background:
+    linear-gradient(
+      145deg,
+      oklch(100% 0 0 / 0.74) 0%,
+      oklch(97% 0 0 / 0.58) 100%
+    ),
+    radial-gradient(
+      circle at 14% 14%,
+      oklch(100% 0 0 / 0.14) 0%,
+      transparent 54%
+    ) !important;
+  border: 1px solid oklch(0% 0 0 / 0.09) !important;
+  backdrop-filter: blur(22px) saturate(1.1) !important;
+  -webkit-backdrop-filter: blur(22px) saturate(1.1) !important;
+  border-radius: 0.75rem;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.64),
+    0 8px 20px oklch(0% 0 0 / 0.1) !important;
+}
+
+.user-menu-dropdown .theme-selector-dropdown-list li > button {
+  border-radius: 0.65rem;
+  box-sizing: border-box;
+  width: 100%;
+  padding-left: 0.875rem !important;
+  padding-right: 0.875rem !important;
+}
+
+.user-menu-dropdown .theme-selector-dropdown-list li {
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+}
+
+.user-menu-dropdown .theme-selector-dropdown-list {
+  margin-left: 0 !important;
+  padding-left: 0.45rem !important;
+  padding-right: 0.45rem !important;
+  padding-inline-start: 0.45rem !important;
+}
+
+[data-theme="glass-dark"]
+  .user-menu-dropdown
+  .theme-selector-dropdown-list
+  li
+  > button {
+  color: oklch(95% 0.005 270) !important;
+}
+
+[data-theme="glass-dark"]
+  .user-menu-dropdown
+  .theme-selector-dropdown-list
+  li
+  > button:hover {
+  background: oklch(100% 0 0 / 0.08) !important;
+}
+
+[data-theme="glass-dark"]
+  .user-menu-dropdown
+  .theme-selector-dropdown-list
+  li
+  > button.theme-option-active {
+  background: oklch(100% 0 0 / 0.14) !important;
+  border: 1px solid oklch(100% 0 0 / 0.16) !important;
+}
+
+[data-theme="glass-light"]
+  .user-menu-dropdown
+  .theme-selector-dropdown-list
+  li
+  > button:hover {
+  background: oklch(0% 0 0 / 0.06) !important;
+}
+
+[data-theme="glass-light"]
+  .user-menu-dropdown
+  .theme-selector-dropdown-list
+  li
+  > button.theme-option-active {
+  background: oklch(0% 0 0 / 0.1) !important;
+  border: 1px solid oklch(0% 0 0 / 0.12) !important;
+}
+
+[data-theme="glass-light"] .user-menu-dropdown :is(summary, li a, li button) {
+  color: oklch(18% 0.02 270) !important;
+}
+
+/* Shared frosted 3D surface for search dialog + My Notes panel. */
+.frosted-dialog-surface {
+  border: 1px solid oklch(100% 0 0 / 0.12) !important;
+  backdrop-filter: blur(38px) saturate(1.34) !important;
+  -webkit-backdrop-filter: blur(38px) saturate(1.34) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.16),
+    inset 0 -1px 0 oklch(0% 0 0 / 0.14),
+    0 26px 62px oklch(0% 0 0 / 0.46),
+    0 8px 18px oklch(0% 0 0 / 0.24) !important;
+}
+
+[data-theme="glass-dark"] .frosted-dialog-surface {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(24% 0 0 / 0.74) 0%,
+      oklch(16% 0 0 / 0.62) 55%,
+      oklch(12% 0 0 / 0.54) 100%
+    ),
+    radial-gradient(
+      110% 90% at 12% 8%,
+      oklch(100% 0 0 / 0.12) 0%,
+      transparent 52%
+    ) !important;
+  color: oklch(95% 0.005 270) !important;
+  border-color: oklch(100% 0 0 / 0.13) !important;
+}
+
+[data-theme="glass-light"] .frosted-dialog-surface {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(100% 0 0 / 0.8) 0%,
+      oklch(96% 0 0 / 0.7) 58%,
+      oklch(94% 0 0 / 0.62) 100%
+    ),
+    radial-gradient(
+      110% 90% at 12% 8%,
+      oklch(100% 0 0 / 0.36) 0%,
+      transparent 54%
+    ) !important;
+  color: oklch(18% 0.01 270) !important;
+  border-color: oklch(0% 0 0 / 0.1) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.78),
+    inset 0 -1px 0 oklch(0% 0 0 / 0.06),
+    0 20px 46px oklch(0% 0 0 / 0.2),
+    0 6px 14px oklch(0% 0 0 / 0.12) !important;
+}
+
+.frosted-dialog-backdrop {
+  background: oklch(0% 0 0 / 0.12);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* My Notes should match modal-box style (denser, less transparent). */
+.notes-dialog-surface {
+  border: 1px solid oklch(100% 0 0 / 0.1) !important;
+  backdrop-filter: blur(78px) saturate(1.58) !important;
+  -webkit-backdrop-filter: blur(78px) saturate(1.58) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.12),
+    0 16px 48px oklch(0% 0 0 / 0.5),
+    0 4px 16px oklch(0% 0 0 / 0.3) !important;
+}
+
+[data-theme="glass-dark"] .notes-dialog-surface {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(30% 0.03 282 / 0.985) 0%,
+      oklch(23% 0.028 280 / 0.975) 56%,
+      oklch(18% 0.024 276 / 0.965) 100%
+    ) !important;
+  color: oklch(95% 0.005 270) !important;
+  border-color: oklch(70% 0.05 278 / 0.32) !important;
+}
+
+[data-theme="glass-light"] .notes-dialog-surface {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(100% 0.009 282 / 0.992) 0%,
+      oklch(98% 0.01 280 / 0.985) 56%,
+      oklch(96% 0.012 276 / 0.972) 100%
+    ) !important;
+  color: oklch(18% 0.02 270) !important;
+  border-color: oklch(56% 0.04 278 / 0.3) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.4),
+    0 12px 40px oklch(52% 0.1 265 / 0.12),
+    0 4px 12px oklch(0% 0 0 / 0.08) !important;
+}
+
+/* Top search bar should match command dialog palette. */
+.search-anchor-surface {
+  border: 1px solid oklch(100% 0 0 / 0.1) !important;
+  backdrop-filter: blur(56px) saturate(1.4) !important;
+  -webkit-backdrop-filter: blur(56px) saturate(1.4) !important;
+  box-shadow: inset 0 1px 0 oklch(100% 0 0 / 0.16) !important;
+}
+
+[data-theme="glass-dark"] .search-anchor-surface {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(30% 0.03 282 / 0.985) 0%,
+      oklch(23% 0.028 280 / 0.975) 56%,
+      oklch(18% 0.024 276 / 0.965) 100%
+    ) !important;
+  border-color: oklch(70% 0.05 278 / 0.28) !important;
+}
+
+[data-theme="glass-light"] .search-anchor-surface {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(100% 0.009 282 / 0.992) 0%,
+      oklch(98% 0.01 280 / 0.985) 56%,
+      oklch(96% 0.012 276 / 0.972) 100%
+    ) !important;
+  border-color: oklch(56% 0.04 278 / 0.24) !important;
+}
+
+/* Org selector dropdown: denser frosted glass + subtle pattern texture. */
+[data-theme="glass-dark"] .org-switcher-dropdown {
+  background:
+    linear-gradient(
+      145deg,
+      oklch(24% 0.03 275 / 0.62) 0%,
+      oklch(14% 0.02 270 / 0.48) 100%
+    ),
+    repeating-linear-gradient(
+      135deg,
+      oklch(100% 0 0 / 0.035) 0 1px,
+      transparent 1px 10px
+    ),
+    radial-gradient(
+      circle at 20% 15%,
+      oklch(100% 0 0 / 0.08) 0%,
+      transparent 45%
+    ) !important;
+  border-color: oklch(100% 0 0 / 0.14) !important;
+  backdrop-filter: blur(46px) saturate(1.45) !important;
+  -webkit-backdrop-filter: blur(46px) saturate(1.45) !important;
+}
+
+[data-theme="glass-light"] .org-switcher-dropdown {
+  background:
+    linear-gradient(
+      145deg,
+      oklch(100% 0 0 / 0.72) 0%,
+      oklch(96% 0.01 265 / 0.58) 100%
+    ),
+    repeating-linear-gradient(
+      135deg,
+      oklch(100% 0 0 / 0.08) 0 1px,
+      transparent 1px 10px
+    ),
+    radial-gradient(
+      circle at 20% 15%,
+      oklch(100% 0 0 / 0.14) 0%,
+      transparent 48%
+    ) !important;
+  border-color: oklch(0% 0 0 / 0.1) !important;
+  backdrop-filter: blur(32px) saturate(1.16) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(1.16) !important;
+}
+
+.user-menu-dropdown .user-menu-logout-action {
+  font-weight: 700 !important;
+  letter-spacing: 0.01em;
+}
+
+[data-theme="glass-dark"] .user-menu-dropdown .user-menu-logout-action {
+  color: oklch(96% 0.012 250) !important;
+  background:
+    linear-gradient(
+      145deg,
+      oklch(52% 0.11 245 / 0.32) 0%,
+      oklch(40% 0.08 250 / 0.24) 100%
+    ) !important;
+  border: 1px solid oklch(78% 0.08 245 / 0.28) !important;
+  text-shadow: 0 1px 0 oklch(0% 0 0 / 0.35);
+}
+[data-theme="glass-dark"] .user-menu-dropdown .user-menu-logout-action:hover {
+  color: oklch(99% 0.01 245) !important;
+  background:
+    linear-gradient(
+      145deg,
+      oklch(56% 0.12 245 / 0.42) 0%,
+      oklch(44% 0.1 250 / 0.32) 100%
+    ) !important;
+}
+
+[data-theme="glass-light"] .user-menu-dropdown .user-menu-logout-action {
+  color: oklch(28% 0.08 245) !important;
+  background:
+    linear-gradient(
+      145deg,
+      oklch(90% 0.045 245 / 0.76) 0%,
+      oklch(84% 0.03 250 / 0.62) 100%
+    ) !important;
+  border: 1px solid oklch(52% 0.08 245 / 0.22) !important;
+  text-shadow: 0 1px 0 oklch(100% 0 0 / 0.4);
+}
+[data-theme="glass-light"] .user-menu-dropdown .user-menu-logout-action:hover {
+  color: oklch(24% 0.09 245) !important;
+  background:
+    linear-gradient(
+      145deg,
+      oklch(92% 0.05 245 / 0.86) 0%,
+      oklch(86% 0.035 250 / 0.72) 100%
+    ) !important;
+}
+
+/* User menu should match dense modal-like surface (not transparent/bright blue). */
+[data-theme="glass-dark"] .user-menu-dropdown {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(38% 0.045 282 / 0.985) 0%,
+      oklch(33% 0.04 279 / 0.975) 56%,
+      oklch(28% 0.034 276 / 0.965) 100%
+    ) !important;
+  border-color: oklch(70% 0.05 278 / 0.32) !important;
+  backdrop-filter: blur(72px) saturate(1.56) !important;
+  -webkit-backdrop-filter: blur(72px) saturate(1.56) !important;
+}
+
+[data-theme="glass-light"] .user-menu-dropdown {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(100% 0.009 282 / 0.992) 0%,
+      oklch(98% 0.01 280 / 0.985) 56%,
+      oklch(96% 0.012 276 / 0.972) 100%
+    ) !important;
+  border-color: oklch(56% 0.04 278 / 0.3) !important;
+  backdrop-filter: blur(56px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(56px) saturate(1.2) !important;
+}
+
+[data-theme="glass-dark"] .user-menu-dropdown .theme-selector-dropdown-list {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(36% 0.042 282 / 0.98) 0%,
+      oklch(30% 0.036 278 / 0.968) 100%
+    ) !important;
+  border-color: oklch(68% 0.045 278 / 0.28) !important;
+}
+
+[data-theme="glass-light"] .user-menu-dropdown .theme-selector-dropdown-list {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(100% 0.008 282 / 0.99) 0%,
+      oklch(97% 0.009 278 / 0.978) 100%
+    ) !important;
+  border-color: oklch(54% 0.038 278 / 0.26) !important;
+}
+
+[data-theme="glass-dark"] .user-menu-dropdown .user-menu-logout-action,
+[data-theme="glass-light"] .user-menu-dropdown .user-menu-logout-action {
+  background: oklch(100% 0 0 / 0.06) !important;
+  border-color: oklch(100% 0 0 / 0.14) !important;
+  text-shadow: none !important;
+}
+
+/* Org switcher should use the same dense modal style (remove yellow active tint). */
+[data-theme="glass-dark"] .org-switcher-dropdown {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(38% 0.045 282 / 0.985) 0%,
+      oklch(33% 0.04 279 / 0.975) 56%,
+      oklch(28% 0.034 276 / 0.965) 100%
+    ) !important;
+  border-color: oklch(70% 0.05 278 / 0.32) !important;
+  backdrop-filter: blur(72px) saturate(1.56) !important;
+  -webkit-backdrop-filter: blur(72px) saturate(1.56) !important;
+}
+
+[data-theme="glass-light"] .org-switcher-dropdown {
+  background:
+    linear-gradient(
+      150deg,
+      oklch(100% 0.009 282 / 0.992) 0%,
+      oklch(98% 0.01 280 / 0.985) 56%,
+      oklch(96% 0.012 276 / 0.972) 100%
+    ) !important;
+  border-color: oklch(56% 0.04 278 / 0.3) !important;
+  backdrop-filter: blur(56px) saturate(1.2) !important;
+  -webkit-backdrop-filter: blur(56px) saturate(1.2) !important;
+}
+
+.org-switcher-dropdown li > button.active {
+  background: oklch(100% 0 0 / 0.1) !important;
+  color: inherit !important;
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.14) !important;
+}
+
+.org-switcher-dropdown li > button:hover {
+  background: oklch(100% 0 0 / 0.08) !important;
 }
 
 /* ── Glass Dark — Form inputs: frosted inset ── */
@@ -1295,4 +1800,440 @@
 [data-theme="orbis-dark"] .hover\:bg-base-300\/40:hover,
 [data-theme="orbis-dark"] .hover\:bg-base-300\/60:hover {
   background-color: oklch(34% 0.024 262) !important;
+}
+
+/* My Tasks — select dropdown surface and menu items */
+[data-theme="glass-dark"] :is(.task-status-select, .task-filter-select) {
+  background: linear-gradient(
+      155deg,
+      oklch(30% 0.03 282 / 0.84) 0%,
+      oklch(24% 0.028 278 / 0.8) 100%
+    )
+    !important;
+  border-color: oklch(70% 0.05 278 / 0.24) !important;
+  color: oklch(95% 0.005 270) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.1),
+    0 6px 16px oklch(0% 0 0 / 0.16) !important;
+}
+
+[data-theme="glass-light"] :is(.task-status-select, .task-filter-select) {
+  background: linear-gradient(
+      155deg,
+      oklch(100% 0.009 282 / 0.9) 0%,
+      oklch(97% 0.01 278 / 0.86) 100%
+    )
+    !important;
+  border-color: oklch(56% 0.04 278 / 0.2) !important;
+  color: oklch(18% 0.02 270) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.28),
+    0 6px 16px oklch(0% 0 0 / 0.08) !important;
+}
+
+[data-theme="glass-dark"] :is(.task-status-select, .task-filter-select) option {
+  background-color: oklch(24% 0.024 278) !important;
+  color: oklch(95% 0.005 270) !important;
+}
+
+[data-theme="glass-light"] :is(.task-status-select, .task-filter-select) option {
+  background-color: oklch(99% 0.008 276) !important;
+  color: oklch(18% 0.02 270) !important;
+}
+
+/* My Tasks — custom status dropdown menu */
+[data-theme="glass-dark"] .task-status-menu {
+  background: linear-gradient(
+      155deg,
+      oklch(28% 0.028 282 / 0.9) 0%,
+      oklch(22% 0.024 278 / 0.88) 100%
+    )
+    !important;
+  border-color: oklch(70% 0.05 278 / 0.24) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.1),
+    0 14px 32px oklch(0% 0 0 / 0.32) !important;
+}
+
+[data-theme="glass-dark"] .task-status-item {
+  color: oklch(95% 0.005 270 / 0.92) !important;
+}
+
+[data-theme="glass-dark"] .task-status-item-active {
+  background: linear-gradient(
+      150deg,
+      oklch(44% 0.1 282 / 0.55),
+      oklch(40% 0.09 270 / 0.5)
+    )
+    !important;
+  color: oklch(99% 0.004 270) !important;
+  box-shadow: inset 0 0 0 1px oklch(75% 0.05 278 / 0.45) !important;
+}
+
+[data-theme="glass-light"] .task-status-menu {
+  background: linear-gradient(
+      155deg,
+      oklch(99% 0.008 282 / 0.95) 0%,
+      oklch(97% 0.01 278 / 0.93) 100%
+    )
+    !important;
+  border-color: oklch(56% 0.04 278 / 0.24) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.35),
+    0 12px 28px oklch(0% 0 0 / 0.14) !important;
+}
+
+[data-theme="glass-light"] .task-status-item-active {
+  background: linear-gradient(
+      150deg,
+      oklch(90% 0.03 282 / 0.8),
+      oklch(88% 0.03 270 / 0.76)
+    )
+    !important;
+  color: oklch(20% 0.02 270) !important;
+  box-shadow: inset 0 0 0 1px oklch(56% 0.04 278 / 0.22) !important;
+}
+
+/* Status color tokens for custom trigger/menu */
+.task-status-dot[data-status="todo"] {
+  background-color: oklch(68% 0.02 255) !important;
+}
+.task-status-dot[data-status="in_progress"] {
+  background-color: oklch(68% 0.16 245) !important;
+}
+.task-status-dot[data-status="blocked"] {
+  background-color: oklch(66% 0.2 18) !important;
+}
+.task-status-dot[data-status="in_review"] {
+  background-color: oklch(66% 0.16 300) !important;
+}
+.task-status-dot[data-status="done"] {
+  background-color: oklch(72% 0.18 155) !important;
+}
+.task-status-dot[data-status="cancelled"] {
+  background-color: oklch(60% 0.01 260) !important;
+}
+
+/* Boost readability for light theme status trigger chips */
+[data-theme="glass-light"] .task-status-trigger[data-status="todo"] {
+  background-color: oklch(95% 0.01 255 / 0.92) !important;
+  border-color: oklch(64% 0.02 255 / 0.45) !important;
+}
+[data-theme="glass-light"] .task-status-trigger[data-status="in_progress"] {
+  background-color: oklch(93% 0.05 245 / 0.92) !important;
+  border-color: oklch(62% 0.14 245 / 0.55) !important;
+}
+[data-theme="glass-light"] .task-status-trigger[data-status="blocked"] {
+  background-color: oklch(94% 0.05 18 / 0.92) !important;
+  border-color: oklch(62% 0.16 18 / 0.5) !important;
+}
+[data-theme="glass-light"] .task-status-trigger[data-status="in_review"] {
+  background-color: oklch(93% 0.04 300 / 0.92) !important;
+  border-color: oklch(62% 0.14 300 / 0.5) !important;
+}
+[data-theme="glass-light"] .task-status-trigger[data-status="done"] {
+  background-color: oklch(94% 0.04 155 / 0.92) !important;
+  border-color: oklch(62% 0.14 155 / 0.5) !important;
+}
+[data-theme="glass-light"] .task-status-trigger[data-status="cancelled"] {
+  background-color: oklch(95% 0.008 260 / 0.92) !important;
+  border-color: oklch(58% 0.01 260 / 0.45) !important;
+}
+
+[data-theme="glass-light"] .task-status-label[data-status="todo"] {
+  color: oklch(37% 0.02 255) !important;
+}
+[data-theme="glass-light"] .task-status-label[data-status="in_progress"] {
+  color: oklch(40% 0.14 245) !important;
+}
+[data-theme="glass-light"] .task-status-label[data-status="blocked"] {
+  color: oklch(42% 0.16 18) !important;
+}
+[data-theme="glass-light"] .task-status-label[data-status="in_review"] {
+  color: oklch(42% 0.13 300) !important;
+}
+[data-theme="glass-light"] .task-status-label[data-status="done"] {
+  color: oklch(41% 0.13 155) !important;
+}
+[data-theme="glass-light"] .task-status-label[data-status="cancelled"] {
+  color: oklch(45% 0.01 260) !important;
+}
+
+[data-theme="glass-light"] .task-status-option[data-status="todo"] {
+  color: oklch(37% 0.02 255) !important;
+}
+[data-theme="glass-light"] .task-status-option[data-status="in_progress"] {
+  color: oklch(40% 0.14 245) !important;
+}
+[data-theme="glass-light"] .task-status-option[data-status="blocked"] {
+  color: oklch(42% 0.16 18) !important;
+}
+[data-theme="glass-light"] .task-status-option[data-status="in_review"] {
+  color: oklch(42% 0.13 300) !important;
+}
+[data-theme="glass-light"] .task-status-option[data-status="done"] {
+  color: oklch(41% 0.13 155) !important;
+}
+[data-theme="glass-light"] .task-status-option[data-status="cancelled"] {
+  color: oklch(45% 0.01 260) !important;
+}
+
+/* Calendar segmented controls - selected state should be theme-aware, not white */
+[data-theme="glass-dark"] .calendar-segment-active {
+  background: linear-gradient(
+      150deg,
+      oklch(30% 0.03 282 / 0.92) 0%,
+      oklch(24% 0.028 278 / 0.9) 100%
+    )
+    !important;
+  color: oklch(98% 0.01 270) !important;
+  border: 1px solid oklch(70% 0.06 278 / 0.35) !important;
+  box-shadow:
+    inset 0 0 0 1px oklch(100% 0 0 / 0.08),
+    0 8px 18px oklch(0% 0 0 / 0.18) !important;
+}
+
+[data-theme="glass-light"] .calendar-segment-active {
+  background: linear-gradient(
+      150deg,
+      oklch(99% 0.01 282 / 0.96) 0%,
+      oklch(96% 0.013 278 / 0.94) 100%
+    )
+    !important;
+  color: oklch(18% 0.02 270) !important;
+  border: 1px solid oklch(62% 0.05 278 / 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.35),
+    0 8px 18px oklch(0% 0 0 / 0.1) !important;
+}
+
+.calendar-segment-check {
+  color: currentColor;
+}
+
+/* Table header surface: increase light-mode contrast while preserving dark readability */
+.table-header-surface th {
+  border-color: oklch(60% 0.02 260 / 0.22) !important;
+}
+
+[data-theme="glass-light"] .table-header-surface th {
+  background-color: oklch(88% 0.02 270 / 0.72) !important;
+  color: oklch(24% 0.02 270) !important;
+  border-color: oklch(48% 0.025 270 / 0.26) !important;
+}
+
+[data-theme="glass-dark"] .table-header-surface th {
+  background-color: oklch(24% 0.02 275 / 0.52) !important;
+  color: oklch(95% 0.005 270) !important;
+  border-color: oklch(100% 0 0 / 0.1) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GLASS DARK — Custom radial-progress & progress styling
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Enhanced radial progress for glass theme */
+[data-theme="glass-dark"] .radial-progress {
+  --value: 50;
+  --size: 5rem;
+  --thickness: 8px;
+  --color: oklch(64% 0.18 180);
+  --bg: oklch(100% 0 0 / 0.08);
+}
+
+[data-theme="glass-dark"] .radial-progress::before {
+  background-color: var(--bg) !important;
+  border-color: transparent !important;
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.1) !important;
+}
+
+/* Project detail header tabs */
+.project-tabs-shell {
+  border: 1px solid oklch(100% 0 0 / 0.14);
+}
+
+.project-tab-btn {
+  min-height: 2rem !important;
+  height: 2rem !important;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: all 140ms ease;
+}
+
+.project-tab-inactive {
+  background: transparent !important;
+}
+
+[data-theme="glass-light"] .project-tabs-shell {
+  background: oklch(90% 0.02 270 / 0.62) !important;
+  border-color: oklch(45% 0.02 270 / 0.2) !important;
+}
+
+[data-theme="glass-light"] .project-tab-inactive {
+  color: oklch(30% 0.02 270 / 0.75) !important;
+}
+
+[data-theme="glass-light"] .project-tab-inactive:hover {
+  background: oklch(100% 0 0 / 0.45) !important;
+  color: oklch(20% 0.02 270) !important;
+}
+
+[data-theme="glass-light"] .project-tab-active {
+  background: linear-gradient(
+      150deg,
+      oklch(99% 0.01 282 / 0.96) 0%,
+      oklch(96% 0.013 278 / 0.94) 100%
+    )
+    !important;
+  color: oklch(18% 0.02 270) !important;
+  border-color: oklch(56% 0.04 278 / 0.24) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.35),
+    0 5px 14px oklch(0% 0 0 / 0.08) !important;
+}
+
+[data-theme="glass-dark"] .project-tabs-shell {
+  background: oklch(24% 0.02 275 / 0.45) !important;
+  border-color: oklch(100% 0 0 / 0.09) !important;
+}
+
+[data-theme="glass-dark"] .project-tab-inactive {
+  color: oklch(95% 0.005 270 / 0.7) !important;
+}
+
+[data-theme="glass-dark"] .project-tab-inactive:hover {
+  background: oklch(100% 0 0 / 0.08) !important;
+  color: oklch(98% 0.005 270) !important;
+}
+
+[data-theme="glass-dark"] .project-tab-active {
+  background: linear-gradient(
+      145deg,
+      oklch(33% 0.05 280 / 0.9) 0%,
+      oklch(26% 0.04 275 / 0.9) 100%
+    )
+    !important;
+  color: oklch(98% 0.005 270) !important;
+  border-color: oklch(72% 0.08 278 / 0.28) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.12),
+    0 8px 16px oklch(0% 0 0 / 0.24) !important;
+}
+
+/* Recharts tooltip: force glassmorphic style and readable text across charts */
+[data-theme="glass-light"] .recharts-default-tooltip {
+  background: linear-gradient(
+      145deg,
+      oklch(100% 0 0 / 0.62) 0%,
+      oklch(96% 0.008 270 / 0.44) 100%
+    )
+    !important;
+  border: 1px solid oklch(0% 0 0 / 0.12) !important;
+  color: oklch(20% 0.02 270) !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(18px) saturate(1.05) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.05) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.55),
+    0 10px 24px oklch(0% 0 0 / 0.14) !important;
+}
+
+[data-theme="glass-dark"] .recharts-default-tooltip {
+  background: linear-gradient(
+      145deg,
+      oklch(24% 0.02 275 / 0.62) 0%,
+      oklch(14% 0.015 272 / 0.5) 100%
+    )
+    !important;
+  border: 1px solid oklch(100% 0 0 / 0.12) !important;
+  color: oklch(96% 0.005 270) !important;
+  border-radius: 10px !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 0.16),
+    0 10px 24px oklch(0% 0 0 / 0.35) !important;
+}
+
+/* Override Recharts inline item colors so tooltip text remains readable, not blue-tinted */
+[data-theme="glass-light"]
+  .recharts-default-tooltip
+  :is(.recharts-tooltip-label, .recharts-tooltip-item, .recharts-tooltip-item-name, .recharts-tooltip-item-value),
+[data-theme="glass-dark"]
+  .recharts-default-tooltip
+  :is(.recharts-tooltip-label, .recharts-tooltip-item, .recharts-tooltip-item-name, .recharts-tooltip-item-value) {
+  color: var(--color-base-content) !important;
+  opacity: 0.95;
+}
+
+/* Soften chart hover cursor bar/area */
+[data-theme="glass-light"] .recharts-tooltip-cursor {
+  fill: oklch(18% 0.02 270 / 0.1) !important;
+  stroke: oklch(18% 0.02 270 / 0.18) !important;
+}
+
+[data-theme="glass-dark"] .recharts-tooltip-cursor {
+  fill: oklch(100% 0 0 / 0.08) !important;
+  stroke: oklch(100% 0 0 / 0.16) !important;
+}
+
+/* Enhanced horizontal progress bar */
+[data-theme="glass-dark"] .progress {
+  background-color: oklch(100% 0 0 / 0.08) !important;
+  border-radius: 9999px;
+  height: 6px;
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.1) !important;
+}
+
+[data-theme="glass-dark"] .progress::-webkit-progress-bar {
+  background-color: oklch(100% 0 0 / 0.08) !important;
+  border-radius: 9999px;
+  box-shadow: inset 0 0 0 1px oklch(100% 0 0 / 0.1) !important;
+}
+
+[data-theme="glass-dark"] .progress::-webkit-progress-value {
+  background: linear-gradient(
+    90deg,
+    oklch(64% 0.18 180 / 0.8),
+    oklch(64% 0.18 180)
+  ) !important;
+  border-radius: 9999px;
+  box-shadow: 0 0 12px oklch(64% 0.18 180 / 0.4) !important;
+}
+
+[data-theme="glass-dark"] .progress::-moz-progress-bar {
+  background: linear-gradient(
+    90deg,
+    oklch(64% 0.18 180 / 0.8),
+    oklch(64% 0.18 180)
+  ) !important;
+  border-radius: 9999px;
+  box-shadow: 0 0 12px oklch(64% 0.18 180 / 0.4) !important;
+}
+
+/* Bulk create modal select + dropdown options (avoid native black popup look) */
+.bulk-create-select {
+  border-radius: 0.85rem !important;
+}
+
+[data-theme="glass-light"] .bulk-create-select {
+  background-color: oklch(100% 0 0 / 0.45) !important;
+  border-color: oklch(0% 0 0 / 0.12) !important;
+  color: oklch(18% 0.02 270) !important;
+}
+
+[data-theme="glass-dark"] .bulk-create-select {
+  background-color: oklch(24% 0.02 275 / 0.55) !important;
+  border-color: oklch(100% 0 0 / 0.12) !important;
+  color: oklch(95% 0.005 270) !important;
+}
+
+[data-theme="glass-light"] .bulk-create-select option {
+  background-color: oklch(96% 0.01 270) !important;
+  color: oklch(18% 0.02 270) !important;
+}
+
+[data-theme="glass-dark"] .bulk-create-select option {
+  background-color: oklch(17% 0.02 272) !important;
+  color: oklch(95% 0.005 270) !important;
 }

@@ -9,18 +9,18 @@ import { api, ApiError } from "@/lib/api";
 import type { Announcement, OrgMember } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
-  CalendarDays,
-  Clock,
-  Eye,
-  Megaphone,
-  MoreHorizontal,
-  Pencil,
-  Pin,
-  PinOff,
-  Plus,
-  Trash2,
-  Users,
+    AlertTriangle,
+    CalendarDays,
+    Clock,
+    Eye,
+    Megaphone,
+    MoreHorizontal,
+    Pencil,
+    Pin,
+    PinOff,
+    Plus,
+    Trash2,
+    Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -118,6 +118,62 @@ function getExpiryStatus(expiresAt?: string): "expired" | "soon" | null {
   return null;
 }
 
+function AnnouncementPriorityDropdown({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const selectedLabel =
+    PRIORITY_OPTIONS.find((o) => o.value === value)?.label || "Normal";
+
+  return (
+    <details className="dropdown dropdown-bottom relative z-[40] open:z-[240] w-full">
+      <summary className="inline-flex h-10 min-h-10 w-full cursor-pointer list-none items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md task-filter-select">
+        <span className="truncate">{selectedLabel}</span>
+        <svg
+          viewBox="0 0 20 20"
+          fill="currentColor"
+          className="h-3.5 w-3.5 text-base-content/60"
+          aria-hidden="true"
+        >
+          <path
+            fillRule="evenodd"
+            d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
+            clipRule="evenodd"
+          />
+        </svg>
+      </summary>
+      <ul className="dropdown-content task-status-menu z-[260] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+        {PRIORITY_OPTIONS.map((opt) => {
+          const active = value === opt.value;
+          return (
+            <li key={opt.value}>
+              <button
+                type="button"
+                className={`task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
+                  active
+                    ? "task-status-item-active"
+                    : "text-base-content/80 hover:bg-base-200/35"
+                }`}
+                onClick={(e) => {
+                  onChange(opt.value);
+                  const details = e.currentTarget.closest("details");
+                  if (details) details.removeAttribute("open");
+                }}
+              >
+                <span className="truncate">{opt.label}</span>
+                {active ? <span className="text-xs">✓</span> : null}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
 export function ProjectAnnouncements({
   orgId,
   projectId,
@@ -161,16 +217,35 @@ export function ProjectAnnouncements({
     register,
     handleSubmit,
     reset,
+    setValue: setCreateValue,
+    watch: watchCreate,
     formState: { errors: formErrors },
-  } = useForm<AnnouncementForm>();
+  } = useForm<AnnouncementForm>({
+    defaultValues: {
+      priority: "normal",
+      pinned: false,
+      expires_at: "",
+      title: "",
+      body: "",
+    },
+  });
 
   const {
     register: registerEdit,
     handleSubmit: handleEditSubmit,
     reset: resetEdit,
     setValue: setEditValue,
+    watch: watchEdit,
     formState: { errors: editErrors },
-  } = useForm<AnnouncementForm>();
+  } = useForm<AnnouncementForm>({
+    defaultValues: {
+      priority: "normal",
+      pinned: false,
+      expires_at: "",
+      title: "",
+      body: "",
+    },
+  });
 
   const queryKey = ["announcements", orgId, projectId] as const;
   type CacheData =
@@ -495,17 +570,11 @@ export function ProjectAnnouncements({
               <label className="label pb-1">
                 <span className="label-text font-medium text-sm">Priority</span>
               </label>
-              <select
-                className="select select-bordered select-sm w-full"
-                {...register("priority")}
-                defaultValue="normal"
-              >
-                {PRIORITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <input type="hidden" {...register("priority")} />
+              <AnnouncementPriorityDropdown
+                value={watchCreate("priority") || "normal"}
+                onChange={(v) => setCreateValue("priority", v)}
+              />
             </div>
             <Input label="Expires At" type="date" {...register("expires_at")} />
           </div>
@@ -573,16 +642,11 @@ export function ProjectAnnouncements({
               <label className="label pb-1">
                 <span className="label-text font-medium text-sm">Priority</span>
               </label>
-              <select
-                className="select select-bordered select-sm w-full"
-                {...registerEdit("priority")}
-              >
-                {PRIORITY_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+              <input type="hidden" {...registerEdit("priority")} />
+              <AnnouncementPriorityDropdown
+                value={watchEdit("priority") || "normal"}
+                onChange={(v) => setEditValue("priority", v)}
+              />
             </div>
             <Input
               label="Expires At"
@@ -828,7 +892,7 @@ function AnnouncementCard({
                   className="fixed inset-0 z-40"
                   onClick={() => setShowMenu(false)}
                 />
-                <ul className="menu menu-sm bg-base-100 border border-base-200 shadow-lg rounded-xl w-44 absolute right-0 top-8 z-50 p-1.5">
+                <ul className="menu menu-sm task-status-menu border shadow-xl rounded-xl w-44 absolute right-0 top-8 z-[120] p-1.5 backdrop-blur-2xl">
                   {canUpdate && (
                     <>
                       <li>
@@ -837,7 +901,7 @@ function AnnouncementCard({
                             onTogglePin();
                             setShowMenu(false);
                           }}
-                          className="gap-2 text-xs"
+                          className="task-status-item gap-2 text-xs"
                         >
                           {a.pinned ? (
                             <PinOff className="w-3.5 h-3.5" />
@@ -853,7 +917,7 @@ function AnnouncementCard({
                             onEdit();
                             setShowMenu(false);
                           }}
-                          className="gap-2 text-xs"
+                          className="task-status-item gap-2 text-xs"
                         >
                           <Pencil className="w-3.5 h-3.5" /> Edit
                         </button>
@@ -867,7 +931,7 @@ function AnnouncementCard({
                           onDelete();
                           setShowMenu(false);
                         }}
-                        className="gap-2 text-xs text-error"
+                        className="task-status-item gap-2 text-xs text-error"
                       >
                         <Trash2 className="w-3.5 h-3.5" /> Delete
                       </button>

@@ -32,6 +32,7 @@ export function NotificationBell() {
   const router = useRouter();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [isEntered, setIsEntered] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown when navigating to a new page
@@ -52,6 +53,31 @@ export function NotificationBell() {
     }
     document.addEventListener("mousedown", handleClick);
     return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  // Close dropdown on Escape.
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  // Smooth entrance animation.
+  useEffect(() => {
+    if (!open) {
+      setIsEntered(false);
+      return;
+    }
+
+    const frame = requestAnimationFrame(() => setIsEntered(true));
+    return () => cancelAnimationFrame(frame);
   }, [open]);
 
   const { data: notifications } = useQuery({
@@ -109,6 +135,10 @@ export function NotificationBell() {
           className={cn(
             "absolute right-0 top-full mt-2 z-50",
             "w-80 rounded-box border border-base-200 bg-base-100/95 backdrop-blur-[20px] shadow-lg",
+            "transition-all duration-220 ease-out",
+            isEntered
+              ? "opacity-100 translate-y-0 scale-100"
+              : "opacity-0 -translate-y-1 scale-[0.985]",
           )}
         >
           {/* Header */}

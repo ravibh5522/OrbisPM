@@ -7,20 +7,20 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Project, TaskStatusConfig } from "@/types/domain";
 import {
-  closestCenter,
-  DndContext,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
+    closestCenter,
+    DndContext,
+    KeyboardSensor,
+    PointerSensor,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
+    arrayMove,
+    SortableContext,
+    sortableKeyboardCoordinates,
+    useSortable,
+    verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -130,7 +130,7 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card allowOverflow className="relative z-20 focus-within:z-[340]">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h3 className="text-lg font-semibold">Task Workflow Statuses</h3>
@@ -267,7 +267,7 @@ function SortableStatusRow({
       </button>
 
       {/* Color indicator */}
-      <div className="dropdown">
+      <div className="dropdown relative isolate z-[30] focus-within:z-[360]">
         <div
           tabIndex={0}
           role="button"
@@ -276,13 +276,16 @@ function SortableStatusRow({
         />
         <ul
           tabIndex={0}
-          className="dropdown-content z-10 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-36"
+          className="dropdown-content task-status-menu z-[380] menu p-2 shadow-xl rounded-box w-36 border backdrop-blur-2xl"
         >
           {COLORS.map((c) => (
             <li key={c.id}>
               <a
                 onClick={() => onUpdate({ color: c.id })}
-                className={cn(status.color === c.id && "font-bold")}
+                className={cn(
+                  "task-status-item",
+                  status.color === c.id && "task-status-item-active font-bold",
+                )}
               >
                 <span className={cn("w-4 h-4 rounded-full", c.bg)} />
                 {c.label}
@@ -390,7 +393,7 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
   });
 
   return (
-    <Card>
+    <Card allowOverflow>
       <h3 className="text-lg font-semibold mb-4">Project Information</h3>
       <div className="space-y-4">
         <div>
@@ -491,7 +494,7 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
   };
 
   return (
-    <Card>
+    <Card className="relative z-10">
       <div className="mb-4">
         <h3 className="text-lg font-semibold">Review Required Fields</h3>
         <p className="text-sm text-base-content/60">
@@ -595,7 +598,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
     .filter(Boolean);
 
   return (
-    <Card>
+    <Card allowOverflow className="relative z-10">
       <div className="mb-4">
         <h3 className="text-lg font-semibold flex items-center gap-2">
           <Shield className="w-5 h-5" /> Designated Approvers
@@ -649,7 +652,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
 
       {/* Add approver dropdown */}
       {available.length > 0 && (
-        <div className="dropdown dropdown-bottom w-full">
+        <div className="dropdown dropdown-bottom relative isolate z-[20] focus-within:z-[320] w-full">
           <div
             tabIndex={0}
             role="button"
@@ -659,13 +662,13 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
           </div>
           <ul
             tabIndex={0}
-            className="dropdown-content z-10 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-full max-h-48 overflow-y-auto"
+            className="dropdown-content task-status-menu z-[340] menu p-2 shadow-xl rounded-box w-full max-h-48 overflow-y-auto border backdrop-blur-2xl"
           >
             {available.map((m) => (
               <li key={m.user_id}>
                 <a
                   onClick={() => addApprover(m.user_id)}
-                  className="flex items-center gap-2"
+                  className="task-status-item flex items-center gap-2"
                 >
                   <Avatar
                     name={m.display_name || m.email}
