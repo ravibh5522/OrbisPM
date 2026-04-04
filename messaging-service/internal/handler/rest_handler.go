@@ -20,6 +20,7 @@ type RESTHandler struct {
 	presenceSvc *service.PresenceService
 	sidebarSvc  *service.SidebarService
 	categorySvc *service.CategoryService
+	rbac        *service.ChannelRBAC
 }
 
 // NewRESTHandler creates a new RESTHandler.
@@ -30,6 +31,7 @@ func NewRESTHandler(
 	presenceSvc *service.PresenceService,
 	sidebarSvc *service.SidebarService,
 	categorySvc *service.CategoryService,
+	rbac *service.ChannelRBAC,
 ) *RESTHandler {
 	return &RESTHandler{
 		channelSvc:  channelSvc,
@@ -38,6 +40,7 @@ func NewRESTHandler(
 		presenceSvc: presenceSvc,
 		sidebarSvc:  sidebarSvc,
 		categorySvc: categorySvc,
+		rbac:        rbac,
 	}
 }
 
@@ -116,6 +119,10 @@ func (h *RESTHandler) Routes(r chi.Router) {
 		})
 		r.Put("/channel/{channelID}", h.SetChannelCategory)
 	})
+
+	// Roles & Permissions
+	r.Get("/roles", h.ListRolePermissions)
+	r.Get("/channels/{channelID}/my-permissions", h.GetMyChannelPermissions)
 }
 
 // ─── Channel Handlers ─────────────────────────
@@ -143,6 +150,12 @@ func (h *RESTHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 	}
 	if len(req.Description) > 500 {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "description too long (max 500 chars)"})
+		return
+	}
+	// Only 'group' channels can be created manually; team/project channels are
+	// auto-managed by backend events, and DMs are created via POST /channels/dm.
+	if domain.ChannelType(req.Type) != domain.ChannelTypeGroup {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "channel type must be 'group'; use /channels/dm for direct messages"})
 		return
 	}
 
@@ -998,4 +1011,31 @@ func (h *RESTHandler) SetChannelCategory(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	JSON(w, http.StatusOK, map[string]string{"message": "channel category updated"})
+}
+
+// ─── Role & Permission Handlers ───────────────
+
+// ListRolePermissions returns the full role → permission matrix.
+func (h *RESTHandler) ListRolePermissions(w http.ResponseWriter, r *http.Request) {
+	rolePerms, err := h.rbac.ListRolePermissions(r.Context())
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, rolePerms)
+}
+
+// GetMyChannelPermissions returns the current user's effective role and permissions for a channel.
+func (h *RESTHandler) GetMyChannelPermissions(w http.ResponseWriter, r *http.Request) {
+	channelID, err := uuid.Parse(chi.URLParam(r, "channelID"))
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid channel_id"})
+		return
+	}
+	perms, err := h.rbac.GetUserPermissions(r.Context(), channelID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusOK, perms)
 }

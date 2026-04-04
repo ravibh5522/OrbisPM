@@ -20,10 +20,53 @@ const (
 type MemberRole string
 
 const (
-	MemberRoleOwner  MemberRole = "owner"
-	MemberRoleAdmin  MemberRole = "admin"
-	MemberRoleMember MemberRole = "member"
+	MemberRoleOwner     MemberRole = "owner"
+	MemberRoleAdmin     MemberRole = "admin"
+	MemberRoleModerator MemberRole = "moderator"
+	MemberRoleMember    MemberRole = "member"
+	MemberRoleViewer    MemberRole = "viewer"
 )
+
+// ValidMemberRoles is the set of all valid channel member roles.
+var ValidMemberRoles = map[MemberRole]bool{
+	MemberRoleOwner:     true,
+	MemberRoleAdmin:     true,
+	MemberRoleModerator: true,
+	MemberRoleMember:    true,
+	MemberRoleViewer:    true,
+}
+
+// RoleRank returns the hierarchy rank (higher = more power).
+func (r MemberRole) Rank() int {
+	switch r {
+	case MemberRoleOwner:
+		return 50
+	case MemberRoleAdmin:
+		return 40
+	case MemberRoleModerator:
+		return 30
+	case MemberRoleMember:
+		return 20
+	case MemberRoleViewer:
+		return 10
+	default:
+		return 0
+	}
+}
+
+// ChannelPermission represents a canonical channel permission.
+type ChannelPermission struct {
+	ID          uuid.UUID `json:"id"`
+	Resource    string    `json:"resource"`
+	Action      string    `json:"action"`
+	Description string    `json:"description,omitempty"`
+}
+
+// RolePermissions maps a role to its set of permissions (resource:action).
+type RolePermissions struct {
+	Role        MemberRole          `json:"role"`
+	Permissions []ChannelPermission `json:"permissions"`
+}
 
 // MessageFormat defines the format for message body content.
 type MessageFormat string

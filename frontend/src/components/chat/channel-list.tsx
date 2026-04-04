@@ -1,5 +1,10 @@
 "use client";
 
+import {
+  canManageRole,
+  getAssignableRoles,
+  useChannelPermissions,
+} from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -7,6 +12,7 @@ import { useChatStore } from "@/stores/chat-store";
 import type {
   ChatChannel,
   ChatChannelMember,
+  ChatMemberRole,
   OrgMemberInfo,
   SidebarData,
   SidebarTeam,
@@ -15,11 +21,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   ChevronRight,
+  Eye,
   FolderKanban,
   Hash,
   Plus,
   Search,
   Shield,
+  ShieldAlert,
+  ShieldCheck,
   UserMinus,
   UserPlus,
   Users,
@@ -633,6 +642,7 @@ function TeamChannelPanel({
 
   const primaryChannelId = team.channels[0]?.id;
   const qc = useQueryClient();
+  const { can: canTeamChannel } = useChannelPermissions(primaryChannelId ?? "");
 
   const { data: members, isLoading: membersLoading } = useQuery<
     ChatChannelMember[]
@@ -721,7 +731,11 @@ function TeamChannelPanel({
           count={members?.length}
           expanded={membersExpanded}
           onToggle={() => setMembersExpanded((p) => !p)}
-          onAdd={() => setShowAddMember(true)}
+          onAdd={
+            canTeamChannel("member", "add")
+              ? () => setShowAddMember(true)
+              : undefined
+          }
         />
         {membersExpanded && (
           <>
@@ -772,6 +786,7 @@ function GroupMemberPanel({
   const [membersExpanded, setMembersExpanded] = useState(true);
   const [showAddMember, setShowAddMember] = useState(false);
   const qc = useQueryClient();
+  const { can: canGroupChannel } = useChannelPermissions(channel.id);
 
   const { data: members, isLoading } = useQuery<ChatChannelMember[]>({
     queryKey: ["channel-members", channel.id],
@@ -830,7 +845,11 @@ function GroupMemberPanel({
           count={members?.length}
           expanded={membersExpanded}
           onToggle={() => setMembersExpanded((p) => !p)}
-          onAdd={() => setShowAddMember(true)}
+          onAdd={
+            canGroupChannel("member", "add")
+              ? () => setShowAddMember(true)
+              : undefined
+          }
         />
         {membersExpanded && (
           <>
@@ -879,9 +898,16 @@ function MemberRow({
   const isCurrentUser = currentUser?.internal_id === member.user_id;
   const presenceMap = useChatStore((s) => s.presenceMap);
   const qc = useQueryClient();
+  const { can, role: myRole } = useChannelPermissions(channelId);
+  const [showRoleMenu, setShowRoleMenu] = useState(false);
 
   const presence = presenceMap.get(member.user_id);
   const dotColor = statusDotColor(presence);
+
+  const canUpdateRoles = can("member", "update_role");
+  const canRemoveMembers = can("member", "remove");
+  const canManageTarget = myRole ? canManageRole(myRole, member.role) : false;
+  const assignableRoles = myRole ? getAssignableRoles(myRole) : [];
 
   const updateRole = useMutation({
     mutationFn: async (newRole: string) => {
@@ -889,12 +915,39 @@ function MemberRow({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["channel-members", channelId] });
+      qc.invalidateQueries({ queryKey: ["channel-permissions", channelId] });
+      setShowRoleMenu(false);
       toast.success("Role updated");
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || "Failed to update role");
     },
   });
 
+  const roleBadgeColor: Record<string, string> = {
+    owner: "badge-primary",
+    admin: "badge-secondary",
+    moderator: "badge-accent",
+    viewer: "badge-warning",
+  };
+
+  const roleIcon = (role: ChatMemberRole) => {
+    switch (role) {
+      case "owner":
+        return <ShieldAlert className="w-2.5 h-2.5" />;
+      case "admin":
+        return <ShieldCheck className="w-2.5 h-2.5" />;
+      case "moderator":
+        return <Shield className="w-2.5 h-2.5" />;
+      case "viewer":
+        return <Eye className="w-2.5 h-2.5" />;
+      default:
+        return null;
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-base-300/30 group/member">
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-base-300/30 group/member relative">
       <div className="relative flex-shrink-0">
         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px]">
           {member.avatar_url ? (
@@ -925,28 +978,56 @@ function MemberRow({
         )}
       </div>
       {member.role !== "member" && (
-        <span className="badge badge-xs badge-ghost capitalize">
+        <span
+          className={cn(
+            "badge badge-xs gap-1 capitalize",
+            roleBadgeColor[member.role] || "badge-ghost",
+          )}
+        >
+          {roleIcon(member.role as ChatMemberRole)}
           {member.role}
         </span>
       )}
-      {!isCurrentUser && (
+      {!isCurrentUser && canManageTarget && (
         <div className="opacity-0 group-hover/member:opacity-100 flex items-center gap-0.5 transition-opacity">
-          {member.role === "member" && (
+          {canUpdateRoles && assignableRoles.length > 0 && (
+            <div className="relative">
+              <button
+                className="btn btn-ghost btn-xs btn-square"
+                title="Change role"
+                onClick={() => setShowRoleMenu(!showRoleMenu)}
+              >
+                <Shield className="w-3 h-3" />
+              </button>
+              {showRoleMenu && (
+                <div className="absolute right-0 top-full mt-1 z-50 bg-base-200 border border-base-300 rounded-lg shadow-lg py-1 min-w-[120px]">
+                  {assignableRoles.map((r) => (
+                    <button
+                      key={r}
+                      className={cn(
+                        "w-full text-left px-3 py-1 text-xs hover:bg-base-300 flex items-center gap-2 capitalize",
+                        member.role === r && "font-bold text-primary",
+                      )}
+                      onClick={() => updateRole.mutate(r)}
+                      disabled={updateRole.isPending || member.role === r}
+                    >
+                      {roleIcon(r)}
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {canRemoveMembers && (
             <button
-              className="btn btn-ghost btn-xs btn-square"
-              title="Make admin"
-              onClick={() => updateRole.mutate("admin")}
+              className="btn btn-ghost btn-xs btn-square text-error"
+              title="Remove member"
+              onClick={onRemove}
             >
-              <Shield className="w-3 h-3" />
+              <UserMinus className="w-3 h-3" />
             </button>
           )}
-          <button
-            className="btn btn-ghost btn-xs btn-square text-error"
-            title="Remove member"
-            onClick={onRemove}
-          >
-            <UserMinus className="w-3 h-3" />
-          </button>
         </div>
       )}
     </div>

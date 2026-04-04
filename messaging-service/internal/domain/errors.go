@@ -24,6 +24,9 @@ var (
 	ErrDMCannotAddMore  = &AppError{Code: http.StatusUnprocessableEntity, Message: "cannot add members to a DM channel"}
 	ErrDMSelf           = &AppError{Code: http.StatusBadRequest, Message: "cannot create DM with yourself"}
 	ErrRateLimited      = &AppError{Code: http.StatusTooManyRequests, Message: "rate limit exceeded"}
+	ErrInvalidRole      = &AppError{Code: http.StatusBadRequest, Message: "invalid role"}
+	ErrInsufficientRank = &AppError{Code: http.StatusForbidden, Message: "cannot modify a user with an equal or higher role"}
+	ErrViewerReadOnly   = &AppError{Code: http.StatusForbidden, Message: "viewers have read-only access"}
 )
 
 // AppError is the application-level error type that carries an HTTP status code.

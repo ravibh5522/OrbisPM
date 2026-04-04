@@ -39,6 +39,7 @@ type MessageService struct {
 	attachmentR    repository.AttachmentRepository
 	pinR           repository.PinRepository
 	bookmarkR      repository.BookmarkRepository
+	rbac           *ChannelRBAC
 	publisher      *natspkg.Publisher
 	redisPublisher *eventbus.RedisPublisher
 	editWindow     time.Duration
@@ -71,6 +72,7 @@ func NewMessageService(
 	attachmentR repository.AttachmentRepository,
 	pinR repository.PinRepository,
 	bookmarkR repository.BookmarkRepository,
+	rbac *ChannelRBAC,
 	publisher *natspkg.Publisher,
 	editWindowMinutes int,
 	presigner Presigner,
@@ -86,6 +88,7 @@ func NewMessageService(
 		attachmentR:    attachmentR,
 		pinR:           pinR,
 		bookmarkR:      bookmarkR,
+		rbac:           rbac,
 		publisher:      publisher,
 		redisPublisher: redisPublisher,
 		editWindow:     time.Duration(editWindowMinutes) * time.Minute,
@@ -120,13 +123,9 @@ func (s *MessageService) SendMessage(ctx context.Context, msg *domain.Message) e
 	var channelName string
 	var channelType domain.ChannelType
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		// Verify membership
-		ok, err := s.memberR.IsMember(ctx, tx, msg.ChannelID, userID)
-		if err != nil {
+		// Verify membership and send permission
+		if _, err := s.rbac.RequirePermission(ctx, tx, msg.ChannelID, "message", "send"); err != nil {
 			return err
-		}
-		if !ok {
-			return domain.ErrNotChannelMember
 		}
 		// Verify channel not archived
 		ch, err := s.channelR.GetByID(ctx, tx, msg.ChannelID)
@@ -183,6 +182,10 @@ func (s *MessageService) EditMessage(ctx context.Context, messageID uuid.UUID, b
 		if msg.UserID != userID {
 			return domain.ErrForbidden.WithDetail("can only edit own messages")
 		}
+		// Check edit_own permission
+		if _, err := s.rbac.RequirePermission(ctx, tx, msg.ChannelID, "message", "edit_own"); err != nil {
+			return err
+		}
 		if msg.IsDeleted {
 			return domain.ErrNotFound
 		}
@@ -213,14 +216,22 @@ func (s *MessageService) DeleteMessage(ctx context.Context, messageID uuid.UUID)
 			return err
 		}
 		channelID = msg.ChannelID
-		// Owner can delete own, channel admin/owner can delete any
-		if msg.UserID != userID {
-			role, err := s.memberR.GetRole(ctx, tx, msg.ChannelID, userID)
+		if msg.UserID == userID {
+			// Deleting own message — check delete_own permission
+			ok, err := s.rbac.RoleHasPermission(ctx, domain.MemberRoleMember, "message", "delete_own")
 			if err != nil {
 				return err
 			}
-			if role != domain.MemberRoleOwner && role != domain.MemberRoleAdmin {
-				return domain.ErrForbidden.WithDetail("can only delete own messages or be channel admin")
+			if !ok {
+				// Fallback: check actual role
+				if _, err := s.rbac.RequirePermission(ctx, tx, msg.ChannelID, "message", "delete_own"); err != nil {
+					return err
+				}
+			}
+		} else {
+			// Deleting someone else's message — requires delete_any
+			if _, err := s.rbac.RequirePermission(ctx, tx, msg.ChannelID, "message", "delete_any"); err != nil {
+				return err
 			}
 		}
 		return s.messageR.SoftDelete(ctx, tx, messageID)
@@ -323,13 +334,9 @@ func (s *MessageService) ForwardMessage(ctx context.Context, sourceMessageID, ta
 		if source.IsDeleted {
 			return domain.ErrNotFound
 		}
-		// Ensure user is member of target channel
-		ok, err := s.memberR.IsMember(ctx, tx, targetChannelID, userID)
-		if err != nil {
+		// Ensure user has forward permission in target channel
+		if _, err := s.rbac.RequirePermission(ctx, tx, targetChannelID, "message", "forward"); err != nil {
 			return err
-		}
-		if !ok {
-			return domain.ErrNotChannelMember
 		}
 		newMsg = &domain.Message{
 			OrgID:           orgID,
@@ -380,6 +387,11 @@ func (s *MessageService) ToggleReaction(ctx context.Context, messageID uuid.UUID
 		}
 		channelID = msg.ChannelID
 
+		// Check react permission
+		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "message", "react"); err != nil {
+			return err
+		}
+
 		// Use savepoint so a unique-violation doesn't abort the whole transaction.
 		if _, err := tx.Exec(ctx, "SAVEPOINT reaction_toggle"); err != nil {
 			return err
@@ -424,12 +436,8 @@ func (s *MessageService) ToggleReaction(ctx context.Context, messageID uuid.UUID
 func (s *MessageService) PinMessage(ctx context.Context, channelID, messageID uuid.UUID) error {
 	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		role, err := s.memberR.GetRole(ctx, tx, channelID, userID)
-		if err != nil {
+		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "message", "pin"); err != nil {
 			return err
-		}
-		if role != domain.MemberRoleOwner && role != domain.MemberRoleAdmin {
-			return domain.ErrForbidden.WithDetail("only channel owner or admin can pin messages")
 		}
 		pin := &domain.PinnedMessage{ChannelID: channelID, MessageID: messageID, PinnedBy: userID}
 		return s.pinR.Pin(ctx, tx, pin)
@@ -444,14 +452,9 @@ func (s *MessageService) PinMessage(ctx context.Context, channelID, messageID uu
 
 // UnpinMessage unpins a message.
 func (s *MessageService) UnpinMessage(ctx context.Context, channelID, messageID uuid.UUID) error {
-	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		role, err := s.memberR.GetRole(ctx, tx, channelID, userID)
-		if err != nil {
+		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "message", "pin"); err != nil {
 			return err
-		}
-		if role != domain.MemberRoleOwner && role != domain.MemberRoleAdmin {
-			return domain.ErrForbidden.WithDetail("only channel owner or admin can unpin messages")
 		}
 		return s.pinR.Unpin(ctx, tx, channelID, messageID)
 	})

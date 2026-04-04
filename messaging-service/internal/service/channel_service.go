@@ -19,6 +19,7 @@ type ChannelService struct {
 	txMgr     *repository.TxManager
 	channelR  repository.ChannelRepository
 	memberR   repository.ChannelMemberRepository
+	rbac      *ChannelRBAC
 	publisher *natspkg.Publisher
 }
 
@@ -27,12 +28,14 @@ func NewChannelService(
 	txMgr *repository.TxManager,
 	channelR repository.ChannelRepository,
 	memberR repository.ChannelMemberRepository,
+	rbac *ChannelRBAC,
 	publisher *natspkg.Publisher,
 ) *ChannelService {
 	return &ChannelService{
 		txMgr:     txMgr,
 		channelR:  channelR,
 		memberR:   memberR,
+		rbac:      rbac,
 		publisher: publisher,
 	}
 }
@@ -60,12 +63,30 @@ func (s *ChannelService) CreateChannel(ctx context.Context, ch *domain.Channel) 
 }
 
 // GetChannel returns a channel by ID.
+// For private channel types (dm, team, project) the caller must be a member.
+// Group channels are visible to any org member.
 func (s *ChannelService) GetChannel(ctx context.Context, id uuid.UUID) (*domain.Channel, error) {
+	userID := tenant.UserID(ctx)
 	var ch *domain.Channel
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		ch, err = s.channelR.GetByID(ctx, tx, id)
-		return err
+		if err != nil {
+			return err
+		}
+		// Group channels are publicly readable within the org.
+		if ch.Type == domain.ChannelTypeGroup {
+			return nil
+		}
+		// All other types (dm, team, project) require membership.
+		ok, err := s.memberR.IsMember(ctx, tx, id, userID)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.ErrNotChannelMember
+		}
+		return nil
 	})
 	return ch, err
 }
@@ -85,14 +106,9 @@ func (s *ChannelService) ListUserChannels(ctx context.Context, limit, offset int
 
 // UpdateChannel updates a channel's name, description, or avatar.
 func (s *ChannelService) UpdateChannel(ctx context.Context, ch *domain.Channel) error {
-	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		role, err := s.memberR.GetRole(ctx, tx, ch.ID, userID)
-		if err != nil {
+		if _, err := s.rbac.RequirePermission(ctx, tx, ch.ID, "channel", "update"); err != nil {
 			return err
-		}
-		if role != domain.MemberRoleOwner && role != domain.MemberRoleAdmin {
-			return domain.ErrForbidden.WithDetail("only channel owner or admin can update")
 		}
 		return s.channelR.Update(ctx, tx, ch)
 	})
@@ -105,14 +121,9 @@ func (s *ChannelService) UpdateChannel(ctx context.Context, ch *domain.Channel) 
 
 // ArchiveChannel archives a channel.
 func (s *ChannelService) ArchiveChannel(ctx context.Context, channelID uuid.UUID) error {
-	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		role, err := s.memberR.GetRole(ctx, tx, channelID, userID)
-		if err != nil {
+		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "channel", "archive"); err != nil {
 			return err
-		}
-		if role != domain.MemberRoleOwner {
-			return domain.ErrForbidden.WithDetail("only channel owner can archive")
 		}
 		return s.channelR.Archive(ctx, tx, channelID)
 	})
@@ -125,14 +136,9 @@ func (s *ChannelService) ArchiveChannel(ctx context.Context, channelID uuid.UUID
 
 // DeleteChannel permanently deletes a channel.
 func (s *ChannelService) DeleteChannel(ctx context.Context, channelID uuid.UUID) error {
-	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		role, err := s.memberR.GetRole(ctx, tx, channelID, userID)
-		if err != nil {
+		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "channel", "delete"); err != nil {
 			return err
-		}
-		if role != domain.MemberRoleOwner {
-			return domain.ErrForbidden.WithDetail("only channel owner can delete")
 		}
 		return s.channelR.Delete(ctx, tx, channelID)
 	})
@@ -165,7 +171,6 @@ func (s *ChannelService) GetOrCreateDM(ctx context.Context, otherUserID uuid.UUI
 
 // AddMember adds a user to a channel.
 func (s *ChannelService) AddMember(ctx context.Context, channelID, targetUserID uuid.UUID) error {
-	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		ch, err := s.channelR.GetByID(ctx, tx, channelID)
 		if err != nil {
@@ -177,12 +182,8 @@ func (s *ChannelService) AddMember(ctx context.Context, channelID, targetUserID 
 		if ch.IsArchived {
 			return domain.ErrChannelArchived
 		}
-		role, err := s.memberR.GetRole(ctx, tx, channelID, userID)
-		if err != nil {
+		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "member", "add"); err != nil {
 			return err
-		}
-		if role != domain.MemberRoleOwner && role != domain.MemberRoleAdmin {
-			return domain.ErrForbidden.WithDetail("only channel owner or admin can add members")
 		}
 		member := &domain.ChannelMember{
 			ChannelID: channelID,
@@ -204,12 +205,25 @@ func (s *ChannelService) RemoveMember(ctx context.Context, channelID, targetUser
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		// Self-leave is always allowed
 		if userID != targetUserID {
-			role, err := s.memberR.GetRole(ctx, tx, channelID, userID)
+			callerRole, err := s.memberR.GetRole(ctx, tx, channelID, userID)
 			if err != nil {
 				return err
 			}
-			if role != domain.MemberRoleOwner && role != domain.MemberRoleAdmin {
-				return domain.ErrForbidden.WithDetail("only channel owner or admin can remove members")
+			// Check permission
+			ok, err := s.rbac.RoleHasPermission(ctx, callerRole, "member", "remove")
+			if err != nil {
+				return err
+			}
+			if !ok {
+				return domain.ErrForbidden.WithDetail("insufficient permissions to remove members")
+			}
+			// Prevent removing someone with equal or higher role
+			targetRole, err := s.memberR.GetRole(ctx, tx, channelID, targetUserID)
+			if err != nil {
+				return err
+			}
+			if !s.rbac.CanManageRole(callerRole, targetRole) {
+				return domain.ErrInsufficientRank
 			}
 		}
 		return s.memberR.Remove(ctx, tx, channelID, targetUserID)
@@ -242,13 +256,33 @@ func (s *ChannelService) ListMembers(ctx context.Context, channelID uuid.UUID) (
 // UpdateMemberRole changes a member's role.
 func (s *ChannelService) UpdateMemberRole(ctx context.Context, channelID, targetUserID uuid.UUID, role domain.MemberRole) error {
 	userID := tenant.UserID(ctx)
+	if !domain.ValidMemberRoles[role] {
+		return domain.ErrInvalidRole.WithDetail("valid roles: owner, admin, moderator, member, viewer")
+	}
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
 		callerRole, err := s.memberR.GetRole(ctx, tx, channelID, userID)
 		if err != nil {
 			return err
 		}
-		if callerRole != domain.MemberRoleOwner {
-			return domain.ErrForbidden.WithDetail("only channel owner can change roles")
+		// Check permission to update roles
+		ok, err := s.rbac.RoleHasPermission(ctx, callerRole, "member", "update_role")
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return domain.ErrForbidden.WithDetail("insufficient permissions to change roles")
+		}
+		// Can only assign roles below your own rank
+		if !s.rbac.CanManageRole(callerRole, role) {
+			return domain.ErrInsufficientRank.WithDetail("cannot assign a role equal or above your own")
+		}
+		// Cannot modify someone with equal or higher role
+		targetCurrentRole, err := s.memberR.GetRole(ctx, tx, channelID, targetUserID)
+		if err != nil {
+			return err
+		}
+		if !s.rbac.CanManageRole(callerRole, targetCurrentRole) {
+			return domain.ErrInsufficientRank
 		}
 		return s.memberR.UpdateRole(ctx, tx, channelID, targetUserID, role)
 	})
