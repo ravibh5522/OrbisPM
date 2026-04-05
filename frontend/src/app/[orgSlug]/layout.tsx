@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Avatar, ConnectionBadge } from "@/components/ui/shared";
 import { useRequireAuth } from "@/hooks/use-auth-guard";
 import { useOrgSocket } from "@/hooks/use-org-socket";
@@ -264,8 +265,10 @@ function Sidebar() {
             </div>
           )}
           {/* Toggle button */}
-          <button
-            className="btn btn-ghost btn-sm btn-square flex-shrink-0"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="btn-square flex-shrink-0"
             onClick={toggleSidebar}
           >
             {sidebarCollapsed ? (
@@ -273,7 +276,7 @@ function Sidebar() {
             ) : (
               <ChevronLeft className="w-5 h-5" />
             )}
-          </button>
+          </Button>
         </div>
 
         {/* Nav items */}
@@ -407,9 +410,11 @@ function Sidebar() {
         {/* User footer — dropdown with Profile, Theme, Logout */}
         <div className="border-t border-base-200 transition-all duration-300 ease-in-out p-2">
           {/* Dark mode quick-toggle */}
-          <button
+          <Button
+            variant="ghost"
+            size="sm"
             className={cn(
-              "btn btn-ghost btn-sm w-full mb-1 gap-2",
+              "w-full mb-1 gap-2",
               sidebarCollapsed ? "btn-square mx-auto w-10" : "",
             )}
             onClick={() => {
@@ -440,7 +445,7 @@ function Sidebar() {
                 {theme.includes("dark") ? "Light mode" : "Dark mode"}
               </span>
             )}
-          </button>
+          </Button>
           <div className="dropdown dropdown-top w-full">
             <label
               tabIndex={0}
@@ -541,23 +546,27 @@ function TopBar() {
         sidebarCollapsed ? "lg:ml-[92px]" : "lg:ml-64",
       )}
     >
-      <button
-        className="btn btn-ghost btn-sm btn-square lg:hidden"
+      <Button
+        variant="ghost"
+        size="sm"
+        className="btn-square lg:hidden"
         onClick={() => setMobileMenuOpen(true)}
       >
         <Menu className="w-5 h-5" />
-      </button>
+      </Button>
 
       <div className="flex min-w-0 items-center gap-3">
         {breadcrumb ? (
           <div className="flex items-center gap-2 min-w-0">
             {breadcrumb.backHref && (
-              <button
-                className="btn btn-ghost btn-xs btn-square flex-shrink-0"
+              <Button
+                variant="ghost"
+                size="xs"
+                className="btn-square flex-shrink-0"
                 onClick={() => router.push(breadcrumb.backHref!)}
               >
                 <ChevronLeft className="w-4 h-4" />
-              </button>
+              </Button>
             )}
             <div className="min-w-0">
               <div className="text-xs uppercase tracking-[0.18em] text-base-content/40">
@@ -765,12 +774,14 @@ function MobileSidebar() {
                 </div>
               </div>
             </div>
-            <button
-              className="btn btn-ghost btn-sm btn-square"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="btn-square"
               onClick={() => setMobileMenuOpen(false)}
             >
               <ChevronLeft className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
           {/* Nav */}

@@ -25,10 +25,10 @@ func NewTemplateService(templateRepo repository.TemplateRepository, txm *reposit
 // CreateTemplateParams holds parameters for creating a template.
 type CreateTemplateParams struct {
 	OrgID       uuid.UUID
-	Name        string `json:"name" validate:"required,min=2,max=100"`
-	Description string `json:"description,omitempty"`
+	Name        string         `json:"name" validate:"required,min=2,max=100"`
+	Description string         `json:"description,omitempty"`
 	Structure   map[string]any `json:"structure" validate:"required"`
-	IsShared    bool   `json:"is_shared"`
+	IsShared    bool           `json:"is_shared"`
 	UserID      uuid.UUID
 }
 
@@ -100,7 +100,7 @@ func (s *TemplateService) Delete(ctx context.Context, id uuid.UUID) error {
 	})
 }
 
-// ListByOrg returns all templates for an org.
-func (s *TemplateService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.TaskTemplate, error) {
-	return s.templateRepo.ListByOrg(ctx, orgID)
+// ListByOrg returns templates for an org with pagination and filtering.
+func (s *TemplateService) ListByOrg(ctx context.Context, orgID uuid.UUID, filter repository.TemplateFilter) ([]*domain.TaskTemplate, int, error) {
+	return s.templateRepo.ListByOrg(ctx, orgID, filter)
 }

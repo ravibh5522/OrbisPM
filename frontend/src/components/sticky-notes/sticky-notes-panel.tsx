@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import type { ListResponse } from "@/lib/api";
 import { api } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
@@ -312,8 +313,10 @@ export function StickyNotesPanel() {
   return (
     <div ref={containerRef} className="relative">
       {/* Toggle button */}
-      <button
-        className="btn btn-ghost btn-sm btn-square indicator"
+      <Button
+        variant="ghost"
+        size="sm"
+        className="btn-square indicator"
         onClick={() => {
           setOpen((v) => !v);
           if (open) {
@@ -330,7 +333,7 @@ export function StickyNotesPanel() {
             {overdue}
           </span>
         )}
-      </button>
+      </Button>
 
       {/* Panel */}
       {open && (
@@ -350,15 +353,17 @@ export function StickyNotesPanel() {
               <Notebook className="w-4 h-4 text-primary" />
               <h3 className="text-sm font-bold">My Notes</h3>
             </div>
-            <button
-              className="btn btn-ghost btn-xs btn-circle"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-circle"
               onClick={() => {
                 setShowForm(true);
                 setEditingNote(null);
               }}
             >
               <Plus className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
 
           {/* Stats bar */}
@@ -381,12 +386,14 @@ export function StickyNotesPanel() {
 
           {/* Date scroller */}
           <div className="flex items-center border-b border-base-200 px-1 py-1.5">
-            <button
-              className="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-circle flex-shrink-0"
               onClick={() => scrollDates("left")}
             >
               <ChevronLeft className="w-3 h-3" />
-            </button>
+            </Button>
             <div
               ref={scrollRef}
               className="flex gap-1 overflow-x-auto scrollbar-none flex-1 px-1"
@@ -427,12 +434,14 @@ export function StickyNotesPanel() {
                 );
               })}
             </div>
-            <button
-              className="btn btn-ghost btn-xs btn-circle flex-shrink-0"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-circle flex-shrink-0"
               onClick={() => scrollDates("right")}
             >
               <ChevronRight className="w-3 h-3" />
-            </button>
+            </Button>
           </div>
 
           {/* Form + Card Grid — unified 3-col layout */}
@@ -441,12 +450,14 @@ export function StickyNotesPanel() {
               <div className="flex flex-col items-center justify-center py-8 text-base-content/50">
                 <Notebook className="w-8 h-8 mb-2 opacity-30" />
                 <p className="text-sm">No notes for this date</p>
-                <button
-                  className="btn btn-ghost btn-xs mt-2"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="mt-2"
                   onClick={() => setShowForm(true)}
                 >
                   <Plus className="w-3 h-3" /> Add one
-                </button>
+                </Button>
               </div>
             )}
 
@@ -547,8 +558,10 @@ function NoteCard({
           </span>
         </div>
         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            className="btn btn-ghost btn-xs btn-circle"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="btn-circle"
             onClick={(e) => {
               e.stopPropagation();
               onToggle();
@@ -561,9 +574,11 @@ function NoteCard({
                 note.completed ? "text-success" : "text-base-content/50",
               )}
             />
-          </button>
-          <button
-            className="btn btn-ghost btn-xs btn-circle hover:text-error"
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="btn-circle hover:text-error"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
@@ -571,7 +586,7 @@ function NoteCard({
             title="Delete"
           >
             <Trash2 className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -825,12 +840,14 @@ function NoteForm({
             >
               {cp.text}
             </span>
-            <button
-              className="btn btn-ghost btn-xs btn-circle opacity-0 group-hover/cp:opacity-100"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-circle opacity-0 group-hover/cp:opacity-100"
               onClick={() => removeCheckpoint(cp.id)}
             >
               <X className="w-3 h-3" />
-            </button>
+            </Button>
           </div>
         ))}
         <div className="flex gap-1">
@@ -855,33 +872,31 @@ function NoteForm({
             }}
             className="input input-bordered input-xs bg-transparent flex-1"
           />
-          <button
-            className="btn btn-ghost btn-xs btn-circle"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="btn-circle"
             onClick={addCheckpoint}
           >
             <Plus className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Actions */}
       <div className="flex justify-end gap-1.5 pt-1">
-        <button className="btn btn-ghost btn-xs" onClick={onCancel}>
+        <Button variant="ghost" size="xs" onClick={onCancel}>
           Cancel
-        </button>
-        <button
-          className="btn btn-primary btn-xs"
+        </Button>
+        <Button
+          variant="primary"
+          size="xs"
           onClick={handleSubmit}
           disabled={!title.trim() || isPending}
+          loading={isPending}
         >
-          {isPending ? (
-            <span className="loading loading-spinner loading-xs" />
-          ) : initial ? (
-            "Update"
-          ) : (
-            "Create"
-          )}
-        </button>
+          {initial ? "Update" : "Create"}
+        </Button>
       </div>
     </div>
   );

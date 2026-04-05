@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -53,14 +54,61 @@ func (r *orgMemberRepo) Get(ctx context.Context, orgID, userID uuid.UUID) (*doma
 	return &m, nil
 }
 
-func (r *orgMemberRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error) {
-	rows, err := r.pool.Query(ctx,
+func (r *orgMemberRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter MemberFilter) ([]*domain.OrgMember, int, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	args := []any{orgID}
+	where := ""
+
+	if filter.Search != nil && *filter.Search != "" {
+		args = append(args, "%"+strings.ToLower(*filter.Search)+"%")
+		where += fmt.Sprintf(" AND (LOWER(u.display_name) LIKE $%d OR LOWER(u.email) LIKE $%d)", len(args), len(args))
+	}
+	if filter.Role != nil && *filter.Role != "" {
+		args = append(args, *filter.Role)
+		where += fmt.Sprintf(" AND m.role = $%d", len(args))
+	}
+
+	var total int
+	countSQL := `SELECT COUNT(*) FROM org_members m LEFT JOIN users u ON u.id = m.user_id WHERE m.org_id = $1` + where
+	if err := r.pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count org members: %w", err)
+	}
+
+	sortCol := "m.joined_at"
+	allowed := map[string]bool{"display_name": true, "email": true, "role": true, "joined_at": true}
+	if allowed[filter.SortBy] {
+		prefix := "m."
+		if filter.SortBy == "display_name" || filter.SortBy == "email" {
+			prefix = "u."
+		}
+		sortCol = prefix + filter.SortBy
+	}
+	sortDir := "ASC"
+	if strings.EqualFold(filter.SortOrder, "desc") {
+		sortDir = "DESC"
+	}
+
+	args = append(args, limit, offset)
+	querySQL := fmt.Sprintf(
 		`SELECT m.org_id, m.user_id, COALESCE(u.email, ''), COALESCE(u.display_name, ''), COALESCE(u.phone, ''), COALESCE(u.avatar_url, ''), m.role, m.joined_at
 		 FROM org_members m
 		 LEFT JOIN users u ON u.id = m.user_id
-		 WHERE m.org_id = $1 ORDER BY m.joined_at`, orgID)
+		 WHERE m.org_id = $1%s
+		 ORDER BY %s %s
+		 LIMIT $%d OFFSET $%d`,
+		where, sortCol, sortDir, len(args)-1, len(args))
+
+	rows, err := r.pool.Query(ctx, querySQL, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -68,11 +116,11 @@ func (r *orgMemberRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*doma
 	for rows.Next() {
 		var m domain.OrgMember
 		if err := rows.Scan(&m.OrgID, &m.UserID, &m.Email, &m.DisplayName, &m.Phone, &m.AvatarURL, &m.Role, &m.JoinedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		members = append(members, &m)
 	}
-	return members, rows.Err()
+	return members, total, rows.Err()
 }
 
 // FindUserByEmail looks up a user in public.users by email and returns their ID.

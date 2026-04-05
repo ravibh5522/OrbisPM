@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -39,27 +40,50 @@ func (r *notificationRepo) Create(ctx context.Context, tx pgx.Tx, n *domain.Noti
 	return &notif, nil
 }
 
-func (r *notificationRepo) ListByUser(ctx context.Context, userID uuid.UUID, filter ListFilter) ([]*domain.Notification, int, error) {
+func (r *notificationRepo) ListByUser(ctx context.Context, userID uuid.UUID, filter NotificationFilter) ([]*domain.Notification, int, error) {
 	limit := filter.Limit
 	if limit <= 0 {
-		limit = 50
+		limit = 20
 	}
 	offset := filter.Offset
 	if offset < 0 {
 		offset = 0
 	}
 
+	args := []any{userID}
+	where := ""
+
+	switch filter.Status {
+	case "read":
+		where += " AND read_at IS NOT NULL"
+	case "unread":
+		where += " AND read_at IS NULL"
+	}
+
 	var total int
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM notifications WHERE user_id = $1`, userID).Scan(&total)
-	if err != nil {
+	countSQL := `SELECT COUNT(*) FROM notifications WHERE user_id = $1` + where
+	if err := r.pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
-	rows, err := r.pool.Query(ctx,
+	orderBy := "read_at NULLS FIRST, created_at DESC"
+	if filter.SortBy == "created_at" {
+		dir := "DESC"
+		if strings.EqualFold(filter.SortOrder, "asc") {
+			dir = "ASC"
+		}
+		orderBy = "created_at " + dir
+	}
+
+	args = append(args, limit, offset)
+	querySQL := fmt.Sprintf(
 		`SELECT id, user_id, org_id, type, title, body, payload, read_at, created_at
-		 FROM notifications WHERE user_id = $1
-		 ORDER BY read_at NULLS FIRST, created_at DESC
-		 LIMIT $2 OFFSET $3`, userID, limit, offset)
+		 FROM notifications WHERE user_id = $1%s
+		 ORDER BY %s
+		 LIMIT $%d OFFSET $%d`,
+		where, orderBy, len(args)-1, len(args))
+
+	rows, err := r.pool.Query(ctx, querySQL, args...)
 	if err != nil {
 		return nil, 0, err
 	}

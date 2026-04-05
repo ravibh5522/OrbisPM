@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
@@ -355,9 +356,9 @@ export default function RolesTab() {
         className="max-w-2xl"
       >
         {error && (
-          <div className="alert alert-error mb-4 text-sm">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4 text-sm">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={createFormMethods.handleSubmit((data) =>
@@ -417,9 +418,9 @@ export default function RolesTab() {
           className="max-w-2xl"
         >
           {error && (
-            <div className="alert alert-error mb-4 text-sm">
-              <span>{error}</span>
-            </div>
+            <Alert variant="error" className="mb-4 text-sm">
+              {error}
+            </Alert>
           )}
           <form
             onSubmit={editFormMethods.handleSubmit((data) =>

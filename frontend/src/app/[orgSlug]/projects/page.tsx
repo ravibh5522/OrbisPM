@@ -1,37 +1,39 @@
 "use client";
 
 import { PermissionGate } from "@/components/permission-gate";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-    Card,
-    ConfirmDialog,
-    EmptyState,
-    PageHeader,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  PageHeader,
 } from "@/components/ui/shared";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import type { ListResponse } from "@/lib/api";
 import { api, ApiError } from "@/lib/api";
+import { STATUS_BADGE } from "@/lib/task-colors";
 import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
-import type { Project, Team } from "@/types/domain";
+import type { Project, TaskStatus, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    Activity,
-    Calendar,
-    ChevronDown,
-    FolderKanban,
-    LayoutGrid,
-    Pencil,
-    Plus,
-    Search,
-    SlidersHorizontal,
-    Table2,
-    Trash2,
-    Users,
-    X,
+  Activity,
+  Calendar,
+  ChevronDown,
+  FolderKanban,
+  LayoutGrid,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Table2,
+  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -338,11 +340,10 @@ export default function ProjectsPage() {
           )}
         </div>
 
-        <button
-          className={cn(
-            "btn btn-sm gap-1",
-            showFilters ? "btn-primary" : "btn-ghost",
-          )}
+        <Button
+          size="sm"
+          variant={showFilters ? "primary" : "ghost"}
+          className="gap-1"
           onClick={() => setShowFilters(!showFilters)}
         >
           <SlidersHorizontal className="w-4 h-4" />
@@ -352,7 +353,7 @@ export default function ProjectsPage() {
               {activeFilterCount}
             </span>
           )}
-        </button>
+        </Button>
 
         <div className="flex-1" />
 
@@ -372,7 +373,9 @@ export default function ProjectsPage() {
           >
             <Table2 className="w-4 h-4" />
             <span>Table</span>
-            {viewMode === "table" ? <span className="text-[10px]">✓</span> : null}
+            {viewMode === "table" ? (
+              <span className="text-[10px]">✓</span>
+            ) : null}
           </button>
           <button
             className={cn(
@@ -385,7 +388,9 @@ export default function ProjectsPage() {
           >
             <LayoutGrid className="w-4 h-4" />
             <span>Grid</span>
-            {viewMode === "grid" ? <span className="text-[10px]">✓</span> : null}
+            {viewMode === "grid" ? (
+              <span className="text-[10px]">✓</span>
+            ) : null}
           </button>
         </div>
       </div>
@@ -452,8 +457,8 @@ export default function ProjectsPage() {
                 className="inline-flex h-9 min-h-9 w-44 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
               >
                 <span className="truncate">
-                  {teamFilterOptions.find((o) => o.value === teamFilter)?.label ||
-                    "All teams"}
+                  {teamFilterOptions.find((o) => o.value === teamFilter)
+                    ?.label || "All teams"}
                 </span>
                 <svg
                   viewBox="0 0 20 20"
@@ -492,9 +497,9 @@ export default function ProjectsPage() {
           </div>
 
           {activeFilterCount > 0 && (
-            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+            <Button variant="ghost" size="xs" onClick={clearFilters}>
               <X className="w-3 h-3" /> Clear all
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -513,17 +518,23 @@ export default function ProjectsPage() {
         <EmptyState
           icon={<FolderKanban className="w-16 h-16" />}
           title={
-            debouncedSearch || (statusFilter && statusFilter !== "active") || teamFilter
+            debouncedSearch ||
+            (statusFilter && statusFilter !== "active") ||
+            teamFilter
               ? "No matching projects"
               : "No projects yet"
           }
           description={
-            debouncedSearch || (statusFilter && statusFilter !== "active") || teamFilter
+            debouncedSearch ||
+            (statusFilter && statusFilter !== "active") ||
+            teamFilter
               ? "Try adjusting your search or filters"
               : "Create your first project to get started"
           }
           action={
-            debouncedSearch || (statusFilter && statusFilter !== "active") || teamFilter ? (
+            debouncedSearch ||
+            (statusFilter && statusFilter !== "active") ||
+            teamFilter ? (
               <Button variant="ghost" onClick={clearFilters}>
                 Clear filters
               </Button>
@@ -606,11 +617,8 @@ export default function ProjectsPage() {
                         <span
                           className={cn(
                             "badge badge-sm",
-                            project.status === "active"
-                              ? "badge-success"
-                              : project.status === "archived"
-                                ? "badge-ghost"
-                                : "badge-info",
+                            STATUS_BADGE[project.status as TaskStatus] ??
+                              "badge-ghost",
                           )}
                         >
                           {statusLabel(project.status)}
@@ -693,7 +701,11 @@ export default function ProjectsPage() {
                     )}
                   </div>
                   <div
-                    className={`badge badge-sm ${project.status === "active" ? "badge-success" : project.status === "archived" ? "badge-ghost" : "badge-info"}`}
+                    className={cn(
+                      "badge badge-sm",
+                      STATUS_BADGE[project.status as TaskStatus] ??
+                        "badge-ghost",
+                    )}
                   >
                     {statusLabel(project.status)}
                   </div>
@@ -758,9 +770,9 @@ export default function ProjectsPage() {
         title="New Project"
       >
         {error && (
-          <div className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleSubmit((data) => createMutation.mutate(data))}
@@ -904,9 +916,9 @@ function EditProjectModal({
   return (
     <Modal open onClose={onClose} title="Edit Project">
       {error && (
-        <div className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
       )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input

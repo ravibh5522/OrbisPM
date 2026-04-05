@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type { Task } from "@/types/domain";
@@ -23,8 +24,8 @@ interface TimeTrackerProps {
 
 interface TimerState {
   isRunning: boolean;
-  startedAt: number | null;  // timestamp when timer started
-  accumulatedMs: number;     // accumulated time from previous sessions
+  startedAt: number | null; // timestamp when timer started
+  accumulatedMs: number; // accumulated time from previous sessions
 }
 
 const STORAGE_KEY_PREFIX = "orbis_timer_";
@@ -58,7 +59,12 @@ function clearTimerState(taskId: string) {
   localStorage.removeItem(getStorageKey(taskId));
 }
 
-export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerProps) {
+export function TimeTracker({
+  orgId,
+  projectId,
+  task,
+  onUpdate,
+}: TimeTrackerProps) {
   const send = useProjectTaskStore((s) => s.send);
   const [state, setState] = useState<TimerState>(() => loadTimerState(task.id));
   const [displayMs, setDisplayMs] = useState(0);
@@ -90,18 +96,24 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
     };
   }, [state.isRunning, state.startedAt, state.accumulatedMs, calculateElapsed]);
 
-  const saveActualHours = useCallback(async (newHours: number) => {
-    if (!send) return;
-    setSaving(true);
-    try {
-      await send("task:update", {
-        task_id: task.id,
-        base_version: task.version ?? 0,
-        actual_hours: newHours,
-      });
-      onUpdate?.();
-    } catch {} finally { setSaving(false); }
-  }, [send, task.id, task.version, onUpdate]);
+  const saveActualHours = useCallback(
+    async (newHours: number) => {
+      if (!send) return;
+      setSaving(true);
+      try {
+        await send("task:update", {
+          task_id: task.id,
+          base_version: task.version ?? 0,
+          actual_hours: newHours,
+        });
+        onUpdate?.();
+      } catch {
+      } finally {
+        setSaving(false);
+      }
+    },
+    [send, task.id, task.version, onUpdate],
+  );
 
   const start = useCallback(() => {
     const newState: TimerState = {
@@ -161,20 +173,22 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
           "flex items-center justify-between gap-1.5 px-2 py-1 rounded border text-xs",
           state.isRunning
             ? "border-primary bg-primary/5"
-            : "border-base-300 bg-base-100"
+            : "border-base-300 bg-base-100",
         )}
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <Timer
             className={cn(
               "w-3.5 h-3.5 shrink-0",
-              state.isRunning ? "text-primary animate-pulse" : "text-base-content/50"
+              state.isRunning
+                ? "text-primary animate-pulse"
+                : "text-base-content/50",
             )}
           />
           <span
             className={cn(
               "font-mono text-sm",
-              state.isRunning ? "text-primary" : "text-base-content"
+              state.isRunning ? "text-primary" : "text-base-content",
             )}
           >
             {formatTime(displayMs)}
@@ -187,23 +201,48 @@ export function TimeTracker({ orgId, projectId, task, onUpdate }: TimeTrackerPro
 
         <div className="flex items-center gap-0.5 shrink-0">
           {state.isRunning ? (
-            <button className="btn btn-ghost btn-xs btn-square" onClick={pause} title="Pause">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square"
+              onClick={pause}
+              title="Pause"
+            >
               <Pause className="w-3 h-3" />
-            </button>
+            </Button>
           ) : (
-            <button className={cn("btn btn-xs btn-square", hasTime ? "btn-ghost" : "btn-primary")} onClick={start} title="Start">
+            <Button
+              variant={hasTime ? "ghost" : "primary"}
+              size="xs"
+              className="btn-square"
+              onClick={start}
+              title="Start"
+            >
               <Play className="w-3 h-3" />
-            </button>
+            </Button>
           )}
           {hasTime && (
-            <button className="btn btn-ghost btn-xs btn-square text-success" onClick={stop} title="Stop & save" disabled={saving}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square text-success"
+              onClick={stop}
+              title="Stop & save"
+              disabled={saving}
+            >
               <StopCircle className="w-3 h-3" />
-            </button>
+            </Button>
           )}
           {hasTime && !state.isRunning && (
-            <button className="btn btn-ghost btn-xs btn-square text-error" onClick={reset} title="Reset">
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square text-error"
+              onClick={reset}
+              title="Reset"
+            >
               <RotateCcw className="w-3 h-3" />
-            </button>
+            </Button>
           )}
         </div>
       </div>

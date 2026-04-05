@@ -7,11 +7,13 @@ import {
 } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, ConfirmDialog } from "@/components/ui/shared";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { useReviewableFields } from "@/hooks/use-reviewable-fields";
-import { cn, formatDate, priorityColor, statusLabel } from "@/lib/utils";
+import { PRIORITY_BADGE } from "@/lib/task-colors";
+import { cn, formatDate, statusLabel } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
   ProjectMember,
@@ -94,8 +96,8 @@ export function TaskTreeView({
         const data = await send("task:tree", {});
         useProjectTaskStore.getState().setTaskTree(data || []);
         lastFetchedAt.current = Date.now();
-      } catch (e) {
-        console.error("[WS] task:tree failed", e);
+      } catch {
+        // WS task:tree failed
       } finally {
         setIsLoading(false);
       }
@@ -165,7 +167,6 @@ export function TaskTreeView({
         if (e instanceof Error && e.message) {
           setUpdateError(e.message);
         }
-        console.error("[WS] task:update failed", e);
       }
     },
     [send, fetchTree, taskTree],
@@ -198,7 +199,6 @@ export function TaskTreeView({
         setDeleteTask(null);
         fetchTree();
       } catch (e) {
-        console.error("[WS] task:delete failed", e);
       } finally {
         setMutating(false);
       }
@@ -212,9 +212,7 @@ export function TaskTreeView({
       try {
         await send("task:duplicate", { task_id: taskId });
         fetchTree();
-      } catch (e) {
-        console.error("[WS] task:duplicate failed", e);
-      }
+      } catch (e) {}
     },
     [send, fetchTree],
   );
@@ -316,15 +314,13 @@ export function TaskTreeView({
 
       {/* Update error toast */}
       {updateError && (
-        <div className="alert alert-error shadow-lg text-sm">
-          <span>{updateError}</span>
-          <button
-            className="btn btn-ghost btn-xs"
-            onClick={() => setUpdateError(null)}
-          >
-            Dismiss
-          </button>
-        </div>
+        <Alert
+          variant="error"
+          className="shadow-lg text-sm"
+          onDismiss={() => setUpdateError(null)}
+        >
+          {updateError}
+        </Alert>
       )}
 
       {/* Change request modal for reviewable field edits */}
@@ -472,11 +468,10 @@ function TreeNode({
           )}
         >
           {/* Expand/collapse toggle */}
-          <button
-            className={cn(
-              "btn btn-ghost btn-xs btn-square",
-              !hasChildren && "invisible",
-            )}
+          <Button
+            variant="ghost"
+            size="xs"
+            className={cn("btn-square", !hasChildren && "invisible")}
             onClick={() => toggleExpand(task.id)}
           >
             {isExpanded ? (
@@ -484,7 +479,7 @@ function TreeNode({
             ) : (
               <ChevronRight className="w-4 h-4" />
             )}
-          </button>
+          </Button>
 
           {/* Status indicator */}
           <StatusDropdown
@@ -569,7 +564,7 @@ function TreeNode({
           </div>
           <ul
             tabIndex={0}
-            className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200"
+            className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200" /* z: action dropdown overlay */
           >
             <li>
               <a onClick={() => (onOpenTask ? onOpenTask(task.id) : undefined)}>
@@ -680,7 +675,7 @@ function StatusDropdown({
       </div>
       <ul
         tabIndex={0}
-        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-32 border border-base-200"
+        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-32 border border-base-200" /* z: status dropdown overlay */
       >
         {statuses.map((s) => (
           <li key={s}>
@@ -720,19 +715,19 @@ function PriorityDropdown({
   const priorities: TaskPriority[] = ["critical", "high", "medium", "low"];
 
   if (disabled) {
-    return <Badge variant={priorityColor(priority)}>{priority}</Badge>;
+    return <Badge variant={PRIORITY_BADGE[priority]}>{priority}</Badge>;
   }
 
   return (
     <div className="dropdown">
       <div tabIndex={0} role="button">
-        <Badge variant={priorityColor(priority)} className="cursor-pointer">
+        <Badge variant={PRIORITY_BADGE[priority]} className="cursor-pointer">
           {priority}
         </Badge>
       </div>
       <ul
         tabIndex={0}
-        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-28 border border-base-200"
+        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-28 border border-base-200" /* z: priority dropdown overlay */
       >
         {priorities.map((p) => (
           <li key={p}>
@@ -740,7 +735,7 @@ function PriorityDropdown({
               onClick={() => onChange(p)}
               className={cn(priority === p && "font-bold")}
             >
-              <Badge variant={priorityColor(p)} className="badge-sm">
+              <Badge variant={PRIORITY_BADGE[p]} className="badge-sm">
                 {p}
               </Badge>
             </a>
@@ -777,7 +772,6 @@ function CreateTaskButton({
       setIsOpen(false);
       onCreated();
     } catch (e) {
-      console.error("[WS] task:create failed", e);
     } finally {
       setPending(false);
     }
@@ -851,9 +845,7 @@ function CreateSubtaskButton({
         parent_task_id: parentId,
       });
       onCreated();
-    } catch (e) {
-      console.error("[WS] create subtask failed", e);
-    }
+    } catch (e) {}
   };
 
   return (

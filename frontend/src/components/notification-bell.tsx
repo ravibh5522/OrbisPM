@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { cn, formatRelative } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -115,8 +116,10 @@ export function NotificationBell() {
   return (
     <div ref={containerRef} className="relative">
       {/* Bell button */}
-      <button
-        className="btn btn-ghost btn-sm btn-square indicator"
+      <Button
+        variant="ghost"
+        size="sm"
+        className="btn-square indicator"
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Notifications"
         aria-expanded={open}
@@ -127,7 +130,7 @@ export function NotificationBell() {
             {unread}
           </span>
         )}
-      </button>
+      </Button>
 
       {/* Dropdown card */}
       {open && (
@@ -145,13 +148,14 @@ export function NotificationBell() {
           <div className="flex items-center justify-between border-b border-base-200 p-3">
             <h3 className="text-sm font-semibold">Notifications</h3>
             {unread > 0 && (
-              <button
-                className="btn btn-ghost btn-xs"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => markAllReadMutation.mutate()}
                 disabled={markAllReadMutation.isPending}
               >
                 <CheckCheck className="w-3 h-3" /> Mark all read
-              </button>
+              </Button>
             )}
           </div>
 

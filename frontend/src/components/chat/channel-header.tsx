@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/form-fields";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -96,55 +98,60 @@ export function ChannelHeader() {
         {/* Search in channel */}
         {searchOpen ? (
           <div className="flex items-center gap-1">
-            <input
+            <Input
               type="text"
               placeholder="Search messages..."
-              className="input input-xs input-bordered w-48"
+              className="input-xs w-48"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
             />
-            <button
-              className="btn btn-ghost btn-xs btn-square"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square"
               onClick={() => {
                 setSearchOpen(false);
                 setSearchQuery("");
               }}
             >
               <X className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           </div>
         ) : (
-          <button
-            className="btn btn-ghost btn-sm btn-square"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="btn-square"
             onClick={() => setSearchOpen(true)}
             title="Search messages"
           >
             <Search className="w-4 h-4" />
-          </button>
+          </Button>
         )}
 
         {/* Members / Info */}
         {isChannel && (
-          <button
-            className="btn btn-ghost btn-sm btn-square"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="btn-square"
             title="Members"
             onClick={toggleDetails}
           >
             <Users className="w-4 h-4" />
-          </button>
+          </Button>
         )}
 
-        <button
-          className={cn(
-            "btn btn-ghost btn-sm btn-square",
-            detailsOpen && "btn-active",
-          )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn("btn-square", detailsOpen && "btn-active")}
           title="Channel details"
           onClick={toggleDetails}
         >
           <Info className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -205,12 +212,14 @@ export function ChannelDetails() {
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-base-200">
         <h3 className="text-sm font-bold">Details</h3>
-        <button
-          className="btn btn-ghost btn-xs btn-square"
+        <Button
+          variant="ghost"
+          size="xs"
+          className="btn-square"
           onClick={() => setDetailsOpen(false)}
         >
           <X className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -273,13 +282,15 @@ export function ChannelDetails() {
               Members
             </h4>
             {isChannel && (
-              <button
-                className="btn btn-ghost btn-xs btn-square"
+              <Button
+                variant="ghost"
+                size="xs"
+                className="btn-square"
                 title="Add member"
                 onClick={() => setShowAddMember((p) => !p)}
               >
                 <UserPlus className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             )}
           </div>
 
@@ -366,21 +377,25 @@ function MemberItem({
       {!isCurrentUser && (
         <div className="opacity-0 group-hover/member:opacity-100 flex items-center gap-0.5 transition-opacity">
           {member.role === "member" && (
-            <button
-              className="btn btn-ghost btn-xs btn-square"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square"
               title="Make admin"
               onClick={() => updateRole.mutate("admin")}
             >
               <Shield className="w-3 h-3" />
-            </button>
+            </Button>
           )}
-          <button
-            className="btn btn-ghost btn-xs btn-square text-error"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="btn-square text-error"
             title="Remove member"
             onClick={onRemove}
           >
             <UserMinus className="w-3 h-3" />
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -444,9 +459,14 @@ function DetailsAddMemberSearch({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && onClose()}
         />
-        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="btn-square"
+          onClick={onClose}
+        >
           <X className="w-3 h-3" />
-        </button>
+        </Button>
       </div>
       <div className="max-h-36 overflow-y-auto">
         {isLoading && (

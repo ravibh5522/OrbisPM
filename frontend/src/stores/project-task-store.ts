@@ -11,8 +11,8 @@ import { create } from "zustand";
 
 export type WsSendFn = (
   action: string,
-  payload?: Record<string, any>,
-) => Promise<any>;
+  payload?: Record<string, unknown>,
+) => Promise<unknown>;
 
 interface ProjectTaskState {
   // Connection
@@ -162,10 +162,13 @@ export const useProjectTaskStore = create<ProjectTaskState>((set, get) => ({
     const pid = get().currentProjectId;
     if (pid) {
       fn("project:join", { project_id: pid })
-        .then((resp: any) => {
+        .then((resp: unknown) => {
           const projectSend: WsSendFn = (action, payload) =>
             fn(action, { ...payload, project_id: pid });
-          set({ send: projectSend, roomSize: resp?.room_size ?? 0 });
+          set({
+            send: projectSend,
+            roomSize: (resp as Record<string, number>)?.room_size ?? 0,
+          });
         })
         .catch(() => {
           set({ send: null });
@@ -200,10 +203,13 @@ export const useProjectTaskStore = create<ProjectTaskState>((set, get) => ({
     // Join new project room
     if (id && rawSend) {
       rawSend("project:join", { project_id: id })
-        .then((resp: any) => {
+        .then((resp: unknown) => {
           const projectSend: WsSendFn = (action, payload) =>
             rawSend(action, { ...payload, project_id: id });
-          set({ send: projectSend, roomSize: resp?.room_size ?? 0 });
+          set({
+            send: projectSend,
+            roomSize: (resp as Record<string, number>)?.room_size ?? 0,
+          });
         })
         .catch(() => {});
     }

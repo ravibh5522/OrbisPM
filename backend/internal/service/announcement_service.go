@@ -263,7 +263,7 @@ func (s *AnnouncementService) notifyOrgMembers(ctx context.Context, orgID, autho
 		log.Warn().Bool("memberRepo_nil", s.memberRepo == nil).Bool("workerSrv_nil", s.workerSrv == nil).Msg("skipping announcement notifications: missing dependency")
 		return
 	}
-	members, err := s.memberRepo.ListByOrg(ctx, orgID)
+	members, _, err := s.memberRepo.ListByOrg(ctx, orgID, repository.MemberFilter{ListFilter: repository.ListFilter{Limit: 10000}})
 	if err != nil {
 		log.Error().Err(err).Msg("list org members for announcement notification")
 		return

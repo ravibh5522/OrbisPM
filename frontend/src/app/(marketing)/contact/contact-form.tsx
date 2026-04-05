@@ -1,5 +1,8 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/form-fields";
 import { CheckSquare, Send } from "lucide-react";
 import { useState } from "react";
 
@@ -11,8 +14,15 @@ interface ContactFormData {
 }
 
 export function ContactForm() {
-  const [form, setForm] = useState<ContactFormData>({ name: "", email: "", company: "", message: "" });
-  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [form, setForm] = useState<ContactFormData>({
+    name: "",
+    email: "",
+    company: "",
+    message: "",
+  });
+  const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">(
+    "idle",
+  );
   const [errorMsg, setErrorMsg] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -21,14 +31,17 @@ export function ContactForm() {
     setErrorMsg("");
 
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+      const API_BASE =
+        process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
       const res = await fetch(`${API_BASE}/api/v1/public/contact`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: "Failed to send message" }));
+        const body = await res
+          .json()
+          .catch(() => ({ message: "Failed to send message" }));
         throw new Error(body.message || "Failed to send message");
       }
       setStatus("sent");
@@ -48,11 +61,17 @@ export function ContactForm() {
           </div>
           <h3 className="text-lg font-semibold">Message Sent!</h3>
           <p className="text-base-content/60 text-sm mt-2">
-            Thank you for reaching out. We&apos;ll get back to you within 24 hours.
+            Thank you for reaching out. We&apos;ll get back to you within 24
+            hours.
           </p>
-          <button className="btn btn-ghost btn-sm mt-4" onClick={() => setStatus("idle")}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="mt-4"
+            onClick={() => setStatus("idle")}
+          >
             Send Another Message
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -66,9 +85,8 @@ export function ContactForm() {
             <label className="label">
               <span className="label-text text-sm">Full Name *</span>
             </label>
-            <input
+            <Input
               type="text"
-              className="input input-bordered w-full"
               placeholder="John Doe"
               required
               value={form.name}
@@ -79,9 +97,8 @@ export function ContactForm() {
             <label className="label">
               <span className="label-text text-sm">Email *</span>
             </label>
-            <input
+            <Input
               type="email"
-              className="input input-bordered w-full"
               placeholder="john@company.com"
               required
               value={form.email}
@@ -92,9 +109,8 @@ export function ContactForm() {
             <label className="label">
               <span className="label-text text-sm">Company</span>
             </label>
-            <input
+            <Input
               type="text"
-              className="input input-bordered w-full"
               placeholder="Acme Inc."
               value={form.company}
               onChange={(e) => setForm({ ...form, company: e.target.value })}
@@ -104,8 +120,8 @@ export function ContactForm() {
             <label className="label">
               <span className="label-text text-sm">Message *</span>
             </label>
-            <textarea
-              className="textarea textarea-bordered w-full h-28"
+            <Textarea
+              className="h-28"
               placeholder="Tell us how we can help..."
               required
               value={form.message}
@@ -113,18 +129,18 @@ export function ContactForm() {
             />
           </div>
           {status === "error" && (
-            <div className="alert alert-error text-sm py-2">
-              <span>{errorMsg}</span>
-            </div>
+            <Alert variant="error" className="text-sm py-2">
+              {errorMsg}
+            </Alert>
           )}
-          <button type="submit" className="btn btn-primary w-full gap-2" disabled={status === "sending"}>
-            {status === "sending" ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              <Send className="w-4 h-4" />
-            )}
+          <Button
+            type="submit"
+            className="w-full gap-2"
+            loading={status === "sending"}
+          >
+            {status !== "sending" && <Send className="w-4 h-4" />}
             {status === "sending" ? "Sending..." : "Send Message"}
-          </button>
+          </Button>
         </form>
       </div>
     </div>

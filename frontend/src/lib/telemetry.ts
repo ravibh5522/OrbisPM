@@ -1,6 +1,6 @@
 "use client";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { API_BASE } from "@/lib/api-base";
 const FLUSH_INTERVAL = 10_000; // 10 seconds
 const MAX_BATCH_SIZE = 50;
 

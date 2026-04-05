@@ -10,6 +10,7 @@ import (
 	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -196,7 +197,19 @@ func (h *OrgHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid org id"})
 		return
 	}
-	members, err := h.orgSvc.ListMembers(r.Context(), orgID)
+
+	filter := repository.MemberFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		Role:      queryStr(r, "role"),
+		SortBy:    queryStrDefault(r, "sort_by", "joined_at"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+
+	members, total, err := h.orgSvc.ListMembers(r.Context(), orgID, filter)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -204,7 +217,7 @@ func (h *OrgHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 	if members == nil {
 		members = []*domain.OrgMember{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: members, Total: len(members), Limit: len(members), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: members, Total: total, Limit: filter.Limit, Offset: filter.Offset})
 }
 
 // GetMyMembership godoc

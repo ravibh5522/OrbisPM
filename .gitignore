@@ -15,6 +15,7 @@ backend/bin/
 .DS_Store
 .idea/
 *.swp
+.env.local
 
 # ── Playwright logs ───────────────────────────────────────────
 .playwright-mcp/

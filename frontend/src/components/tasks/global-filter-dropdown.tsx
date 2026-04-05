@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { ProjectMember, TaskPriority, TaskStatus } from "@/types/domain";
 import { useEffect, useRef, useState } from "react";
@@ -115,9 +116,14 @@ export function GlobalFilterDropdown({
       <div className="p-4 space-y-4">
         <div className="flex items-center justify-between">
           <span className="text-sm font-semibold">Global Filters</span>
-          <button className="btn btn-ghost btn-sm h-8 min-h-8 px-3" onClick={clearFilter}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 min-h-8 px-3"
+            onClick={clearFilter}
+          >
             Clear All
-          </button>
+          </Button>
         </div>
 
         {/* Search */}
@@ -284,18 +290,21 @@ export function GlobalFilterDropdown({
 
         {/* Actions */}
         <div className="flex items-center gap-2 pt-2 border-t border-base-200/70">
-          <button
-            className="btn btn-primary btn-sm h-10 min-h-10 flex-1 rounded-xl"
+          <Button
+            size="sm"
+            className="h-10 min-h-10 flex-1 rounded-xl"
             onClick={applyFilter}
           >
             Apply
-          </button>
-          <button
-            className="btn btn-ghost btn-sm h-10 min-h-10 flex-1 rounded-xl"
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-10 min-h-10 flex-1 rounded-xl"
             onClick={onClose}
           >
             Cancel
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,16 +1,18 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/form-fields";
 import { api } from "@/lib/api"; // kept for CSV file upload (binary)
 import type { ImportJob } from "@/types/domain";
 import {
-    AlertTriangle,
-    ArrowLeft,
-    ArrowRight,
-    CheckCircle2,
-    FileSpreadsheet,
-    Upload,
-    X,
+  AlertTriangle,
+  ArrowLeft,
+  ArrowRight,
+  CheckCircle2,
+  FileSpreadsheet,
+  Upload,
+  X,
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
@@ -95,7 +97,12 @@ interface CSVImportDialogProps {
 
 type Step = "upload" | "mapping" | "result";
 
-export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDialogProps) {
+export function CSVImportDialog({
+  orgId,
+  projectId,
+  open,
+  onClose,
+}: CSVImportDialogProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -145,7 +152,11 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
 
     setParseError(null);
 
-    if (!f.name.endsWith(".csv") && !f.type.includes("csv") && !f.type.includes("text/plain")) {
+    if (
+      !f.name.endsWith(".csv") &&
+      !f.type.includes("csv") &&
+      !f.type.includes("text/plain")
+    ) {
       setParseError("Please select a CSV file.");
       return;
     }
@@ -182,11 +193,13 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
           fileRef.current.dispatchEvent(new Event("change", { bubbles: true }));
         }
         // Directly handle
-        handleFileSelect({ target: { files: dt.files } } as unknown as React.ChangeEvent<HTMLInputElement>);
+        handleFileSelect({
+          target: { files: dt.files },
+        } as unknown as React.ChangeEvent<HTMLInputElement>);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
+    [],
   );
 
   const hasTitleMapping = Object.values(mapping).includes("title");
@@ -204,11 +217,19 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
   if (!open) return null;
 
   return (
-    <dialog className="modal modal-open" style={{ backgroundColor: "transparent" }}>
+    <dialog
+      className="modal modal-open"
+      style={{ backgroundColor: "transparent" }}
+    >
       <div className="modal-box w-11/12 max-w-3xl">
-        <button className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" onClick={handleClose}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="btn-circle absolute right-2 top-2"
+          onClick={handleClose}
+        >
           <X className="w-4 h-4" />
-        </button>
+        </Button>
 
         <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
           <FileSpreadsheet className="w-5 h-5" /> Import Tasks from CSV
@@ -216,10 +237,14 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
 
         {/* Steps indicator */}
         <ul className="steps steps-horizontal w-full mb-6">
-          <li className={`step ${step === "upload" || step === "mapping" || step === "result" ? "step-primary" : ""}`}>
+          <li
+            className={`step ${step === "upload" || step === "mapping" || step === "result" ? "step-primary" : ""}`}
+          >
             Upload
           </li>
-          <li className={`step ${step === "mapping" || step === "result" ? "step-primary" : ""}`}>
+          <li
+            className={`step ${step === "mapping" || step === "result" ? "step-primary" : ""}`}
+          >
             Map Columns
           </li>
           <li className={`step ${step === "result" ? "step-primary" : ""}`}>
@@ -236,7 +261,9 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
             onClick={() => fileRef.current?.click()}
           >
             <Upload className="w-12 h-12 mx-auto text-base-content/40 mb-4" />
-            <p className="text-lg font-medium mb-1">Drop a CSV file here or click to browse</p>
+            <p className="text-lg font-medium mb-1">
+              Drop a CSV file here or click to browse
+            </p>
             <p className="text-sm text-base-content/60">
               Supports .csv files. First row should contain column headers.
             </p>
@@ -248,10 +275,9 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
               onChange={handleFileSelect}
             />
             {parseError && (
-              <div className="alert alert-error mt-4">
-                <AlertTriangle className="w-4 h-4" />
-                <span>{parseError}</span>
-              </div>
+              <Alert variant="error" className="mt-4">
+                {parseError}
+              </Alert>
             )}
           </div>
         )}
@@ -260,7 +286,8 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
         {step === "mapping" && (
           <div>
             <p className="text-sm text-base-content/60 mb-4">
-              Map each CSV column to a task field. At least <strong>Title</strong> is required.
+              Map each CSV column to a task field. At least{" "}
+              <strong>Title</strong> is required.
             </p>
 
             {/* Mapping table */}
@@ -281,11 +308,15 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
                         {previewRows[0]?.[i] || "—"}
                       </td>
                       <td>
-                        <select
-                          className="select select-bordered select-sm w-full max-w-xs"
+                        <Select
+                          size="sm"
+                          className="w-full max-w-xs"
                           value={mapping[h] || ""}
                           onChange={(e) =>
-                            setMapping((prev) => ({ ...prev, [h]: e.target.value }))
+                            setMapping((prev) => ({
+                              ...prev,
+                              [h]: e.target.value,
+                            }))
                           }
                         >
                           {TASK_FIELDS.map((f) => (
@@ -293,7 +324,7 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
                               {f.label}
                             </option>
                           ))}
-                        </select>
+                        </Select>
                       </td>
                     </tr>
                   ))}
@@ -313,7 +344,9 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
                     <thead>
                       <tr>
                         {headers.map((h, i) => (
-                          <th key={i} className="text-xs">{h}</th>
+                          <th key={i} className="text-xs">
+                            {h}
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -321,7 +354,10 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
                       {previewRows.map((row, ri) => (
                         <tr key={ri}>
                           {headers.map((_, ci) => (
-                            <td key={ci} className="text-xs max-w-[150px] truncate">
+                            <td
+                              key={ci}
+                              className="text-xs max-w-[150px] truncate"
+                            >
                               {row[ci] || ""}
                             </td>
                           ))}
@@ -334,14 +370,20 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
             )}
 
             {!hasTitleMapping && (
-              <div className="alert alert-warning mb-4">
-                <AlertTriangle className="w-4 h-4" />
-                <span>You must map at least one column to <strong>Title</strong>.</span>
-              </div>
+              <Alert variant="warning" className="mb-4">
+                You must map at least one column to <strong>Title</strong>.
+              </Alert>
             )}
 
             <div className="flex justify-between">
-              <Button variant="ghost" size="sm" onClick={() => { reset(); setStep("upload"); }}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  reset();
+                  setStep("upload");
+                }}
+              >
                 <ArrowLeft className="w-4 h-4 mr-1" /> Back
               </Button>
               <Button
@@ -359,10 +401,9 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
             </div>
 
             {importError && (
-              <div className="alert alert-error text-sm">
-                <AlertTriangle className="w-4 h-4" />
-                <span>{importError.message || "Import failed"}</span>
-              </div>
+              <Alert variant="error" className="text-sm">
+                {importError.message || "Import failed"}
+              </Alert>
             )}
           </div>
         )}
@@ -373,12 +414,16 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
             {result.status === "completed" ? (
               <div className="mb-4">
                 <CheckCircle2 className="w-16 h-16 mx-auto text-success mb-3" />
-                <h4 className="text-xl font-bold text-success">Import Complete!</h4>
+                <h4 className="text-xl font-bold text-success">
+                  Import Complete!
+                </h4>
               </div>
             ) : result.status === "completed_with_errors" ? (
               <div className="mb-4">
                 <AlertTriangle className="w-16 h-16 mx-auto text-warning mb-3" />
-                <h4 className="text-xl font-bold text-warning">Import Completed with Errors</h4>
+                <h4 className="text-xl font-bold text-warning">
+                  Import Completed with Errors
+                </h4>
               </div>
             ) : (
               <div className="mb-4">
@@ -391,15 +436,21 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
             <div className="stats shadow mb-6">
               <div className="stat">
                 <div className="stat-title">Total Rows</div>
-                <div className="stat-value text-lg">{result.total_rows ?? 0}</div>
+                <div className="stat-value text-lg">
+                  {result.total_rows ?? 0}
+                </div>
               </div>
               <div className="stat">
                 <div className="stat-title">Created</div>
-                <div className="stat-value text-lg text-success">{result.processed_rows}</div>
+                <div className="stat-value text-lg text-success">
+                  {result.processed_rows}
+                </div>
               </div>
               <div className="stat">
                 <div className="stat-title">Errors</div>
-                <div className="stat-value text-lg text-error">{result.error_rows}</div>
+                <div className="stat-value text-lg text-error">
+                  {result.error_rows}
+                </div>
               </div>
             </div>
 
@@ -409,8 +460,13 @@ export function CSVImportDialog({ orgId, projectId, open, onClose }: CSVImportDi
                 <h5 className="font-semibold mb-2">Error Details:</h5>
                 <div className="max-h-40 overflow-y-auto bg-base-200 rounded-lg p-3">
                   {result.errors.map((err, i) => (
-                    <div key={i} className="text-sm py-1 border-b border-base-300 last:border-0">
-                      <span className="font-mono text-error">Row {String(err.row)}:</span>{" "}
+                    <div
+                      key={i}
+                      className="text-sm py-1 border-b border-base-300 last:border-0"
+                    >
+                      <span className="font-mono text-error">
+                        Row {String(err.row)}:
+                      </span>{" "}
                       {String(err.error)}
                     </div>
                   ))}

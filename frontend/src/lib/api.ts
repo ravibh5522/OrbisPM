@@ -33,7 +33,7 @@ class ApiError extends Error {
 
 export { ApiError };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { API_BASE } from "@/lib/api-base";
 const V1 = "/api/v1";
 
 function getToken(): string | null {
@@ -569,8 +569,27 @@ export const api = {
 
   // Org Members
   members: {
-    list: (orgId: string) =>
-      get<ListResponse<OrgMember>>(`${V1}/orgs/${orgId}/members`),
+    list: (
+      orgId: string,
+      params?: {
+        limit?: number;
+        offset?: number;
+        search?: string;
+        role?: string;
+        sort_by?: string;
+        sort_order?: string;
+      },
+    ) => {
+      const qs = params
+        ? "?" +
+          new URLSearchParams(
+            Object.entries(params)
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => [k, String(v)]),
+          ).toString()
+        : "";
+      return get<ListResponse<OrgMember>>(`${V1}/orgs/${orgId}/members${qs}`);
+    },
     add: (
       orgId: string,
       data: { email?: string; user_id?: string; role: string },
@@ -1002,8 +1021,29 @@ export const api = {
 
   // Templates
   templates: {
-    list: (orgId: string) =>
-      get<ListResponse<TaskTemplate>>(`${V1}/orgs/${orgId}/templates`),
+    list: (
+      orgId: string,
+      params?: {
+        limit?: number;
+        offset?: number;
+        search?: string;
+        shared?: string;
+        sort_by?: string;
+        sort_order?: string;
+      },
+    ) => {
+      const qs = params
+        ? "?" +
+          new URLSearchParams(
+            Object.entries(params)
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => [k, String(v)]),
+          ).toString()
+        : "";
+      return get<ListResponse<TaskTemplate>>(
+        `${V1}/orgs/${orgId}/templates${qs}`,
+      );
+    },
     get: (orgId: string, id: string) =>
       get<TaskTemplate>(`${V1}/orgs/${orgId}/templates/${id}`),
     create: (orgId: string, data: Partial<TaskTemplate>) =>
@@ -1203,9 +1243,19 @@ export const api = {
         status?: string;
         priority?: string;
         search?: string;
+        sort_by?: string;
+        sort_order?: string;
       } = {},
     ) => {
-      const { limit = 50, offset = 0, status, priority, search } = params;
+      const {
+        limit = 50,
+        offset = 0,
+        status,
+        priority,
+        search,
+        sort_by,
+        sort_order,
+      } = params;
       const qs = new URLSearchParams({
         limit: String(limit),
         offset: String(offset),
@@ -1213,6 +1263,8 @@ export const api = {
       if (status) qs.set("status", status);
       if (priority) qs.set("priority", priority);
       if (search) qs.set("search", search);
+      if (sort_by) qs.set("sort_by", sort_by);
+      if (sort_order) qs.set("sort_order", sort_order);
       return get<ListResponse<Task>>(
         `${V1}/orgs/${orgId}/dashboard/my-tasks?${qs.toString()}`,
       );

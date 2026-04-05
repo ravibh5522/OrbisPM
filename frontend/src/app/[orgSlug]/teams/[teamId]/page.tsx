@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarView, getDateRange } from "@/components/calendar";
+import { Button } from "@/components/ui/button";
 import {
   Avatar,
   Badge,
@@ -9,20 +10,19 @@ import {
   LoadingPage,
   PageHeader,
 } from "@/components/ui/shared";
-import { Button } from "@/components/ui/button";
-import type { ListResponse } from "@/lib/api";
-import { api } from "@/lib/api";
-import {
-  cn,
-  formatDate,
-  formatRelative,
-  priorityColor,
-  statusColor,
-  statusLabel,
-} from "@/lib/utils";
-import { useAuthStore } from "@/stores/auth-store";
+import { Tabs } from "@/components/ui/tabs";
 import { useTeamPolicies } from "@/hooks/use-policies";
-import type { Role, Task, Team, TeamDashboardStats, TeamMember } from "@/types/domain";
+import { api } from "@/lib/api";
+import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
+import { cn, formatDate, formatRelative, statusLabel } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
+import type {
+  Role,
+  Task,
+  Team,
+  TeamDashboardStats,
+  TeamMember,
+} from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -218,29 +218,30 @@ export default function TeamDashboardPage({
       />
 
       {/* Tab switcher */}
-      <div role="tablist" className="tabs tabs-boxed bg-base-200/50 mb-6 w-fit">
-        <button
-          role="tab"
-          className={`tab tab-sm ${activeTab === "overview" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("overview")}
-        >
-          <ListTodo className="w-3.5 h-3.5 mr-1" /> Overview
-        </button>
-        <button
-          role="tab"
-          className={`tab tab-sm ${activeTab === "members" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("members")}
-        >
-          <Users className="w-3.5 h-3.5 mr-1" /> Members
-        </button>
-        <button
-          role="tab"
-          className={`tab tab-sm ${activeTab === "calendar" ? "tab-active" : ""}`}
-          onClick={() => setActiveTab("calendar")}
-        >
-          <CalendarDays className="w-3.5 h-3.5 mr-1" /> Calendar
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          {
+            id: "overview",
+            label: "Overview",
+            icon: <ListTodo className="w-3.5 h-3.5" />,
+          },
+          {
+            id: "members",
+            label: "Members",
+            icon: <Users className="w-3.5 h-3.5" />,
+          },
+          {
+            id: "calendar",
+            label: "Calendar",
+            icon: <CalendarDays className="w-3.5 h-3.5" />,
+          },
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        variant="boxed"
+        size="sm"
+        className="mb-6 w-fit bg-base-200/50"
+      />
 
       {/* Members Tab */}
       {activeTab === "members" && (
@@ -342,7 +343,11 @@ export default function TeamDashboardPage({
                       key={status}
                       className="flex items-center justify-between"
                     >
-                      <Badge variant={statusColor(status)}>
+                      <Badge
+                        variant={
+                          STATUS_BADGE[status as keyof typeof STATUS_BADGE]
+                        }
+                      >
                         {statusLabel(status)}
                       </Badge>
                       <div className="flex items-center gap-2">
@@ -369,7 +374,13 @@ export default function TeamDashboardPage({
                       key={priority}
                       className="flex items-center justify-between"
                     >
-                      <Badge variant={priorityColor(priority)}>
+                      <Badge
+                        variant={
+                          PRIORITY_BADGE[
+                            priority as keyof typeof PRIORITY_BADGE
+                          ]
+                        }
+                      >
                         {statusLabel(priority)}
                       </Badge>
                       <span className="font-semibold">{count as number}</span>
@@ -482,12 +493,12 @@ export default function TeamDashboardPage({
                       >
                         <td className="font-medium">{task.title}</td>
                         <td>
-                          <Badge variant={statusColor(task.status)}>
+                          <Badge variant={STATUS_BADGE[task.status]}>
                             {statusLabel(task.status)}
                           </Badge>
                         </td>
                         <td>
-                          <Badge variant={priorityColor(task.priority)}>
+                          <Badge variant={PRIORITY_BADGE[task.priority]}>
                             {statusLabel(task.priority)}
                           </Badge>
                         </td>

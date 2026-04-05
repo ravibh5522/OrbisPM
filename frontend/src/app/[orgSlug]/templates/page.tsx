@@ -1,16 +1,17 @@
 "use client";
 
 import { PermissionGate } from "@/components/permission-gate";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/form-fields";
+import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-    Card,
-    ConfirmDialog,
-    EmptyState,
-    LoadingPage,
-    PageHeader,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  LoadingPage,
+  PageHeader,
 } from "@/components/ui/shared";
 import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
@@ -19,17 +20,17 @@ import { useUIStore } from "@/stores/ui-store";
 import type { TaskTemplate } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    Download,
-    FileText,
-    Pencil,
-    Plus,
-    Search,
-    SlidersHorizontal,
-    Trash2,
-    Upload,
-    X,
+  Download,
+  FileText,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Upload,
+  X,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 
@@ -58,13 +59,24 @@ export default function TemplatesPage() {
   const [error, setError] = useState("");
   const importRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
-  const [sharedFilter, setSharedFilter] = useState<"" | "shared" | "private">("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [sharedFilter, setSharedFilter] = useState<"" | "shared" | "private">(
+    "",
+  );
   const [showFilters, setShowFilters] = useState(false);
   const [page, setPage] = useState(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(search);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
 
   const updateSearch = (v: string) => {
     setSearch(v);
-    setPage(0);
   };
 
   const updateSharedFilter = (v: "" | "shared" | "private") => {
@@ -74,40 +86,41 @@ export default function TemplatesPage() {
 
   const clearFilters = () => {
     setSearch("");
+    setDebouncedSearch("");
     setSharedFilter("");
     setPage(0);
   };
 
   const { data: templates, isLoading } = useQuery({
-    queryKey: ["templates", currentOrg?.id],
-    queryFn: () => api.templates.list(currentOrg!.id),
+    queryKey: [
+      "templates",
+      currentOrg?.id,
+      page,
+      debouncedSearch,
+      sharedFilter,
+    ],
+    queryFn: () =>
+      api.templates.list(currentOrg!.id, {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        search: debouncedSearch || undefined,
+        shared:
+          sharedFilter === "shared"
+            ? "true"
+            : sharedFilter === "private"
+              ? "false"
+              : undefined,
+        sort_by: "name",
+        sort_order: "asc",
+      }),
     enabled: !!currentOrg,
   });
 
-  const filtered = useMemo(() => {
-    const all = templates?.data || [];
-    let result = all;
-
-    if (sharedFilter === "shared") {
-      result = result.filter((t: TaskTemplate) => t.is_shared);
-    } else if (sharedFilter === "private") {
-      result = result.filter((t: TaskTemplate) => !t.is_shared);
-    }
-
-    if (!search.trim()) return result;
-    const q = search.toLowerCase();
-    return result.filter(
-      (t: TaskTemplate) =>
-        t.name.toLowerCase().includes(q) ||
-        t.description?.toLowerCase().includes(q),
-    );
-  }, [templates?.data, search, sharedFilter]);
-
   const activeFilterCount = [sharedFilter].filter(Boolean).length;
 
-  const total = filtered.length;
+  const total = templates?.total ?? 0;
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const paginated = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  const items = templates?.data || [];
 
   const {
     register,
@@ -181,7 +194,7 @@ export default function TemplatesPage() {
   if (isLoading) return <LoadingPage />;
 
   return (
-    <div>
+    <div className="flex h-full flex-col">
       <PageHeader
         title="Templates"
         description="Reusable task templates for your projects"
@@ -231,8 +244,10 @@ export default function TemplatesPage() {
           )}
         </div>
 
-        <button
-          className={`btn btn-sm gap-1 ${showFilters ? "btn-primary" : "btn-ghost"}`}
+        <Button
+          size="sm"
+          variant={showFilters ? "primary" : "ghost"}
+          className="gap-1"
           onClick={() => setShowFilters((p) => !p)}
         >
           <SlidersHorizontal className="w-4 h-4" />
@@ -242,7 +257,7 @@ export default function TemplatesPage() {
               {activeFilterCount}
             </span>
           )}
-        </button>
+        </Button>
 
         <div className="flex-1" />
         <span className="text-sm text-base-content/50">
@@ -254,74 +269,36 @@ export default function TemplatesPage() {
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg bg-base-200 p-3">
           <div className="flex items-center gap-2">
             <span className="whitespace-nowrap text-sm font-medium">Type:</span>
-            <div className="dropdown dropdown-bottom">
-              <div
-                tabIndex={0}
-                role="button"
-                className="inline-flex h-9 min-h-9 w-36 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
-              >
-                <span>
-                  {sharedFilter === "shared"
-                    ? "Shared"
-                    : sharedFilter === "private"
-                      ? "Private"
-                      : "All"}
-                </span>
-                <svg
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="h-3.5 w-3.5 text-base-content/60"
-                  aria-hidden="true"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-36 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
-                {[
-                  { value: "", label: "All" },
-                  { value: "shared", label: "Shared" },
-                  { value: "private", label: "Private" },
-                ].map((opt) => (
-                  <li key={opt.value || "all"}>
-                    <button
-                      className={`task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors ${
-                        sharedFilter === opt.value
-                          ? "task-status-item-active"
-                          : "text-base-content/80 hover:bg-base-200/35"
-                      }`}
-                      onClick={() =>
-                        updateSharedFilter(
-                          opt.value as "" | "shared" | "private",
-                        )
-                      }
-                    >
-                      <span>{opt.label}</span>
-                      {sharedFilter === opt.value ? (
-                        <span className="text-xs">✓</span>
-                      ) : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Select
+              className="select-sm"
+              value={sharedFilter}
+              onChange={(e) =>
+                updateSharedFilter(e.target.value as "" | "shared" | "private")
+              }
+              options={[
+                { value: "", label: "All" },
+                { value: "shared", label: "Shared" },
+                { value: "private", label: "Private" },
+              ]}
+            />
           </div>
 
           {activeFilterCount > 0 && (
-            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+            <Button variant="ghost" size="xs" onClick={clearFilters}>
               <X className="w-3 h-3" /> Clear all
-            </button>
+            </Button>
           )}
         </div>
       )}
 
-      {paginated.length === 0 ? (
+      {items.length === 0 ? (
         <EmptyState
           icon={<FileText className="w-16 h-16" />}
-          title={search || sharedFilter ? "No matching templates" : "No templates yet"}
+          title={
+            search || sharedFilter
+              ? "No matching templates"
+              : "No templates yet"
+          }
           description={
             search || sharedFilter
               ? "Try adjusting your search or filters"
@@ -329,10 +306,7 @@ export default function TemplatesPage() {
           }
           action={
             search || sharedFilter ? (
-              <Button
-                variant="ghost"
-                onClick={clearFilters}
-              >
+              <Button variant="ghost" onClick={clearFilters}>
                 Clear filters
               </Button>
             ) : (
@@ -343,8 +317,8 @@ export default function TemplatesPage() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {paginated.map((tpl: TaskTemplate) => (
+        <div className="min-h-0 flex-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {items.map((tpl: TaskTemplate) => (
             <Card key={tpl.id} compact>
               <div
                 className="cursor-pointer"
@@ -373,30 +347,36 @@ export default function TemplatesPage() {
                     className="flex gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
-                      className="btn btn-ghost btn-xs btn-square"
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="btn-square"
                       title="Export JSON"
                       onClick={() =>
                         api.templates.export(currentOrg!.id, tpl.id, tpl.name)
                       }
                     >
                       <Download className="w-3 h-3" />
-                    </button>
+                    </Button>
                     <PermissionGate resource="projects" action="update">
-                      <button
-                        className="btn btn-ghost btn-xs btn-square"
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="btn-square"
                         onClick={() => setEditTarget(tpl)}
                       >
                         <Pencil className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </PermissionGate>
                     <PermissionGate resource="projects" action="delete">
-                      <button
-                        className="btn btn-ghost btn-xs btn-square"
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="btn-square"
                         onClick={() => setDeleteTarget(tpl)}
                       >
                         <Trash2 className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </PermissionGate>
                   </div>
                 </div>
@@ -463,9 +443,9 @@ export default function TemplatesPage() {
         title="New Template"
       >
         {error && (
-          <div className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleSubmit((data) => createMutation.mutate(data))}
@@ -539,9 +519,9 @@ function EditTemplateModal({
   return (
     <Modal open onClose={onClose} title="Edit Template">
       {error && (
-        <div className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
       )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input

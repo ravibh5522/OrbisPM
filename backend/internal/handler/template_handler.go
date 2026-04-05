@@ -9,6 +9,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -102,7 +103,22 @@ func (h *TemplateHandler) Get(w http.ResponseWriter, r *http.Request) {
 // @Router /orgs/{orgId}/templates [get]
 func (h *TemplateHandler) List(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
-	templates, err := h.tmplSvc.ListByOrg(r.Context(), orgID)
+
+	filter := repository.TemplateFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Search:    queryStr(r, "search"),
+		SortBy:    queryStrDefault(r, "sort_by", "name"),
+		SortOrder: queryStrDefault(r, "sort_order", "asc"),
+	}
+	if s := r.URL.Query().Get("shared"); s != "" {
+		v := s == "true" || s == "1"
+		filter.Shared = &v
+	}
+
+	templates, total, err := h.tmplSvc.ListByOrg(r.Context(), orgID, filter)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -110,7 +126,7 @@ func (h *TemplateHandler) List(w http.ResponseWriter, r *http.Request) {
 	if templates == nil {
 		templates = []*domain.TaskTemplate{}
 	}
-	JSON(w, http.StatusOK, ListResponse{Data: templates, Total: len(templates), Limit: len(templates), Offset: 0})
+	JSON(w, http.StatusOK, ListResponse{Data: templates, Total: total, Limit: filter.Limit, Offset: filter.Offset})
 }
 
 // Update godoc

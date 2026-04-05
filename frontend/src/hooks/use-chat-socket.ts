@@ -4,7 +4,7 @@ import { useChatStore } from "@/stores/chat-store";
 import type { ChatMessage } from "@/types/domain";
 import { useCallback, useEffect, useRef } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { API_BASE } from "@/lib/api-base";
 
 /**
  * Connects to the messaging-service WebSocket via Kong at /ws/chat.

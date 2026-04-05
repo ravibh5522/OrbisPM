@@ -1,9 +1,8 @@
 "use client";
 
-import React from "react";
-import { cn } from "@/lib/utils";
-import { Check } from "lucide-react";
 import type { ThemeColorProfile } from "@/lib/theme-profiles";
+import { cn, isLightHex } from "@/lib/utils";
+import { Check } from "lucide-react";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Profile swatch card
@@ -36,7 +35,7 @@ export function ProfileSwatch({
           : "border-base-300 hover:border-base-content/20 hover:shadow-sm",
       )}
       style={{
-        backgroundColor: colorScheme === "dark" ? "oklch(16% 0.02 270)" : "oklch(96% 0.01 265)",
+        backgroundColor: "var(--color-base-100)",
       }}
     >
       {/* Colour trio */}
@@ -71,13 +70,13 @@ export function ProfileSwatch({
       <div>
         <p
           className="text-xs font-semibold"
-          style={{ color: colorScheme === "dark" ? "#f0f0ff" : "#1e1b4b" }}
+          style={{ color: "var(--color-base-content)" }}
         >
           {profile.name}
         </p>
         <p
           className="text-[10px] leading-tight opacity-60 mt-0.5"
-          style={{ color: colorScheme === "dark" ? "#f0f0ff" : "#1e1b4b" }}
+          style={{ color: "var(--color-base-content)" }}
         >
           {profile.description}
         </p>
@@ -93,15 +92,33 @@ export function ProfileSwatch({
    ───────────────────────────────────────────────────────────────────────────── */
 
 const LIGHT_THEME_PRIMARIES = [
-  "#3b82f6", "#6366f1", "#8b5cf6", "#a855f7",
-  "#ec4899", "#f43f5e", "#f97316", "#f59e0b",
-  "#10b981", "#059669", "#0891b2", "#0284c7",
+  "#3b82f6",
+  "#6366f1",
+  "#8b5cf6",
+  "#a855f7",
+  "#ec4899",
+  "#f43f5e",
+  "#f97316",
+  "#f59e0b",
+  "#10b981",
+  "#059669",
+  "#0891b2",
+  "#0284c7",
 ];
 
 const DARK_THEME_PRIMARIES = [
-  "#818cf8", "#a78bfa", "#c084fc", "#f472b6",
-  "#fb7185", "#fb923c", "#fbbf24", "#34d399",
-  "#2dd4bf", "#38bdf8", "#60a5fa", "#e879f9",
+  "#818cf8",
+  "#a78bfa",
+  "#c084fc",
+  "#f472b6",
+  "#fb7185",
+  "#fb923c",
+  "#fbbf24",
+  "#34d399",
+  "#2dd4bf",
+  "#38bdf8",
+  "#60a5fa",
+  "#e879f9",
 ];
 
 interface PrimaryColorPickerProps {
@@ -134,13 +151,20 @@ export function PrimaryColorPicker({
               className={cn(
                 "w-8 h-8 rounded-lg transition-all duration-150 cursor-pointer flex items-center justify-center",
                 "hover:scale-110 hover:shadow-lg hover:z-10",
-                isSelected && "ring-2 ring-offset-2 ring-offset-base-100 ring-primary scale-110",
+                isSelected &&
+                  "ring-2 ring-offset-2 ring-offset-base-100 ring-primary scale-110",
               )}
               style={{ backgroundColor: hex }}
             >
               {isSelected && (
-                <Check className="w-3.5 h-3.5 drop-shadow"
-                  style={{ color: isLightHex(hex) ? "#000" : "#fff" }} />
+                <Check
+                  className="w-3.5 h-3.5 drop-shadow"
+                  style={{
+                    color: isLightHex(hex)
+                      ? "var(--color-neutral-content, #000)"
+                      : "var(--color-base-100, #fff)",
+                  }}
+                />
               )}
             </button>
           );
@@ -154,7 +178,9 @@ export function PrimaryColorPicker({
           style={{ backgroundColor: currentHex }}
         />
         <div className="flex-1 relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm font-mono">#</span>
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-base-content/40 text-sm font-mono">
+            #
+          </span>
           <input
             type="text"
             value={currentHex.replace("#", "")}
@@ -179,12 +205,5 @@ export function PrimaryColorPicker({
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   Utilities
-   ───────────────────────────────────────────────────────────────────────────── */
-export function isLightHex(hex: string): boolean {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return (r * 299 + g * 587 + b * 114) / 1000 > 155;
-}
+/* isLightHex is now in @/lib/utils — re-export for backward compatibility */
+export { isLightHex } from "@/lib/utils";

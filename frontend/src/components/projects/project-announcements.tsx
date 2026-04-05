@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
@@ -9,18 +10,18 @@ import { api, ApiError } from "@/lib/api";
 import type { Announcement, OrgMember } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    AlertTriangle,
-    CalendarDays,
-    Clock,
-    Eye,
-    Megaphone,
-    MoreHorizontal,
-    Pencil,
-    Pin,
-    PinOff,
-    Plus,
-    Trash2,
-    Users,
+  AlertTriangle,
+  CalendarDays,
+  Clock,
+  Eye,
+  Megaphone,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Plus,
+  Trash2,
+  Users,
 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -543,10 +544,9 @@ export function ProjectAnnouncements({
         title="New Announcement"
       >
         {error && (
-          <div role="alert" className="alert alert-error alert-sm mb-4">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="text-sm">{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleSubmit((data) => createMutation.mutate(data))}
@@ -615,10 +615,9 @@ export function ProjectAnnouncements({
         title="Edit Announcement"
       >
         {error && (
-          <div role="alert" className="alert alert-error alert-sm mb-4">
-            <AlertTriangle className="w-4 h-4" />
-            <span className="text-sm">{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleEditSubmit((data) => updateMutation.mutate(data))}

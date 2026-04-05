@@ -1,9 +1,12 @@
 "use client";
 
 import { useEmailEditor } from "@/components/email-editor-wrapper";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Badge, ConfirmDialog, LoadingPage } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,64 +34,64 @@ const DEFAULT_TEMPLATES = [
     label: "Notification",
     description: "General notification emails sent to project members",
     icon: Mail,
-    color: "text-blue-500",
-    bg: "bg-blue-500/10",
+    color: "text-primary",
+    bg: "bg-primary/10",
   },
   {
     name: "password_reset",
     label: "Password Reset",
     description: "Sent when a user requests a password reset link",
     icon: KeyRound,
-    color: "text-amber-500",
-    bg: "bg-amber-500/10",
+    color: "text-warning",
+    bg: "bg-warning/10",
   },
   {
     name: "otp",
     label: "OTP / Verification",
     description: "One-time passcode and account verification emails",
     icon: ShieldCheck,
-    color: "text-emerald-500",
-    bg: "bg-emerald-500/10",
+    color: "text-success",
+    bg: "bg-success/10",
   },
   {
     name: "announcement",
     label: "Announcement",
     description: "Emailed copies of organization announcements",
     icon: Megaphone,
-    color: "text-violet-500",
-    bg: "bg-violet-500/10",
+    color: "text-secondary",
+    bg: "bg-secondary/10",
   },
   {
     name: "welcome",
     label: "Welcome",
     description: "Sent to new users when they join the organization",
     icon: PartyPopper,
-    color: "text-pink-500",
-    bg: "bg-pink-500/10",
+    color: "text-accent",
+    bg: "bg-accent/10",
   },
   {
     name: "change_request_review",
     label: "CR — Review",
     description: "Sent to reviewers when a change request needs approval",
     icon: ClipboardCheck,
-    color: "text-cyan-500",
-    bg: "bg-cyan-500/10",
+    color: "text-info",
+    bg: "bg-info/10",
   },
   {
     name: "change_request_approved",
     label: "CR — Approved",
     description: "Sent to requester when a change request is approved",
     icon: CheckCircle2,
-    color: "text-green-500",
-    bg: "bg-green-500/10",
+    color: "text-success",
+    bg: "bg-success/10",
   },
   {
     name: "change_request_rejected",
     label: "CR — Rejected",
     description: "Sent to requester when a change request is rejected",
     icon: XCircle,
-    color: "text-red-500",
-    bg: "bg-red-500/10",
+    color: "text-error",
+    bg: "bg-error/10",
   },
 ];
 
@@ -247,9 +250,7 @@ function TemplateEditorModal({
   const handlePreview = async () => {
     try {
       const html =
-        editorMode === "visual"
-          ? (await exportTemplate()).html
-          : editHtml;
+        editorMode === "visual" ? (await exportTemplate()).html : editHtml;
       setPreviewHtml(renderPreview(html, templateName));
     } catch {
       setError("Failed to generate preview");
@@ -265,26 +266,31 @@ function TemplateEditorModal({
         className="max-w-6xl"
       >
         {error && (
-          <div role="alert" className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <div className="space-y-4">
           {/* Mode tabs */}
-          <div className="tabs tabs-boxed w-fit">
-            <button
-              className={`tab tab-sm gap-1 ${editorMode === "visual" ? "tab-active" : ""}`}
-              onClick={() => handleModeSwitch("visual")}
-            >
-              <LayoutTemplate className="w-3.5 h-3.5" /> Visual
-            </button>
-            <button
-              className={`tab tab-sm gap-1 ${editorMode === "code" ? "tab-active" : ""}`}
-              onClick={() => handleModeSwitch("code")}
-            >
-              <Code2 className="w-3.5 h-3.5" /> Code
-            </button>
-          </div>
+          <Tabs
+            tabs={[
+              {
+                id: "visual",
+                label: "Visual",
+                icon: <LayoutTemplate className="w-3.5 h-3.5" />,
+              },
+              {
+                id: "code",
+                label: "Code",
+                icon: <Code2 className="w-3.5 h-3.5" />,
+              },
+            ]}
+            activeTab={editorMode}
+            onChange={(id) => handleModeSwitch(id as "visual" | "code")}
+            variant="boxed"
+            size="sm"
+            className="w-fit"
+          />
 
           {/* Variables hint */}
           <div className="rounded-xl bg-base-200/70 border border-base-300 px-4 py-3">
@@ -324,8 +330,8 @@ function TemplateEditorModal({
                   Jinja2 syntax supported
                 </span>
               </label>
-              <textarea
-                className="textarea textarea-bordered w-full font-mono text-xs leading-relaxed resize-y"
+              <Textarea
+                className="font-mono text-xs leading-relaxed resize-y"
                 rows={22}
                 value={editHtml}
                 onChange={(e) => setEditHtml(e.target.value)}

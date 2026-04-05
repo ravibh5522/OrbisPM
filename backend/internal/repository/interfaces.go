@@ -64,6 +64,33 @@ type MemberFilter struct {
 	SortOrder string // asc, desc
 }
 
+// TemplateFilter for paginated template listing.
+type TemplateFilter struct {
+	ListFilter
+	Search    *string
+	Shared    *bool  // nil = all, true = shared only, false = private only
+	SortBy    string // name, created_at, updated_at
+	SortOrder string // asc, desc
+}
+
+// NotificationFilter for paginated notification listing.
+type NotificationFilter struct {
+	ListFilter
+	Status    string // "" (all), "read", "unread"
+	SortBy    string // created_at, read_at
+	SortOrder string // asc, desc
+}
+
+// ActivityFilter for paginated activity listing.
+type ActivityFilter struct {
+	ListFilter
+	Search     *string
+	Action     *string // e.g., "created", "updated", "deleted"
+	EntityType *string // e.g., "task", "project"
+	SortBy     string  // created_at
+	SortOrder  string  // asc, desc
+}
+
 // --- Organisation ---
 
 type OrgRepository interface {
@@ -79,7 +106,7 @@ type OrgMemberRepository interface {
 	Add(ctx context.Context, tx pgx.Tx, m *domain.OrgMember) error
 	Remove(ctx context.Context, tx pgx.Tx, orgID, userID uuid.UUID) error
 	Get(ctx context.Context, orgID, userID uuid.UUID) (*domain.OrgMember, error)
-	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error)
+	ListByOrg(ctx context.Context, orgID uuid.UUID, filter MemberFilter) ([]*domain.OrgMember, int, error)
 	UpdateRole(ctx context.Context, tx pgx.Tx, orgID, userID uuid.UUID, role string) error
 	FindUserByEmail(ctx context.Context, email string) (uuid.UUID, error)
 }
@@ -184,14 +211,14 @@ type CommentRepository interface {
 type ActivityRepository interface {
 	Create(ctx context.Context, tx pgx.Tx, log *domain.ActivityLog) error
 	ListByEntity(ctx context.Context, entityType string, entityID uuid.UUID, filter ListFilter) ([]*domain.ActivityLog, error)
-	ListByOrg(ctx context.Context, orgID uuid.UUID, filter ListFilter) ([]*domain.ActivityLog, int, error)
+	ListByOrg(ctx context.Context, orgID uuid.UUID, filter ActivityFilter) ([]*domain.ActivityLog, int, error)
 }
 
 // --- Notification ---
 
 type NotificationRepository interface {
 	Create(ctx context.Context, tx pgx.Tx, n *domain.Notification) (*domain.Notification, error)
-	ListByUser(ctx context.Context, userID uuid.UUID, filter ListFilter) ([]*domain.Notification, int, error)
+	ListByUser(ctx context.Context, userID uuid.UUID, filter NotificationFilter) ([]*domain.Notification, int, error)
 	MarkRead(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	MarkAllRead(ctx context.Context, tx pgx.Tx, userID uuid.UUID) error
 	CountUnread(ctx context.Context, userID uuid.UUID) (int, error)
@@ -225,7 +252,7 @@ type TemplateRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.TaskTemplate, error)
 	Update(ctx context.Context, tx pgx.Tx, t *domain.TaskTemplate) (*domain.TaskTemplate, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
-	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.TaskTemplate, error)
+	ListByOrg(ctx context.Context, orgID uuid.UUID, filter TemplateFilter) ([]*domain.TaskTemplate, int, error)
 }
 
 // --- Task Dependency ---

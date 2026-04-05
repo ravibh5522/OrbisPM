@@ -9,6 +9,7 @@ import {
   LoadingPage,
   PageHeader,
 } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { cn, formatRelative } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -57,8 +58,20 @@ export default function NotificationsPage() {
 
   // ── Inbox data ──
   const { data: notificationsRes, isLoading } = useQuery({
-    queryKey: ["notifications", orgId, "all"],
-    queryFn: () => api.notifications.list(orgId, "limit=100"),
+    queryKey: ["notifications", orgId, filter, page],
+    queryFn: () =>
+      api.notifications.list(
+        orgId,
+        `limit=${NOTIF_PAGE_SIZE}&offset=${page * NOTIF_PAGE_SIZE}&filter=${filter}`,
+      ),
+    enabled: !!orgId,
+    refetchInterval: 15000,
+  });
+
+  // Separate lightweight query for unread count (used in tabs/header)
+  const { data: unreadRes } = useQuery({
+    queryKey: ["notifications", orgId, "unread-count"],
+    queryFn: () => api.notifications.list(orgId, "limit=0&filter=unread"),
     enabled: !!orgId,
     refetchInterval: 15000,
   });
@@ -115,18 +128,10 @@ export default function NotificationsPage() {
     );
 
   const all = notificationsRes?.data || [];
-  const unread = all.filter((n: Notification) => !n.read_at);
-  const filtered =
-    filter === "unread"
-      ? unread
-      : filter === "read"
-        ? all.filter((n: Notification) => !!n.read_at)
-        : all;
-  const totalNotifPages = Math.ceil(filtered.length / NOTIF_PAGE_SIZE);
-  const pagedNotifs = filtered.slice(
-    page * NOTIF_PAGE_SIZE,
-    (page + 1) * NOTIF_PAGE_SIZE,
-  );
+  const total = notificationsRes?.total ?? 0;
+  const unreadCount = unreadRes?.total ?? 0;
+  const totalNotifPages = Math.ceil(total / NOTIF_PAGE_SIZE);
+  const pagedNotifs = all;
   const prefList = prefs?.data || [];
 
   return (
@@ -135,11 +140,11 @@ export default function NotificationsPage() {
         title="Notifications"
         description={
           tab === "inbox"
-            ? `${unread.length} unread notification${unread.length !== 1 ? "s" : ""}`
+            ? `${unreadCount} unread notification${unreadCount !== 1 ? "s" : ""}`
             : "Configure your notification preferences"
         }
         actions={
-          tab === "inbox" && unread.length > 0 ? (
+          tab === "inbox" && unreadCount > 0 ? (
             <Button
               variant="outline"
               size="sm"
@@ -153,53 +158,46 @@ export default function NotificationsPage() {
       />
 
       {/* Top-level tabs: Inbox / Preferences */}
-      <div role="tablist" className="tabs tabs-bordered mb-4">
-        <button
-          role="tab"
-          className={cn(
-            "tab gap-2",
-            tab === "inbox" && "tab-active font-medium",
-          )}
-          onClick={() => setTab("inbox")}
-        >
-          <Bell className="w-4 h-4" /> Inbox
-        </button>
-        <button
-          role="tab"
-          className={cn(
-            "tab gap-2",
-            tab === "preferences" && "tab-active font-medium",
-          )}
-          onClick={() => setTab("preferences")}
-        >
-          <Settings className="w-4 h-4" /> Preferences
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          { id: "inbox", label: "Inbox", icon: <Bell className="w-4 h-4" /> },
+          {
+            id: "preferences",
+            label: "Preferences",
+            icon: <Settings className="w-4 h-4" />,
+          },
+        ]}
+        activeTab={tab}
+        onChange={(id) => setTab(id as TabMode)}
+        variant="bordered"
+        className="mb-4"
+      />
 
       {/* ── Inbox Tab ── */}
       {tab === "inbox" && (
         <>
           {/* Filter tabs */}
-          <div className="tabs tabs-boxed bg-base-200 w-fit mb-4">
-            {(["all", "unread", "read"] as FilterMode[]).map((f) => (
-              <button
-                key={f}
-                className={cn("tab tab-sm", filter === f && "tab-active")}
-                onClick={() => {
-                  setFilter(f);
-                  setPage(0);
-                }}
-              >
-                {f === "all"
-                  ? `All (${all.length})`
+          <Tabs
+            tabs={(["all", "unread", "read"] as FilterMode[]).map((f) => ({
+              id: f,
+              label:
+                f === "all"
+                  ? `All (${total})`
                   : f === "unread"
-                    ? `Unread (${unread.length})`
-                    : "Read"}
-              </button>
-            ))}
-          </div>
+                    ? `Unread (${unreadCount})`
+                    : "Read",
+            }))}
+            activeTab={filter}
+            onChange={(id) => {
+              setFilter(id as FilterMode);
+              setPage(0);
+            }}
+            variant="boxed"
+            size="sm"
+            className="bg-base-200 w-fit mb-4"
+          />
 
-          {filtered.length === 0 ? (
+          {all.length === 0 ? (
             <EmptyState
               icon={<Bell className="w-16 h-16" />}
               title={
@@ -263,13 +261,15 @@ export default function NotificationsPage() {
                           onClick={(e) => e.stopPropagation()}
                         >
                           {!notif.read_at && (
-                            <button
-                              className="btn btn-ghost btn-xs tooltip"
+                            <Button
+                              variant="ghost"
+                              size="xs"
+                              className="tooltip"
                               data-tip="Mark as read"
                               onClick={() => markReadMutation.mutate(notif.id)}
                             >
                               <Check className="w-4 h-4" />
-                            </button>
+                            </Button>
                           )}
                         </div>
                       </div>
@@ -280,7 +280,7 @@ export default function NotificationsPage() {
               <Pagination
                 page={page}
                 totalPages={totalNotifPages}
-                total={filtered.length}
+                total={total}
                 pageSize={NOTIF_PAGE_SIZE}
                 onPageChange={setPage}
               />

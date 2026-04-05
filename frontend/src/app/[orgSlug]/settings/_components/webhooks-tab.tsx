@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
@@ -125,12 +126,14 @@ export default function WebhooksTab() {
                     ))}
                   </div>
                 </div>
-                <button
-                  className="btn btn-ghost btn-sm btn-square"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="btn-square"
                   onClick={() => setDeleteTarget(wh)}
                 >
                   <Trash2 className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </Card>
           ))}
@@ -147,9 +150,9 @@ export default function WebhooksTab() {
         title="New Webhook"
       >
         {error && (
-          <div className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleSubmit((data) => createMutation.mutate(data))}

@@ -1,5 +1,7 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import {
   Activity,
   ArrowRight,
@@ -344,8 +346,10 @@ export default function LandingPage() {
             </div>
 
             {/* Mobile Menu Button */}
-            <button
-              className="lg:hidden btn btn-ghost btn-sm btn-square"
+            <Button
+              variant="ghost"
+              size="sm"
+              className="lg:hidden btn-square"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (
@@ -353,7 +357,7 @@ export default function LandingPage() {
               ) : (
                 <Menu className="w-5 h-5" />
               )}
-            </button>
+            </Button>
           </div>
 
           {/* Mobile Menu */}
@@ -1379,12 +1383,14 @@ export default function LandingPage() {
                         Thank you for reaching out. We&apos;ll get back to you
                         within 24 hours.
                       </p>
-                      <button
-                        className="btn btn-ghost btn-sm mt-4"
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="mt-4"
                         onClick={() => setContactStatus("idle")}
                       >
                         Send Another Message
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <form onSubmit={handleContactSubmit} className="space-y-4">
@@ -1461,24 +1467,22 @@ export default function LandingPage() {
                         />
                       </div>
                       {contactStatus === "error" && (
-                        <div className="alert alert-error text-sm py-2">
-                          <span>{contactError}</span>
-                        </div>
+                        <Alert variant="error" className="text-sm py-2">
+                          {contactError}
+                        </Alert>
                       )}
-                      <button
+                      <Button
                         type="submit"
-                        className="btn btn-primary w-full gap-2"
-                        disabled={contactStatus === "sending"}
+                        className="w-full gap-2"
+                        loading={contactStatus === "sending"}
                       >
-                        {contactStatus === "sending" ? (
-                          <span className="loading loading-spinner loading-sm" />
-                        ) : (
+                        {contactStatus !== "sending" && (
                           <Send className="w-4 h-4" />
                         )}
                         {contactStatus === "sending"
                           ? "Sending..."
                           : "Send Message"}
-                      </button>
+                      </Button>
                     </form>
                   )}
                 </div>

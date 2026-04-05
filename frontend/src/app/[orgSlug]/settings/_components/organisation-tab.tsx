@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Avatar, Card } from "@/components/ui/shared";
@@ -12,7 +13,6 @@ import {
   Building2,
   Calendar,
   Camera,
-  CheckCircle,
   Mail,
   MapPin,
 } from "lucide-react";
@@ -199,15 +199,14 @@ export default function OrganisationTab() {
   return (
     <div>
       {error && (
-        <div className="alert alert-error mb-4 text-sm">
-          <span>{error}</span>
-        </div>
+        <Alert variant="error" className="mb-4 text-sm">
+          {error}
+        </Alert>
       )}
       {success && (
-        <div className="alert alert-success mb-4 text-sm">
-          <CheckCircle className="w-4 h-4" />
-          <span>{success}</span>
-        </div>
+        <Alert variant="success" className="mb-4 text-sm">
+          {success}
+        </Alert>
       )}
 
       <form

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 interface BadgeProps {
@@ -75,8 +76,8 @@ export function Card({
       className={cn(
         "card bg-base-100/36 border border-base-200/55 backdrop-blur-xl transition-all duration-300",
         allowOverflow ? "overflow-visible" : "overflow-hidden",
-        "shadow-[inset_0_1px_0_oklch(100%_0_0_/_0.12),0_12px_32px_oklch(0%_0_0_/_0.14)]",
-        "hover:shadow-[inset_0_1px_0_oklch(100%_0_0_/_0.16),0_16px_40px_oklch(0%_0_0_/_0.18)]",
+        "card-glass-shadow",
+        "hover:card-glass-shadow-hover",
         compact && "card-compact",
         className,
       )}
@@ -192,17 +193,17 @@ export function ConfirmDialog({
         <h3 className="font-bold text-lg">{title}</h3>
         <p className="py-4">{message}</p>
         <div className="modal-action">
-          <button className="btn" onClick={onClose} disabled={loading}>
+          <Button variant="ghost" onClick={onClose} disabled={loading}>
             Cancel
-          </button>
-          <button
-            className="btn btn-error"
+          </Button>
+          <Button
+            variant="error"
             onClick={onConfirm}
             disabled={loading}
+            loading={loading}
           >
-            {loading && <span className="loading loading-spinner loading-sm" />}
             {confirmLabel}
-          </button>
+          </Button>
         </div>
       </div>
       <div

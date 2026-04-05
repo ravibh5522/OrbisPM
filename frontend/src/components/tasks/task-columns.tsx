@@ -2,12 +2,13 @@
 
 import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
-    ChangeRequestToast,
-    PendingReviewBadge,
+  ChangeRequestToast,
+  PendingReviewBadge,
 } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
@@ -19,30 +20,30 @@ import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
-    DeadlineConflict,
-    OrgMember,
-    ProjectMember,
-    Task,
-    TaskPriority,
-    TaskStatus,
-    TaskUpdateResult,
+  DeadlineConflict,
+  OrgMember,
+  ProjectMember,
+  Task,
+  TaskPriority,
+  TaskStatus,
+  TaskUpdateResult,
 } from "@/types/domain";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import {
-    Check,
-    ChevronRight,
-    Filter,
-    GripVertical,
-    ListPlus,
-    Loader2,
-    Pencil,
-    Plus,
-    Redo2,
-    Tags,
-    Trash2,
-    Undo2,
-    UserPlus,
-    X,
+  Check,
+  ChevronRight,
+  Filter,
+  GripVertical,
+  ListPlus,
+  Loader2,
+  Pencil,
+  Plus,
+  Redo2,
+  Tags,
+  Trash2,
+  Undo2,
+  UserPlus,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -1405,52 +1406,51 @@ export function TaskColumns({
   const toolbarContent = (
     <>
       <div className="flex items-center gap-1">
-        <button
-          className={cn(
-            "btn btn-xs gap-1",
-            bulkActionMode ? "btn-primary" : "btn-ghost",
-          )}
+        <Button
+          variant={bulkActionMode ? "primary" : "ghost"}
+          size="xs"
+          className="gap-1"
           onClick={toggleBulkActionMode}
         >
           <Check className="w-3 h-3" />
           {bulkActionMode ? `Select (${multiSelected.size})` : "Select"}
-        </button>
+        </Button>
         {bulkActionMode && multiSelected.size > 0 && (
-          <button
-            className="btn btn-ghost btn-xs"
-            onClick={clearMultiSelection}
-          >
+          <Button variant="ghost" size="xs" onClick={clearMultiSelection}>
             Clear
-          </button>
+          </Button>
         )}
       </div>
       <div className="flex items-center gap-0.5">
-        <button
-          className={cn(
-            "btn btn-xs gap-1",
-            splitView ? "btn-secondary" : "btn-ghost",
-          )}
+        <Button
+          variant={splitView ? "secondary" : "ghost"}
+          size="xs"
+          className="gap-1"
           onClick={() => setSplitView((p) => !p)}
           title="Toggle split view"
         >
           {splitView ? "Unsplit" : "Split"}
-        </button>
-        <button
-          className="btn btn-ghost btn-xs btn-square"
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="btn-square"
           onClick={undo}
           disabled={!canUndo}
           title="Undo (Ctrl+Z)"
         >
           <Undo2 className="w-3.5 h-3.5" />
-        </button>
-        <button
-          className="btn btn-ghost btn-xs btn-square"
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="btn-square"
           onClick={redo}
           disabled={!canRedo}
           title="Redo (Ctrl+Y)"
         >
           <Redo2 className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
     </>
   );
@@ -1465,15 +1465,13 @@ export function TaskColumns({
 
       {/* Update error toast (e.g. blocked non-reviewable fields) */}
       {updateError && (
-        <div className="alert alert-error shadow-lg mx-3 mt-2 text-sm">
-          <span>{updateError}</span>
-          <button
-            className="btn btn-ghost btn-xs"
-            onClick={() => setUpdateError(null)}
-          >
-            Dismiss
-          </button>
-        </div>
+        <Alert
+          variant="error"
+          className="shadow-lg mx-3 mt-2 text-sm"
+          onDismiss={() => setUpdateError(null)}
+        >
+          {updateError}
+        </Alert>
       )}
 
       {/* Change request modal for reviewable field edits */}
@@ -1813,21 +1811,22 @@ export function TaskColumns({
                     </p>
                   </div>
                   <div className="modal-action">
-                    <button
-                      className="btn btn-sm"
+                    <Button
+                      size="sm"
                       onClick={() => {
                         setUpdateDeadlineConflicts([]);
                         pendingUpdateRef.current = null;
                       }}
                     >
                       Cancel
-                    </button>
-                    <button
-                      className="btn btn-sm btn-warning"
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="warning"
                       onClick={confirmExtendDeadlinesOnUpdate}
                     >
                       Apply &amp; Adjust
-                    </button>
+                    </Button>
                   </div>
                 </div>
                 <div
@@ -2032,8 +2031,9 @@ function BulkActionsBar({
                 }
               }}
             />
-            <button
-              className="btn btn-primary btn-xs"
+            <Button
+              variant="primary"
+              size="xs"
               onClick={() => {
                 const labels = labelInput
                   .split(",")
@@ -2046,7 +2046,7 @@ function BulkActionsBar({
               }}
             >
               Apply
-            </button>
+            </Button>
           </div>
           <p className="text-[10px] text-base-content/50 mt-1">
             Comma-separated labels
@@ -2057,21 +2057,25 @@ function BulkActionsBar({
       <div className="divider divider-horizontal mx-0 h-6" />
 
       {/* Delete */}
-      <button
-        className="btn btn-ghost btn-xs text-error gap-1"
+      <Button
+        variant="ghost"
+        size="xs"
+        className="text-error gap-1"
         onClick={onDelete}
       >
         <Trash2 className="w-3 h-3" /> Delete
-      </button>
+      </Button>
 
       {/* Clear selection */}
-      <button
-        className="btn btn-ghost btn-xs btn-square"
+      <Button
+        variant="ghost"
+        size="xs"
+        className="btn-square"
         onClick={onClear}
         title="Clear selection"
       >
         <X className="w-3.5 h-3.5" />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -2176,18 +2180,22 @@ function TaskColumn({
                 if (e.key === "Escape") onCancelEdit();
               }}
             />
-            <button
-              className="btn btn-ghost btn-xs btn-square text-success"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square text-success"
               onClick={onConfirmEdit}
             >
               <Check className="w-3 h-3" />
-            </button>
-            <button
-              className="btn btn-ghost btn-xs btn-square text-error"
+            </Button>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square text-error"
               onClick={onCancelEdit}
             >
               <X className="w-3 h-3" />
-            </button>
+            </Button>
           </div>
         ) : (
           <span
@@ -2203,8 +2211,10 @@ function TaskColumn({
         )}
         <div className="flex items-center gap-1">
           {bulkMode && tasks.length > 0 && (
-            <button
-              className="btn btn-ghost btn-xs btn-square"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square"
               onClick={() => {
                 const allSelected = tasks.every((t) => multiSelected.has(t.id));
                 if (allSelected) {
@@ -2225,45 +2235,50 @@ function TaskColumn({
                 }
                 readOnly
               />
-            </button>
+            </Button>
           )}
           {canEdit && !isEditing && (
-            <button
-              className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 hover:opacity-100"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square opacity-0 group-hover:opacity-100 hover:opacity-100"
               onClick={onStartEdit}
               title="Rename column"
             >
               <Pencil className="w-3 h-3" />
-            </button>
+            </Button>
           )}
           <span className="text-xs text-base-content/40">{tasks.length}</span>
-          <button
-            className={cn(
-              "btn btn-ghost btn-xs btn-square",
-              filterActive && "text-primary",
-            )}
+          <Button
+            variant="ghost"
+            size="xs"
+            className={cn("btn-square", filterActive && "text-primary")}
             onClick={() => setShowFilter((p) => !p)}
             title="Filter column"
           >
             <Filter className="w-3 h-3" />
-          </button>
+          </Button>
           {onBulkAdd && (
-            <button
-              className="btn btn-ghost btn-xs btn-square"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square"
               onClick={onBulkAdd}
               title={`Bulk add ${label.toLowerCase()}`}
             >
               <ListPlus className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           )}
           {onAdd && (
-            <button
-              className="btn btn-ghost btn-xs btn-square"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="btn-square"
               onClick={onAdd}
               title={`Add ${label.toLowerCase()}`}
             >
               <Plus className="w-3.5 h-3.5" />
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -2301,9 +2316,14 @@ function TaskColumn({
           <div className="text-center py-8 px-3">
             <p className="text-xs text-base-content/30">No tasks</p>
             {onAdd && (
-              <button className="btn btn-ghost btn-xs mt-2" onClick={onAdd}>
+              <Button
+                variant="ghost"
+                size="xs"
+                className="mt-2"
+                onClick={onAdd}
+              >
                 <Plus className="w-3 h-3" /> Add
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -2705,15 +2725,22 @@ function ColumnFilterDropdown({
 
         {/* Actions */}
         <div className="flex items-center gap-1 pt-1 border-t border-base-200">
-          <button
-            className="btn btn-primary btn-xs flex-1"
+          <Button
+            variant="primary"
+            size="xs"
+            className="flex-1"
             onClick={applyFilter}
           >
             Apply
-          </button>
-          <button className="btn btn-ghost btn-xs flex-1" onClick={clearFilter}>
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="flex-1"
+            onClick={clearFilter}
+          >
             Clear
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -2877,9 +2904,9 @@ function CreateTaskModal({
         className="max-w-md"
       >
         {error && (
-          <div className="alert alert-error mb-3 text-sm">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-3 text-sm">
+            {error}
+          </Alert>
         )}
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
           <Input
@@ -2911,9 +2938,7 @@ function CreateTaskModal({
               </label>
               <ThemedDropdownSelect<TaskPriority>
                 value={watchedPriority || "medium"}
-                onChange={(v) =>
-                  setValue("priority", v, { shouldDirty: true })
-                }
+                onChange={(v) => setValue("priority", v, { shouldDirty: true })}
                 options={[
                   { value: "critical", label: "Critical" },
                   { value: "high", label: "High" },
@@ -3078,21 +3103,22 @@ function CreateTaskModal({
               </p>
             </div>
             <div className="modal-action">
-              <button
-                className="btn btn-sm"
+              <Button
+                size="sm"
                 onClick={() => {
                   setDeadlineConflicts([]);
                   setPendingPayload(null);
                 }}
               >
                 Cancel
-              </button>
-              <button
-                className="btn btn-sm btn-warning"
+              </Button>
+              <Button
+                size="sm"
+                variant="warning"
                 onClick={confirmExtendDeadlines}
               >
                 Apply &amp; Extend
-              </button>
+              </Button>
             </div>
           </div>
           <div
@@ -3165,7 +3191,9 @@ function ThemedDropdownSelect<T extends string>({
           />
         </svg>
       </summary>
-      <ul className="dropdown-content task-status-menu z-[220] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
+      <ul
+        className="dropdown-content task-status-menu z-[220] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border p-1 shadow-xl backdrop-blur-2xl" /* z: themed select dropdown */
+      >
         {options.map((opt) => (
           <li key={opt.value}>
             <button
@@ -3513,19 +3541,17 @@ function BulkCreateTaskModal({
 
         {/* Errors */}
         {errors.length > 0 && (
-          <div className="alert alert-error text-sm">
-            <div>
-              <p className="font-medium">
-                Failed to create {errors.length} task
-                {errors.length !== 1 ? "s" : ""}:
-              </p>
-              <ul className="list-disc list-inside mt-1 text-xs">
-                {errors.map((e, i) => (
-                  <li key={i}>{e}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
+          <Alert variant="error" className="text-sm">
+            <p className="font-medium">
+              Failed to create {errors.length} task
+              {errors.length !== 1 ? "s" : ""}:
+            </p>
+            <ul className="list-disc list-inside mt-1 text-xs">
+              {errors.map((e, i) => (
+                <li key={i}>{e}</li>
+              ))}
+            </ul>
+          </Alert>
         )}
 
         {/* Actions */}

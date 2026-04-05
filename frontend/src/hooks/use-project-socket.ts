@@ -1,18 +1,20 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useProjectTaskStore } from "@/stores/project-task-store";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { API_BASE } from "@/lib/api-base";
 
 type PendingReq = {
-  resolve: (data: any) => void;
+  resolve: (data: unknown) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
 
-let _send: ((action: string, payload?: Record<string, any>) => Promise<any>) | null = null;
+let _send:
+  | ((action: string, payload?: Record<string, any>) => Promise<any>)
+  | null = null;
 
 /**
  * Get the global WS send function (available after useProjectSocket mounts).
@@ -28,11 +30,16 @@ export function getProjectSend() {
  *
  * Call once in the project page.
  */
-export function useProjectSocket(orgId: string | undefined, projectId: string | undefined) {
+export function useProjectSocket(
+  orgId: string | undefined,
+  projectId: string | undefined,
+) {
   const wsRef = useRef<WebSocket | null>(null);
   const pendingRef = useRef<Map<string, PendingReq>>(new Map());
   const retryRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
   const unmountedRef = useRef(false);
   const qc = useQueryClient();
 
@@ -67,7 +74,10 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
   const connect = useCallback(() => {
     if (!orgId || !projectId || unmountedRef.current) return;
 
-    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+    const token =
+      typeof window !== "undefined"
+        ? localStorage.getItem("access_token")
+        : null;
     if (!token) return;
 
     // Close existing
@@ -80,7 +90,6 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log("[WS] Connected to project room");
       retryRef.current = 0;
       store.getState().setConnected(true);
       store.getState().setSend(send);
@@ -97,7 +106,6 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
     };
 
     ws.onclose = () => {
-      console.log("[WS] Disconnected");
       store.getState().setConnected(false);
       store.getState().setSend(null);
       _send = null;
@@ -114,7 +122,6 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
       const delay = Math.min(2000 * Math.pow(2, retryRef.current), 30_000);
       retryRef.current++;
       if (retryRef.current <= 15) {
-        console.log(`[WS] Reconnecting in ${delay / 1000}s...`);
         retryTimerRef.current = setTimeout(connect, delay);
       }
     };
@@ -152,7 +159,13 @@ export function useProjectSocket(orgId: string | undefined, projectId: string | 
 
 // ─── Message handler ───────────────────────────
 function handleMessage(
-  msg: { id?: string; action: string; payload?: any; error?: string; actor_id?: string },
+  msg: {
+    id?: string;
+    action: string;
+    payload?: Record<string, unknown>;
+    error?: string;
+    actor_id?: string;
+  },
   pending: Map<string, PendingReq>,
   qc: ReturnType<typeof useQueryClient>,
   orgId?: string,
@@ -175,7 +188,8 @@ function handleMessage(
   }
 
   // 2. Broadcast from another user — apply to local state
-  const p = msg.payload || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p = (msg.payload || {}) as Record<string, any>;
 
   switch (msg.action) {
     case "connected":
@@ -190,7 +204,11 @@ function handleMessage(
         const parentKey = task.parent_task_id || "root";
         const existing = store.tasks.get(parentKey);
         if (existing) {
-          store.setTasks(parentKey, [...existing, task], (store.totals.get(parentKey) ?? 0) + 1);
+          store.setTasks(
+            parentKey,
+            [...existing, task],
+            (store.totals.get(parentKey) ?? 0) + 1,
+          );
         }
       }
       break;
@@ -205,7 +223,7 @@ function handleMessage(
       break;
     }
     case "task:bulk-updated": {
-      const tasks = Array.isArray(p) ? p : p.data ?? [];
+      const tasks = Array.isArray(p) ? p : (p.data ?? []);
       store.bulkUpsertTasks(tasks);
       break;
     }
@@ -224,7 +242,8 @@ function handleMessage(
       if (p.task_id && p.item) store.addChecklist(p.task_id, p.item);
       break;
     case "checklist:updated":
-      if (p.task_id && p.item) store.updateChecklist(p.task_id, p.item.id, p.item);
+      if (p.task_id && p.item)
+        store.updateChecklist(p.task_id, p.item.id, p.item);
       break;
     case "checklist:deleted":
       if (p.task_id && p.id) store.removeChecklist(p.task_id, p.id);
@@ -249,7 +268,8 @@ function handleMessage(
       }
       break;
     case "dependency:removed":
-      if (p.task_id && p.depends_on_id) store.removeDependency(p.task_id, p.depends_on_id);
+      if (p.task_id && p.depends_on_id)
+        store.removeDependency(p.task_id, p.depends_on_id);
       break;
 
     // ─── Change request broadcasts ────

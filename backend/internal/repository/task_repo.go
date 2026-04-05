@@ -416,15 +416,28 @@ func (r *taskRepo) ListByOrgAndAssignee(ctx context.Context, orgID, assigneeID u
 	}
 
 	args = append(args, limit, offset)
+	orderClause := `ORDER BY
+		   CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'todo' THEN 1 WHEN status = 'blocked' THEN 2 ELSE 3 END,
+		   CASE WHEN due_date IS NOT NULL AND due_date < NOW() THEN 0 ELSE 1 END,
+		   due_date NULLS LAST,
+		   created_at DESC`
+
+	if filter.SortBy != "" {
+		allowedSort := map[string]bool{"title": true, "status": true, "priority": true, "due_date": true, "created_at": true, "updated_at": true}
+		if allowedSort[filter.SortBy] {
+			dir := "ASC"
+			if strings.EqualFold(filter.SortOrder, "desc") {
+				dir = "DESC"
+			}
+			orderClause = fmt.Sprintf("ORDER BY %s %s", filter.SortBy, dir)
+		}
+	}
+
 	querySQL := `SELECT id, org_id, project_id, parent_task_id, title, description, status, priority,
 		  assignee_id, assignee_ids, reporter_id, depth, position, due_date, start_date, estimated_hours, actual_hours,
 		  labels, metadata, review_status, recurrence_rule, recurrence_parent_id, next_occurrence, version, created_at, updated_at
 		 FROM tasks WHERE org_id = $1 AND ($2 = ANY(assignee_ids) OR assignee_id = $2)` + conds + `
-		 ORDER BY
-		   CASE WHEN status = 'in_progress' THEN 0 WHEN status = 'todo' THEN 1 WHEN status = 'blocked' THEN 2 ELSE 3 END,
-		   CASE WHEN due_date IS NOT NULL AND due_date < NOW() THEN 0 ELSE 1 END,
-		   due_date NULLS LAST,
-		   created_at DESC
+		 ` + orderClause + `
 		 LIMIT $` + fmt.Sprintf("%d", len(args)-1) + ` OFFSET $` + fmt.Sprintf("%d", len(args))
 	rows, err := r.pool.Query(ctx, querySQL, args...)
 	if err != nil {

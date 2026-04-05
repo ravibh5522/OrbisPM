@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, PasswordInput } from "@/components/ui/form-fields";
 import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
@@ -223,9 +224,9 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="alert alert-error mb-4 text-sm">
-              <span>{error}</span>
-            </div>
+            <Alert variant="error" className="mb-4 text-sm">
+              {error}
+            </Alert>
           )}
 
           {mfaChallenge.availableMethods.length > 1 && (
@@ -252,7 +253,7 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="border border-base-200 rounded-xl p-4 mb-4 bg-base-50">
+          <div className="border border-base-200 rounded-xl p-4 mb-4 bg-base-100">
             <div className="flex items-center gap-2 mb-3">
               <methodInfo.Icon className="w-5 h-5 text-primary" />
               <span className="font-medium text-sm">{methodInfo.label}</span>
@@ -338,9 +339,9 @@ export default function LoginPage() {
         </div>
 
         {error && (
-          <div className="alert alert-error mb-5 text-sm py-3">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-5 text-sm py-3">
+            {error}
+          </Alert>
         )}
 
         {/* Social Login Buttons */}

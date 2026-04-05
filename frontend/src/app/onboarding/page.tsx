@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
 import { api, ApiError } from "@/lib/api";
@@ -99,9 +100,9 @@ export default function OnboardingPage() {
             </div>
 
             {error && (
-              <div className="alert alert-error mb-4">
-                <span>{error}</span>
-              </div>
+              <Alert variant="error" className="mb-4">
+                {error}
+              </Alert>
             )}
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

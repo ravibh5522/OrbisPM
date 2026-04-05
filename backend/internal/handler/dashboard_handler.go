@@ -90,6 +90,12 @@ func (h *DashboardHandler) MyTasks(w http.ResponseWriter, r *http.Request) {
 	if q := r.URL.Query().Get("search"); q != "" {
 		filter.Search = &q
 	}
+	if sb := r.URL.Query().Get("sort_by"); sb != "" {
+		filter.SortBy = sb
+	}
+	if so := r.URL.Query().Get("sort_order"); so != "" {
+		filter.SortOrder = so
+	}
 
 	tasks, total, err := h.taskSvc.ListMyTasks(r.Context(), orgID, userID, filter)
 	if err != nil {

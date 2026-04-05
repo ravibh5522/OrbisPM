@@ -1,5 +1,6 @@
 "use client";
 
+import { STATUS_HEX } from "@/lib/task-colors";
 import { cn } from "@/lib/utils";
 
 interface HealthRingProps {
@@ -10,11 +11,18 @@ interface HealthRingProps {
   className?: string;
 }
 
+const SCORE_COLORS = {
+  excellent: STATUS_HEX.done, // green
+  good: STATUS_HEX.in_progress, // blue
+  atRisk: STATUS_HEX.blocked, // error red (risk = blocked severity)
+  critical: "#dc2626", // tailwind red-600
+} as const;
+
 function getScoreColor(score: number): string {
-  if (score >= 80) return "oklch(64% 0.18 180)";
-  if (score >= 60) return "oklch(56% 0.16 270)";
-  if (score >= 40) return "oklch(52% 0.14 282)";
-  return "oklch(48% 0.12 300)";
+  if (score >= 80) return SCORE_COLORS.excellent;
+  if (score >= 60) return SCORE_COLORS.good;
+  if (score >= 40) return SCORE_COLORS.atRisk;
+  return SCORE_COLORS.critical;
 }
 
 function getScoreLabel(score: number): string {
@@ -40,7 +48,12 @@ export function HealthRing({
   return (
     <div className={cn("flex flex-col items-center gap-1", className)}>
       <div className="relative" style={{ width: size, height: size }}>
-        <svg width={size} height={size} className="-rotate-90" style={{ backgroundColor: "transparent" }}>
+        <svg
+          width={size}
+          height={size}
+          className="-rotate-90"
+          style={{ backgroundColor: "transparent" }}
+        >
           <circle
             cx={size / 2}
             cy={size / 2}

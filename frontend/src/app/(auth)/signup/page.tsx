@@ -1,16 +1,17 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { useAuthStore } from "@/stores/auth-store";
-import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { Input, PasswordInput } from "@/components/ui/form-fields";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { ApiError, api } from "@/lib/api";
+import { Input, PasswordInput } from "@/components/ui/form-fields";
+import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
+import { api } from "@/lib/api";
 import { parseAuthError } from "@/lib/auth-errors";
+import { useAuthStore } from "@/stores/auth-store";
 import type { IDPInfo } from "@/types/domain";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useForm } from "react-hook-form";
 
 const IDP_ICONS: Record<string, string> = {
   google: "G",
@@ -57,7 +58,10 @@ export default function SignupPage() {
   } = useForm<SignupForm>();
 
   useEffect(() => {
-    api.auth.listIDPs().then((res) => setIdps(res.idps || [])).catch(() => {});
+    api.auth
+      .listIDPs()
+      .then((res) => setIdps(res.idps || []))
+      .catch(() => {});
   }, []);
 
   const onSubmit = async (data: SignupForm) => {
@@ -91,14 +95,18 @@ export default function SignupPage() {
     <div className="card bg-base-100 shadow-2xl rounded-2xl">
       <div className="card-body p-8">
         <div className="text-center mb-7">
-          <h1 className="text-2xl font-bold text-base-content">Create account</h1>
-          <p className="text-base-content/55 mt-1.5 text-sm">Get started with OrbisPM for free</p>
+          <h1 className="text-2xl font-bold text-base-content">
+            Create account
+          </h1>
+          <p className="text-base-content/55 mt-1.5 text-sm">
+            Get started with OrbisPM for free
+          </p>
         </div>
 
         {error && (
-          <div className="alert alert-error mb-5 text-sm py-3">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-5 text-sm py-3">
+            {error}
+          </Alert>
         )}
 
         {/* Social Signup Buttons */}
@@ -106,20 +114,19 @@ export default function SignupPage() {
           <>
             <div className="space-y-2">
               {idps.map((idp) => (
-                <button
+                <Button
                   key={idp.id}
                   type="button"
-                  className={`btn ${getIDPColor(idp)} w-full gap-2`}
+                  className={`${getIDPColor(idp)} w-full gap-2`}
                   onClick={() => handleIDPSignup(idp)}
                   disabled={idpLoading !== null}
+                  loading={idpLoading === idp.id}
                 >
-                  {idpLoading === idp.id ? (
-                    <span className="loading loading-spinner loading-sm" />
-                  ) : (
+                  {idpLoading !== idp.id && (
                     <span className="font-bold text-sm">{getIDPIcon(idp)}</span>
                   )}
                   Sign up with {idp.name}
-                </button>
+                </Button>
               ))}
             </div>
             <div className="divider text-xs text-base-content/40 my-4">OR</div>
@@ -158,7 +165,8 @@ export default function SignupPage() {
             autoComplete="new-password"
             {...register("confirmPassword", {
               required: "Please confirm your password",
-              validate: (v) => v === watch("password") || "Passwords do not match",
+              validate: (v) =>
+                v === watch("password") || "Passwords do not match",
             })}
             error={errors.confirmPassword?.message}
           />

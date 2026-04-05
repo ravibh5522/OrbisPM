@@ -1,5 +1,7 @@
 "use client";
 
+import { CHART_AXIS_STYLE, CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
+import { STATUS_HEX } from "@/lib/task-colors";
 import type { CFDPoint } from "@/types/domain";
 import {
   Area,
@@ -12,10 +14,10 @@ import {
 } from "recharts";
 
 const CFD_COLORS = {
-  done: "#22c55e",
-  in_progress: "#3b82f6",
-  blocked: "#ef4444",
-  todo: "#94a3b8",
+  done: STATUS_HEX.done,
+  in_progress: STATUS_HEX.in_progress,
+  blocked: STATUS_HEX.blocked,
+  todo: STATUS_HEX.todo,
 };
 
 interface StackedAreaChartProps {
@@ -39,24 +41,17 @@ export function StackedAreaChart({
         <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 11 }}
+          tick={CHART_AXIS_STYLE}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11 }}
+          tick={CHART_AXIS_STYLE}
           tickLine={false}
           axisLine={false}
           width={35}
         />
-        <Tooltip
-          contentStyle={{
-            fontSize: 12,
-            borderRadius: 8,
-            border: "none",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          }}
-        />
+        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
         <Area
           type="monotone"
           dataKey="done"

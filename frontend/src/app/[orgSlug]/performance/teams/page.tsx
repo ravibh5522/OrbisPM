@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "@/components/ui/form-fields";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { useOrgPolicies } from "@/hooks/use-policies";
@@ -87,10 +88,10 @@ export default function TeamsPerformancePage() {
         <div className="mb-6">
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
-            <input
+            <Input
               type="text"
               placeholder="Search teams..."
-              className="input input-bordered input-sm w-full max-w-xs pl-9"
+              className="input-sm w-full max-w-xs pl-9"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />

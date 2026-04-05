@@ -7,6 +7,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -63,7 +64,16 @@ func (h *ActivityHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	logs, total, err := h.activitySvc.ListByOrg(r.Context(), orgID, limit, offset)
+	filter := repository.ActivityFilter{
+		ListFilter: repository.ListFilter{Limit: limit, Offset: offset},
+		Search:     queryStr(r, "search"),
+		Action:     queryStr(r, "action"),
+		EntityType: entityType,
+		SortBy:     queryStrDefault(r, "sort_by", "created_at"),
+		SortOrder:  queryStrDefault(r, "sort_order", "desc"),
+	}
+
+	logs, total, err := h.activitySvc.ListByOrg(r.Context(), orgID, filter)
 	if err != nil {
 		Error(w, r, err)
 		return

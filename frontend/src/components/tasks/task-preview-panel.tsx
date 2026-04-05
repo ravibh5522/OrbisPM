@@ -1,17 +1,19 @@
 "use client";
 
 import {
-    RichTextEditor,
-    RichTextViewer,
+  RichTextEditor,
+  RichTextViewer,
 } from "@/components/editor/rich-text-editor";
 import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
 import {
-    RecurrenceBadge,
-    RecurrenceSelector,
+  RecurrenceBadge,
+  RecurrenceSelector,
 } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/form-fields";
 import { Avatar, ConfirmDialog } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { api } from "@/lib/api"; // kept for attachment upload/download (binary ops)
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -19,48 +21,42 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { useReviewableFields } from "@/hooks/use-reviewable-fields";
-import {
-    cn,
-    formatDate,
-    formatRelative,
-    priorityColor,
-    statusColor,
-    statusLabel,
-} from "@/lib/utils";
+import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
+import { cn, formatDate, formatRelative, statusLabel } from "@/lib/utils";
 import type {
-    Attachment,
-    Checklist,
-    Comment,
-    OrgMember,
-    ProjectMember,
-    Task,
-    TaskDependency,
-    TaskPriority,
-    TaskStatus,
-    TaskWatcher,
+  Attachment,
+  Checklist,
+  Comment,
+  OrgMember,
+  ProjectMember,
+  Task,
+  TaskDependency,
+  TaskPriority,
+  TaskStatus,
+  TaskWatcher,
 } from "@/types/domain";
 import {
-    CheckSquare,
-    Clock,
-    Copy,
-    Download,
-    Eye,
-    FileText,
-    Image as ImageIcon,
-    Link2,
-    ListChecks,
-    Lock,
-    MessageSquare,
-    Paperclip,
-    Play,
-    Plus,
-    Send,
-    Settings2,
-    Square,
-    Trash2,
-    Upload,
-    Users,
-    X,
+  CheckSquare,
+  Clock,
+  Copy,
+  Download,
+  Eye,
+  FileText,
+  Image as ImageIcon,
+  Link2,
+  ListChecks,
+  Lock,
+  MessageSquare,
+  Paperclip,
+  Play,
+  Plus,
+  Send,
+  Settings2,
+  Square,
+  Trash2,
+  Upload,
+  Users,
+  X,
 } from "lucide-react";
 
 const MAX_DEPTH = 3;
@@ -221,14 +217,6 @@ export function TaskPreviewPanel({
   const send = useProjectTaskStore((s) => s.send);
   const [activeTab, setActiveTab] = useState<TabType>("details");
   const [showDelete, setShowDelete] = useState(false);
-  const tabStripRef = useRef<HTMLDivElement | null>(null);
-  const tabButtonRefs = useRef<Record<TabType, HTMLButtonElement | null>>({
-    details: null,
-    checklist: null,
-    comments: null,
-    attachments: null,
-    relations: null,
-  });
 
   // DB-driven role-based access via project policies
   const policies = useProjectPolicies(projectId);
@@ -381,18 +369,6 @@ export function TaskPreviewPanel({
     },
   ];
 
-  useEffect(() => {
-    const activeBtn = tabButtonRefs.current[activeTab];
-    const strip = tabStripRef.current;
-    if (!activeBtn || !strip) return;
-
-    activeBtn.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-      inline: "center",
-    });
-  }, [activeTab]);
-
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
@@ -415,8 +391,9 @@ export function TaskPreviewPanel({
               }}
             />
             <div className="flex gap-1">
-              <button
-                className="btn btn-primary btn-xs"
+              <Button
+                variant="primary"
+                size="xs"
                 onClick={() => {
                   if (titleDraft.trim()) {
                     onUpdate({ title: titleDraft.trim() });
@@ -425,13 +402,14 @@ export function TaskPreviewPanel({
                 }}
               >
                 Save
-              </button>
-              <button
-                className="btn btn-ghost btn-xs"
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setEditingTitle(false)}
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -454,13 +432,13 @@ export function TaskPreviewPanel({
 
         {/* Quick status badges */}
         <div className="flex items-center gap-2 mt-2 flex-wrap">
-          <span className={cn("badge badge-sm", statusColor(task.status))}>
+          <span className={cn("badge badge-sm", STATUS_BADGE[task.status])}>
             {statusLabel(task.status)}
           </span>
           <span
             className={cn(
               "badge badge-sm badge-outline",
-              priorityColor(task.priority),
+              PRIORITY_BADGE[task.priority],
             )}
           >
             {task.priority}
@@ -483,34 +461,19 @@ export function TaskPreviewPanel({
 
       {/* Tabs */}
       <div className="shrink-0 border-b border-base-200">
-        <div
-          ref={tabStripRef}
-          className="flex overflow-x-auto scrollbar-hide scroll-smooth"
-        >
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              ref={(el) => {
-                tabButtonRefs.current[tab.id] = el;
-              }}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2 text-xs font-medium border-b-2 transition-colors whitespace-nowrap",
-                activeTab === tab.id
-                  ? "border-primary text-primary"
-                  : "border-transparent text-base-content/60 hover:text-base-content hover:bg-base-200/50",
-              )}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              {tab.icon}
-              <span className="hidden sm:inline">{tab.label}</span>
-              {tab.badge !== undefined && tab.badge > 0 && (
-                <span className="badge badge-xs badge-primary">
-                  {tab.badge}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          tabs={tabs.map((t) => ({
+            id: t.id,
+            label: t.label,
+            icon: t.icon,
+            badge: t.badge && t.badge > 0 ? t.badge : undefined,
+          }))}
+          activeTab={activeTab}
+          onChange={(id) => setActiveTab(id as TabType)}
+          variant="bordered"
+          size="sm"
+          className="overflow-x-auto scrollbar-hide"
+        />
       </div>
 
       {/* Tab Content - scrollable */}
@@ -588,29 +551,35 @@ export function TaskPreviewPanel({
       {/* Footer Actions */}
       <div className="shrink-0 p-3 border-t border-base-200 space-y-2 bg-base-100">
         {task.depth < MAX_DEPTH && access.canEdit && onAddSubtask && (
-          <button
-            className="btn btn-xs btn-outline btn-primary w-full gap-1"
+          <Button
+            size="xs"
+            variant="outline"
+            className="btn-primary w-full gap-1"
             onClick={onAddSubtask}
           >
             <Plus className="w-3 h-3" /> Subtask
-          </button>
+          </Button>
         )}
         <div className="flex gap-1">
           {access.canEdit && (
-            <button
-              className="btn btn-xs btn-ghost flex-1 gap-1"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="flex-1 gap-1"
               onClick={onDuplicate}
             >
               <Copy className="w-3 h-3" /> Clone
-            </button>
+            </Button>
           )}
           {access.canDelete && (
-            <button
-              className="btn btn-xs btn-ghost text-error flex-1 gap-1"
+            <Button
+              variant="ghost"
+              size="xs"
+              className="text-error flex-1 gap-1"
               onClick={() => setShowDelete(true)}
             >
               <Trash2 className="w-3 h-3" /> Delete
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -906,9 +875,9 @@ function DetailsTab({
       <div className="grid grid-cols-2 gap-2">
         <div>
           {fieldLabel("Start Date", "start_date")}
-          <input
+          <Input
             type="date"
-            className="input input-bordered input-xs w-full"
+            className="input-xs w-full"
             value={task.start_date ? task.start_date.split("T")[0] : ""}
             onChange={(e) =>
               handleFieldUpdate("start_date", {
@@ -922,9 +891,9 @@ function DetailsTab({
         </div>
         <div>
           {fieldLabel("Due Date", "due_date")}
-          <input
+          <Input
             type="date"
-            className="input input-bordered input-xs w-full"
+            className="input-xs w-full"
             value={task.due_date ? task.due_date.split("T")[0] : ""}
             onChange={(e) =>
               handleFieldUpdate("due_date", {
@@ -942,9 +911,9 @@ function DetailsTab({
       <div className="grid grid-cols-2 gap-2">
         <div>
           {fieldLabel("Est. Hours", "estimated_hours")}
-          <input
+          <Input
             type="number"
-            className="input input-bordered input-xs w-full"
+            className="input-xs w-full"
             step="0.5"
             min="0"
             placeholder="0"
@@ -961,9 +930,9 @@ function DetailsTab({
         </div>
         <div>
           {fieldLabel("Actual Hours", "actual_hours")}
-          <input
+          <Input
             type="number"
-            className="input input-bordered input-xs w-full"
+            className="input-xs w-full"
             step="0.5"
             min="0"
             placeholder="0"
@@ -1063,12 +1032,13 @@ function DetailsTab({
                     if (e.key === "Escape") setLabelsOpen(false);
                   }}
                 />
-                <button
-                  className="btn btn-ghost btn-xs"
+                <Button
+                  variant="ghost"
+                  size="xs"
                   onClick={() => setLabelsOpen(false)}
                 >
                   <X className="w-3 h-3" />
-                </button>
+                </Button>
               </div>
             ) : (
               <button
@@ -1094,27 +1064,29 @@ function DetailsTab({
               placeholder="Add description..."
             />
             <div className="flex gap-1">
-              <button
-                className="btn btn-primary btn-xs"
+              <Button
+                variant="primary"
+                size="xs"
                 onClick={() => {
                   onUpdate({ description: descDraft });
                   setEditingDesc(false);
                 }}
               >
                 Save
-              </button>
-              <button
-                className="btn btn-ghost btn-xs"
+              </Button>
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => setEditingDesc(false)}
               >
                 Cancel
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
           <div
             className={cn(
-              "text-sm min-h-[60px] p-2 rounded border border-base-200 bg-base-50",
+              "text-sm min-h-[60px] p-2 rounded border border-base-200 bg-base-100",
               access.canEdit && "cursor-pointer hover:border-base-300",
             )}
             onClick={() => {
@@ -1269,8 +1241,10 @@ function ChecklistTab({
                   }}
                   className="flex items-center gap-2 group py-1"
                 >
-                  <button
-                    className="btn btn-ghost btn-xs btn-square shrink-0"
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="btn-square shrink-0"
                     onClick={() =>
                       access.canEdit && handleToggle(item.id, !item.is_checked)
                     }
@@ -1281,7 +1255,7 @@ function ChecklistTab({
                     ) : (
                       <Square className="w-4 h-4" />
                     )}
-                  </button>
+                  </Button>
                   <span
                     className={cn(
                       "flex-1 text-sm truncate",
@@ -1291,12 +1265,14 @@ function ChecklistTab({
                     {item.title}
                   </span>
                   {access.canEdit && (
-                    <button
-                      className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100 shrink-0"
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      className="btn-square opacity-0 group-hover:opacity-100 shrink-0"
                       onClick={() => handleDeleteItem(item.id)}
                     >
                       <Trash2 className="w-3 h-3" />
-                    </button>
+                    </Button>
                   )}
                 </div>
               );
@@ -1322,13 +1298,15 @@ function ChecklistTab({
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
             />
-            <button
+            <Button
               type="submit"
-              className="btn btn-primary btn-xs join-item"
+              variant="primary"
+              size="xs"
+              className="join-item"
               disabled={!newTitle.trim() || creating}
             >
               <Plus className="w-3 h-3" />
-            </button>
+            </Button>
           </div>
         </form>
       )}
@@ -1445,12 +1423,14 @@ function CommentsTab({
                         {formatRelative(comment.created_at)}
                       </span>
                       {canDelete && (
-                        <button
-                          className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="btn-square opacity-0 group-hover:opacity-100"
                           onClick={() => handleDeleteComment(comment.id)}
                         >
                           <Trash2 className="w-2.5 h-2.5" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                     <p className="text-sm text-base-content/80 whitespace-pre-wrap break-words">
@@ -1794,8 +1774,9 @@ function AttachmentsTab({
                       </div>
                       {/* Action buttons */}
                       <div className="absolute top-1 right-1 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          className="btn btn-xs btn-circle bg-base-100/80 hover:bg-base-100 border-0"
+                        <Button
+                          size="xs"
+                          className="btn-circle bg-base-100/80 hover:bg-base-100 border-0"
                           disabled={loadingId === att.id}
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1804,10 +1785,11 @@ function AttachmentsTab({
                           title="Download"
                         >
                           <Download className="w-3 h-3" />
-                        </button>
+                        </Button>
                         {access.canEdit && (
-                          <button
-                            className="btn btn-xs btn-circle bg-base-100/80 hover:bg-error/20 border-0 text-error"
+                          <Button
+                            size="xs"
+                            className="btn-circle bg-base-100/80 hover:bg-error/20 border-0 text-error"
                             onClick={(e) => {
                               e.stopPropagation();
                               setDeleteConfirm(att.id);
@@ -1815,7 +1797,7 @@ function AttachmentsTab({
                             title="Delete"
                           >
                             <Trash2 className="w-3 h-3" />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -1848,31 +1830,37 @@ function AttachmentsTab({
                     </div>
                     <div className="flex gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       {isPDF(att.mime_type) && (
-                        <button
-                          className="btn btn-ghost btn-xs btn-square"
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="btn-square"
                           disabled={loadingId === att.id}
                           onClick={() => handlePreview(att)}
                           title="Preview"
                         >
                           <Eye className="w-3 h-3" />
-                        </button>
+                        </Button>
                       )}
-                      <button
-                        className="btn btn-ghost btn-xs btn-square"
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="btn-square"
                         disabled={loadingId === att.id}
                         onClick={() => handleDownload(att)}
                         title="Download"
                       >
                         <Download className="w-3 h-3" />
-                      </button>
+                      </Button>
                       {access.canEdit && (
-                        <button
-                          className="btn btn-ghost btn-xs btn-square text-error"
+                        <Button
+                          variant="ghost"
+                          size="xs"
+                          className="btn-square text-error"
                           onClick={() => setDeleteConfirm(att.id)}
                           title="Delete"
                         >
                           <Trash2 className="w-3 h-3" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -1908,8 +1896,10 @@ function AttachmentsTab({
             <div className="flex items-center justify-between px-3 py-2 border-b border-base-200">
               <h3 className="font-semibold text-sm truncate">{preview.name}</h3>
               <div className="flex gap-1">
-                <button
-                  className="btn btn-ghost btn-xs btn-square"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="btn-square"
                   onClick={() => {
                     const a = document.createElement("a");
                     a.href = preview.url;
@@ -1922,13 +1912,15 @@ function AttachmentsTab({
                   title="Download"
                 >
                   <Download className="w-4 h-4" />
-                </button>
-                <button
-                  className="btn btn-ghost btn-xs btn-square"
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="btn-square"
                   onClick={() => setPreview(null)}
                 >
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </div>
             <div
@@ -2032,17 +2024,16 @@ function RelationsTab({
           <label className="text-xs text-base-content/50 flex items-center gap-1">
             <Users className="w-3 h-3" /> Watchers ({watchers.length})
           </label>
-          <button
-            className={cn(
-              "btn btn-xs gap-1",
-              isWatching ? "btn-primary" : "btn-outline",
-            )}
+          <Button
+            size="xs"
+            variant={isWatching ? "primary" : "outline"}
+            className="gap-1"
             onClick={() => handleToggleWatch()}
             disabled={watchPending}
           >
             <Eye className="w-3 h-3" />
             {isWatching ? "Watching" : "Watch"}
-          </button>
+          </Button>
         </div>
         {watchers.length === 0 ? (
           <p className="text-xs text-base-content/40">No watchers</p>
@@ -2092,12 +2083,14 @@ function RelationsTab({
                   {dep.depends_on_id.slice(0, 8)}...
                 </span>
                 {access.canEdit && (
-                  <button
-                    className="btn btn-ghost btn-xs btn-square opacity-0 group-hover:opacity-100"
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    className="btn-square opacity-0 group-hover:opacity-100"
                     onClick={() => handleRemoveDep(dep.depends_on_id)}
                   >
                     <X className="w-3 h-3" />
-                  </button>
+                  </Button>
                 )}
               </div>
             ))}

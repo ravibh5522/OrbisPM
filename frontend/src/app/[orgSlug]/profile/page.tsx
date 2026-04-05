@@ -1,22 +1,23 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Avatar, Card, PageHeader } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { ThemeCustomizerModal } from "@/components/ui/theme-customizer-modal";
 import { api, ApiError } from "@/lib/api";
+import { THEME_PREVIEWS } from "@/lib/theme-previews";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { THEMES, useUIStore } from "@/stores/ui-store";
 import type { NotificationPreference, TOTPRegistration } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  AlertTriangle,
   Bell,
   Briefcase,
   Calendar,
   Camera,
-  CheckCircle,
   Copy,
   Download,
   Globe,
@@ -76,57 +77,6 @@ interface ProfileForm {
   timezone: string;
   language: string;
 }
-
-/* ─── Theme preview colors for visual picker ─── */
-const THEME_PREVIEWS: Record<
-  string,
-  {
-    bg: string;
-    card: string;
-    primary: string;
-    secondary: string;
-    accent: string;
-    text: string;
-    label: string;
-  }
-> = {
-  "glass-light": {
-    bg: "bg-gradient-to-br from-indigo-100 via-purple-50 to-teal-50",
-    card: "bg-white/60 backdrop-blur-md border border-white/40",
-    primary: "bg-indigo-500",
-    secondary: "bg-violet-400",
-    accent: "bg-teal-400",
-    text: "text-gray-800",
-    label: "Frosted glass with light gradient",
-  },
-  "glass-dark": {
-    bg: "bg-gradient-to-br from-purple-950 via-indigo-950 to-cyan-950",
-    card: "bg-white/10 backdrop-blur-md border border-white/10",
-    primary: "bg-violet-500",
-    secondary: "bg-cyan-400",
-    accent: "bg-rose-400",
-    text: "text-white",
-    label: "Frosted glass with dark gradient",
-  },
-  "orbis-light": {
-    bg: "bg-slate-50",
-    card: "bg-white border border-slate-200",
-    primary: "bg-blue-600",
-    secondary: "bg-sky-500",
-    accent: "bg-emerald-500",
-    text: "text-slate-800",
-    label: "Clean minimal light",
-  },
-  "orbis-dark": {
-    bg: "bg-slate-900",
-    card: "bg-slate-800 border border-slate-700",
-    primary: "bg-indigo-500",
-    secondary: "bg-teal-500",
-    accent: "bg-amber-400",
-    text: "text-white",
-    label: "Clean minimal dark",
-  },
-};
 
 /* ─── Notification event types and labels ─── */
 const EVENT_TYPES = [
@@ -241,15 +191,14 @@ function NotificationsTab() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="alert alert-error mb-4 text-sm">
-          <span>{error}</span>
-        </div>
+        <Alert variant="error" className="mb-4 text-sm">
+          {error}
+        </Alert>
       )}
       {success && (
-        <div className="alert alert-success mb-4 text-sm">
-          <CheckCircle className="w-4 h-4" />
-          <span>{success}</span>
-        </div>
+        <Alert variant="success" className="mb-4 text-sm">
+          {success}
+        </Alert>
       )}
 
       <Card>
@@ -399,35 +348,28 @@ function AppearanceTab() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="alert alert-error mb-4 text-sm">
-          <span>{error}</span>
-        </div>
+        <Alert variant="error" className="mb-4 text-sm">
+          {error}
+        </Alert>
       )}
       {success && (
-        <div className="alert alert-success mb-4 text-sm">
-          <CheckCircle className="w-4 h-4" />
-          <span>{success}</span>
-        </div>
+        <Alert variant="success" className="mb-4 text-sm">
+          {success}
+        </Alert>
       )}
 
       {isLocked && (
-        <div className="alert gap-2 border border-warning/30 bg-warning/10 text-warning text-sm">
-          <Lock className="w-4 h-4 flex-shrink-0" />
-          <span>
-            Your organisation admin has applied and locked a theme. You cannot
-            change it.
-          </span>
-        </div>
+        <Alert variant="warning" className="mb-4 text-sm">
+          Your organisation admin has applied and locked a theme. You cannot
+          change it.
+        </Alert>
       )}
 
       {!isLocked && colorSchemaLocked && (
-        <div className="alert gap-2 border border-info/30 bg-info/10 text-info text-sm">
-          <Palette className="w-4 h-4 flex-shrink-0" />
-          <span>
-            Colour scheme is set by your admin. You can switch between themes
-            but cannot customise colours.
-          </span>
-        </div>
+        <Alert variant="info" className="mb-4 text-sm">
+          Colour scheme is set by your admin. You can switch between themes but
+          cannot customise colours.
+        </Alert>
       )}
 
       <Card>
@@ -442,12 +384,14 @@ function AppearanceTab() {
             </div>
           </div>
           {/* Customise colours button */}
-          <button
+          <Button
             type="button"
             onClick={() => setCustomizerOpen(true)}
             disabled={isLocked || colorSchemaLocked}
+            size="sm"
+            variant="outline"
             className={cn(
-              "btn btn-sm btn-outline gap-2",
+              "gap-2",
               (isLocked || colorSchemaLocked) && "btn-disabled opacity-50",
             )}
             title={
@@ -460,7 +404,7 @@ function AppearanceTab() {
           >
             <Paintbrush className="w-3.5 h-3.5" />
             Customise
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -942,66 +886,47 @@ export default function ProfilePage() {
       />
 
       {/* Tabs */}
-      <div role="tablist" className="tabs tabs-bordered mb-6">
-        <button
-          role="tab"
-          className={cn(
-            "tab gap-2",
-            activeTab === "profile" && "tab-active font-medium",
-          )}
-          onClick={() => setActiveTab("profile")}
-        >
-          <User className="w-4 h-4" />
-          Profile
-        </button>
-        <button
-          role="tab"
-          className={cn(
-            "tab gap-2",
-            activeTab === "appearance" && "tab-active font-medium",
-          )}
-          onClick={() => setActiveTab("appearance")}
-        >
-          <Palette className="w-4 h-4" />
-          Appearance
-        </button>
-        <button
-          role="tab"
-          className={cn(
-            "tab gap-2",
-            activeTab === "notifications" && "tab-active font-medium",
-          )}
-          onClick={() => setActiveTab("notifications")}
-        >
-          <Bell className="w-4 h-4" />
-          Notifications
-        </button>
-        <button
-          role="tab"
-          className={cn(
-            "tab gap-2",
-            activeTab === "security" && "tab-active font-medium",
-          )}
-          onClick={() => setActiveTab("security")}
-        >
-          <Shield className="w-4 h-4" />
-          Security
-        </button>
-      </div>
+      <Tabs
+        tabs={[
+          {
+            id: "profile",
+            label: "Profile",
+            icon: <User className="w-4 h-4" />,
+          },
+          {
+            id: "appearance",
+            label: "Appearance",
+            icon: <Palette className="w-4 h-4" />,
+          },
+          {
+            id: "notifications",
+            label: "Notifications",
+            icon: <Bell className="w-4 h-4" />,
+          },
+          {
+            id: "security",
+            label: "Security",
+            icon: <Shield className="w-4 h-4" />,
+          },
+        ]}
+        activeTab={activeTab}
+        onChange={setActiveTab}
+        variant="bordered"
+        className="mb-6"
+      />
 
       {/* ── Profile Tab ── */}
       {activeTab === "profile" && (
         <>
           {profileError && (
-            <div className="alert alert-error mb-4 text-sm">
-              <span>{profileError}</span>
-            </div>
+            <Alert variant="error" className="mb-4 text-sm">
+              {profileError}
+            </Alert>
           )}
           {profileSuccess && (
-            <div className="alert alert-success mb-4 text-sm">
-              <CheckCircle className="w-4 h-4" />
-              <span>{profileSuccess}</span>
-            </div>
+            <Alert variant="success" className="mb-4 text-sm">
+              {profileSuccess}
+            </Alert>
           )}
 
           <form
@@ -1220,16 +1145,14 @@ export default function ProfilePage() {
       {activeTab === "security" && (
         <>
           {secError && (
-            <div className="alert alert-error mb-4 text-sm">
-              <AlertTriangle className="w-4 h-4" />
-              <span>{secError}</span>
-            </div>
+            <Alert variant="error" className="mb-4 text-sm">
+              {secError}
+            </Alert>
           )}
           {secSuccess && (
-            <div className="alert alert-success mb-4 text-sm">
-              <CheckCircle className="w-4 h-4" />
-              <span>{secSuccess}</span>
-            </div>
+            <Alert variant="success" className="mb-4 text-sm">
+              {secSuccess}
+            </Alert>
           )}
 
           {/* Change Password Card */}
@@ -1560,13 +1483,10 @@ export default function ProfilePage() {
                     <h3 className="font-bold text-lg mb-2">
                       Your Backup Codes
                     </h3>
-                    <div className="alert alert-warning mb-4 text-xs">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>
-                        Save these codes now — they will not be shown again.
-                        Each code can only be used once.
-                      </span>
-                    </div>
+                    <Alert variant="warning" className="mb-4 text-xs">
+                      Save these codes now — they will not be shown again. Each
+                      code can only be used once.
+                    </Alert>
                     <div className="grid grid-cols-2 gap-2 mb-4">
                       {backupCodes.map((code, i) => (
                         <code

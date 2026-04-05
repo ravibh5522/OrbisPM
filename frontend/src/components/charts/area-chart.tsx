@@ -10,6 +10,7 @@ import {
   YAxis,
 } from "recharts";
 
+import { CHART_AXIS_STYLE, CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { AreaChartSkeleton } from "./chart-skeleton";
 
 interface AreaChartProps {
@@ -46,24 +47,17 @@ export function AreaChartWidget({
         {showGrid && <CartesianGrid strokeDasharray="3 3" opacity={0.2} />}
         <XAxis
           dataKey={xKey}
-          tick={{ fontSize: 11 }}
+          tick={CHART_AXIS_STYLE}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
-          tick={{ fontSize: 11 }}
+          tick={CHART_AXIS_STYLE}
           tickLine={false}
           axisLine={false}
           width={35}
         />
-        <Tooltip
-          contentStyle={{
-            fontSize: 12,
-            borderRadius: 8,
-            border: "none",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          }}
-        />
+        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
         <Area
           type="monotone"
           dataKey={dataKey}

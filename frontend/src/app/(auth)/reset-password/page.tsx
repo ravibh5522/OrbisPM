@@ -1,15 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useForm } from "react-hook-form";
-import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { Input, PasswordInput } from "@/components/ui/form-fields";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Input, PasswordInput } from "@/components/ui/form-fields";
+import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
 import { api } from "@/lib/api";
 import { parseAuthError } from "@/lib/auth-errors";
-import { KeyRound, CheckCircle, ArrowLeft } from "lucide-react";
+import { ArrowLeft, CheckCircle, KeyRound } from "lucide-react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 interface ResetForm {
   email: string;
@@ -84,9 +85,9 @@ export default function ResetPasswordPage() {
         </div>
 
         {error && (
-          <div className="alert alert-error mb-5 text-sm py-3">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-5 text-sm py-3">
+            {error}
+          </Alert>
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

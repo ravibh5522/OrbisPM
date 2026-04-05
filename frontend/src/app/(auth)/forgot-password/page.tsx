@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { useForm } from "react-hook-form";
-import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { Input } from "@/components/ui/form-fields";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { api, ApiError } from "@/lib/api";
+import { Input } from "@/components/ui/form-fields";
+import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
+import { api } from "@/lib/api";
 import { parseAuthError } from "@/lib/auth-errors";
-import { Mail, ArrowLeft, CheckCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, Mail } from "lucide-react";
+import Link from "next/link";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
 
 interface ForgotForm {
   email: string;
@@ -61,16 +62,18 @@ export default function ForgotPasswordPage() {
 
           <div className="divider text-xs text-base-content/40 my-3">OR</div>
 
-          <button
+          <Button
             type="button"
-            className="btn btn-ghost btn-sm w-full"
+            variant="ghost"
+            size="sm"
+            className="w-full"
             onClick={() => {
               setSent(false);
               setSentEmail("");
             }}
           >
             Try a different email
-          </button>
+          </Button>
 
           <p className="text-center text-xs text-base-content/40 mt-4">
             Didn&apos;t receive the email? Check your spam folder or{" "}
@@ -106,9 +109,9 @@ export default function ForgotPasswordPage() {
         </div>
 
         {error && (
-          <div className="alert alert-error mb-5 text-sm py-3">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-5 text-sm py-3">
+            {error}
+          </Alert>
         )}
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -62,7 +63,7 @@ func (r *activityRepo) ListByEntity(ctx context.Context, entityType string, enti
 	return logs, rows.Err()
 }
 
-func (r *activityRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter ListFilter) ([]*domain.ActivityLog, int, error) {
+func (r *activityRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter ActivityFilter) ([]*domain.ActivityLog, int, error) {
 	limit := filter.Limit
 	if limit <= 0 {
 		limit = 50
@@ -72,17 +73,42 @@ func (r *activityRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter Li
 		offset = 0
 	}
 
-	var total int
-	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM activity_log WHERE org_id = $1`, orgID).Scan(&total)
-	if err != nil {
-		return nil, 0, err
+	args := []any{orgID}
+	where := ""
+
+	if filter.Search != nil && *filter.Search != "" {
+		args = append(args, "%"+strings.ToLower(*filter.Search)+"%")
+		where += fmt.Sprintf(" AND (LOWER(action) LIKE $%d OR LOWER(entity_type) LIKE $%d)", len(args), len(args))
+	}
+	if filter.Action != nil && *filter.Action != "" {
+		args = append(args, *filter.Action)
+		where += fmt.Sprintf(" AND action = $%d", len(args))
+	}
+	if filter.EntityType != nil && *filter.EntityType != "" {
+		args = append(args, *filter.EntityType)
+		where += fmt.Sprintf(" AND entity_type = $%d", len(args))
 	}
 
-	rows, err := r.pool.Query(ctx,
+	var total int
+	countSQL := `SELECT COUNT(*) FROM activity_log WHERE org_id = $1` + where
+	if err := r.pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count activity: %w", err)
+	}
+
+	sortDir := "DESC"
+	if strings.EqualFold(filter.SortOrder, "asc") {
+		sortDir = "ASC"
+	}
+
+	args = append(args, limit, offset)
+	querySQL := fmt.Sprintf(
 		`SELECT id, org_id, entity_type, entity_id, action, actor_id, changes, metadata, created_at
-		 FROM activity_log WHERE org_id = $1
-		 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-		orgID, limit, offset)
+		 FROM activity_log WHERE org_id = $1%s
+		 ORDER BY created_at %s
+		 LIMIT $%d OFFSET $%d`,
+		where, sortDir, len(args)-1, len(args))
+
+	rows, err := r.pool.Query(ctx, querySQL, args...)
 	if err != nil {
 		return nil, 0, err
 	}

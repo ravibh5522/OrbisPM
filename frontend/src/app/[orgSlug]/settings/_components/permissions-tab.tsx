@@ -1,7 +1,8 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input, Textarea } from "@/components/ui/form-fields";
+import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import {
   Card,
@@ -9,8 +10,8 @@ import {
   EmptyState,
   LoadingPage,
 } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
-import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
   Permission,
@@ -110,8 +111,8 @@ function TeamProjectRoleMapSection({ orgId }: { orgId: string }) {
                   {tr.name}
                 </span>
                 <span className="text-base-content/40 text-xs">→</span>
-                <select
-                  className="select select-bordered select-xs flex-1"
+                <Select
+                  className="select-xs flex-1"
                   value={draft[tr.slug] || ""}
                   onChange={(e) => {
                     setDraft((prev) => ({
@@ -120,14 +121,14 @@ function TeamProjectRoleMapSection({ orgId }: { orgId: string }) {
                     }));
                     setHasChanges(true);
                   }}
-                >
-                  <option value="">— No mapping —</option>
-                  {projectRoleList.map((pr: Role) => (
-                    <option key={pr.slug} value={pr.slug}>
-                      {pr.name}
-                    </option>
-                  ))}
-                </select>
+                  options={[
+                    { value: "", label: "— No mapping —" },
+                    ...projectRoleList.map((pr: Role) => ({
+                      value: pr.slug,
+                      label: pr.name,
+                    })),
+                  ]}
+                />
               </div>
             ))}
             {teamRoleList.length === 0 && (
@@ -360,22 +361,13 @@ export default function PermissionsTab() {
     <div className="space-y-4">
       {/* Scope tabs + New Role button */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-1 bg-base-200 rounded-lg p-0.5">
-          {SCOPE_TABS.map((tab) => (
-            <button
-              key={tab.value}
-              className={cn(
-                "px-3 py-1.5 text-sm font-medium rounded-md transition-colors",
-                scope === tab.value
-                  ? "bg-base-100 text-base-content shadow-sm"
-                  : "text-base-content/60 hover:text-base-content",
-              )}
-              onClick={() => setScope(tab.value)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+        <Tabs
+          tabs={SCOPE_TABS.map((t) => ({ id: t.value, label: t.label }))}
+          activeTab={scope}
+          onChange={(id) => setScope(id as PermissionScope)}
+          variant="boxed"
+          size="sm"
+        />
         <Button
           size="sm"
           onClick={() => {
@@ -602,7 +594,11 @@ export default function PermissionsTab() {
           onSubmit={createForm.handleSubmit(handleCreate)}
           className="space-y-4"
         >
-          {error && <div className="alert alert-error text-sm">{error}</div>}
+          {error && (
+            <Alert variant="error" className="text-sm">
+              {error}
+            </Alert>
+          )}
           <Input
             label="Slug"
             placeholder="e.g. project_manager"
@@ -645,7 +641,11 @@ export default function PermissionsTab() {
           onSubmit={editForm.handleSubmit(handleEdit)}
           className="space-y-4"
         >
-          {error && <div className="alert alert-error text-sm">{error}</div>}
+          {error && (
+            <Alert variant="error" className="text-sm">
+              {error}
+            </Alert>
+          )}
           <Input
             label="Display Name"
             {...editForm.register("name", { required: "Name is required" })}
@@ -675,7 +675,11 @@ export default function PermissionsTab() {
         className="max-w-2xl"
       >
         <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-          {error && <div className="alert alert-error text-sm">{error}</div>}
+          {error && (
+            <Alert variant="error" className="text-sm">
+              {error}
+            </Alert>
+          )}
           {Array.from(grouped.entries()).map(([resource, perms]) => {
             const selectedCount = perms.filter((p) =>
               selectedPermIds.has(p.id),

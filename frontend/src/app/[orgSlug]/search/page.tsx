@@ -1,18 +1,16 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/form-fields";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
-import {
-  formatRelative,
-  priorityColor,
-  statusColor,
-  statusLabel,
-} from "@/lib/utils";
+import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
+import { formatRelative, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
-import type { Project, Task } from "@/types/domain";
+import type { Project, Task, TaskPriority, TaskStatus } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { FolderKanban, ListTodo, Search as SearchIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -113,17 +111,17 @@ export default function SearchPage() {
 
       <form onSubmit={handleSearch} className="mb-6">
         <div className="join w-full max-w-lg">
-          <input
-            className="input input-bordered join-item flex-1"
+          <Input
+            className="join-item flex-1"
             placeholder="Search tasks and projects..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
-          <button className="btn btn-primary join-item" type="submit">
+          <Button className="join-item" type="submit">
             <SearchIcon className="w-4 h-4" />
             Search
-          </button>
+          </Button>
         </div>
       </form>
 
@@ -190,7 +188,13 @@ export default function SearchPage() {
                             >
                               <td className="font-medium">{project.name}</td>
                               <td>
-                                <Badge variant={statusColor(project.status)}>
+                                <Badge
+                                  variant={
+                                    STATUS_BADGE[
+                                      project.status as TaskStatus
+                                    ] ?? "badge-ghost"
+                                  }
+                                >
                                   {statusLabel(project.status)}
                                 </Badge>
                               </td>
@@ -244,12 +248,22 @@ export default function SearchPage() {
                             >
                               <td className="font-medium">{task.title}</td>
                               <td>
-                                <Badge variant={statusColor(task.status)}>
+                                <Badge
+                                  variant={
+                                    STATUS_BADGE[task.status as TaskStatus]
+                                  }
+                                >
                                   {statusLabel(task.status)}
                                 </Badge>
                               </td>
                               <td>
-                                <Badge variant={priorityColor(task.priority)}>
+                                <Badge
+                                  variant={
+                                    PRIORITY_BADGE[
+                                      task.priority as TaskPriority
+                                    ]
+                                  }
+                                >
                                   {statusLabel(task.priority)}
                                 </Badge>
                               </td>
@@ -282,4 +296,3 @@ export default function SearchPage() {
     </div>
   );
 }
-

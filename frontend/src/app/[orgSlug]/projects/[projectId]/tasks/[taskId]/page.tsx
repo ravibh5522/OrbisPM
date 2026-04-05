@@ -19,16 +19,11 @@ import {
 } from "@/components/tasks/change-requests";
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
+import { Alert } from "@/components/ui/alert";
 import { PresenceIndicator } from "@/components/ui/presence-indicator";
 import { useProjectPolicies } from "@/hooks/use-policies";
-import {
-  cn,
-  formatDate,
-  formatRelative,
-  priorityColor,
-  statusColor,
-  statusLabel,
-} from "@/lib/utils";
+import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
+import { cn, formatDate, formatRelative, statusLabel } from "@/lib/utils";
 import type {
   Attachment,
   Checklist,
@@ -201,12 +196,14 @@ export default function TaskDetailPage({
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <button
-          className="btn btn-ghost btn-sm gap-1"
+        <Button
+          variant="ghost"
+          size="sm"
+          className="gap-1"
           onClick={() => router.push(`/${orgSlug}/projects/${projectId}`)}
         >
           <ArrowLeft className="w-4 h-4" /> Back to Tasks
-        </button>
+        </Button>
         <PresenceIndicator
           orgId={orgId}
           resourceType="task"
@@ -227,19 +224,15 @@ export default function TaskDetailPage({
 
       {/* Mutation error toast */}
       {updateTaskMutation.isError && (
-        <div className="alert alert-error shadow-lg mb-4 text-sm">
-          <span>
-            {updateTaskMutation.error instanceof Error
-              ? updateTaskMutation.error.message
-              : "Failed to update task"}
-          </span>
-          <button
-            className="btn btn-ghost btn-xs"
-            onClick={() => updateTaskMutation.reset()}
-          >
-            Dismiss
-          </button>
-        </div>
+        <Alert
+          variant="error"
+          className="shadow-lg mb-4 text-sm"
+          onDismiss={() => updateTaskMutation.reset()}
+        >
+          {updateTaskMutation.error instanceof Error
+            ? updateTaskMutation.error.message
+            : "Failed to update task"}
+        </Alert>
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -577,10 +570,10 @@ function TaskHeaderCard({
             {canEdit && (
               <Pencil className="w-4 h-4 opacity-0 group-hover:opacity-60 transition-opacity" />
             )}
-            <Badge variant={statusColor(task.status)}>
+            <Badge variant={STATUS_BADGE[task.status]}>
               {statusLabel(task.status)}
             </Badge>
-            <Badge variant={priorityColor(task.priority)}>
+            <Badge variant={PRIORITY_BADGE[task.priority]}>
               {statusLabel(task.priority)}
             </Badge>
           </div>
@@ -1812,16 +1805,17 @@ function RulesSection({
             Required
           </label>
           <div className="flex gap-1">
-            <button type="submit" className="btn btn-xs btn-primary">
+            <Button type="submit" variant="primary" size="xs">
               Add
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="btn btn-xs btn-ghost"
+              variant="ghost"
+              size="xs"
               onClick={() => setAdding(false)}
             >
               Cancel
-            </button>
+            </Button>
           </div>
         </form>
       ) : (

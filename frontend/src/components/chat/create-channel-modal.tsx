@@ -1,5 +1,8 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input, Textarea } from "@/components/ui/form-fields";
 import { api } from "@/lib/api";
 import { useChatStore } from "@/stores/chat-store";
 import { useQueryClient } from "@tanstack/react-query";
@@ -30,7 +33,11 @@ export function CreateChannelModal({
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState("");
 
-  const parentLabel = teamId ? "team" : groupChannelId ? "group" : "conversation";
+  const parentLabel = teamId
+    ? "team"
+    : groupChannelId
+      ? "group"
+      : "conversation";
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -82,12 +89,14 @@ export function CreateChannelModal({
             <Hash className="w-5 h-5 text-primary" />
             <h3 className="text-lg font-bold">Create Channel</h3>
           </div>
-          <button
-            className="btn btn-ghost btn-sm btn-square"
+          <Button
+            variant="ghost"
+            size="sm"
+            className="btn-square"
             onClick={handleClose}
           >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         <p className="text-xs text-base-content/50 mb-4">
@@ -95,9 +104,9 @@ export function CreateChannelModal({
         </p>
 
         {error && (
-          <div className="alert alert-error alert-sm mb-3">
-            <span className="text-sm">{error}</span>
-          </div>
+          <Alert variant="error" className="mb-3">
+            {error}
+          </Alert>
         )}
 
         {/* Name */}
@@ -105,10 +114,10 @@ export function CreateChannelModal({
           <label className="label">
             <span className="label-text text-sm font-medium">Channel Name</span>
           </label>
-          <input
+          <Input
             type="text"
             placeholder="e.g. general, design, announcements"
-            className="input input-bordered w-full"
+            className="w-full"
             value={name}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleCreate()}
@@ -124,9 +133,9 @@ export function CreateChannelModal({
               <span className="text-base-content/40">(optional)</span>
             </span>
           </label>
-          <textarea
+          <Textarea
             placeholder="What's this channel about?"
-            className="textarea textarea-bordered w-full resize-none"
+            className="w-full resize-none"
             rows={2}
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -135,20 +144,17 @@ export function CreateChannelModal({
 
         {/* Actions */}
         <div className="flex justify-end gap-2 mt-4">
-          <button className="btn btn-ghost" onClick={handleClose}>
+          <Button variant="ghost" onClick={handleClose}>
             Cancel
-          </button>
-          <button
-            className="btn btn-primary"
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleCreate}
             disabled={creating || !name.trim()}
+            loading={creating}
           >
-            {creating ? (
-              <span className="loading loading-spinner loading-sm" />
-            ) : (
-              "Create Channel"
-            )}
-          </button>
+            {!creating && "Create Channel"}
+          </Button>
         </div>
       </div>
     </div>

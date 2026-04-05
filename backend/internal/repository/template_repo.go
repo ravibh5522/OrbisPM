@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -83,12 +84,56 @@ func (r *templateRepo) Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) erro
 	return err
 }
 
-func (r *templateRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.TaskTemplate, error) {
-	rows, err := r.pool.Query(ctx,
+func (r *templateRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter TemplateFilter) ([]*domain.TaskTemplate, int, error) {
+	limit := filter.Limit
+	if limit <= 0 {
+		limit = 20
+	}
+	offset := filter.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	args := []any{orgID}
+	where := ""
+
+	if filter.Search != nil && *filter.Search != "" {
+		args = append(args, "%"+strings.ToLower(*filter.Search)+"%")
+		where += fmt.Sprintf(" AND LOWER(name) LIKE $%d", len(args))
+	}
+	if filter.Shared != nil {
+		args = append(args, *filter.Shared)
+		where += fmt.Sprintf(" AND is_shared = $%d", len(args))
+	}
+
+	var total int
+	countSQL := `SELECT COUNT(*) FROM task_templates WHERE org_id = $1` + where
+	if err := r.pool.QueryRow(ctx, countSQL, args...).Scan(&total); err != nil {
+		return nil, 0, fmt.Errorf("count templates: %w", err)
+	}
+
+	// Determine sort
+	sortCol := "name"
+	allowed := map[string]bool{"name": true, "created_at": true, "updated_at": true}
+	if allowed[filter.SortBy] {
+		sortCol = filter.SortBy
+	}
+	sortDir := "ASC"
+	if strings.EqualFold(filter.SortOrder, "desc") {
+		sortDir = "DESC"
+	}
+
+	args = append(args, limit, offset)
+	querySQL := fmt.Sprintf(
 		`SELECT id, org_id, name, description, structure, is_shared, created_by, created_at, updated_at
-		 FROM task_templates WHERE org_id = $1 ORDER BY name`, orgID)
+		 FROM task_templates WHERE org_id = $1%s
+		 ORDER BY %s %s
+		 LIMIT $%d OFFSET $%d`,
+		where, sortCol, sortDir, len(args)-1, len(args))
+
+	rows, err := r.pool.Query(ctx, querySQL, args...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -98,12 +143,12 @@ func (r *templateRepo) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domai
 		var desc *string
 		if err := rows.Scan(&t.ID, &t.OrgID, &t.Name, &desc, &t.Structure,
 			&t.IsShared, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if desc != nil {
 			t.Description = *desc
 		}
 		templates = append(templates, &t)
 	}
-	return templates, rows.Err()
+	return templates, total, rows.Err()
 }

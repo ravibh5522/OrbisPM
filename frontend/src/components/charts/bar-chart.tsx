@@ -1,5 +1,6 @@
 "use client";
 
+import { CHART_AXIS_STYLE, CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import {
   Bar,
   CartesianGrid,
@@ -43,24 +44,17 @@ export function BarChartWidget({
           <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
           <XAxis
             dataKey={xKey}
-            tick={{ fontSize: 11 }}
+            tick={CHART_AXIS_STYLE}
             tickLine={false}
             axisLine={false}
           />
           <YAxis
-            tick={{ fontSize: 11 }}
+            tick={CHART_AXIS_STYLE}
             tickLine={false}
             axisLine={false}
             width={35}
           />
-          <Tooltip
-            contentStyle={{
-              fontSize: 12,
-              borderRadius: 8,
-              border: "none",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-            }}
-          />
+          <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
           <Bar dataKey={dataKey} fill={color} radius={[4, 4, 0, 0]} />
         </RechartsBarChart>
       </ResponsiveContainer>
@@ -77,26 +71,19 @@ export function BarChartWidget({
         <CartesianGrid strokeDasharray="3 3" opacity={0.2} horizontal={false} />
         <XAxis
           type="number"
-          tick={{ fontSize: 11 }}
+          tick={CHART_AXIS_STYLE}
           tickLine={false}
           axisLine={false}
         />
         <YAxis
           dataKey={xKey}
           type="category"
-          tick={{ fontSize: 11 }}
+          tick={CHART_AXIS_STYLE}
           tickLine={false}
           axisLine={false}
           width={100}
         />
-        <Tooltip
-          contentStyle={{
-            fontSize: 12,
-            borderRadius: 8,
-            border: "none",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-          }}
-        />
+        <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
         <Bar dataKey={dataKey} fill={color} radius={[0, 4, 4, 0]} />
       </RechartsBarChart>
     </ResponsiveContainer>

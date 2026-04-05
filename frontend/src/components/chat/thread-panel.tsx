@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
@@ -56,8 +57,8 @@ export function ThreadPanel() {
         () => bottomRef.current?.scrollIntoView({ behavior: "smooth" }),
         50,
       );
-    } catch (err) {
-      console.error("[Chat] Failed to send thread reply:", err);
+    } catch {
+      // send failed
     } finally {
       setSending(false);
     }
@@ -73,12 +74,14 @@ export function ThreadPanel() {
           <MessageSquare className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-bold">Thread</h3>
         </div>
-        <button
-          className="btn btn-ghost btn-xs btn-square"
+        <Button
+          variant="ghost"
+          size="xs"
+          className="btn-square"
           onClick={closeThread}
         >
           <X className="w-4 h-4" />
-        </button>
+        </Button>
       </div>
 
       {/* Parent message */}
@@ -146,17 +149,16 @@ export function ThreadPanel() {
             rows={1}
             disabled={sending}
           />
-          <button
+          <Button
             onClick={handleSend}
             disabled={!body.trim() || sending}
-            className="btn btn-primary btn-xs btn-circle"
+            variant="primary"
+            size="xs"
+            className="btn-circle"
+            loading={sending}
           >
-            {sending ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <Send className="w-3.5 h-3.5" />
-            )}
-          </button>
+            {!sending && <Send className="w-3.5 h-3.5" />}
+          </Button>
         </div>
       </div>
     </div>

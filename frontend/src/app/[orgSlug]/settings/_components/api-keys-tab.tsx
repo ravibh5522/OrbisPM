@@ -1,5 +1,6 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
@@ -93,29 +94,26 @@ export default function ApiKeysTab() {
 
       {/* New key display */}
       {newKey && (
-        <div className="alert alert-warning mb-4">
-          <div>
-            <h3 className="font-bold text-sm">Save your API key</h3>
-            <p className="text-xs">This key will not be shown again.</p>
-            <div className="flex items-center gap-2 mt-2">
-              <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded">
-                {newKey}
-              </code>
-              <button
-                className="btn btn-ghost btn-xs"
-                onClick={() => navigator.clipboard.writeText(newKey)}
-              >
-                <Copy className="w-3 h-3" /> Copy
-              </button>
-            </div>
+        <Alert
+          variant="warning"
+          title="Save your API key"
+          className="mb-4"
+          onDismiss={() => setNewKey(null)}
+        >
+          <p className="text-xs">This key will not be shown again.</p>
+          <div className="flex items-center gap-2 mt-2">
+            <code className="font-mono text-xs bg-base-200 px-2 py-1 rounded">
+              {newKey}
+            </code>
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => navigator.clipboard.writeText(newKey)}
+            >
+              <Copy className="w-3 h-3" /> Copy
+            </Button>
           </div>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => setNewKey(null)}
-          >
-            Dismiss
-          </button>
-        </div>
+        </Alert>
       )}
 
       {keyList.length === 0 ? (
@@ -171,12 +169,14 @@ export default function ApiKeysTab() {
                       {formatDate(key.created_at)}
                     </td>
                     <td>
-                      <button
-                        className="btn btn-ghost btn-xs text-error"
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-error"
                         onClick={() => setDeleteTarget(key)}
                       >
                         <Trash2 className="w-3 h-3" />
-                      </button>
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -196,9 +196,9 @@ export default function ApiKeysTab() {
         title="New API Key"
       >
         {error && (
-          <div className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleSubmit((data) => createMutation.mutate(data))}

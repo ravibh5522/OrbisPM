@@ -1,9 +1,12 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/form-fields";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { api, type ListResponse } from "@/lib/api";
+import { STATUS_BADGE } from "@/lib/task-colors";
 import { useAuthStore } from "@/stores/auth-store";
-import type { PerformanceReport } from "@/types/domain";
+import type { PerformanceReport, TaskStatus } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -19,13 +22,7 @@ function ReportRow({ report }: { report: PerformanceReport }) {
   const [expanded, setExpanded] = useState(false);
 
   const statusClass =
-    report.status === "completed"
-      ? "badge-success"
-      : report.status === "generating"
-        ? "badge-warning"
-        : report.status === "failed"
-          ? "badge-error"
-          : "badge-ghost";
+    STATUS_BADGE[report.status as TaskStatus] ?? "badge-ghost";
 
   const isActive =
     report.status === "pending" || report.status === "generating";
@@ -62,7 +59,7 @@ function ReportRow({ report }: { report: PerformanceReport }) {
       </div>
 
       {expanded && report.status === "completed" && (
-        <div className="border-t border-base-200 p-3 bg-base-50">
+        <div className="border-t border-base-200 p-3 bg-base-100">
           <p className="text-xs font-semibold text-base-content/60 mb-2 uppercase tracking-wide">
             Report Data
           </p>
@@ -132,18 +129,20 @@ export default function ReportsPage() {
       {/* Generate Report */}
       <Card title="Generate New Report" compact className="mb-6">
         <div className="flex items-center gap-3 py-2">
-          <select
-            className="select select-bordered select-sm"
+          <Select
+            className="select-sm"
             value={reportType}
             onChange={(e) => setReportType(e.target.value)}
-          >
-            <option value="summary">Summary Report</option>
-            <option value="velocity">Velocity Report</option>
-            <option value="cycle_time">Cycle Time Report</option>
-            <option value="health">Health Report</option>
-          </select>
-          <button
-            className="btn btn-primary btn-sm gap-1"
+            options={[
+              { value: "summary", label: "Summary Report" },
+              { value: "velocity", label: "Velocity Report" },
+              { value: "cycle_time", label: "Cycle Time Report" },
+              { value: "health", label: "Health Report" },
+            ]}
+          />
+          <Button
+            size="sm"
+            className="gap-1"
             onClick={() => createReport.mutate()}
             disabled={createReport.isPending}
           >
@@ -153,7 +152,7 @@ export default function ReportsPage() {
               <FileBarChart className="w-4 h-4" />
             )}
             Generate
-          </button>
+          </Button>
         </div>
       </Card>
 

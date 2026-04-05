@@ -1,11 +1,12 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { api } from "@/lib/api";
 import type { OrgMember, Task, TaskChangeRequest } from "@/types/domain";
-import { AlertCircle, Paperclip, Upload, X } from "lucide-react";
+import { Paperclip, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
 /** Human-readable labels for task field keys. */
@@ -170,10 +171,9 @@ export function ChangeRequestModal({
     >
       <div className="space-y-4">
         {/* Info banner */}
-        <div className="alert alert-info text-sm py-2">
-          <AlertCircle className="w-4 h-4" />
-          <span>These fields require approval before changes are applied.</span>
-        </div>
+        <Alert variant="info" className="text-sm py-2">
+          These fields require approval before changes are applied.
+        </Alert>
 
         {/* Proposed changes */}
         <div>
@@ -225,21 +225,25 @@ export function ChangeRequestModal({
                 <span className="text-base-content/50">
                   {(file.size / 1024).toFixed(0)} KB
                 </span>
-                <button
-                  className="btn btn-ghost btn-xs btn-square"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="btn-square"
                   onClick={() => removeFile(i)}
                 >
                   <X className="w-3 h-3" />
-                </button>
+                </Button>
               </div>
             ))}
-            <button
+            <Button
               type="button"
-              className="btn btn-outline btn-xs gap-1"
+              variant="outline"
+              size="xs"
+              className="gap-1"
               onClick={() => fileRef.current?.click()}
             >
               <Upload className="w-3 h-3" /> Add File
-            </button>
+            </Button>
             <input
               ref={fileRef}
               type="file"
@@ -252,9 +256,9 @@ export function ChangeRequestModal({
 
         {/* Error */}
         {error && (
-          <div className="alert alert-error text-sm py-2">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="text-sm py-2">
+            {error}
+          </Alert>
         )}
 
         {/* Actions */}

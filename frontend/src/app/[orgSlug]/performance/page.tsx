@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { api } from "@/lib/api";
@@ -121,15 +122,15 @@ export default function PerformancePage() {
           <div className="flex flex-wrap gap-2 items-center">
             <div className="join">
               {([7, 30, 90] as const).map((d) => (
-                <button
+                <Button
                   key={d}
-                  className={`join-item btn btn-sm ${
-                    days === d ? "btn-primary" : "btn-outline"
-                  }`}
+                  size="sm"
+                  variant={days === d ? "primary" : "outline"}
+                  className="join-item"
                   onClick={() => setDays(d)}
                 >
                   {d}d
-                </button>
+                </Button>
               ))}
             </div>
             <Link

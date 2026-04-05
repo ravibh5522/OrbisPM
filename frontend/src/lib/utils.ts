@@ -36,36 +36,6 @@ export function slugify(text: string): string {
     .replace(/(^-|-$)/g, "");
 }
 
-export function statusColor(status: string): string {
-  switch (status) {
-    case "todo":
-      return "badge-ghost";
-    case "in_progress":
-      return "badge-info";
-    case "done":
-      return "badge-success";
-    case "blocked":
-      return "badge-error";
-    default:
-      return "badge-ghost";
-  }
-}
-
-export function priorityColor(priority: string): string {
-  switch (priority) {
-    case "critical":
-      return "badge-error";
-    case "high":
-      return "badge-warning";
-    case "medium":
-      return "badge-info";
-    case "low":
-      return "badge-ghost";
-    default:
-      return "badge-ghost";
-  }
-}
-
 export function statusLabel(status: string | undefined | null): string {
   if (!status) return "";
   return status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -74,4 +44,16 @@ export function statusLabel(status: string | undefined | null): string {
 export function truncate(str: string, len: number): string {
   if (str.length <= len) return str;
   return str.slice(0, len) + "…";
+}
+
+/**
+ * Returns true if the given hex color is perceptually light
+ * (i.e. dark text should be placed on top of it).
+ * Moved here from color-picker-panel.tsx — pure utility, no UI deps.
+ */
+export function isLightHex(hex: string): boolean {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return (r * 299 + g * 587 + b * 114) / 1000 > 155;
 }

@@ -1,30 +1,28 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { Pagination } from "@/components/ui/pagination";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui/shared";
+import { StatCard } from "@/components/ui/stat-card";
 import { api } from "@/lib/api";
-import {
-    formatDate,
-    formatRelative,
-    priorityColor,
-    statusLabel,
-} from "@/lib/utils";
+import { PRIORITY_BADGE } from "@/lib/task-colors";
+import { formatDate, formatRelative, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { Task, TaskStatus } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    AlertTriangle,
-    CheckCircle,
-    Circle,
-    Clock,
-    LayoutGrid,
-    ListTodo,
-    PlayCircle,
-    Rows3,
-    Search,
-    SlidersHorizontal,
-    X,
+  AlertTriangle,
+  CheckCircle,
+  Circle,
+  Clock,
+  LayoutGrid,
+  ListTodo,
+  PlayCircle,
+  Rows3,
+  Search,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -51,6 +49,7 @@ export default function MyTasksPage() {
   });
 
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -59,27 +58,28 @@ export default function MyTasksPage() {
   const [groupedTab, setGroupedTab] = useState<
     "overdue" | "in_progress" | "blocked"
   >("overdue");
+  const [sortBy, setSortBy] = useState("");
+  const [sortOrder, setSortOrder] = useState("");
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
 
   // Reset page when filters change
-  const updateSearch = (v: string) => {
-    setSearch(v);
+  useEffect(() => {
     setPage(0);
-  };
-  const updateStatus = (v: string) => {
-    setStatusFilter(v);
-    setPage(0);
-  };
-  const updatePriority = (v: string) => {
-    setPriorityFilter(v);
-    setPage(0);
-  };
+  }, [debouncedSearch, statusFilter, priorityFilter]);
 
   const queryParams = {
-    limit: 200,
-    offset: 0,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
     status: statusFilter || undefined,
     priority: priorityFilter || undefined,
-    search: search.trim() || undefined,
+    search: debouncedSearch.trim() || undefined,
+    sort_by: sortBy || undefined,
+    sort_order: sortOrder || undefined,
   };
 
   const { data: myTasks, isLoading } = useQuery({
@@ -91,9 +91,8 @@ export default function MyTasksPage() {
   const allTasks: Task[] = myTasks?.data ?? [];
   const total = myTasks?.total ?? 0;
 
-  // Client-side pagination for flat view only
-  const totalPages = Math.ceil(allTasks.length / PAGE_SIZE);
-  const paginated = allTasks.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+  // Server-side pagination
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   // Group for grouped view
   const grouped = useMemo(
@@ -125,6 +124,8 @@ export default function MyTasksPage() {
     setStatusFilter("");
     setPriorityFilter("");
     setSearch("");
+    setSortBy("");
+    setSortOrder("");
     setPage(0);
   };
 
@@ -182,7 +183,7 @@ export default function MyTasksPage() {
     );
 
   return (
-    <div>
+    <div className="h-full flex flex-col">
       <PageHeader
         title="My Tasks"
         description={`${total} task${total !== 1 ? "s" : ""} assigned to you`}
@@ -190,37 +191,41 @@ export default function MyTasksPage() {
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
-          <div className="stat-title text-xs">In Progress</div>
-          <div className="stat-value text-lg text-info">
-            {allTasks.filter((t: Task) => t.status === "in_progress").length}
-          </div>
-        </div>
-        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
-          <div className="stat-title text-xs">Todo</div>
-          <div className="stat-value text-lg">
-            {allTasks.filter((t: Task) => t.status === "todo").length}
-          </div>
-        </div>
-        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
-          <div className="stat-title text-xs">Blocked</div>
-          <div className="stat-value text-lg text-warning">
-            {allTasks.filter((t: Task) => t.status === "blocked").length}
-          </div>
-        </div>
-        <div className="stat bg-base-100 rounded-lg shadow-sm border border-base-200 py-3 px-4">
-          <div className="stat-title text-xs">Overdue</div>
-          <div className="stat-value text-lg text-error">
-            {
-              allTasks.filter(
-                (t: Task) =>
-                  t.due_date &&
-                  new Date(t.due_date) < new Date() &&
-                  t.status !== "done",
-              ).length
-            }
-          </div>
-        </div>
+        <StatCard
+          compact
+          title="In Progress"
+          value={
+            allTasks.filter((t: Task) => t.status === "in_progress").length
+          }
+          iconColor="text-info"
+          iconBg="bg-info/10"
+        />
+        <StatCard
+          compact
+          title="Todo"
+          value={allTasks.filter((t: Task) => t.status === "todo").length}
+        />
+        <StatCard
+          compact
+          title="Blocked"
+          value={allTasks.filter((t: Task) => t.status === "blocked").length}
+          iconColor="text-warning"
+          iconBg="bg-warning/10"
+        />
+        <StatCard
+          compact
+          title="Overdue"
+          value={
+            allTasks.filter(
+              (t: Task) =>
+                t.due_date &&
+                new Date(t.due_date) < new Date() &&
+                t.status !== "done",
+            ).length
+          }
+          iconColor="text-error"
+          iconBg="bg-error/10"
+        />
       </div>
 
       {/* Search + Filters + View toggle */}
@@ -232,12 +237,12 @@ export default function MyTasksPage() {
             placeholder="Search tasks..."
             className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-8 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
             value={search}
-            onChange={(e) => updateSearch(e.target.value)}
+            onChange={(e) => setSearch(e.target.value)}
           />
           {search && (
             <button
               className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-full text-base-content/60 transition-colors hover:bg-base-100/45 hover:text-base-content"
-              onClick={() => updateSearch("")}
+              onClick={() => setSearch("")}
               aria-label="Clear search"
             >
               <X className="w-3 h-3" />
@@ -245,8 +250,10 @@ export default function MyTasksPage() {
           )}
         </div>
 
-        <button
-          className={`btn btn-sm gap-1 ${showFilters ? "btn-primary" : "btn-ghost"}`}
+        <Button
+          size="sm"
+          variant={showFilters ? "primary" : "ghost"}
+          className="gap-1"
           onClick={() => setShowFilters(!showFilters)}
         >
           <SlidersHorizontal className="w-4 h-4" />
@@ -256,7 +263,7 @@ export default function MyTasksPage() {
               {activeFilterCount}
             </span>
           )}
-        </button>
+        </Button>
 
         <div className="flex-1" />
 
@@ -275,7 +282,9 @@ export default function MyTasksPage() {
           >
             <LayoutGrid className="h-3.5 w-3.5" />
             Grouped
-            {viewMode === "grouped" ? <span className="text-[10px]">✓</span> : null}
+            {viewMode === "grouped" ? (
+              <span className="text-[10px]">✓</span>
+            ) : null}
           </button>
           <button
             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-all ${
@@ -287,7 +296,9 @@ export default function MyTasksPage() {
           >
             <Rows3 className="h-3.5 w-3.5" />
             Flat
-            {viewMode === "flat" ? <span className="text-[10px]">✓</span> : null}
+            {viewMode === "flat" ? (
+              <span className="text-[10px]">✓</span>
+            ) : null}
           </button>
         </div>
       </div>
@@ -331,7 +342,7 @@ export default function MyTasksPage() {
                           ? "task-status-item-active"
                           : "text-base-content/80 hover:bg-base-200/35"
                       }`}
-                      onClick={() => updateStatus(opt.value)}
+                      onClick={() => setStatusFilter(opt.value)}
                     >
                       <span>{opt.label}</span>
                       {statusFilter === opt.value ? (
@@ -379,7 +390,7 @@ export default function MyTasksPage() {
                           ? "task-status-item-active"
                           : "text-base-content/80 hover:bg-base-200/35"
                       }`}
-                      onClick={() => updatePriority(opt.value)}
+                      onClick={() => setPriorityFilter(opt.value)}
                     >
                       <span>{opt.label}</span>
                       {priorityFilter === opt.value ? (
@@ -392,9 +403,9 @@ export default function MyTasksPage() {
             </div>
           </div>
           {activeFilterCount > 0 && (
-            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+            <Button variant="ghost" size="xs" onClick={clearFilters}>
               <X className="w-3 h-3" /> Clear all
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -414,9 +425,9 @@ export default function MyTasksPage() {
           }
           action={
             (search || statusFilter || priorityFilter) && (
-              <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
                 Clear filters
-              </button>
+              </Button>
             )
           }
         />
@@ -424,7 +435,7 @@ export default function MyTasksPage() {
         <div className="flex h-[calc(100vh-18rem)] min-h-[24rem] flex-col gap-2 overflow-hidden">
           <Card className="flex-1 overflow-hidden">
             <TaskTable
-              tasks={paginated}
+              tasks={allTasks}
               statusIcon={statusIcon}
               scrollable
               onNavigate={(t) =>
@@ -450,61 +461,61 @@ export default function MyTasksPage() {
         <div className="flex h-[calc(100vh-18rem)] min-h-[24rem] flex-col overflow-hidden">
           <Card className="flex-1 overflow-hidden">
             <div className="mb-3 inline-flex items-center gap-2 rounded-xl bg-base-100/22 p-1">
-            <button
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                groupedTab === "overdue"
-                  ? "bg-error/20 text-error"
-                  : "text-base-content/70 hover:bg-base-100/24"
-              }`}
-              onClick={() => setGroupedTab("overdue")}
-            >
-              Overdue ({overdue.length})
-            </button>
-            <button
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                groupedTab === "in_progress"
-                  ? "bg-info/20 text-info"
-                  : "text-base-content/70 hover:bg-base-100/24"
-              }`}
-              onClick={() => setGroupedTab("in_progress")}
-            >
-              In Progress ({grouped.in_progress.length})
-            </button>
-            <button
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                groupedTab === "blocked"
-                  ? "bg-warning/20 text-warning"
-                  : "text-base-content/70 hover:bg-base-100/24"
-              }`}
-              onClick={() => setGroupedTab("blocked")}
-            >
-              Blocked ({grouped.blocked.length})
-            </button>
+              <button
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  groupedTab === "overdue"
+                    ? "bg-error/20 text-error"
+                    : "text-base-content/70 hover:bg-base-100/24"
+                }`}
+                onClick={() => setGroupedTab("overdue")}
+              >
+                Overdue ({overdue.length})
+              </button>
+              <button
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  groupedTab === "in_progress"
+                    ? "bg-info/20 text-info"
+                    : "text-base-content/70 hover:bg-base-100/24"
+                }`}
+                onClick={() => setGroupedTab("in_progress")}
+              >
+                In Progress ({grouped.in_progress.length})
+              </button>
+              <button
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  groupedTab === "blocked"
+                    ? "bg-warning/20 text-warning"
+                    : "text-base-content/70 hover:bg-base-100/24"
+                }`}
+                onClick={() => setGroupedTab("blocked")}
+              >
+                Blocked ({grouped.blocked.length})
+              </button>
             </div>
 
             <div className="mb-3 flex items-center gap-2">
-            {groupedTab === "overdue" ? (
-              <AlertTriangle className="w-5 h-5 text-error" />
-            ) : groupedTab === "in_progress" ? (
+              {groupedTab === "overdue" ? (
+                <AlertTriangle className="w-5 h-5 text-error" />
+              ) : groupedTab === "in_progress" ? (
                 <PlayCircle className="w-5 h-5 text-info" />
-            ) : (
-              <AlertTriangle className="w-5 h-5 text-warning" />
-            )}
-            <h3
-              className={`font-semibold ${
-                groupedTab === "overdue"
-                  ? "text-error"
+              ) : (
+                <AlertTriangle className="w-5 h-5 text-warning" />
+              )}
+              <h3
+                className={`font-semibold ${
+                  groupedTab === "overdue"
+                    ? "text-error"
+                    : groupedTab === "in_progress"
+                      ? "text-info"
+                      : "text-warning"
+                }`}
+              >
+                {groupedTab === "overdue"
+                  ? `Overdue (${overdue.length})`
                   : groupedTab === "in_progress"
-                    ? "text-info"
-                    : "text-warning"
-              }`}
-            >
-              {groupedTab === "overdue"
-                ? `Overdue (${overdue.length})`
-                : groupedTab === "in_progress"
-                  ? `In Progress (${grouped.in_progress.length})`
-                  : `Blocked (${grouped.blocked.length})`}
-            </h3>
+                    ? `In Progress (${grouped.in_progress.length})`
+                    : `Blocked (${grouped.blocked.length})`}
+              </h3>
             </div>
 
             {(groupedTab === "overdue"
@@ -524,7 +535,9 @@ export default function MyTasksPage() {
                 statusIcon={statusIcon}
                 scrollable
                 onNavigate={(t) =>
-                  router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)
+                  router.push(
+                    `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
+                  )
                 }
                 onStatusChange={(t, s) =>
                   statusMutation.mutate({ task: t, status: s })
@@ -629,7 +642,10 @@ function TaskTable({
                 className="rounded-l-lg transition-colors group-hover:bg-base-100/24"
                 onClick={(e) => e.stopPropagation()}
               >
-                <div className="dropdown dropdown-right" onClick={(e) => e.stopPropagation()}>
+                <div
+                  className="dropdown dropdown-right"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div
                     tabIndex={0}
                     role="button"
@@ -707,7 +723,7 @@ function TaskTable({
                 </div>
               </td>
               <td className="transition-colors group-hover:bg-base-100/24">
-                <Badge variant={priorityColor(task.priority)}>
+                <Badge variant={PRIORITY_BADGE[task.priority]}>
                   {statusLabel(task.priority)}
                 </Badge>
               </td>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { AlertTriangle, RefreshCcw } from "lucide-react";
 
 export default function MessagesError({
@@ -24,9 +25,9 @@ export default function MessagesError({
             {error.message}
           </p>
         )}
-        <button className="btn btn-primary mt-6 gap-2" onClick={reset}>
+        <Button className="mt-6 gap-2" onClick={reset}>
           <RefreshCcw className="h-4 w-4" /> Try again
-        </button>
+        </Button>
       </div>
     </div>
   );

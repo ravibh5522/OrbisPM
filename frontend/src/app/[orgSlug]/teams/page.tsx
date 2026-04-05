@@ -1,14 +1,15 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Pagination } from "@/components/ui/pagination";
 import {
-    Card,
-    ConfirmDialog,
-    EmptyState,
-    PageHeader,
+  Card,
+  ConfirmDialog,
+  EmptyState,
+  PageHeader,
 } from "@/components/ui/shared";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useOrgPolicies } from "@/hooks/use-policies";
@@ -19,14 +20,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    ChevronDown,
-    Pencil,
-    Plus,
-    Search,
-    SlidersHorizontal,
-    Trash2,
-    Users,
-    X,
+  ChevronDown,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  Users,
+  X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -258,11 +259,10 @@ export default function TeamsPage() {
           )}
         </div>
 
-        <button
-          className={cn(
-            "btn btn-sm gap-1",
-            showFilters ? "btn-primary" : "btn-ghost",
-          )}
+        <Button
+          size="sm"
+          variant={showFilters ? "primary" : "ghost"}
+          className="gap-1"
           onClick={() => setShowFilters(!showFilters)}
         >
           <SlidersHorizontal className="w-4 h-4" />
@@ -272,7 +272,7 @@ export default function TeamsPage() {
               {activeFilterCount}
             </span>
           )}
-        </button>
+        </Button>
 
         <div className="flex-1" />
 
@@ -288,55 +288,17 @@ export default function TeamsPage() {
             <span className="text-sm font-medium whitespace-nowrap">
               Status:
             </span>
-            <div className="dropdown dropdown-bottom">
-              <div
-                tabIndex={0}
-                role="button"
-                className="inline-flex h-9 min-h-9 w-32 items-center justify-between rounded-xl border border-base-200/55 bg-base-100/45 px-3 text-sm backdrop-blur-md"
-              >
-                <span>
-                  {statusFilterOptions.find((o) => o.value === statusFilter)
-                    ?.label || "All"}
-                </span>
-                <svg
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                  className="h-3.5 w-3.5 text-base-content/60"
-                  aria-hidden="true"
-                >
-                  <path
-                    fillRule="evenodd"
-                    d="M5.23 7.21a.75.75 0 0 1 1.06.02L10 11.168l3.71-3.938a.75.75 0 1 1 1.08 1.04l-4.25 4.5a.75.75 0 0 1-1.08 0l-4.25-4.5a.75.75 0 0 1 .02-1.06Z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <ul className="dropdown-content task-status-menu z-[80] mt-1 w-32 rounded-xl border p-1 shadow-xl backdrop-blur-2xl">
-                {statusFilterOptions.map((opt) => (
-                  <li key={opt.value || "all"}>
-                    <button
-                      className={cn(
-                        "task-status-item flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-sm transition-colors",
-                        statusFilter === opt.value
-                          ? "task-status-item-active"
-                          : "text-base-content/80 hover:bg-base-200/35",
-                      )}
-                      onClick={() => updateStatus(opt.value)}
-                    >
-                      <span>{opt.label}</span>
-                      {statusFilter === opt.value ? (
-                        <span className="text-xs">✓</span>
-                      ) : null}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            <Select
+              className="select-sm"
+              value={statusFilter}
+              onChange={(e) => updateStatus(e.target.value)}
+              options={statusFilterOptions}
+            />
           </div>
           {(statusFilter !== "active" || search) && (
-            <button className="btn btn-ghost btn-xs" onClick={clearFilters}>
+            <Button variant="ghost" size="xs" onClick={clearFilters}>
               <X className="w-3 h-3" /> Clear all
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -500,9 +462,9 @@ export default function TeamsPage() {
         title="New Team"
       >
         {error && (
-          <div className="alert alert-error mb-4">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4">
+            {error}
+          </Alert>
         )}
         <form
           onSubmit={handleSubmit((data) => createMutation.mutate(data))}
@@ -593,9 +555,9 @@ function EditTeamModal({
   return (
     <Modal open onClose={onClose} title="Edit Team">
       {error && (
-        <div className="alert alert-error mb-4">
-          <span>{error}</span>
-        </div>
+        <Alert variant="error" className="mb-4">
+          {error}
+        </Alert>
       )}
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <Input

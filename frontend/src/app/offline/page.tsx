@@ -1,5 +1,7 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+
 export default function OfflinePage() {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-base-200/30 gap-4 p-8 text-center">
@@ -9,12 +11,9 @@ export default function OfflinePage() {
         Check your internet connection and try again. Previously visited pages
         are still available from cache.
       </p>
-      <button
-        className="btn btn-primary"
-        onClick={() => window.location.reload()}
-      >
+      <Button variant="primary" onClick={() => window.location.reload()}>
         Retry
-      </button>
+      </Button>
     </div>
   );
 }

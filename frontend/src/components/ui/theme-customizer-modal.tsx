@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import {
   PrimaryColorPicker,
   ProfileSwatch,
@@ -159,13 +160,15 @@ export function ThemeCustomizerModal({
               </p>
             </div>
           </div>
-          <button
+          <Button
             type="button"
             onClick={onClose}
-            className="btn btn-ghost btn-sm btn-circle"
+            variant="ghost"
+            size="sm"
+            className="btn-circle"
           >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
 
         {/* ── Body ── */}
@@ -204,12 +207,7 @@ export function ThemeCustomizerModal({
             {/* Summary bar showing current trio */}
             <div
               className="flex items-center gap-3 px-4 py-3"
-              style={{
-                background:
-                  colorScheme === "dark"
-                    ? "oklch(14% 0.02 270)"
-                    : "oklch(96% 0.015 265)",
-              }}
+              style={{ background: "var(--color-base-100)" }}
             >
               <div className="flex gap-1.5">
                 <span
@@ -234,17 +232,16 @@ export function ThemeCustomizerModal({
                 </p>
               </div>
               {!locked && (
-                <button
+                <Button
                   type="button"
                   onClick={() => setShowCustomPrimary((v) => !v)}
-                  className={cn(
-                    "btn btn-xs gap-1 flex-shrink-0",
-                    showCustomPrimary ? "btn-primary" : "btn-ghost",
-                  )}
+                  variant={showCustomPrimary ? "primary" : "ghost"}
+                  size="xs"
+                  className="gap-1 flex-shrink-0"
                 >
                   <ALargeSmall className="w-3 h-3" />
                   {showCustomPrimary ? "Custom on" : "Custom"}
-                </button>
+                </Button>
               )}
             </div>
 
@@ -350,31 +347,29 @@ export function ThemeCustomizerModal({
 
         {/* ── Footer ── */}
         <div className="flex items-center justify-between px-5 py-4 border-t border-base-200 bg-base-200/40 flex-shrink-0">
-          <button
+          <Button
             type="button"
             onClick={handleReset}
             disabled={locked}
-            className="btn btn-ghost btn-sm gap-2 text-base-content/50"
+            variant="ghost"
+            size="sm"
+            className="gap-2 text-base-content/50"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Reset
-          </button>
+          </Button>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn btn-sm btn-ghost"
-            >
+            <Button type="button" onClick={onClose} variant="ghost" size="sm">
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
               onClick={handleApply}
               disabled={locked}
-              className="btn btn-sm btn-primary"
+              size="sm"
             >
               Apply
-            </button>
+            </Button>
           </div>
         </div>
       </div>

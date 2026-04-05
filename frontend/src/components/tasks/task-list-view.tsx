@@ -6,12 +6,14 @@ import {
   PendingReviewBadge,
 } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { ConfirmDialog } from "@/components/ui/shared";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { useReviewableFields } from "@/hooks/use-reviewable-fields";
+import { PRIORITY_TEXT, STATUS_TEXT } from "@/lib/task-colors";
 import { cn, formatDate } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
@@ -162,8 +164,8 @@ export function TaskListView({
       });
       setTasks(res?.data || []);
       setTotal(res?.total || 0);
-    } catch (e) {
-      console.error("[WS] task:list failed", e);
+    } catch {
+      // WS list failed
     } finally {
       setIsLoading(false);
       setIsFetching(false);
@@ -241,8 +243,8 @@ export function TaskListView({
         await send("task:delete", { task_id: id });
         setDeleteTarget(null);
         fetchList();
-      } catch (e) {
-        console.error("[WS] task:delete failed", e);
+      } catch {
+        // WS delete failed
       }
     },
     [send, fetchList],
@@ -255,8 +257,8 @@ export function TaskListView({
       try {
         await send("task:duplicate", { task_id: id });
         fetchList();
-      } catch (e) {
-        console.error("[WS] task:duplicate failed", e);
+      } catch {
+        // WS duplicate failed
       }
     },
     [send, fetchList],
@@ -274,8 +276,8 @@ export function TaskListView({
         });
         setSelectedIds(new Set());
         fetchList();
-      } catch (e) {
-        console.error("[WS] task:bulk-update failed", e);
+      } catch {
+        // WS bulk-update failed
       } finally {
         setBulkPending(false);
       }
@@ -290,8 +292,8 @@ export function TaskListView({
       try {
         await send("task:reorder", { items });
         fetchList();
-      } catch (e) {
-        console.error("[WS] task:reorder failed", e);
+      } catch {
+        // WS reorder failed
       }
     },
     [send, fetchList],
@@ -390,15 +392,13 @@ export function TaskListView({
 
       {/* Update error toast */}
       {updateError && (
-        <div className="alert alert-error shadow-lg text-sm">
-          <span>{updateError}</span>
-          <button
-            className="btn btn-ghost btn-xs"
-            onClick={() => setUpdateError(null)}
-          >
-            Dismiss
-          </button>
-        </div>
+        <Alert
+          variant="error"
+          className="shadow-lg text-sm"
+          onDismiss={() => setUpdateError(null)}
+        >
+          {updateError}
+        </Alert>
       )}
 
       {/* Change request modal for reviewable field edits */}
@@ -425,43 +425,45 @@ export function TaskListView({
             {selectedIds.size} selected
           </span>
           <div className="divider divider-horizontal mx-0" />
-          <select
-            className="select select-bordered select-xs"
+          {/* inline toolbar select */}
+          <Select
+            className="select-xs"
             defaultValue=""
+            placeholder="Set Status…"
             onChange={(e) => {
               if (e.target.value)
                 bulkAction({ status: e.target.value as TaskStatus });
               e.target.value = "";
             }}
-          >
-            <option value="" disabled>
-              Set Status…
-            </option>
-            <option value="todo">Todo</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-            <option value="blocked">Blocked</option>
-          </select>
-          <select
-            className="select select-bordered select-xs"
+            options={[
+              { value: "todo", label: "Todo" },
+              { value: "in_progress", label: "In Progress" },
+              { value: "done", label: "Done" },
+              { value: "blocked", label: "Blocked" },
+            ]}
+          />
+          {/* inline toolbar select */}
+          <Select
+            className="select-xs"
             defaultValue=""
+            placeholder="Set Priority…"
             onChange={(e) => {
               if (e.target.value)
                 bulkAction({ priority: e.target.value as TaskPriority });
               e.target.value = "";
             }}
-          >
-            <option value="" disabled>
-              Set Priority…
-            </option>
-            <option value="critical">Critical</option>
-            <option value="high">High</option>
-            <option value="medium">Medium</option>
-            <option value="low">Low</option>
-          </select>
-          <select
-            className="select select-bordered select-xs"
+            options={[
+              { value: "critical", label: "Critical" },
+              { value: "high", label: "High" },
+              { value: "medium", label: "Medium" },
+              { value: "low", label: "Low" },
+            ]}
+          />
+          {/* inline toolbar select */}
+          <Select
+            className="select-xs"
             defaultValue=""
+            placeholder="Set Assignee…"
             onChange={(e) => {
               if (e.target.value) {
                 const ids =
@@ -473,23 +475,21 @@ export function TaskListView({
               }
               e.target.value = "";
             }}
-          >
-            <option value="" disabled>
-              Set Assignee…
-            </option>
-            <option value="__none__">Unassigned</option>
-            {members.map((m) => (
-              <option key={m.user_id} value={m.user_id}>
-                {m.display_name || m.email || m.user_id.slice(0, 8)}
-              </option>
-            ))}
-          </select>
-          <button
-            className="btn btn-ghost btn-xs"
+            options={[
+              { value: "__none__", label: "Unassigned" },
+              ...members.map((m) => ({
+                value: m.user_id,
+                label: m.display_name || m.email || m.user_id.slice(0, 8),
+              })),
+            ]}
+          />
+          <Button
+            variant="ghost"
+            size="xs"
             onClick={() => setSelectedIds(new Set())}
           >
             <X className="w-3 h-3" /> Clear
-          </button>
+          </Button>
           {bulkPending && <Loader2 className="w-3 h-3 animate-spin" />}
         </div>
       )}
@@ -499,10 +499,10 @@ export function TaskListView({
         {/* Search */}
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-base-content/40" />
-          <input
+          <Input
             type="text"
             placeholder="Search tasks…"
-            className="input input-bordered input-sm w-full pl-9"
+            className="input-sm w-full pl-9"
             value={searchInput}
             onChange={(e) => {
               setSearchInput(e.target.value);
@@ -511,41 +511,43 @@ export function TaskListView({
         </div>
 
         {/* Status filter */}
-        <select
-          className="select select-bordered select-sm"
+        <Select
+          className="select-sm"
           value={filterStatus}
           onChange={(e) => {
             setFilterStatus(e.target.value);
             setPage(0);
           }}
-        >
-          <option value="">All Status</option>
-          <option value="todo">Todo</option>
-          <option value="in_progress">In Progress</option>
-          <option value="done">Done</option>
-          <option value="blocked">Blocked</option>
-        </select>
+          options={[
+            { value: "", label: "All Status" },
+            { value: "todo", label: "Todo" },
+            { value: "in_progress", label: "In Progress" },
+            { value: "done", label: "Done" },
+            { value: "blocked", label: "Blocked" },
+          ]}
+        />
 
         {/* Priority filter */}
-        <select
-          className="select select-bordered select-sm"
+        <Select
+          className="select-sm"
           value={filterPriority}
           onChange={(e) => {
             setFilterPriority(e.target.value);
             setPage(0);
           }}
-        >
-          <option value="">All Priority</option>
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
+          options={[
+            { value: "", label: "All Priority" },
+            { value: "critical", label: "Critical" },
+            { value: "high", label: "High" },
+            { value: "medium", label: "Medium" },
+            { value: "low", label: "Low" },
+          ]}
+        />
 
         {hasFilters && (
-          <button className="btn btn-ghost btn-sm" onClick={clearFilters}>
+          <Button variant="ghost" size="sm" onClick={clearFilters}>
             <X className="w-3 h-3" /> Clear
-          </button>
+          </Button>
         )}
 
         {policies.canCreateTask && (
@@ -687,23 +689,25 @@ export function TaskListView({
       {/* ── Pagination ── */}
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
-          <button
-            className="btn btn-sm btn-ghost"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={page === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
             Previous
-          </button>
+          </Button>
           <span className="text-sm text-base-content/60">
             Page {page + 1} of {totalPages}
           </span>
-          <button
-            className="btn btn-sm btn-ghost"
+          <Button
+            variant="ghost"
+            size="sm"
             disabled={page >= totalPages - 1}
             onClick={() => setPage((p) => p + 1)}
           >
             Next
-          </button>
+          </Button>
         </div>
       )}
 
@@ -846,44 +850,42 @@ function TaskRow({
 
       {/* Status — inline dropdown */}
       <td>
-        <select
+        <Select
           className={cn(
-            "select select-ghost select-xs font-medium",
-            task.status === "done" && "text-success",
-            task.status === "in_progress" && "text-info",
-            task.status === "blocked" && "text-error",
+            "select-ghost select-xs font-medium",
+            STATUS_TEXT[task.status],
           )}
           value={task.status}
           onChange={(e) => onUpdate({ status: e.target.value as TaskStatus })}
           disabled={!canEdit}
-        >
-          <option value="todo">Todo</option>
-          <option value="in_progress">In Progress</option>
-          <option value="done">Done</option>
-          <option value="blocked">Blocked</option>
-        </select>
+          options={[
+            { value: "todo", label: "Todo" },
+            { value: "in_progress", label: "In Progress" },
+            { value: "done", label: "Done" },
+            { value: "blocked", label: "Blocked" },
+          ]}
+        />
       </td>
 
       {/* Priority — inline dropdown */}
       <td>
-        <select
+        <Select
           className={cn(
-            "select select-ghost select-xs font-medium",
-            task.priority === "critical" && "text-error",
-            task.priority === "high" && "text-warning",
-            task.priority === "medium" && "text-info",
+            "select-ghost select-xs font-medium",
+            PRIORITY_TEXT[task.priority],
           )}
           value={task.priority}
           onChange={(e) =>
             onUpdate({ priority: e.target.value as TaskPriority })
           }
           disabled={!canEdit}
-        >
-          <option value="critical">Critical</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
+          options={[
+            { value: "critical", label: "Critical" },
+            { value: "high", label: "High" },
+            { value: "medium", label: "Medium" },
+            { value: "low", label: "Low" },
+          ]}
+        />
       </td>
 
       {/* Assignee — multi-select dropdown */}
@@ -906,10 +908,10 @@ function TaskRow({
 
       {/* Due date — inline input */}
       <td>
-        <input
+        <Input
           type="date"
           className={cn(
-            "input input-ghost input-xs w-full",
+            "input-ghost input-xs w-full",
             isOverdue && "text-error font-medium",
           )}
           value={task.due_date ? task.due_date.slice(0, 10) : ""}
@@ -1026,12 +1028,14 @@ function MultiAssigneeCell({
 
   return (
     <div className="relative" ref={containerRef}>
-      <button
-        className="btn btn-ghost btn-xs w-full max-w-32 justify-start truncate text-left font-normal"
+      <Button
+        variant="ghost"
+        size="xs"
+        className="w-full max-w-32 justify-start truncate text-left font-normal"
         onClick={() => setOpen((p) => !p)}
       >
         {label}
-      </button>
+      </Button>
       {open && (
         <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-48 overflow-y-auto z-50">
           <button
@@ -1189,13 +1193,9 @@ function CreateTaskModal({
         </div>
         {createError && <p className="text-error text-sm">{createError}</p>}
         <div className="flex justify-end gap-2 pt-2">
-          <button
-            type="button"
-            className="btn btn-ghost btn-sm"
-            onClick={onClose}
-          >
+          <Button type="button" variant="ghost" size="sm" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
           <Button type="submit" size="sm" loading={creating}>
             Create
           </Button>

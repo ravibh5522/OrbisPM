@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { useEffect, useState } from "react";
 
 interface PaginationProps {
@@ -48,13 +49,14 @@ export function Pagination({
         Showing {start}&ndash;{end} of {total}
       </span>
       <div className="flex items-center gap-2">
-        <button
+        <Button
           type="button"
-          className="btn btn-sm btn-ghost"
+          variant="ghost"
+          size="sm"
           onClick={() => setShowJump((prev) => !prev)}
         >
           Go to
-        </button>
+        </Button>
 
         {showJump && (
           <div className="flex items-center gap-1">
@@ -67,44 +69,52 @@ export function Pagination({
               className="input input-bordered input-sm w-20"
               aria-label="Go to page number"
             />
-            <button type="button" className="btn btn-sm" onClick={handleJump}>
+            <Button type="button" size="sm" onClick={handleJump}>
               Go
-            </button>
+            </Button>
           </div>
         )}
 
         <div className="join">
-        <button
-          className="join-item btn btn-sm"
-          disabled={page === 0}
-          onClick={() => onPageChange(0)}
-        >
-          &laquo;
-        </button>
-        <button
-          className="join-item btn btn-sm"
-          disabled={page === 0}
-          onClick={() => onPageChange(page - 1)}
-        >
-          &lsaquo;
-        </button>
-        <button className="join-item btn btn-sm">
-          Page {page + 1} of {totalPages}
-        </button>
-        <button
-          className="join-item btn btn-sm"
-          disabled={page >= totalPages - 1}
-          onClick={() => onPageChange(page + 1)}
-        >
-          &rsaquo;
-        </button>
-        <button
-          className="join-item btn btn-sm"
-          disabled={page >= totalPages - 1}
-          onClick={() => onPageChange(totalPages - 1)}
-        >
-          &raquo;
-        </button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="join-item"
+            disabled={page === 0}
+            onClick={() => onPageChange(0)}
+          >
+            &laquo;
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="join-item"
+            disabled={page === 0}
+            onClick={() => onPageChange(page - 1)}
+          >
+            &lsaquo;
+          </Button>
+          <Button size="sm" variant="ghost" className="join-item">
+            Page {page + 1} of {totalPages}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="join-item"
+            disabled={page >= totalPages - 1}
+            onClick={() => onPageChange(page + 1)}
+          >
+            &rsaquo;
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="join-item"
+            disabled={page >= totalPages - 1}
+            onClick={() => onPageChange(totalPages - 1)}
+          >
+            &raquo;
+          </Button>
         </div>
       </div>
     </div>

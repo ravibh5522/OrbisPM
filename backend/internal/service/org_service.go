@@ -165,9 +165,9 @@ func (s *OrgService) GetMember(ctx context.Context, orgID, userID uuid.UUID) (*d
 	return s.orgMemberRepo.Get(ctx, orgID, userID)
 }
 
-// ListMembers lists members of an org.
-func (s *OrgService) ListMembers(ctx context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error) {
-	return s.orgMemberRepo.ListByOrg(ctx, orgID)
+// ListMembers lists members of an org with pagination and filtering.
+func (s *OrgService) ListMembers(ctx context.Context, orgID uuid.UUID, filter repository.MemberFilter) ([]*domain.OrgMember, int, error) {
+	return s.orgMemberRepo.ListByOrg(ctx, orgID, filter)
 }
 
 // InviteMember adds a member to an org.

@@ -19,8 +19,8 @@ func NewNotificationService(notifRepo repository.NotificationRepository, txm *re
 	return &NotificationService{notifRepo: notifRepo, txm: txm}
 }
 
-func (s *NotificationService) List(ctx context.Context, userID uuid.UUID, limit, offset int) ([]*domain.Notification, int, error) {
-	return s.notifRepo.ListByUser(ctx, userID, repository.ListFilter{Limit: limit, Offset: offset})
+func (s *NotificationService) List(ctx context.Context, userID uuid.UUID, filter repository.NotificationFilter) ([]*domain.Notification, int, error) {
+	return s.notifRepo.ListByUser(ctx, userID, filter)
 }
 
 func (s *NotificationService) MarkRead(ctx context.Context, id uuid.UUID) error {

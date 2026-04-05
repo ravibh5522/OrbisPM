@@ -99,7 +99,7 @@ func (s *CommentService) processMentions(ctx context.Context, comment *domain.Co
 	}
 
 	// Load all org members
-	members, err := s.orgMemberRepo.ListByOrg(ctx, comment.OrgID)
+	members, _, err := s.orgMemberRepo.ListByOrg(ctx, comment.OrgID, repository.MemberFilter{ListFilter: repository.ListFilter{Limit: 10000}})
 	if err != nil {
 		log.Error().Err(err).Msg("load org members for mentions")
 		return

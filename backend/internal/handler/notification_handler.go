@@ -7,6 +7,7 @@ import (
 
 	"github.com/orbispm/orbispm/internal/domain"
 	"github.com/orbispm/orbispm/internal/middleware"
+	"github.com/orbispm/orbispm/internal/repository"
 	"github.com/orbispm/orbispm/internal/service"
 )
 
@@ -42,10 +43,18 @@ func (h *NotificationHandler) Routes() chi.Router {
 // @Router /notifications [get]
 func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFromCtx(r.Context())
-	limit := queryInt(r, "limit", 50)
-	offset := queryInt(r, "offset", 0)
 
-	notifications, total, err := h.notifSvc.List(r.Context(), userID, limit, offset)
+	filter := repository.NotificationFilter{
+		ListFilter: repository.ListFilter{
+			Limit:  queryInt(r, "limit", 20),
+			Offset: queryInt(r, "offset", 0),
+		},
+		Status:    queryStrDefault(r, "filter", ""),
+		SortBy:    queryStrDefault(r, "sort_by", ""),
+		SortOrder: queryStrDefault(r, "sort_order", "desc"),
+	}
+
+	notifications, total, err := h.notifSvc.List(r.Context(), userID, filter)
 	if err != nil {
 		Error(w, r, err)
 		return
@@ -56,8 +65,8 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, ListResponse{
 		Data:   notifications,
 		Total:  total,
-		Limit:  limit,
-		Offset: offset,
+		Limit:  filter.Limit,
+		Offset: filter.Offset,
 	})
 }
 

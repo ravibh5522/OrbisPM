@@ -7,20 +7,20 @@ import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Project, TaskStatusConfig } from "@/types/domain";
 import {
-    closestCenter,
-    DndContext,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    type DragEndEvent,
+  closestCenter,
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
 } from "@dnd-kit/core";
 import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    useSortable,
-    verticalListSortingStrategy,
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -258,13 +258,15 @@ function SortableStatusRow({
       )}
     >
       {/* Drag handle */}
-      <button
-        className="btn btn-ghost btn-xs btn-square cursor-grab"
+      <Button
+        variant="ghost"
+        size="xs"
+        className="btn-square cursor-grab"
         {...attributes}
         {...listeners}
       >
         <GripVertical className="w-4 h-4 text-base-content/40" />
-      </button>
+      </Button>
 
       {/* Color indicator */}
       <div className="dropdown relative isolate z-[30] focus-within:z-[360]">
@@ -298,9 +300,9 @@ function SortableStatusRow({
       {/* Label */}
       {isEditing ? (
         <div className="flex-1 flex gap-2">
-          <input
+          <Input
             type="text"
-            className="input input-sm input-bordered flex-1"
+            className="input-sm flex-1"
             value={labelDraft}
             onChange={(e) => setLabelDraft(e.target.value)}
             onKeyDown={(e) => {
@@ -315,24 +317,28 @@ function SortableStatusRow({
             }}
             autoFocus
           />
-          <button
-            className="btn btn-ghost btn-xs btn-square"
+          <Button
+            variant="ghost"
+            size="xs"
+            className="btn-square"
             onClick={() => {
               onUpdate({ label: labelDraft });
               onStopEdit();
             }}
           >
             <Check className="w-4 h-4 text-success" />
-          </button>
-          <button
-            className="btn btn-ghost btn-xs btn-square"
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
+            className="btn-square"
             onClick={() => {
               setLabelDraft(status.label);
               onStopEdit();
             }}
           >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
       ) : (
         <span
@@ -360,14 +366,16 @@ function SortableStatusRow({
       </label>
 
       {/* Remove button */}
-      <button
-        className="btn btn-ghost btn-xs btn-square text-error"
+      <Button
+        variant="ghost"
+        size="xs"
+        className="btn-square text-error"
         onClick={onRemove}
         disabled={!canRemove}
         title={canRemove ? "Remove status" : "Cannot remove the last status"}
       >
         <Trash2 className="w-4 h-4" />
-      </button>
+      </Button>
     </div>
   );
 }
@@ -637,13 +645,15 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
                 <span className="badge badge-sm badge-ghost">
                   {member.role}
                 </span>
-                <button
-                  className="btn btn-ghost btn-xs btn-square text-error"
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  className="btn-square text-error"
                   onClick={() => removeApprover(member.user_id)}
                   title="Remove approver"
                 >
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             ) : null,
           )}

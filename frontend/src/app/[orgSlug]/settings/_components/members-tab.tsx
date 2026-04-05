@@ -1,8 +1,10 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import {
   Avatar,
   Card,
@@ -10,6 +12,7 @@ import {
   EmptyState,
   LoadingPage,
 } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { api, ApiError } from "@/lib/api";
 import { formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -57,6 +60,8 @@ const ROLE_COLORS: Record<string, string> = {
   viewer: "badge-info badge-outline",
   billing_admin: "badge-warning badge-outline",
 };
+
+const PAGE_SIZE = 20;
 
 type InviteMode = "email" | "create";
 
@@ -122,10 +127,21 @@ export default function MembersTab() {
   const [error, setError] = useState("");
   const [actionSuccess, setActionSuccess] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(0);
+    }, 300);
+    return () => clearTimeout(debounceRef.current);
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!openMenuId) return;
@@ -175,8 +191,13 @@ export default function MembersTab() {
   );
 
   const { data: members, isLoading } = useQuery({
-    queryKey: ["org-members", currentOrg?.id],
-    queryFn: () => api.members.list(currentOrg!.id),
+    queryKey: ["org-members", currentOrg?.id, page, debouncedSearch],
+    queryFn: () =>
+      api.members.list(currentOrg!.id, {
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+        search: debouncedSearch || undefined,
+      }),
     enabled: !!currentOrg,
   });
 
@@ -324,16 +345,8 @@ export default function MembersTab() {
   if (isLoading) return <LoadingPage />;
 
   const memberList = members?.data || [];
-  const filteredMembers = searchQuery
-    ? memberList.filter(
-        (m: OrgMember) =>
-          (m.display_name || "")
-            .toLowerCase()
-            .includes(searchQuery.toLowerCase()) ||
-          (m.email || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-          m.role.toLowerCase().includes(searchQuery.toLowerCase()),
-      )
-    : memberList;
+  const serverTotal = members?.total ?? 0;
+  const totalPages = Math.ceil(serverTotal / PAGE_SIZE);
 
   const getMemberName = (m: OrgMember) =>
     m.display_name || m.email || m.user_id.slice(0, 12);
@@ -343,7 +356,7 @@ export default function MembersTab() {
       {/* Header with action */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-base-content/60">
-          {memberList.length} member{memberList.length !== 1 ? "s" : ""}
+          {serverTotal} member{serverTotal !== 1 ? "s" : ""}
         </p>
         <Button
           size="sm"
@@ -360,17 +373,18 @@ export default function MembersTab() {
       <div className="mb-4">
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
-          <input
+          <Input
             type="text"
             placeholder="Search by name, email or role..."
-            className="input input-bordered w-full pl-10 input-sm"
+            className="pl-10"
+            size={undefined}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
       </div>
 
-      {filteredMembers.length === 0 && !searchQuery ? (
+      {memberList.length === 0 && !searchQuery ? (
         <EmptyState
           icon={<Users className="w-16 h-16" />}
           title="No members yet"
@@ -382,212 +396,223 @@ export default function MembersTab() {
           }
         />
       ) : (
-        <Card>
-          <div className="w-full overflow-x-auto overflow-y-visible">
-            <table className="table w-full">
-              <thead>
-                <tr>
-                  <th>Member</th>
-                  <th>
-                    <Mail className="w-3.5 h-3.5 inline mr-1" />
-                    Email
-                  </th>
-                  <th>
-                    <Phone className="w-3.5 h-3.5 inline mr-1" />
-                    Phone
-                  </th>
-                  <th>
-                    <Shield className="w-3.5 h-3.5 inline mr-1" />
-                    Role
-                  </th>
-                  <th>
-                    <Calendar className="w-3.5 h-3.5 inline mr-1" />
-                    Joined
-                  </th>
-                  <th className="text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredMembers.map((m: OrgMember) => (
-                  <tr key={m.user_id} className="hover">
-                    <td>
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          name={getMemberName(m)}
-                          src={m.avatar_url}
-                          size="sm"
-                        />
-                        <div>
-                          <span className="font-medium text-sm">
-                            {m.display_name || "—"}
-                          </span>
-                          {m.user_id === currentUser?.id && (
-                            <span className="badge badge-xs badge-primary ml-2">
-                              You
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="text-sm">{m.email || "—"}</span>
-                    </td>
-                    <td>
-                      <span className="text-sm text-base-content/60">
-                        {m.phone || "—"}
-                      </span>
-                    </td>
-                    <td>
-                      <span
-                        className={`badge badge-sm ${ROLE_COLORS[m.role] || "badge-ghost"}`}
-                      >
-                        {m.role.replace("_", " ")}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="text-sm text-base-content/60">
-                        {formatDate(m.joined_at)}
-                      </span>
-                    </td>
-                    <td>
-                      <div className="flex gap-1 justify-end">
-                        <button
-                          className="btn btn-ghost btn-xs btn-square"
-                          onClick={(e) => toggleMenu(e, m.user_id)}
-                        >
-                          <MoreHorizontal className="w-4 h-4" />
-                        </button>
-                        {openMenuId === m.user_id &&
-                          createPortal(
-                            <div
-                              ref={menuRef}
-                              style={menuStyle}
-                              className="menu p-1 shadow-xl bg-base-100/95 backdrop-blur-[20px] rounded-box w-48 border border-base-200"
-                            >
-                              <ul>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setEditTarget(m);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm"
-                                  >
-                                    <Shield className="w-3.5 h-3.5" /> Change
-                                    Role
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setPasswordTarget(m);
-                                      setError("");
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm"
-                                  >
-                                    <Key className="w-3.5 h-3.5" /> Reset
-                                    Password
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setEmailTarget(m);
-                                      setError("");
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm"
-                                  >
-                                    <Mail className="w-3.5 h-3.5" /> Update
-                                    Email
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      forceMfaMutation.mutate(m.user_id);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm"
-                                  >
-                                    <ShieldCheck className="w-3.5 h-3.5" />{" "}
-                                    Force MFA
-                                  </button>
-                                </li>
-                                <div className="divider my-0.5" />
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setDeactivateTarget(m);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm text-warning"
-                                  >
-                                    <Ban className="w-3.5 h-3.5" /> Deactivate
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      reactivateMutation.mutate(m.user_id);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm text-success"
-                                  >
-                                    <RefreshCw className="w-3.5 h-3.5" />{" "}
-                                    Reactivate
-                                  </button>
-                                </li>
-                                <div className="divider my-0.5" />
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setRemoveTarget(m);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm text-error"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Remove
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setDeleteAccountTarget(m);
-                                      setOpenMenuId(null);
-                                    }}
-                                    disabled={m.user_id === currentUser?.id}
-                                    className="text-sm text-error"
-                                  >
-                                    <UserX className="w-3.5 h-3.5" /> Delete
-                                    Account
-                                  </button>
-                                </li>
-                              </ul>
-                            </div>,
-                            document.body,
-                          )}
-                      </div>
-                    </td>
+        <>
+          <Card>
+            <div className="w-full overflow-x-auto overflow-y-visible">
+              <table className="table w-full">
+                <thead>
+                  <tr>
+                    <th>Member</th>
+                    <th>
+                      <Mail className="w-3.5 h-3.5 inline mr-1" />
+                      Email
+                    </th>
+                    <th>
+                      <Phone className="w-3.5 h-3.5 inline mr-1" />
+                      Phone
+                    </th>
+                    <th>
+                      <Shield className="w-3.5 h-3.5 inline mr-1" />
+                      Role
+                    </th>
+                    <th>
+                      <Calendar className="w-3.5 h-3.5 inline mr-1" />
+                      Joined
+                    </th>
+                    <th className="text-right">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {searchQuery && filteredMembers.length === 0 && (
-            <div className="text-center py-6 text-base-content/50 text-sm">
-              No members match &ldquo;{searchQuery}&rdquo;
+                </thead>
+                <tbody>
+                  {memberList.map((m: OrgMember) => (
+                    <tr key={m.user_id} className="hover">
+                      <td>
+                        <div className="flex items-center gap-3">
+                          <Avatar
+                            name={getMemberName(m)}
+                            src={m.avatar_url}
+                            size="sm"
+                          />
+                          <div>
+                            <span className="font-medium text-sm">
+                              {m.display_name || "—"}
+                            </span>
+                            {m.user_id === currentUser?.id && (
+                              <span className="badge badge-xs badge-primary ml-2">
+                                You
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className="text-sm">{m.email || "—"}</span>
+                      </td>
+                      <td>
+                        <span className="text-sm text-base-content/60">
+                          {m.phone || "—"}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className={`badge badge-sm ${ROLE_COLORS[m.role] || "badge-ghost"}`}
+                        >
+                          {m.role.replace("_", " ")}
+                        </span>
+                      </td>
+                      <td>
+                        <span className="text-sm text-base-content/60">
+                          {formatDate(m.joined_at)}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="flex gap-1 justify-end">
+                          <Button
+                            variant="ghost"
+                            size="xs"
+                            className="btn-square"
+                            onClick={(e) => toggleMenu(e, m.user_id)}
+                          >
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                          {openMenuId === m.user_id &&
+                            createPortal(
+                              <div
+                                ref={menuRef}
+                                style={menuStyle}
+                                className="menu p-1 shadow-xl bg-base-100/95 backdrop-blur-[20px] rounded-box w-48 border border-base-200"
+                              >
+                                <ul>
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setEditTarget(m);
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm"
+                                    >
+                                      <Shield className="w-3.5 h-3.5" /> Change
+                                      Role
+                                    </button>
+                                  </li>
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setPasswordTarget(m);
+                                        setError("");
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm"
+                                    >
+                                      <Key className="w-3.5 h-3.5" /> Reset
+                                      Password
+                                    </button>
+                                  </li>
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setEmailTarget(m);
+                                        setError("");
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm"
+                                    >
+                                      <Mail className="w-3.5 h-3.5" /> Update
+                                      Email
+                                    </button>
+                                  </li>
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        forceMfaMutation.mutate(m.user_id);
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm"
+                                    >
+                                      <ShieldCheck className="w-3.5 h-3.5" />{" "}
+                                      Force MFA
+                                    </button>
+                                  </li>
+                                  <div className="divider my-0.5" />
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setDeactivateTarget(m);
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm text-warning"
+                                    >
+                                      <Ban className="w-3.5 h-3.5" /> Deactivate
+                                    </button>
+                                  </li>
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        reactivateMutation.mutate(m.user_id);
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm text-success"
+                                    >
+                                      <RefreshCw className="w-3.5 h-3.5" />{" "}
+                                      Reactivate
+                                    </button>
+                                  </li>
+                                  <div className="divider my-0.5" />
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setRemoveTarget(m);
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm text-error"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Remove
+                                    </button>
+                                  </li>
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setDeleteAccountTarget(m);
+                                        setOpenMenuId(null);
+                                      }}
+                                      disabled={m.user_id === currentUser?.id}
+                                      className="text-sm text-error"
+                                    >
+                                      <UserX className="w-3.5 h-3.5" /> Delete
+                                      Account
+                                    </button>
+                                  </li>
+                                </ul>
+                              </div>,
+                              document.body,
+                            )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          )}
-        </Card>
+            {searchQuery && memberList.length === 0 && (
+              <div className="text-center py-6 text-base-content/50 text-sm">
+                No members match &ldquo;{searchQuery}&rdquo;
+              </div>
+            )}
+          </Card>
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            total={serverTotal}
+            pageSize={PAGE_SIZE}
+            onPageChange={setPage}
+          />
+        </>
       )}
 
       {/* Add Member Modal */}
@@ -602,30 +627,32 @@ export default function MembersTab() {
         title="Add Member"
       >
         {error && (
-          <div className="alert alert-error mb-4 text-sm">
-            <span>{error}</span>
-          </div>
+          <Alert variant="error" className="mb-4 text-sm">
+            {error}
+          </Alert>
         )}
-        <div className="tabs tabs-boxed mb-4">
-          <button
-            className={`tab tab-sm ${inviteMode === "email" ? "tab-active" : ""}`}
-            onClick={() => {
-              setInviteMode("email");
-              setError("");
-            }}
-          >
-            <Mail className="w-3.5 h-3.5 mr-1" /> Invite Existing User
-          </button>
-          <button
-            className={`tab tab-sm ${inviteMode === "create" ? "tab-active" : ""}`}
-            onClick={() => {
-              setInviteMode("create");
-              setError("");
-            }}
-          >
-            <UserPlus className="w-3.5 h-3.5 mr-1" /> Create New Account
-          </button>
-        </div>
+        <Tabs
+          tabs={[
+            {
+              id: "email",
+              label: "Invite Existing User",
+              icon: <Mail className="w-3.5 h-3.5" />,
+            },
+            {
+              id: "create",
+              label: "Create New Account",
+              icon: <UserPlus className="w-3.5 h-3.5" />,
+            },
+          ]}
+          activeTab={inviteMode}
+          onChange={(id) => {
+            setInviteMode(id as "email" | "create");
+            setError("");
+          }}
+          variant="boxed"
+          size="sm"
+          className="mb-4"
+        />
 
         {inviteMode === "email" ? (
           <form
@@ -818,9 +845,9 @@ export default function MembersTab() {
           title="Reset Password"
         >
           {error && (
-            <div className="alert alert-error mb-4 text-sm">
-              <span>{error}</span>
-            </div>
+            <Alert variant="error" className="mb-4 text-sm">
+              {error}
+            </Alert>
           )}
           <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg mb-4">
             <Avatar
@@ -882,9 +909,9 @@ export default function MembersTab() {
       {emailTarget && (
         <Modal open onClose={() => setEmailTarget(null)} title="Update Email">
           {error && (
-            <div className="alert alert-error mb-4 text-sm">
-              <span>{error}</span>
-            </div>
+            <Alert variant="error" className="mb-4 text-sm">
+              {error}
+            </Alert>
           )}
           <div className="flex items-center gap-3 p-3 bg-base-200 rounded-lg mb-4">
             <Avatar
@@ -973,9 +1000,9 @@ export default function MembersTab() {
       {/* Success Toast */}
       {actionSuccess && (
         <div className="toast toast-end toast-bottom z-50">
-          <div className="alert alert-success text-sm">
-            <span>{actionSuccess}</span>
-          </div>
+          <Alert variant="success" className="text-sm">
+            {actionSuccess}
+          </Alert>
         </div>
       )}
     </div>

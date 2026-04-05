@@ -6,10 +6,10 @@ import type { ChatMessage, DomainEvent, Task } from "@/types/domain";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
+import { API_BASE } from "@/lib/api-base";
 
 type PendingReq = {
-  resolve: (data: any) => void;
+  resolve: (data: unknown) => void;
   reject: (err: Error) => void;
   timer: ReturnType<typeof setTimeout>;
 };
@@ -85,7 +85,6 @@ export function useOrgSocket(orgId: string | undefined) {
         ws.close();
         return;
       }
-      console.log("[WS] Connected to org");
       retryRef.current = 0;
       store.getState().setConnected(true);
       store.getState().setRawSend(send);
@@ -104,7 +103,6 @@ export function useOrgSocket(orgId: string | undefined) {
     ws.onclose = () => {
       // Ignore stale connection close events
       if (connGenRef.current !== gen) return;
-      console.log("[WS] Disconnected");
       store.getState().setConnected(false);
       store.getState().setRawSend(null);
       wsRef.current = null;
@@ -113,7 +111,6 @@ export function useOrgSocket(orgId: string | undefined) {
       const delay = Math.min(2000 * Math.pow(2, retryRef.current), 30_000);
       retryRef.current++;
       if (retryRef.current <= 15) {
-        console.log(`[WS] Reconnecting in ${delay / 1000}s...`);
         retryTimerRef.current = setTimeout(connect, delay);
       }
     };
@@ -154,7 +151,7 @@ function handleMessage(
   msg: {
     id?: string;
     action: string;
-    payload?: any;
+    payload?: Record<string, unknown>;
     error?: string;
     actor_id?: string;
   },
@@ -178,7 +175,7 @@ function handleMessage(
 
   // 2. Org-level events from event bus → invalidate React Query
   if (msg.action.startsWith("event:")) {
-    handleOrgEvent(msg.payload, qc);
+    handleOrgEvent(msg.payload as DomainEvent | undefined, qc);
     return;
   }
 
@@ -409,11 +406,12 @@ function handleOrgEvent(
 // ═══════════════════════════════════════
 
 function handleProjectBroadcast(
-  msg: { action: string; payload?: any; actor_id?: string },
+  msg: { action: string; payload?: Record<string, unknown>; actor_id?: string },
   store: ReturnType<typeof useProjectTaskStore.getState>,
   qc: ReturnType<typeof useQueryClient>,
 ) {
-  const p = msg.payload || {};
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const p = (msg.payload || {}) as Record<string, any>;
 
   switch (msg.action) {
     case "connected":
@@ -426,7 +424,7 @@ function handleProjectBroadcast(
       if (task?.id) {
         const parentKey = task.parent_task_id || "root";
         const existing = store.tasks.get(parentKey);
-        if (existing && !existing.find((t: any) => t.id === task.id)) {
+        if (existing && !existing.find((t: Task) => t.id === task.id)) {
           store.setTasks(
             parentKey,
             [...existing, task],
@@ -473,12 +471,12 @@ function handleProjectBroadcast(
       break;
     }
     case "task:bulk-created": {
-      const tasks: any[] = Array.isArray(p) ? p : (p.data ?? []);
+      const tasks: Task[] = Array.isArray(p) ? p : (p.data ?? []);
       for (const task of tasks) {
         if (task?.id) {
           const parentKey = task.parent_task_id || "root";
           const existing = store.tasks.get(parentKey);
-          if (existing && !existing.find((t: any) => t.id === task.id)) {
+          if (existing && !existing.find((t: Task) => t.id === task.id)) {
             store.setTasks(
               parentKey,
               [...existing, task],

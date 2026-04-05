@@ -6,16 +6,17 @@ import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import {
-    activeFilterCount,
-    EMPTY_GLOBAL_FILTER,
-    GlobalFilterDropdown,
-    isGlobalFilterActive,
-    type GlobalFilterState,
+  activeFilterCount,
+  EMPTY_GLOBAL_FILTER,
+  GlobalFilterDropdown,
+  isGlobalFilterActive,
+  type GlobalFilterState,
 } from "@/components/tasks/global-filter-dropdown";
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
 import { Button } from "@/components/ui/button";
 import { Avatar, Card } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import { api } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
@@ -25,24 +26,24 @@ import { useUIStore } from "@/stores/ui-store";
 import type { ProjectMember, ProjectTeam, Role, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-    CalendarDays,
-    Columns3,
-    Download,
-    Filter,
-    GitFork,
-    GitPullRequest,
-    Link2,
-    List,
-    ListTodo,
-    Megaphone,
-    Search,
-    Settings,
-    Trash2,
-    Unlink,
-    Upload,
-    UserPlus,
-    Users,
-    X,
+  CalendarDays,
+  Columns3,
+  Download,
+  Filter,
+  GitFork,
+  GitPullRequest,
+  Link2,
+  List,
+  ListTodo,
+  Megaphone,
+  Search,
+  Settings,
+  Trash2,
+  Unlink,
+  Upload,
+  UserPlus,
+  Users,
+  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -229,238 +230,165 @@ export default function ProjectDetailPage({
       {/* Single consolidated toolbar row */}
       <div className="flex items-center justify-between gap-2 py-1.5 border-b border-base-200 flex-wrap">
         {/* Tabs */}
-        <div
-          role="tablist"
-          className="project-tabs-shell tabs tabs-boxed flex-shrink-0 rounded-2xl p-1"
-        >
-          <button
-            role="tab"
-            className={cn(
-              "project-tab-btn tab tab-sm rounded-xl",
-              activeTab === "dashboard"
-                ? "project-tab-active"
-                : "project-tab-inactive",
-            )}
-            onClick={() => setActiveTab("dashboard")}
-          >
-            <ListTodo className="w-3.5 h-3.5 mr-1" /> Dashboard
-          </button>
-          <button
-            role="tab"
-            className={cn(
-              "project-tab-btn tab tab-sm rounded-xl",
-              activeTab === "tasks"
-                ? "project-tab-active"
-                : "project-tab-inactive",
-            )}
-            onClick={() => setActiveTab("tasks")}
-          >
-            <Columns3 className="w-3.5 h-3.5 mr-1" /> Tasks
-          </button>
-          {projPerms.can("members", "manage") && (
-            <button
-              role="tab"
-              className={cn(
-                "project-tab-btn tab tab-sm rounded-xl",
-                activeTab === "members"
-                  ? "project-tab-active"
-                  : "project-tab-inactive",
+        <Tabs
+          tabs={[
+            {
+              id: "dashboard",
+              label: "Dashboard",
+              icon: <ListTodo className="w-3.5 h-3.5" />,
+            },
+            {
+              id: "tasks",
+              label: "Tasks",
+              icon: <Columns3 className="w-3.5 h-3.5" />,
+            },
+            ...(projPerms.can("members", "manage")
+              ? [
+                  {
+                    id: "members",
+                    label: "Members",
+                    icon: <Users className="w-3.5 h-3.5" />,
+                  },
+                  {
+                    id: "teams",
+                    label: "Teams",
+                    icon: <Link2 className="w-3.5 h-3.5" />,
+                  },
+                ]
+              : []),
+            {
+              id: "reviews",
+              label: "Reviews",
+              icon: <GitPullRequest className="w-3.5 h-3.5" />,
+            },
+            {
+              id: "announcements",
+              label: "Announcements",
+              icon: <Megaphone className="w-3.5 h-3.5" />,
+            },
+            ...(projPerms.can("project", "update")
+              ? [
+                  {
+                    id: "settings",
+                    label: "Settings",
+                    icon: <Settings className="w-3.5 h-3.5" />,
+                  },
+                ]
+              : []),
+          ]}
+          activeTab={activeTab}
+          onChange={(id) => setActiveTab(id as typeof activeTab)}
+          variant="boxed"
+          size="sm"
+          className="project-tabs-shell flex-shrink-0 rounded-2xl p-1"
+        />
+
+        <div className="ml-auto flex items-center gap-2 flex-shrink-0">
+          {/* Global filter button — affects all task views */}
+          {(activeTab === "tasks" || activeTab === "dashboard") && (
+            <div className="relative">
+              <button
+                className={cn(
+                  "btn btn-sm gap-1",
+                  isGlobalFilterActive(globalFilter)
+                    ? "btn-primary"
+                    : "btn-ghost",
+                )}
+                onClick={() => setShowGlobalFilter((p) => !p)}
+              >
+                <Filter className="w-3.5 h-3.5" />
+                Filter
+                {isGlobalFilterActive(globalFilter) && (
+                  <span className="badge badge-xs badge-neutral">
+                    {activeFilterCount(globalFilter)}
+                  </span>
+                )}
+              </button>
+              {showGlobalFilter && (
+                <GlobalFilterDropdown
+                  filter={globalFilter}
+                  members={members?.data || []}
+                  onChange={setGlobalFilter}
+                  onClose={() => setShowGlobalFilter(false)}
+                />
               )}
-              onClick={() => setActiveTab("members")}
-            >
-              <Users className="w-3.5 h-3.5 mr-1" /> Members
-            </button>
+            </div>
           )}
-          {projPerms.can("members", "manage") && (
-            <button
-              role="tab"
-              className={cn(
-                "project-tab-btn tab tab-sm rounded-xl",
-                activeTab === "teams"
-                  ? "project-tab-active"
-                  : "project-tab-inactive",
+
+          {/* Actions: Import/Export + View toggle (only visible when Tasks tab is active) */}
+          {activeTab === "tasks" && (
+            <div className="flex items-center gap-2">
+              {/* Toolbar buttons portaled from TaskColumns */}
+              {taskView === "columns" && (
+                <div ref={setToolbarEl} className="flex items-center gap-2" />
               )}
-              onClick={() => setActiveTab("teams")}
-            >
-              <Link2 className="w-3.5 h-3.5 mr-1" /> Teams
-            </button>
-          )}
-          <button
-            role="tab"
-            className={cn(
-              "project-tab-btn tab tab-sm rounded-xl",
-              activeTab === "reviews"
-                ? "project-tab-active"
-                : "project-tab-inactive",
-            )}
-            onClick={() => setActiveTab("reviews")}
-          >
-            <GitPullRequest className="w-3.5 h-3.5 mr-1" /> Reviews
-          </button>
-          <button
-            role="tab"
-            className={cn(
-              "project-tab-btn tab tab-sm rounded-xl",
-              activeTab === "announcements"
-                ? "project-tab-active"
-                : "project-tab-inactive",
-            )}
-            onClick={() => setActiveTab("announcements")}
-          >
-            <Megaphone className="w-3.5 h-3.5 mr-1" /> Announcements
-          </button>
-          {projPerms.can("project", "update") && (
-            <button
-              role="tab"
-              className={cn(
-                "project-tab-btn tab tab-sm rounded-xl",
-                activeTab === "settings"
-                  ? "project-tab-active"
-                  : "project-tab-inactive",
-              )}
-              onClick={() => setActiveTab("settings")}
-            >
-              <Settings className="w-3.5 h-3.5 mr-1" /> Settings
-            </button>
+              <Button
+                variant="outline"
+                size="xs"
+                onClick={() => setImportOpen(true)}
+              >
+                <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
+              </Button>
+              <div className="dropdown dropdown-end">
+                <div
+                  tabIndex={0}
+                  role="button"
+                  className="btn btn-outline btn-xs"
+                >
+                  <Download className="w-3.5 h-3.5 mr-1" /> Export
+                </div>
+                <ul
+                  tabIndex={0}
+                  className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-44"
+                >
+                  <li>
+                    <a
+                      onClick={() =>
+                        api.tasks.export(currentOrg!.id, projectId)
+                      }
+                    >
+                      <Download className="w-4 h-4" /> CSV
+                    </a>
+                  </li>
+                  <li>
+                    <a
+                      onClick={() =>
+                        api.tasks.exportCalendar(currentOrg!.id, projectId)
+                      }
+                    >
+                      <CalendarDays className="w-4 h-4" /> iCal (.ics)
+                    </a>
+                  </li>
+                </ul>
+              </div>
+              <Tabs
+                tabs={[
+                  {
+                    id: "columns",
+                    label: "",
+                    icon: <Columns3 className="w-4 h-4" />,
+                  },
+                  {
+                    id: "tree",
+                    label: "",
+                    icon: <GitFork className="w-4 h-4" />,
+                  },
+                  { id: "list", label: "", icon: <List className="w-4 h-4" /> },
+                  {
+                    id: "calendar",
+                    label: "",
+                    icon: <CalendarDays className="w-4 h-4" />,
+                  },
+                ]}
+                activeTab={taskView}
+                onChange={(id) => setTaskView(id as typeof taskView)}
+                variant="boxed"
+                size="sm"
+                className="project-tabs-shell rounded-2xl p-1"
+              />
+            </div>
           )}
         </div>
-
-          <div className="ml-auto flex items-center gap-2 flex-shrink-0">
-            {/* Global filter button — affects all task views */}
-            {(activeTab === "tasks" || activeTab === "dashboard") && (
-              <div className="relative">
-                <button
-                  className={cn(
-                    "btn btn-sm gap-1",
-                    isGlobalFilterActive(globalFilter)
-                      ? "btn-primary"
-                      : "btn-ghost",
-                  )}
-                  onClick={() => setShowGlobalFilter((p) => !p)}
-                >
-                  <Filter className="w-3.5 h-3.5" />
-                  Filter
-                  {isGlobalFilterActive(globalFilter) && (
-                    <span className="badge badge-xs badge-neutral">
-                      {activeFilterCount(globalFilter)}
-                    </span>
-                  )}
-                </button>
-                {showGlobalFilter && (
-                  <GlobalFilterDropdown
-                    filter={globalFilter}
-                    members={members?.data || []}
-                    onChange={setGlobalFilter}
-                    onClose={() => setShowGlobalFilter(false)}
-                  />
-                )}
-              </div>
-            )}
-
-            {/* Actions: Import/Export + View toggle (only visible when Tasks tab is active) */}
-            {activeTab === "tasks" && (
-              <div className="flex items-center gap-2">
-                {/* Toolbar buttons portaled from TaskColumns */}
-                {taskView === "columns" && (
-                  <div ref={setToolbarEl} className="flex items-center gap-2" />
-                )}
-                <Button
-                  variant="outline"
-                  size="xs"
-                  onClick={() => setImportOpen(true)}
-                >
-                  <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
-                </Button>
-                <div className="dropdown dropdown-end">
-                  <div
-                    tabIndex={0}
-                    role="button"
-                    className="btn btn-outline btn-xs"
-                  >
-                    <Download className="w-3.5 h-3.5 mr-1" /> Export
-                  </div>
-                  <ul
-                    tabIndex={0}
-                    className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-44"
-                  >
-                    <li>
-                      <a
-                        onClick={() => api.tasks.export(currentOrg!.id, projectId)}
-                      >
-                        <Download className="w-4 h-4" /> CSV
-                      </a>
-                    </li>
-                    <li>
-                      <a
-                        onClick={() =>
-                          api.tasks.exportCalendar(currentOrg!.id, projectId)
-                        }
-                      >
-                        <CalendarDays className="w-4 h-4" /> iCal (.ics)
-                      </a>
-                    </li>
-                  </ul>
-                </div>
-                <div
-                  role="tablist"
-                  className="project-tabs-shell tabs tabs-boxed rounded-2xl p-1"
-                >
-                  <button
-                    role="tab"
-                    className={cn(
-                      "project-tab-btn tab tab-sm rounded-xl",
-                      taskView === "columns"
-                        ? "project-tab-active"
-                        : "project-tab-inactive",
-                    )}
-                    onClick={() => setTaskView("columns")}
-                    title="Miller Columns"
-                  >
-                    <Columns3 className="w-4 h-4" />
-                  </button>
-                  <button
-                    role="tab"
-                    className={cn(
-                      "project-tab-btn tab tab-sm rounded-xl",
-                      taskView === "tree"
-                        ? "project-tab-active"
-                        : "project-tab-inactive",
-                    )}
-                    onClick={() => setTaskView("tree")}
-                    title="Tree View"
-                  >
-                    <GitFork className="w-4 h-4" />
-                  </button>
-                  <button
-                    role="tab"
-                    className={cn(
-                      "project-tab-btn tab tab-sm rounded-xl",
-                      taskView === "list"
-                        ? "project-tab-active"
-                        : "project-tab-inactive",
-                    )}
-                    onClick={() => setTaskView("list")}
-                    title="Sortable List"
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
-                  <button
-                    role="tab"
-                    className={cn(
-                      "project-tab-btn tab tab-sm rounded-xl",
-                      taskView === "calendar"
-                        ? "project-tab-active"
-                        : "project-tab-inactive",
-                    )}
-                    onClick={() => setTaskView("calendar")}
-                    title="Calendar View"
-                  >
-                    <CalendarDays className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
       </div>
 
       {/* Dashboard tab */}
@@ -992,7 +920,9 @@ function ProjectMembersSection({
           role="tab"
           className={cn(
             "project-tab-btn tab tab-sm rounded-xl",
-            subTab === "internal" ? "project-tab-active" : "project-tab-inactive",
+            subTab === "internal"
+              ? "project-tab-active"
+              : "project-tab-inactive",
           )}
           onClick={() => setSubTab("internal")}
         >
@@ -1003,7 +933,9 @@ function ProjectMembersSection({
           role="tab"
           className={cn(
             "project-tab-btn tab tab-sm rounded-xl",
-            subTab === "external" ? "project-tab-active" : "project-tab-inactive",
+            subTab === "external"
+              ? "project-tab-active"
+              : "project-tab-inactive",
           )}
           onClick={() => setSubTab("external")}
         >
@@ -1056,7 +988,8 @@ function ProjectMembersSection({
                     { value: "", label: "Skip — unassign all tasks" },
                     ...reassignCandidates.map((m) => ({
                       value: m.user_id,
-                      label: m.display_name || m.email || m.user_id.slice(0, 12),
+                      label:
+                        m.display_name || m.email || m.user_id.slice(0, 12),
                     })),
                   ]}
                 />

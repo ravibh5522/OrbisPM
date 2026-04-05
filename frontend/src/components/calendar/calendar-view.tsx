@@ -1,7 +1,8 @@
 "use client";
 
 import { Avatar, Badge } from "@/components/ui/shared";
-import { cn, priorityColor, statusColor, statusLabel } from "@/lib/utils";
+import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
+import { cn, statusLabel } from "@/lib/utils";
 import type {
   ProjectMember,
   Task,
@@ -190,10 +191,10 @@ function TaskCard({
         )}
       </div>
       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-        <Badge variant={priorityColor(task.priority)} className="badge-xs">
+        <Badge variant={PRIORITY_BADGE[task.priority]} className="badge-xs">
           {statusLabel(task.priority)}
         </Badge>
-        <Badge variant={statusColor(task.status)} className="badge-xs">
+        <Badge variant={STATUS_BADGE[task.status]} className="badge-xs">
           {statusLabel(task.status)}
         </Badge>
         {task.labels?.map((l) => (
@@ -568,7 +569,9 @@ export function CalendarView({
               aria-pressed={mode === m}
               onClick={() => handleModeChange(m)}
             >
-              {mode === m && <Check className="calendar-segment-check h-3 w-3" />}
+              {mode === m && (
+                <Check className="calendar-segment-check h-3 w-3" />
+              )}
               {m.charAt(0).toUpperCase() + m.slice(1)}
             </button>
           ))}
@@ -957,7 +960,8 @@ function DayGridView({
         <>
           {grid[0].tasks.length > 0 && (
             <div className="text-sm text-base-content/50 mb-3">
-              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""} scheduled
+              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""}{" "}
+              scheduled
             </div>
           )}
 

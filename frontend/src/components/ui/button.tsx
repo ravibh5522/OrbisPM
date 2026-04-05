@@ -4,7 +4,16 @@ import { cn } from "@/lib/utils";
 import { Loader2 } from "lucide-react";
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "accent" | "ghost" | "error" | "outline";
+  variant?:
+    | "primary"
+    | "secondary"
+    | "accent"
+    | "ghost"
+    | "error"
+    | "outline"
+    | "success"
+    | "warning"
+    | "info";
   size?: "xs" | "sm" | "md" | "lg";
   loading?: boolean;
 }
@@ -16,6 +25,9 @@ const variantMap: Record<string, string> = {
   ghost: "btn-ghost",
   error: "btn-error",
   outline: "btn-outline",
+  success: "btn-success",
+  warning: "btn-warning",
+  info: "btn-info",
 };
 
 const sizeMap: Record<string, string> = {

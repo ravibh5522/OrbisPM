@@ -1,30 +1,33 @@
 "use client";
 
 import { AreaChartSkeleton } from "@/components/charts/chart-skeleton";
+import { Button } from "@/components/ui/button";
 import { Badge, Card, PageHeader } from "@/components/ui/shared";
+import { StatCard } from "@/components/ui/stat-card";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
-import { cn, formatRelative, priorityColor, statusLabel } from "@/lib/utils";
+import { PRIORITY_BADGE, PRIORITY_HEX, STATUS_HEX } from "@/lib/task-colors";
+import { cn, formatRelative, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type {
-    DashboardAnalytics,
-    DashboardStats,
-    MetricAlert,
-    Project,
+  DashboardAnalytics,
+  DashboardStats,
+  MetricAlert,
+  Project,
 } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import {
-    AlertTriangle,
-    ArrowRight,
-    Bell,
-    CheckCircle2,
-    Clock,
-    FolderKanban,
-    ListTodo,
-    ShieldAlert,
-    TrendingUp,
-    Users2,
+  AlertTriangle,
+  ArrowRight,
+  Bell,
+  CheckCircle2,
+  Clock,
+  FolderKanban,
+  ListTodo,
+  ShieldAlert,
+  TrendingUp,
+  Users2,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -68,55 +71,6 @@ const HealthRing = dynamic(
     ),
   },
 );
-
-const STATUS_COLORS: Record<string, string> = {
-  todo: "#94a3b8",
-  in_progress: "#3b82f6",
-  in_review: "#a855f7",
-  done: "#22c55e",
-  blocked: "#ef4444",
-  cancelled: "#6b7280",
-};
-
-const PRIORITY_COLORS: Record<string, string> = {
-  urgent: "#ef4444",
-  high: "#f97316",
-  medium: "#eab308",
-  low: "#22c55e",
-  none: "#94a3b8",
-};
-
-function MiniStat({
-  label,
-  value,
-  icon,
-  color,
-  sub,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  color: string;
-  sub?: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 shadow-sm glass-card">
-      <div
-        className={cn(
-          "flex items-center justify-center w-9 h-9 rounded-lg",
-          color,
-        )}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-xl font-bold leading-tight">{value}</div>
-        <div className="text-xs text-base-content/50 truncate">{label}</div>
-        {sub && <div className="text-[10px] text-base-content/40">{sub}</div>}
-      </div>
-    </div>
-  );
-}
 
 export default function DashboardPage() {
   const currentOrg = useAuthStore((s) => s.currentOrg);
@@ -198,18 +152,20 @@ export default function DashboardPage() {
               {([7, 30, 90] as const).map((d) => {
                 const active = days === d;
                 return (
-                  <button
+                  <Button
                     key={d}
+                    variant={active ? "primary" : "ghost"}
+                    size="xs"
                     className={cn(
-                      "rounded-full px-3.5 py-1.5 text-[11px] font-semibold tracking-wide transition-all",
+                      "rounded-full px-3.5 text-[11px] font-semibold tracking-wide",
                       active
-                        ? "bg-gradient-to-br from-oklch(45% 0.12 282 / 0.4) to-oklch(48% 0.14 270 / 0.35) text-base-content shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.15)] border border-oklch(100%_0_0_/_0.12)"
-                        : "text-base-content/72 hover:bg-oklch(100%_0_0_/_0.18) hover:text-base-content",
+                        ? "shadow-[inset_0_0_0_1px_oklch(100%_0_0_/_0.15)]"
+                        : "",
                     )}
                     onClick={() => setDays(d)}
                   >
                     {d}d
-                  </button>
+                  </Button>
                 );
               })}
             </div>
@@ -226,58 +182,66 @@ export default function DashboardPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-        <MiniStat
-          label="Projects"
+        <StatCard
+          compact
+          title="Projects"
           value={stats.total_projects}
-          icon={<FolderKanban className="w-5 h-5 text-primary-content" />}
-          color="bg-primary"
+          icon={<FolderKanban className="w-5 h-5" />}
+          iconBg="bg-primary"
+          iconColor="text-primary-content"
         />
-        <MiniStat
-          label="Total Tasks"
+        <StatCard
+          compact
+          title="Total Tasks"
           value={stats.total_tasks}
-          icon={<ListTodo className="w-5 h-5 text-secondary-content" />}
-          color="bg-secondary"
+          icon={<ListTodo className="w-5 h-5" />}
+          iconBg="bg-secondary"
+          iconColor="text-secondary-content"
         />
-        <MiniStat
-          label="In Progress"
+        <StatCard
+          compact
+          title="In Progress"
           value={inProgress}
-          icon={<TrendingUp className="w-5 h-5 text-info-content" />}
-          color="bg-info"
+          icon={<TrendingUp className="w-5 h-5" />}
+          iconBg="bg-info"
+          iconColor="text-info-content"
         />
-        <MiniStat
-          label="Completed"
+        <StatCard
+          compact
+          title="Completed"
           value={completedTasks}
-          icon={<CheckCircle2 className="w-5 h-5 text-success-content" />}
-          color="bg-success"
-          sub={`${completionPct}% done`}
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          iconBg="bg-success"
+          iconColor="text-success-content"
+          description={`${completionPct}% done`}
         />
-        <MiniStat
-          label="Teams"
+        <StatCard
+          compact
+          title="Teams"
           value={stats.total_teams}
-          icon={<Users2 className="w-5 h-5 text-accent-content" />}
-          color="bg-accent"
+          icon={<Users2 className="w-5 h-5" />}
+          iconBg="bg-accent"
+          iconColor="text-accent-content"
         />
-        <MiniStat
-          label="Overdue"
+        <StatCard
+          compact
+          title="Overdue"
           value={stats.overdue_tasks}
-          icon={<AlertTriangle className="w-5 h-5 text-error-content" />}
-          color="bg-error"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          iconBg="bg-error"
+          iconColor="text-error-content"
         />
       </div>
 
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
         <Card title="Task Status" compact>
-          <DonutChart
-            data={statusData}
-            colors={STATUS_COLORS}
-            title="By Status"
-          />
+          <DonutChart data={statusData} colors={STATUS_HEX} title="By Status" />
         </Card>
         <Card title="Task Priority" compact>
           <DonutChart
             data={priorityData}
-            colors={PRIORITY_COLORS}
+            colors={PRIORITY_HEX}
             title="By Priority"
           />
         </Card>
@@ -309,9 +273,11 @@ export default function DashboardPage() {
             <div className="w-full px-2">
               <progress
                 className="progress w-full h-1.5"
-                style={{
-                  "--progress-value": "oklch(64% 0.18 180)",
-                } as React.CSSProperties}
+                style={
+                  {
+                    "--progress-value": "oklch(64% 0.18 180)",
+                  } as React.CSSProperties
+                }
                 value={completedTasks}
                 max={stats.total_tasks || 1}
               />
@@ -514,14 +480,15 @@ export default function DashboardPage() {
                       className="w-2 h-2 rounded-full flex-shrink-0"
                       style={{
                         backgroundColor:
-                          STATUS_COLORS[task.status] || "#94a3b8",
+                          STATUS_HEX[task.status as keyof typeof STATUS_HEX] ||
+                          "#94a3b8",
                       }}
                     />
                     <span className="flex-1 text-sm truncate">
                       {task.title}
                     </span>
                     <Badge
-                      variant={priorityColor(task.priority)}
+                      variant={PRIORITY_BADGE[task.priority]}
                       className="text-[10px]"
                     >
                       {statusLabel(task.priority)}

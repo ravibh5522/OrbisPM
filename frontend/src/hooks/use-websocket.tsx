@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { useAuthStore } from "@/stores/auth-store";
 import type { DomainEvent } from "@/types/domain";
+import { useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useRef } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+import { API_BASE } from "@/lib/api-base";
 
 export function useWebSocket() {
   const esRef = useRef<EventSource | null>(null);
@@ -32,7 +32,6 @@ export function useWebSocket() {
       const es = new EventSource(url);
 
       es.onopen = () => {
-        console.log("[SSE] Connected");
         retryCount.current = 0;
       };
 
@@ -52,10 +51,7 @@ export function useWebSocket() {
         const delay = Math.min(5000 * Math.pow(2, retryCount.current), 30000);
         retryCount.current++;
         if (retryCount.current <= 10) {
-          console.log(`[SSE] Disconnected, reconnecting in ${delay / 1000}s...`);
           reconnectTimeout.current = setTimeout(connect, delay);
-        } else {
-          console.log("[SSE] Max retries reached, stopping reconnection");
         }
       };
 
@@ -79,7 +75,10 @@ export function useWebSocket() {
   }, [connect]);
 }
 
-function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) {
+function handleEvent(
+  event: DomainEvent,
+  qc: ReturnType<typeof useQueryClient>,
+) {
   const type = event.type;
 
   // --- Tasks ---
@@ -97,8 +96,12 @@ function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) 
     qc.invalidateQueries({ queryKey: ["projects"] });
     qc.invalidateQueries({ queryKey: ["dashboard-stats"] });
     if (event.entity_id) {
-      qc.invalidateQueries({ queryKey: ["project", event.org_id, event.entity_id] });
-      qc.invalidateQueries({ queryKey: ["project-dashboard", event.org_id, event.entity_id] });
+      qc.invalidateQueries({
+        queryKey: ["project", event.org_id, event.entity_id],
+      });
+      qc.invalidateQueries({
+        queryKey: ["project-dashboard", event.org_id, event.entity_id],
+      });
     }
   }
 
@@ -106,9 +109,15 @@ function handleEvent(event: DomainEvent, qc: ReturnType<typeof useQueryClient>) 
   if (type.startsWith("team.")) {
     qc.invalidateQueries({ queryKey: ["teams"] });
     if (event.entity_id) {
-      qc.invalidateQueries({ queryKey: ["team", event.org_id, event.entity_id] });
-      qc.invalidateQueries({ queryKey: ["team-dashboard", event.org_id, event.entity_id] });
-      qc.invalidateQueries({ queryKey: ["team-members", event.org_id, event.entity_id] });
+      qc.invalidateQueries({
+        queryKey: ["team", event.org_id, event.entity_id],
+      });
+      qc.invalidateQueries({
+        queryKey: ["team-dashboard", event.org_id, event.entity_id],
+      });
+      qc.invalidateQueries({
+        queryKey: ["team-members", event.org_id, event.entity_id],
+      });
     }
   }
 

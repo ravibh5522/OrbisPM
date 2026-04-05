@@ -13,6 +13,7 @@ import {
   type CalendarGroupBy,
   type CalendarViewMode,
 } from "@/components/calendar";
+import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useOrgPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api";
@@ -250,12 +251,12 @@ export default function OrgCalendarPage({
 
           {/* Filter button */}
           <div className="relative">
-            <button
+            <Button
+              variant={isCalendarFilterActive(filter) ? "primary" : "ghost"}
+              size="xs"
               className={cn(
-                "inline-flex h-8 items-center gap-1 rounded-xl border border-base-200/55 bg-base-100/26 px-2.5 text-xs font-medium backdrop-blur-xl transition-colors",
-                isCalendarFilterActive(filter)
-                  ? "text-primary bg-primary/10 border-primary/30"
-                  : "text-base-content/80 hover:bg-base-100/36",
+                "rounded-xl gap-1",
+                isCalendarFilterActive(filter) ? "" : "",
               )}
               onClick={() => setShowFilter((p) => !p)}
             >
@@ -266,7 +267,7 @@ export default function OrgCalendarPage({
                   {calendarFilterCount(filter)}
                 </span>
               )}
-            </button>
+            </Button>
             {showFilter && (
               <>
                 {/* Invisible backdrop to intercept clicks outside the filter panel */}

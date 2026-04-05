@@ -1,29 +1,30 @@
 "use client";
 
-import { useEditor, EditorContent, type Editor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
 import Underline from "@tiptap/extension-underline";
-import { useCallback, useEffect } from "react";
+import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
 import {
   Bold,
-  Italic,
-  Underline as UnderlineIcon,
-  Strikethrough,
   Code,
-  List,
-  ListOrdered,
-  Quote,
   Heading1,
   Heading2,
   Heading3,
+  Italic,
   Link as LinkIcon,
-  Undo,
-  Redo,
+  List,
+  ListOrdered,
   Minus,
+  Quote,
+  Redo,
+  Strikethrough,
+  Underline as UnderlineIcon,
+  Undo,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useCallback, useEffect } from "react";
 
 /* ═══════════════════════════════════════════════════════
    Reusable Tiptap-based Rich Text Editor
@@ -97,7 +98,12 @@ export function RichTextEditor({
   if (!editor) return null;
 
   return (
-    <div className={cn("border border-base-300 rounded-lg overflow-hidden bg-base-100", className)}>
+    <div
+      className={cn(
+        "border border-base-300 rounded-lg overflow-hidden bg-base-100",
+        className,
+      )}
+    >
       {editable && <Toolbar editor={editor} compact={compact} />}
       <EditorContent editor={editor} />
     </div>
@@ -105,7 +111,13 @@ export function RichTextEditor({
 }
 
 /* ── Read-only rich text viewer (no toolbar, no border) ── */
-export function RichTextViewer({ content, className }: { content: string; className?: string }) {
+export function RichTextViewer({
+  content,
+  className,
+}: {
+  content: string;
+  className?: string;
+}) {
   const editor = useEditor({
     immediatelyRender: false,
     extensions: [
@@ -162,159 +174,193 @@ function Toolbar({ editor, compact }: { editor: Editor; compact?: boolean }) {
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   }, [editor]);
 
-  const btnClass = cn(
-    "btn btn-ghost btn-xs",
-    compact && "btn-xs",
-  );
-
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-base-300 px-1 py-0.5 bg-base-200/40">
       {/* Text formatting */}
-      <button
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleBold().run()}
-        className={cn(btnClass, editor.isActive("bold") && "btn-active")}
+        className={cn(editor.isActive("bold") && "btn-active")}
         title="Bold"
       >
         <Bold className="w-3.5 h-3.5" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleItalic().run()}
-        className={cn(btnClass, editor.isActive("italic") && "btn-active")}
+        className={cn(editor.isActive("italic") && "btn-active")}
         title="Italic"
       >
         <Italic className="w-3.5 h-3.5" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleUnderline().run()}
-        className={cn(btnClass, editor.isActive("underline") && "btn-active")}
+        className={cn(editor.isActive("underline") && "btn-active")}
         title="Underline"
       >
         <UnderlineIcon className="w-3.5 h-3.5" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleStrike().run()}
-        className={cn(btnClass, editor.isActive("strike") && "btn-active")}
+        className={cn(editor.isActive("strike") && "btn-active")}
         title="Strikethrough"
       >
         <Strikethrough className="w-3.5 h-3.5" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleCode().run()}
-        className={cn(btnClass, editor.isActive("code") && "btn-active")}
+        className={cn(editor.isActive("code") && "btn-active")}
         title="Inline code"
       >
         <Code className="w-3.5 h-3.5" />
-      </button>
+      </Button>
 
       <div className="divider divider-horizontal mx-0 h-5" />
 
       {/* Headings */}
       {!compact && (
         <>
-          <button
+          <Button
+            variant="ghost"
+            size="xs"
             type="button"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            className={cn(btnClass, editor.isActive("heading", { level: 1 }) && "btn-active")}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 1 }).run()
+            }
+            className={cn(
+              editor.isActive("heading", { level: 1 }) && "btn-active",
+            )}
             title="Heading 1"
           >
             <Heading1 className="w-3.5 h-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             type="button"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            className={cn(btnClass, editor.isActive("heading", { level: 2 }) && "btn-active")}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            }
+            className={cn(
+              editor.isActive("heading", { level: 2 }) && "btn-active",
+            )}
             title="Heading 2"
           >
             <Heading2 className="w-3.5 h-3.5" />
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="ghost"
+            size="xs"
             type="button"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-            className={cn(btnClass, editor.isActive("heading", { level: 3 }) && "btn-active")}
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 3 }).run()
+            }
+            className={cn(
+              editor.isActive("heading", { level: 3 }) && "btn-active",
+            )}
             title="Heading 3"
           >
             <Heading3 className="w-3.5 h-3.5" />
-          </button>
+          </Button>
 
           <div className="divider divider-horizontal mx-0 h-5" />
         </>
       )}
 
       {/* Lists */}
-      <button
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleBulletList().run()}
-        className={cn(btnClass, editor.isActive("bulletList") && "btn-active")}
+        className={cn(editor.isActive("bulletList") && "btn-active")}
         title="Bullet list"
       >
         <List className="w-3.5 h-3.5" />
-      </button>
-      <button
+      </Button>
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
-        className={cn(btnClass, editor.isActive("orderedList") && "btn-active")}
+        className={cn(editor.isActive("orderedList") && "btn-active")}
         title="Numbered list"
       >
         <ListOrdered className="w-3.5 h-3.5" />
-      </button>
+      </Button>
 
       {/* Blockquote & HR */}
-      <button
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={() => editor.chain().focus().toggleBlockquote().run()}
-        className={cn(btnClass, editor.isActive("blockquote") && "btn-active")}
+        className={cn(editor.isActive("blockquote") && "btn-active")}
         title="Blockquote"
       >
         <Quote className="w-3.5 h-3.5" />
-      </button>
+      </Button>
       {!compact && (
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           type="button"
           onClick={() => editor.chain().focus().setHorizontalRule().run()}
-          className={btnClass}
           title="Horizontal rule"
         >
           <Minus className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       )}
 
       <div className="divider divider-horizontal mx-0 h-5" />
 
       {/* Link */}
-      <button
+      <Button
+        variant="ghost"
+        size="xs"
         type="button"
         onClick={setLink}
-        className={cn(btnClass, editor.isActive("link") && "btn-active")}
+        className={cn(editor.isActive("link") && "btn-active")}
         title="Insert link"
       >
         <LinkIcon className="w-3.5 h-3.5" />
-      </button>
+      </Button>
 
       {/* Undo / Redo */}
       <div className="ml-auto flex items-center gap-0.5">
-        <button
+        <Button
+          variant="ghost"
+          size="xs"
           type="button"
           onClick={() => editor.chain().focus().undo().run()}
           disabled={!editor.can().undo()}
-          className={btnClass}
           title="Undo"
         >
           <Undo className="w-3.5 h-3.5" />
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="ghost"
+          size="xs"
           type="button"
           onClick={() => editor.chain().focus().redo().run()}
           disabled={!editor.can().redo()}
-          className={btnClass}
           title="Redo"
         >
           <Redo className="w-3.5 h-3.5" />
-        </button>
+        </Button>
       </div>
     </div>
   );

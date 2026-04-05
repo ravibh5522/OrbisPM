@@ -3,6 +3,7 @@
 import { statusLabel } from "@/lib/utils";
 import { Cell, Pie, PieChart, Tooltip } from "recharts";
 
+import { CHART_PALETTE } from "@/lib/chart-utils";
 import { DonutChartSkeleton } from "./chart-skeleton";
 
 export function DonutChart({
@@ -37,7 +38,10 @@ export function DonutChart({
             strokeWidth={0}
           >
             {data.map((entry) => (
-              <Cell key={entry.name} fill={colors[entry.name] || "#94a3b8"} />
+              <Cell
+                key={entry.name}
+                fill={colors[entry.name] ?? CHART_PALETTE[0]}
+              />
             ))}
           </Pie>
           <Tooltip formatter={(value) => [value, "Tasks"]} />
@@ -53,14 +57,16 @@ export function DonutChart({
               <span
                 className="w-3 h-3 rounded-full flex-shrink-0"
                 style={{
-                  backgroundColor: colors[entry.name] || "#94a3b8",
+                  backgroundColor: colors[entry.name] ?? CHART_PALETTE[0],
                 }}
               />
               <span className="truncate capitalize font-medium">
                 {statusLabel(entry.name)}
               </span>
             </div>
-            <span className="font-semibold tabular-nums flex-shrink-0">{entry.value}</span>
+            <span className="font-semibold tabular-nums flex-shrink-0">
+              {entry.value}
+            </span>
           </div>
         ))}
       </div>

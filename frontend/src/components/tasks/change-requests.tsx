@@ -1,32 +1,33 @@
 "use client";
 
+import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
 import { Avatar, Badge, Card } from "@/components/ui/shared";
+import { Tabs } from "@/components/ui/tabs";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api"; // kept for CR attachment binary ops
 import { cn, formatRelative } from "@/lib/utils";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
-    Attachment,
-    ChangeRequestStatus,
-    OrgMember,
-    TaskChangeRequest,
+  Attachment,
+  ChangeRequestStatus,
+  OrgMember,
+  TaskChangeRequest,
 } from "@/types/domain";
 import {
-    AlertCircle,
-    Check,
-    Clock,
-    Download,
-    FileText,
-    GitPullRequest,
-    Image as ImageIcon,
-    Paperclip,
-    Play,
-    Trash2,
-    Upload,
-    X,
+  Check,
+  Clock,
+  Download,
+  FileText,
+  GitPullRequest,
+  Image as ImageIcon,
+  Paperclip,
+  Play,
+  Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -347,29 +348,21 @@ export function ProjectChangeRequests({
           </h3>
 
           {/* Status filter pills */}
-          <div
-            role="tablist"
-            className="project-tabs-shell tabs tabs-boxed rounded-2xl p-1"
-          >
-            {(["pending", "approved", "rejected", "all"] as const).map((s) => (
-              <button
-                key={s}
-                role="tab"
-                className={cn(
-                  "project-tab-btn tab tab-xs rounded-xl",
-                  statusFilter === s
-                    ? "project-tab-active"
-                    : "project-tab-inactive",
-                )}
-                onClick={() => {
-                  setStatusFilter(s);
-                  setPage(1);
-                }}
-              >
-                {s === "all" ? "All" : s.charAt(0).toUpperCase() + s.slice(1)}
-              </button>
-            ))}
-          </div>
+          <Tabs
+            tabs={[
+              { id: "all", label: "All" },
+              { id: "pending", label: "Pending" },
+              { id: "approved", label: "Approved" },
+              { id: "rejected", label: "Rejected" },
+            ]}
+            activeTab={statusFilter}
+            onChange={(v) => {
+              setStatusFilter(v as "pending" | "approved" | "rejected" | "all");
+              setPage(1);
+            }}
+            variant="boxed"
+            size="xs"
+          />
         </div>
 
         {/* ── Filter / Search bar ── */}
@@ -430,15 +423,16 @@ export function ProjectChangeRequests({
               No change requests found
             </p>
             {(debouncedSearch || proposerFilter !== "all") && (
-              <button
-                className="btn btn-ghost btn-xs"
+              <Button
+                variant="ghost"
+                size="xs"
                 onClick={() => {
                   setSearch("");
                   setProposerFilter("all");
                 }}
               >
                 Clear filters
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -475,16 +469,15 @@ export function ProjectChangeRequests({
                   totalPages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3;
                 if (p < 1 || p > totalPages) return null;
                 return (
-                  <button
+                  <Button
                     key={p}
-                    className={cn(
-                      "btn btn-xs btn-square",
-                      p === page ? "btn-primary" : "btn-ghost",
-                    )}
+                    size="xs"
+                    variant={p === page ? "primary" : "ghost"}
+                    className="btn-square"
                     onClick={() => setPage(p)}
                   >
                     {p}
-                  </button>
+                  </Button>
                 );
               })}
               <Button
@@ -1240,25 +1233,21 @@ export function ChangeRequestToast({
   const fields = Object.keys(result.change_request.changes || {});
 
   return (
-    <div className="alert alert-warning shadow-lg mb-4">
-      <AlertCircle className="w-5 h-5" />
-      <div>
-        <h4 className="font-bold text-sm">Changes Pending Review</h4>
-        <p className="text-xs">
-          Your changes to <strong>{fields.join(", ")}</strong> require approval
-          before being applied.
-        </p>
-      </div>
-      <div className="flex gap-1">
-        {onViewApprovals && (
-          <button className="btn btn-ghost btn-xs" onClick={onViewApprovals}>
-            <Paperclip className="w-3 h-3 mr-1" /> View & Attach
-          </button>
-        )}
-        <button className="btn btn-ghost btn-xs" onClick={onDismiss}>
-          Dismiss
-        </button>
-      </div>
-    </div>
+    <Alert
+      variant="warning"
+      title="Changes Pending Review"
+      className="shadow-lg mb-4"
+      onDismiss={onDismiss}
+    >
+      <p className="text-xs">
+        Your changes to <strong>{fields.join(", ")}</strong> require approval
+        before being applied.
+      </p>
+      {onViewApprovals && (
+        <Button variant="ghost" size="xs" onClick={onViewApprovals}>
+          <Paperclip className="w-3 h-3 mr-1" /> View & Attach
+        </Button>
+      )}
+    </Alert>
   );
 }

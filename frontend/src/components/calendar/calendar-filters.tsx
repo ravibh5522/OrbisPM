@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type {
   OrgMember,
@@ -217,7 +218,9 @@ export function GroupBySelector({
           aria-pressed={value === opt.key}
           onClick={() => onChange(opt.key)}
         >
-          {value === opt.key && <Check className="calendar-segment-check h-3 w-3" />}
+          {value === opt.key && (
+            <Check className="calendar-segment-check h-3 w-3" />
+          )}
           {opt.label}
         </button>
       ))}
@@ -420,7 +423,8 @@ export function CalendarFilterDropdown({
                   key={s}
                   className={cn(
                     "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
-                    local.statuses.includes(s) && "bg-primary/12 border border-primary/20",
+                    local.statuses.includes(s) &&
+                      "bg-primary/12 border border-primary/20",
                   )}
                 >
                   <input
@@ -446,7 +450,8 @@ export function CalendarFilterDropdown({
                   key={p}
                   className={cn(
                     "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
-                    local.priorities.includes(p) && "bg-primary/12 border border-primary/20",
+                    local.priorities.includes(p) &&
+                      "bg-primary/12 border border-primary/20",
                   )}
                 >
                   <input
@@ -471,7 +476,8 @@ export function CalendarFilterDropdown({
                     key={l}
                     className={cn(
                       "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
-                      local.labels.includes(l) && "bg-primary/12 border border-primary/20",
+                      local.labels.includes(l) &&
+                        "bg-primary/12 border border-primary/20",
                     )}
                   >
                     <input
@@ -496,7 +502,8 @@ export function CalendarFilterDropdown({
                 <label
                   className={cn(
                     "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
-                    local.parentTaskId === null && "bg-primary/12 border border-primary/20",
+                    local.parentTaskId === null &&
+                      "bg-primary/12 border border-primary/20",
                   )}
                 >
                   <input
@@ -516,7 +523,8 @@ export function CalendarFilterDropdown({
                 <label
                   className={cn(
                     "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
-                    local.parentTaskId === "root" && "bg-primary/12 border border-primary/20",
+                    local.parentTaskId === "root" &&
+                      "bg-primary/12 border border-primary/20",
                   )}
                 >
                   <input
@@ -539,7 +547,8 @@ export function CalendarFilterDropdown({
                     key={t.id}
                     className={cn(
                       "flex items-center gap-2 cursor-pointer rounded-lg px-2 py-1 transition-colors",
-                      local.parentTaskId === t.id && "bg-primary/12 border border-primary/20",
+                      local.parentTaskId === t.id &&
+                        "bg-primary/12 border border-primary/20",
                     )}
                   >
                     <input
@@ -626,15 +635,25 @@ export function CalendarFilterDropdown({
       {/* Actions */}
       <div className="sticky bottom-0 z-10 border-t border-base-200/50 bg-base-100/88 px-4 py-3 backdrop-blur-2xl">
         <div className="flex flex-wrap gap-2">
-          <button className="btn btn-ghost btn-sm flex-1" onClick={reset}>
+          <Button variant="ghost" size="sm" className="flex-1" onClick={reset}>
             Reset Filters
-          </button>
-          <button className="btn btn-ghost btn-sm flex-1" onClick={onClose}>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="flex-1"
+            onClick={onClose}
+          >
             Cancel
-          </button>
-          <button className="btn btn-primary btn-sm flex-1" onClick={apply}>
+          </Button>
+          <Button
+            variant="primary"
+            size="sm"
+            className="flex-1"
+            onClick={apply}
+          >
             Apply
-          </button>
+          </Button>
         </div>
       </div>
     </div>

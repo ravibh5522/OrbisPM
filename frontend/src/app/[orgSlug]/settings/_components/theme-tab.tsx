@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import {
   PrimaryColorPicker,
   ProfileSwatch,
@@ -7,6 +8,7 @@ import {
 } from "@/components/ui/color-picker-panel";
 import { Card } from "@/components/ui/shared";
 import { ApiError, api } from "@/lib/api";
+import { THEME_PREVIEWS } from "@/lib/theme-previews";
 import {
   DEFAULT_PROFILE_ID,
   PROFILES_BY_THEME,
@@ -32,52 +34,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
-
-/* ─── Theme preview mini-tiles ─── */
-const THEME_PREVIEWS: Record<
-  string,
-  {
-    bg: string;
-    card: string;
-    primary: string;
-    secondary: string;
-    accent: string;
-    text: string;
-  }
-> = {
-  "glass-light": {
-    bg: "bg-gradient-to-br from-indigo-100 via-purple-50 to-teal-50",
-    card: "bg-white/60 backdrop-blur-md border border-white/40",
-    primary: "bg-indigo-500",
-    secondary: "bg-violet-400",
-    accent: "bg-teal-400",
-    text: "text-gray-800",
-  },
-  "glass-dark": {
-    bg: "bg-gradient-to-br from-purple-950 via-indigo-950 to-cyan-950",
-    card: "bg-white/10 backdrop-blur-md border border-white/10",
-    primary: "bg-violet-500",
-    secondary: "bg-cyan-400",
-    accent: "bg-rose-400",
-    text: "text-white",
-  },
-  "orbis-light": {
-    bg: "bg-slate-50",
-    card: "bg-white border border-slate-200",
-    primary: "bg-blue-600",
-    secondary: "bg-sky-500",
-    accent: "bg-emerald-500",
-    text: "text-slate-800",
-  },
-  "orbis-dark": {
-    bg: "bg-slate-900",
-    card: "bg-slate-800 border border-slate-700",
-    primary: "bg-indigo-500",
-    secondary: "bg-teal-500",
-    accent: "bg-amber-400",
-    text: "text-white",
-  },
-};
 
 export default function ThemeTab() {
   const { currentOrg } = useAuthStore();
@@ -370,16 +326,15 @@ export default function ThemeTab() {
               </p>
             </div>
           </div>
-          <button
+          <Button
             type="button"
+            size="xs"
+            variant={showCustomPrimary ? "primary" : "outline"}
+            className="gap-1.5"
             onClick={() => setShowCustomPrimary((v) => !v)}
-            className={cn(
-              "btn btn-xs gap-1.5",
-              showCustomPrimary ? "btn-primary" : "btn-outline",
-            )}
           >
             {showCustomPrimary ? "On" : "Enable"}
-          </button>
+          </Button>
         </div>
 
         {showCustomPrimary && (
@@ -405,13 +360,15 @@ export default function ThemeTab() {
               colorScheme={colorScheme}
             />
 
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="xs"
+              className="gap-1.5 text-base-content/40"
               onClick={handleResetCustom}
-              className="btn btn-ghost btn-xs gap-1.5 text-base-content/40"
             >
               <RotateCcw className="w-3 h-3" /> Reset to profile default
-            </button>
+            </Button>
           </div>
         )}
       </Card>
@@ -456,21 +413,22 @@ export default function ThemeTab() {
         <p className="text-xs text-base-content/40">
           {isDirty ? "You have unsaved changes" : "No pending changes"}
         </p>
-        <button
+        <Button
           type="button"
+          variant={locked ? "warning" : "primary"}
+          className="gap-2"
           onClick={handleApplyForAll}
           disabled={saveMutation.isPending || !isDirty}
-          className={cn("btn gap-2", locked ? "btn-warning" : "btn-primary")}
+          loading={saveMutation.isPending}
         >
-          {saveMutation.isPending ? (
-            <span className="loading loading-spinner loading-sm" />
-          ) : locked ? (
-            <Lock className="w-4 h-4" />
-          ) : (
-            <CheckCircle className="w-4 h-4" />
-          )}
+          {!saveMutation.isPending &&
+            (locked ? (
+              <Lock className="w-4 h-4" />
+            ) : (
+              <CheckCircle className="w-4 h-4" />
+            ))}
           {locked ? "Apply & Lock for All" : "Apply for All"}
-        </button>
+        </Button>
       </div>
     </div>
   );
