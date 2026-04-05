@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -217,8 +216,8 @@ export function MessageInput() {
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
       }
-    } catch {
-      // send failed
+    } catch (err) {
+      console.error("[Chat] Failed to send message:", err);
     } finally {
       setSending(false);
     }
@@ -381,14 +380,12 @@ export function MessageInput() {
                   {fp.error}
                 </div>
               )}
-              <Button
+              <button
                 onClick={() => removeFile(i)}
-                variant="error"
-                size="xs"
-                className="btn-circle absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute -top-1.5 -right-1.5 btn btn-error btn-xs btn-circle opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <X className="w-3 h-3" />
-              </Button>
+              </button>
             </div>
           ))}
         </div>
@@ -459,51 +456,17 @@ export function MessageInput() {
             e.target.value = "";
           }}
         />
-        <Button
-          variant="ghost"
-          size="xs"
-          className="btn-circle"
-          onClick={() => fileInputRef.current?.click()}
-          title="Attach file"
-        >
-          <Paperclip className="w-4 h-4 text-base-content/50" />
-        </Button>
-
-        {/* Emoji picker */}
-        <div className="relative">
-          <Button
-            variant="ghost"
-            size="xs"
-            className="btn-circle"
-            onClick={() => setShowEmoji(!showEmoji)}
-            title="Add emoji"
-          >
-            <Smile className="w-4 h-4 text-base-content/50" />
-          </Button>
-          {showEmoji && (
-            <div className="absolute bottom-full left-0 mb-2 bg-base-100 border border-base-200 rounded-xl shadow-lg p-2 z-20 grid grid-cols-4 gap-1">
-              {EMOJI_QUICK.map((e) => (
-                <Button
-                  key={e}
-                  onClick={() => insertEmoji(e)}
-                  variant="ghost"
-                  size="sm"
-                  className="btn-square text-lg hover:scale-110 transition-transform"
-                >
-                  {e}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
         {canUpload && (
           <button
             className="btn btn-ghost btn-xs btn-circle"
             onClick={() => fileInputRef.current?.click()}
             title="Attach file"
+          >
             <Paperclip className="w-4 h-4 text-base-content/50" />
           </button>
         )}
+
+        {/* Emoji picker */}
         {canReact && (
           <div className="relative">
             <button
@@ -542,20 +505,21 @@ export function MessageInput() {
         />
 
         {/* Send button */}
-        <Button
+        <button
           onClick={handleSend}
           disabled={
             (!body.trim() && files.filter((f) => !f.error).length === 0) ||
             sending
           }
-          variant="primary"
-          size="sm"
-          className="btn-circle"
+          className="btn btn-primary btn-sm btn-circle"
           title="Send message"
-          loading={sending}
         >
-          {!sending && <Send className="w-4 h-4" />}
-        </Button>
+          {sending ? (
+            <span className="loading loading-spinner loading-xs" />
+          ) : (
+            <Send className="w-4 h-4" />
+          )}
+        </button>
       </div>
     </div>
   );

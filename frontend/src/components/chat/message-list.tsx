@@ -1,6 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
 import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -26,7 +25,7 @@ const EMOJI_LIST = ["👍", "❤️", "😂", "🎉", "😮", "😢", "🔥", "�
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_TYPING = new Set<string>();
 
-import { API_BASE } from "@/lib/api-base";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
 /** Fetches an attachment image via the authenticated /file streaming endpoint and renders it as a blob URL. */
 function ChatAttachmentImage({
@@ -574,16 +573,15 @@ function MessageBubble({
                 rows={2}
               />
               <div className="flex gap-1 mt-1">
-                <Button size="xs" variant="primary" onClick={handleEdit}>
+                <button className="btn btn-xs btn-primary" onClick={handleEdit}>
                   Save
-                </Button>
-                <Button
-                  size="xs"
-                  variant="ghost"
+                </button>
+                <button
+                  className="btn btn-xs btn-ghost"
                   onClick={() => setEditing(false)}
                 >
                   Cancel
-                </Button>
+                </button>
               </div>
             </div>
           ) : (
@@ -696,47 +694,12 @@ function MessageBubble({
               isOwn ? "right-2" : "left-12",
             )}
           >
-            <Button
-              variant="ghost"
-              size="xs"
-              className="btn-square"
+            <button
+              className="btn btn-ghost btn-xs btn-square"
               title="Reply in thread"
               onClick={onOpenThread}
             >
               <MessageSquare className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="btn-square"
-              title="React"
-              onClick={() => setShowEmoji(!showEmoji)}
-            >
-              <SmilePlus className="w-3.5 h-3.5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              className={cn("btn-square", bookmarked && "text-warning")}
-              title={bookmarked ? "Bookmarked!" : "Bookmark"}
-              onClick={async () => {
-                try {
-                  if (bookmarked) {
-                    await api.chat.bookmarks.remove(message.id);
-                    setBookmarked(false);
-                  } else {
-                    await api.chat.bookmarks.add(message.id);
-                    setBookmarked(true);
-                  }
-                } catch {
-                  // toggle failed silently
-                }
-              }}
-            >
-              <Bookmark
-                className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
-              />
-            </Button>
             </button>
             {canReact && (
               <button
@@ -765,6 +728,7 @@ function MessageBubble({
                     }
                   } catch {
                     // toggle failed silently
+                  }
                 }}
               >
                 <Bookmark
@@ -774,15 +738,13 @@ function MessageBubble({
             )}
             {/* 3-dot menu */}
             <div className="relative" ref={menuRef}>
-              <Button
-                variant="ghost"
-                size="xs"
-                className="btn-square"
+              <button
+                className="btn btn-ghost btn-xs btn-square"
                 title="More"
                 onClick={() => setShowMenu(!showMenu)}
               >
                 <MoreHorizontal className="w-3.5 h-3.5" />
-              </Button>
+              </button>
               {showMenu && (
                 <div
                   className={cn(
@@ -866,15 +828,13 @@ function MessageBubble({
             )}
           >
             {EMOJI_LIST.map((e) => (
-              <Button
+              <button
                 key={e}
                 onClick={() => handleReaction(e)}
-                variant="ghost"
-                size="xs"
-                className="btn-square text-base hover:scale-125 transition-transform"
+                className="btn btn-ghost btn-xs btn-square text-base hover:scale-125 transition-transform"
               >
                 {e}
-              </Button>
+              </button>
             ))}
           </div>
         )}
@@ -886,14 +846,12 @@ function MessageBubble({
           className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
           onClick={() => setLightboxUrl(null)}
         >
-          <Button
-            variant="ghost"
-            size="sm"
-            className="btn-circle text-white absolute top-4 right-4"
+          <button
+            className="absolute top-4 right-4 btn btn-ghost btn-sm btn-circle text-white"
             onClick={() => setLightboxUrl(null)}
           >
             <X className="w-5 h-5" />
-          </Button>
+          </button>
           <img
             src={lightboxUrl}
             alt="Preview"

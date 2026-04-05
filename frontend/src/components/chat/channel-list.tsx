@@ -1,7 +1,5 @@
 "use client";
 
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/form-fields";
 import {
   canManageRole,
   getAssignableRoles,
@@ -386,22 +384,20 @@ function ConversationPanel({
       <div className="px-3 pt-3 pb-2">
         <div className="flex items-center justify-between mb-2">
           <h2 className="text-sm font-bold text-base-content">Messages</h2>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="btn-square"
+          <button
+            className="btn btn-ghost btn-xs btn-square"
             onClick={() => setShowCreateOverlay(true)}
             title="New conversation"
           >
             <Plus className="w-4 h-4" />
-          </Button>
+          </button>
         </div>
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-base-content/30" />
-          <Input
+          <input
             type="text"
             placeholder="Search..."
-            className="input-xs w-full pl-8 bg-base-300/50 h-8 text-xs"
+            className="input input-xs input-bordered w-full pl-8 bg-base-300/50 h-8 text-xs"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -994,26 +990,6 @@ function MemberRow({
       )}
       {!isCurrentUser && canManageTarget && (
         <div className="opacity-0 group-hover/member:opacity-100 flex items-center gap-0.5 transition-opacity">
-          {member.role === "member" && (
-            <Button
-              variant="ghost"
-              size="xs"
-              className="btn-square"
-              title="Make admin"
-              onClick={() => updateRole.mutate("admin")}
-            >
-              <Shield className="w-3 h-3" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="xs"
-            className="btn-square text-error"
-            title="Remove member"
-            onClick={onRemove}
-          >
-            <UserMinus className="w-3 h-3" />
-          </Button>
           {canUpdateRoles && assignableRoles.length > 0 && (
             <div className="relative">
               <button
@@ -1042,13 +1018,16 @@ function MemberRow({
                 </div>
               )}
             </div>
+          )}
           {canRemoveMembers && (
             <button
               className="btn btn-ghost btn-xs btn-square text-error"
               title="Remove member"
               onClick={onRemove}
+            >
               <UserMinus className="w-3 h-3" />
             </button>
+          )}
         </div>
       )}
     </div>
@@ -1112,14 +1091,9 @@ function AddMemberSearch({
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => e.key === "Escape" && onClose()}
         />
-        <Button
-          variant="ghost"
-          size="xs"
-          className="btn-square"
-          onClick={onClose}
-        >
+        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
           <X className="w-3 h-3" />
-        </Button>
+        </button>
       </div>
       <div className="max-h-36 overflow-y-auto">
         {isLoading && (
@@ -1333,14 +1307,9 @@ function CreateConversationOverlay({ onClose }: { onClose: () => void }) {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-base-300">
         <span className="text-sm font-semibold">New Conversation</span>
-        <Button
-          variant="ghost"
-          size="xs"
-          className="btn-square"
-          onClick={onClose}
-        >
+        <button className="btn btn-ghost btn-xs btn-square" onClick={onClose}>
           <X className="w-4 h-4" />
-        </Button>
+        </button>
       </div>
 
       {/* Mode selector */}
@@ -1352,18 +1321,18 @@ function CreateConversationOverlay({ onClose }: { onClose: () => void }) {
             { value: "team" as const, label: "Team" },
           ] as const
         ).map((m) => (
-          <Button
+          <button
             key={m.value}
             onClick={() => setMode(m.value)}
-            size="xs"
-            variant={mode === m.value ? "primary" : "ghost"}
             className={cn(
-              "flex-1",
-              mode !== m.value && "border border-base-200",
+              "btn btn-xs flex-1",
+              mode === m.value
+                ? "btn-primary"
+                : "btn-ghost border border-base-200",
             )}
           >
             {m.label}
-          </Button>
+          </button>
         ))}
       </div>
 
@@ -1476,16 +1445,17 @@ function CreateConversationOverlay({ onClose }: { onClose: () => void }) {
       {/* Action button (not for DM mode — DMs create on user click) */}
       {mode !== "dm" && (
         <div className="px-3 py-2 border-t border-base-300">
-          <Button
-            variant="primary"
-            size="sm"
-            className="w-full"
+          <button
+            className="btn btn-primary btn-sm w-full"
             disabled={!canSubmit || creating}
-            loading={creating}
             onClick={handleSubmit}
           >
-            {!creating && submitLabel}
-          </Button>
+            {creating ? (
+              <span className="loading loading-spinner loading-sm" />
+            ) : (
+              submitLabel
+            )}
+          </button>
         </div>
       )}
     </div>
@@ -1524,15 +1494,13 @@ function SectionHeader({
         )}
       </button>
       {onAdd && (
-        <Button
+        <button
           onClick={onAdd}
-          variant="ghost"
-          size="xs"
-          className="btn-square opacity-0 group-hover:opacity-100 transition-opacity"
+          className="opacity-0 group-hover:opacity-100 btn btn-ghost btn-xs btn-square transition-opacity"
           title={`Add ${title.toLowerCase()}`}
         >
           <Plus className="w-3 h-3" />
-        </Button>
+        </button>
       )}
     </div>
   );
