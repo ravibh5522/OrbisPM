@@ -15,6 +15,37 @@ import (
 
 const redisChannelPrefix = "orbispm:events:"
 
+// DefaultTeamChannelRoleMap maps team-level roles to channel member roles.
+var DefaultTeamChannelRoleMap = map[string]domain.MemberRole{
+	"team_lead": domain.MemberRoleAdmin,
+	"member":    domain.MemberRoleMember,
+	"viewer":    domain.MemberRoleViewer,
+}
+
+// DefaultProjectChannelRoleMap maps project-level roles to channel member roles.
+var DefaultProjectChannelRoleMap = map[string]domain.MemberRole{
+	"lead":        domain.MemberRoleAdmin,
+	"contributor": domain.MemberRoleMember,
+	"reviewer":    domain.MemberRoleViewer,
+	"observer":    domain.MemberRoleViewer,
+}
+
+// mapTeamRoleToChannelRole maps a team role to a channel role.
+func mapTeamRoleToChannelRole(teamRole string) domain.MemberRole {
+	if r, ok := DefaultTeamChannelRoleMap[teamRole]; ok {
+		return r
+	}
+	return domain.MemberRoleMember
+}
+
+// mapProjectRoleToChannelRole maps a project role to a channel role.
+func mapProjectRoleToChannelRole(projectRole string) domain.MemberRole {
+	if r, ok := DefaultProjectChannelRoleMap[projectRole]; ok {
+		return r
+	}
+	return domain.MemberRoleMember
+}
+
 // BackendEvent mirrors the backend's DomainEvent struct.
 type BackendEvent struct {
 	Type     string         `json:"type"`
@@ -222,6 +253,10 @@ func (h *BackendEventHandler) handleTeamMemberAdded(ctx context.Context, event B
 		return err
 	}
 
+	// Map team role to channel role
+	teamRole, _ := event.Payload["role"].(string)
+	channelRole := mapTeamRoleToChannelRole(teamRole)
+
 	return h.txMgr.WithOrgTx(ctx, orgID, func(tx pgx.Tx) error {
 		// Find all channels for this team
 		rows, err := tx.Query(ctx,
@@ -251,7 +286,7 @@ func (h *BackendEventHandler) handleTeamMemberAdded(ctx context.Context, event B
 				cm := &domain.ChannelMember{
 					ChannelID: channelID,
 					UserID:    userID,
-					Role:      domain.MemberRoleMember,
+					Role:      channelRole,
 				}
 				if err := h.memberR.Add(ctx, tx, cm); err != nil {
 					log.Warn().Err(err).
@@ -418,6 +453,10 @@ func (h *BackendEventHandler) handleProjectMemberAdded(ctx context.Context, even
 		return err
 	}
 
+	// Map project role to channel role
+	projectRole, _ := event.Payload["role"].(string)
+	channelRole := mapProjectRoleToChannelRole(projectRole)
+
 	return h.txMgr.WithOrgTx(ctx, orgID, func(tx pgx.Tx) error {
 		rows, err := tx.Query(ctx,
 			`SELECT id FROM channels WHERE auto_source = 'project' AND auto_source_id = $1 AND NOT is_archived`,
@@ -446,7 +485,7 @@ func (h *BackendEventHandler) handleProjectMemberAdded(ctx context.Context, even
 				cm := &domain.ChannelMember{
 					ChannelID: channelID,
 					UserID:    userID,
-					Role:      domain.MemberRoleMember,
+					Role:      channelRole,
 				}
 				if err := h.memberR.Add(ctx, tx, cm); err != nil {
 					log.Warn().Err(err).

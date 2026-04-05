@@ -606,8 +606,27 @@ export interface OIDCAuthorizeResponse {
 // ─── Chat / Messaging Types ───────────────────────────
 
 export type ChatChannelType = "dm" | "group" | "team" | "project";
-export type ChatMemberRole = "owner" | "admin" | "member";
+export type ChatMemberRole =
+  | "owner"
+  | "admin"
+  | "moderator"
+  | "member"
+  | "viewer";
 export type ChatMessageFormat = "text" | "markdown";
+
+/** Channel permission from the backend. */
+export interface ChannelPermission {
+  id: string;
+  resource: string;
+  action: string;
+  description?: string;
+}
+
+/** Role with its associated permissions. */
+export interface ChannelRolePermissions {
+  role: ChatMemberRole;
+  permissions: ChannelPermission[];
+}
 
 export interface ChatChannel {
   id: string;

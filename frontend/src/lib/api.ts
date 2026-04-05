@@ -1830,6 +1830,17 @@ export const api = {
           `${V1}/chat/attachments/${attachmentId}/url`,
         ),
     },
+    // Channel Roles & Permissions
+    roles: {
+      list: () =>
+        get<import("@/types/domain").ChannelRolePermissions[]>(
+          `${V1}/chat/roles`,
+        ),
+      myPermissions: (channelId: string) =>
+        get<import("@/types/domain").ChannelRolePermissions>(
+          `${V1}/chat/channels/${channelId}/my-permissions`,
+        ),
+    },
   },
 
   // Org theme config

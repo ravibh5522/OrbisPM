@@ -121,7 +121,9 @@ func main() {
 	categoryRepo := repository.NewCategoryRepository(pool)
 
 	// ─── Services ─────────────────────────────
-	channelSvc := service.NewChannelService(txManager, channelRepo, memberRepo, publisher)
+	permRepo := repository.NewChannelPermissionRepository(pool)
+	rbac := service.NewChannelRBAC(txManager, memberRepo, permRepo)
+	channelSvc := service.NewChannelService(txManager, channelRepo, memberRepo, rbac, publisher)
 
 	// ─── Redis ────────────────────────────────
 	redisOpts, err := redis.ParseURL(cfg.RedisURL)
@@ -182,7 +184,7 @@ func main() {
 	// ─── Message Service (needs uploadSvc as presigner) ──
 	messageSvc := service.NewMessageService(
 		txManager, messageRepo, memberRepo, channelRepo,
-		reactionRepo, attachmentRepo, pinRepo, bookmarkRepo, publisher, cfg.EditWindowMinutes,
+		reactionRepo, attachmentRepo, pinRepo, bookmarkRepo, rbac, publisher, cfg.EditWindowMinutes,
 		uploadSvc, redisEventPublisher, rdb,
 	)
 
@@ -203,7 +205,7 @@ func main() {
 	}
 
 	// ─── Handlers ─────────────────────────────
-	restHandler := handler.NewRESTHandler(channelSvc, messageSvc, uploadSvc, presenceSvc, sidebarSvc, categorySvc)
+	restHandler := handler.NewRESTHandler(channelSvc, messageSvc, uploadSvc, presenceSvc, sidebarSvc, categorySvc, rbac)
 	wsHandler := handler.NewWSHandler(hub, channelSvc, messageSvc, presenceSvc, cfg.AllowedOrigins)
 
 	// ─── Router ───────────────────────────────

@@ -1,12 +1,13 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
 import type { ChatChannelMember } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
-import { Paperclip, Send, Smile, X } from "lucide-react";
+import { Eye, Paperclip, Send, Smile, X } from "lucide-react";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 const EMOJI_QUICK = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏"];
@@ -313,7 +314,25 @@ export function MessageInput() {
     textareaRef.current?.focus();
   };
 
+  const { can, isLoading: permLoading } =
+    useChannelPermissions(activeChannelId);
+  const canSend = can("message", "send");
+  const canUpload = can("message", "upload");
+  const canReact = can("message", "react");
+
   if (!activeChannelId) return null;
+
+  // Viewer read-only banner
+  if (!permLoading && !canSend) {
+    return (
+      <div className="border-t border-base-300 bg-base-200 p-3">
+        <div className="flex items-center justify-center gap-2 text-base-content/50 text-sm py-2">
+          <Eye className="w-4 h-4" />
+          <span>You have view-only access to this channel</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -477,6 +496,38 @@ export function MessageInput() {
             </div>
           )}
         </div>
+        {canUpload && (
+          <button
+            className="btn btn-ghost btn-xs btn-circle"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach file"
+            <Paperclip className="w-4 h-4 text-base-content/50" />
+          </button>
+        )}
+        {canReact && (
+          <div className="relative">
+            <button
+              className="btn btn-ghost btn-xs btn-circle"
+              onClick={() => setShowEmoji(!showEmoji)}
+              title="Add emoji"
+            >
+              <Smile className="w-4 h-4 text-base-content/50" />
+            </button>
+            {showEmoji && (
+              <div className="absolute bottom-full left-0 mb-2 bg-base-100 border border-base-200 rounded-xl shadow-lg p-2 z-20 grid grid-cols-4 gap-1">
+                {EMOJI_QUICK.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => insertEmoji(e)}
+                    className="btn btn-ghost btn-sm btn-square text-lg hover:scale-110 transition-transform"
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Text input */}
         <textarea

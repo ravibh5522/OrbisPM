@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -417,6 +418,13 @@ function MessageBubble({
   const removeMessage = useChatStore((s) => s.removeMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
 
+  const { can } = useChannelPermissions(message.channel_id);
+  const canReact = can("message", "react");
+  const canEditOwn = isOwn && can("message", "edit_own");
+  const canDeleteOwn = isOwn && can("message", "delete_own");
+  const canDeleteAny = can("message", "delete_any");
+  const canBookmark = can("message", "bookmark");
+
   // Resolve sender name
   const senderName =
     message.sender_name ||
@@ -729,6 +737,41 @@ function MessageBubble({
                 className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
               />
             </Button>
+            </button>
+            {canReact && (
+              <button
+                className="btn btn-ghost btn-xs btn-square"
+                title="React"
+                onClick={() => setShowEmoji(!showEmoji)}
+              >
+                <SmilePlus className="w-3.5 h-3.5" />
+              </button>
+            )}
+            {canBookmark && (
+              <button
+                className={cn(
+                  "btn btn-ghost btn-xs btn-square",
+                  bookmarked && "text-warning",
+                )}
+                title={bookmarked ? "Bookmarked!" : "Bookmark"}
+                onClick={async () => {
+                  try {
+                    if (bookmarked) {
+                      await api.chat.bookmarks.remove(message.id);
+                      setBookmarked(false);
+                    } else {
+                      await api.chat.bookmarks.add(message.id);
+                      setBookmarked(true);
+                    }
+                  } catch {
+                    // toggle failed silently
+                }}
+              >
+                <Bookmark
+                  className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
+                />
+              </button>
+            )}
             {/* 3-dot menu */}
             <div className="relative" ref={menuRef}>
               <Button
@@ -747,7 +790,7 @@ function MessageBubble({
                     isOwn ? "right-0" : "left-0",
                   )}
                 >
-                  {isOwn && (
+                  {canEditOwn && (
                     <button
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
                       onClick={() => {
@@ -780,16 +823,18 @@ function MessageBubble({
                       ))}
                     </>
                   )}
-                  <button
-                    className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
-                    onClick={() => {
-                      setShowMenu(false);
-                      setShowEmoji(true);
-                    }}
-                  >
-                    <SmilePlus className="w-3.5 h-3.5" />
-                    Add Reaction
-                  </button>
+                  {canReact && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowEmoji(true);
+                      }}
+                    >
+                      <SmilePlus className="w-3.5 h-3.5" />
+                      Add Reaction
+                    </button>
+                  )}
                   <button
                     className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
                     onClick={onOpenThread}
@@ -797,7 +842,7 @@ function MessageBubble({
                     <MessageSquare className="w-3.5 h-3.5" />
                     Reply in Thread
                   </button>
-                  {isOwn && (
+                  {(canDeleteOwn || canDeleteAny) && (
                     <button
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors"
                       onClick={handleDelete}
