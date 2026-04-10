@@ -314,7 +314,7 @@ export function MessageList() {
     <div
       ref={scrollRef}
       onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-4 py-3 bg-base-100"
+      className="flex-1 overflow-y-auto px-4 py-3"
     >
       {isLoadingMore && (
         <div className="flex justify-center py-2">
@@ -590,7 +590,7 @@ function MessageBubble({
                 "inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words",
                 isOwn
                   ? "bg-primary text-primary-content rounded-tr-sm"
-                  : "bg-base-200 text-base-content rounded-tl-sm",
+                  : "bg-base-300/60 text-base-content rounded-tl-sm",
               )}
             >
               {message.body}
@@ -625,7 +625,7 @@ function MessageBubble({
                 <button
                   key={att.id}
                   onClick={() => downloadAttachment(att.id, att.file_name)}
-                  className="flex items-center gap-2 px-3 py-2 bg-base-200 rounded-lg text-sm hover:bg-base-300 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 bg-base-100/50 border border-base-200/60 rounded-lg text-sm hover:bg-base-200 transition-colors"
                 >
                   <span className="text-base">📎</span>
                   <span className="truncate max-w-[150px]">

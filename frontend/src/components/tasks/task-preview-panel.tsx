@@ -661,10 +661,11 @@ function DetailsTab({
   const fieldAccess = useCallback(
     (field: string): FieldAccess => {
       if (!access.canEdit) return "disabled";
-      if (canDirectUpdate || !hasReviewPipeline) return "direct";
-      return isReviewable(field) ? "review" : "disabled";
+      if (canDirectUpdate) return "direct";
+      // User lacks direct_update: all field edits require a change request
+      return "review";
     },
-    [access.canEdit, canDirectUpdate, hasReviewPipeline, isReviewable],
+    [access.canEdit, canDirectUpdate],
   );
 
   // Change request modal state

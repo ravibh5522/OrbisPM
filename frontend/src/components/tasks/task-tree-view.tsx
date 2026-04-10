@@ -172,22 +172,16 @@ export function TaskTreeView({
     [send, fetchTree, taskTree],
   );
 
-  /** Intercepts updates for reviewable fields — shows modal instead of WS send */
+  /** Intercepts updates — users without direct_update always go through CR modal */
   const handleUpdateWithReviewCheck = useCallback(
     (taskId: string, data: Partial<Task>) => {
-      if (hasReviewPipeline && !canDirectUpdate) {
-        const changedFields = Object.keys(data);
-        if (
-          changedFields.length > 0 &&
-          changedFields.every((f) => isReviewable(f))
-        ) {
-          setCrModal({ taskId, changes: data });
-          return;
-        }
+      if (!canDirectUpdate && Object.keys(data).length > 0) {
+        setCrModal({ taskId, changes: data });
+        return;
       }
       handleUpdate(taskId, data);
     },
-    [hasReviewPipeline, canDirectUpdate, isReviewable, handleUpdate],
+    [canDirectUpdate, handleUpdate],
   );
 
   const handleDelete = useCallback(
@@ -283,7 +277,7 @@ export function TaskTreeView({
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex h-full items-center justify-center">
         <span className="loading loading-spinner loading-lg" />
       </div>
     );
@@ -291,7 +285,7 @@ export function TaskTreeView({
 
   if (filteredTree.length === 0) {
     return (
-      <div className="text-center py-12 text-base-content/60">
+      <div className="flex h-full flex-col items-center justify-center text-base-content/60">
         <p className="mb-4">
           {hasFilter
             ? "No tasks match the current filters."
@@ -305,14 +299,12 @@ export function TaskTreeView({
   }
 
   return (
-    <div className="space-y-2">
-      {/* Pending review toast */}
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Floating overlays */}
       <ChangeRequestToast
         result={pendingReviewResult}
         onDismiss={() => setPendingReviewResult(null)}
       />
-
-      {/* Update error toast */}
       {updateError && (
         <Alert
           variant="error"
@@ -322,8 +314,6 @@ export function TaskTreeView({
           {updateError}
         </Alert>
       )}
-
-      {/* Change request modal for reviewable field edits */}
       {crModal &&
         (() => {
           const findTaskInTree = (nodes: TaskTree[]): Task | undefined => {
@@ -350,8 +340,8 @@ export function TaskTreeView({
           ) : null;
         })()}
 
-      {/* Toolbar */}
-      <div className="flex items-center justify-between mb-3">
+      {/* Toolbar — fixed, not scrollable */}
+      <div className="flex flex-shrink-0 items-center justify-between px-3 py-2 border-b border-base-200/55">
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={expandAll}>
             Expand All
@@ -365,9 +355,9 @@ export function TaskTreeView({
         )}
       </div>
 
-      {/* Tree container */}
-      <div className="border border-base-300 rounded-lg bg-base-100">
-        <div className="divide-y divide-base-200">
+      {/* Scrollable tree content */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        <div className="divide-y divide-base-200/55">
           {filteredTree.map((node) => (
             <TreeNode
               key={node.task.id}
@@ -455,7 +445,7 @@ function TreeNode({
     <>
       <div
         className={cn(
-          "relative flex items-center gap-2 px-3 py-2 hover:bg-base-200/50 transition-colors group",
+          "relative flex items-center gap-2 px-3 py-2 hover:bg-base-200/35 transition-colors group",
         )}
         style={{ paddingLeft: `${12 + depth * 24}px` }}
       >
@@ -564,7 +554,7 @@ function TreeNode({
           </div>
           <ul
             tabIndex={0}
-            className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200" /* z: action dropdown overlay */
+            className="dropdown-content z-[999] menu p-2 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-xl w-44 border border-base-200/55" /* z: action dropdown overlay */
           >
             <li>
               <a onClick={() => (onOpenTask ? onOpenTask(task.id) : undefined)}>
@@ -675,7 +665,7 @@ function StatusDropdown({
       </div>
       <ul
         tabIndex={0}
-        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-32 border border-base-200" /* z: status dropdown overlay */
+        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-xl w-32 border border-base-200/55" /* z: status dropdown overlay */
       >
         {statuses.map((s) => (
           <li key={s}>
@@ -727,7 +717,7 @@ function PriorityDropdown({
       </div>
       <ul
         tabIndex={0}
-        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-28 border border-base-200" /* z: priority dropdown overlay */
+        className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-xl w-28 border border-base-200/55" /* z: priority dropdown overlay */
       >
         {priorities.map((p) => (
           <li key={p}>

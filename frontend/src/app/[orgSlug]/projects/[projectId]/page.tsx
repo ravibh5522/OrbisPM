@@ -15,6 +15,7 @@ import {
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
 import { Button } from "@/components/ui/button";
+import { Pagination } from "@/components/ui/pagination";
 import { Avatar, Card } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
@@ -187,12 +188,23 @@ export default function ProjectDetailPage({
       projectId,
       calDateRange.from,
       calDateRange.to,
+      globalFilter,
     ],
     queryFn: () => {
       const p = new URLSearchParams();
       p.set("due_date_from", calDateRange.from);
       p.set("due_date_to", calDateRange.to);
       p.set("limit", "200");
+      if (globalFilter.statuses.length > 0)
+        p.set("statuses", globalFilter.statuses.join(","));
+      if (globalFilter.priorities.length > 0)
+        p.set("priorities", globalFilter.priorities.join(","));
+      if (globalFilter.assigneeIds.filter(Boolean).length > 0)
+        p.set(
+          "assignee_ids",
+          globalFilter.assigneeIds.filter(Boolean).join(","),
+        );
+      if (globalFilter.search) p.set("search", globalFilter.search);
       return api.tasks.list(currentOrg!.id, projectId, p.toString());
     },
     enabled: !!currentOrg && taskView === "calendar",
@@ -216,19 +228,19 @@ export default function ProjectDetailPage({
   if (projLoading)
     return (
       <div className="h-full flex flex-col animate-pulse">
-        <div className="flex items-center gap-2 py-1.5 border-b border-base-200 mb-2">
-          <div className="h-8 bg-base-300 rounded w-full max-w-96" />
+        <div className="flex items-center gap-2 py-1.5 px-3 mb-3">
+          <div className="h-8 bg-base-300/50 rounded w-full max-w-96" />
         </div>
-        <div className="flex-1 bg-base-200 rounded-lg border border-base-200" />
+        <div className="card flex-1 bg-base-100/36 border border-base-200/55 backdrop-blur-xl card-glass-shadow rounded-2xl" />
       </div>
     );
   if (!project)
     return <div className="text-center py-12">Project not found</div>;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      {/* Single consolidated toolbar row */}
-      <div className="flex items-center justify-between gap-2 py-1.5 border-b border-base-200 flex-wrap">
+    <div className="h-full flex flex-col">
+      {/* Single consolidated toolbar row — outside the card */}
+      <div className="flex items-center justify-between gap-2 py-1.5 px-3 mb-3 flex-wrap">
         {/* Tabs */}
         <Tabs
           tabs={[
@@ -327,7 +339,7 @@ export default function ProjectDetailPage({
                 size="xs"
                 onClick={() => setImportOpen(true)}
               >
-                <Upload className="w-3.5 h-3.5 mr-1" /> Import CSV
+                <Upload className="w-3.5 h-3.5 mr-1" /> Import
               </Button>
               <div className="dropdown dropdown-end">
                 <div
@@ -341,6 +353,15 @@ export default function ProjectDetailPage({
                   tabIndex={0}
                   className="dropdown-content z-50 menu p-2 shadow bg-base-100/95 backdrop-blur-[20px] rounded-box w-44"
                 >
+                  <li>
+                    <a
+                      onClick={() =>
+                        api.import.exportExcel(currentOrg!.id, projectId)
+                      }
+                    >
+                      <Download className="w-4 h-4" /> Excel (.xlsx)
+                    </a>
+                  </li>
                   <li>
                     <a
                       onClick={() =>
@@ -391,128 +412,143 @@ export default function ProjectDetailPage({
         </div>
       </div>
 
-      {/* Dashboard tab */}
+      {/* Dashboard tab — rendered outside the card, no background wrapper */}
       {activeTab === "dashboard" && (
         <div className="flex-1 overflow-auto">
           <ProjectDashboard orgId={currentOrg!.id} projectId={projectId} />
         </div>
       )}
 
-      {/* Tasks tab — keep mounted but hidden to preserve expanded state */}
+      {/* Content card — hidden (not unmounted) when dashboard is active so Tasks state is preserved */}
       <div
         className={cn(
-          "flex-1 flex flex-col min-h-0",
-          activeTab !== "tasks" && "hidden",
+          "card flex-1 min-h-0 bg-base-100/36 border border-base-200/55 backdrop-blur-xl card-glass-shadow hover:card-glass-shadow-hover transition-all duration-300 rounded-2xl overflow-hidden flex flex-col",
+          activeTab === "dashboard" && "hidden",
         )}
       >
-        <CSVImportDialog
-          orgId={currentOrg!.id}
-          projectId={projectId}
-          open={importOpen}
-          onClose={() => setImportOpen(false)}
-        />
+        {/* Tasks tab — keep mounted but hidden to preserve expanded state */}
+        <div
+          className={cn(
+            "flex-1 flex flex-col min-h-0",
+            activeTab !== "tasks" && "hidden",
+          )}
+        >
+          <CSVImportDialog
+            orgId={currentOrg!.id}
+            projectId={projectId}
+            open={importOpen}
+            onClose={() => setImportOpen(false)}
+          />
 
-        <div
-          className={cn(
-            "flex-1 flex flex-col min-h-0",
-            taskView !== "columns" && "hidden",
+          <div
+            className={cn(
+              "flex-1 flex flex-col min-h-0",
+              taskView !== "columns" && "hidden",
+            )}
+          >
+            <TaskColumns
+              orgId={currentOrg!.id}
+              orgSlug={currentOrg!.slug}
+              projectId={projectId}
+              members={members?.data || []}
+              orgMembers={orgMembersData?.data}
+              focusTaskId={focusTaskId}
+              toolbarPortal={toolbarEl}
+              globalFilter={globalFilter}
+            />
+          </div>
+          <div
+            className={cn(
+              "flex-1 flex flex-col min-h-0",
+              taskView !== "tree" && "hidden",
+            )}
+          >
+            <TaskTreeView
+              orgId={currentOrg!.id}
+              orgSlug={currentOrg!.slug}
+              projectId={projectId}
+              members={members?.data || []}
+              onOpenTask={handleOpenTask}
+              globalFilter={globalFilter}
+            />
+          </div>
+          <div
+            className={cn(
+              "flex-1 flex flex-col min-h-0",
+              taskView !== "list" && "hidden",
+            )}
+          >
+            <TaskListView
+              orgId={currentOrg!.id}
+              orgSlug={currentOrg!.slug}
+              projectId={projectId}
+              members={members?.data || []}
+              globalFilter={globalFilter}
+            />
+          </div>
+          {taskView === "calendar" && (
+            <CalendarView
+              tasks={calTasksData?.data || []}
+              members={members?.data || []}
+              isLoading={calTasksLoading}
+              onTaskClick={(task) => {
+                setOpenedTaskId(task.id);
+                setTaskView("columns");
+              }}
+              onRangeChange={handleCalRangeChange}
+            />
           )}
-        >
-          <TaskColumns
-            orgId={currentOrg!.id}
-            orgSlug={currentOrg!.slug}
-            projectId={projectId}
-            members={members?.data || []}
-            orgMembers={orgMembersData?.data}
-            focusTaskId={focusTaskId}
-            toolbarPortal={toolbarEl}
-            globalFilter={globalFilter}
-          />
         </div>
-        <div
-          className={cn(
-            "flex-1 flex flex-col min-h-0",
-            taskView !== "tree" && "hidden",
-          )}
-        >
-          <TaskTreeView
-            orgId={currentOrg!.id}
-            orgSlug={currentOrg!.slug}
-            projectId={projectId}
-            members={members?.data || []}
-            onOpenTask={handleOpenTask}
-            globalFilter={globalFilter}
-          />
-        </div>
-        <div
-          className={cn(
-            "flex-1 flex flex-col min-h-0",
-            taskView !== "list" && "hidden",
-          )}
-        >
-          <TaskListView
-            orgId={currentOrg!.id}
-            orgSlug={currentOrg!.slug}
-            projectId={projectId}
-            members={members?.data || []}
-            globalFilter={globalFilter}
-          />
-        </div>
-        {taskView === "calendar" && (
-          <CalendarView
-            tasks={calTasksData?.data || []}
-            members={members?.data || []}
-            isLoading={calTasksLoading}
-            onTaskClick={(task) => {
-              setOpenedTaskId(task.id);
-              setTaskView("columns");
-            }}
-            onRangeChange={handleCalRangeChange}
-          />
+
+        {/* Members tab */}
+        {activeTab === "members" && (
+          <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <ProjectMembersSection
+              orgId={currentOrg!.id}
+              projectId={projectId}
+            />
+          </div>
+        )}
+
+        {/* Teams tab */}
+        {activeTab === "teams" && (
+          <div className="flex-1 overflow-auto">
+            <ProjectTeamsSection orgId={currentOrg!.id} projectId={projectId} />
+          </div>
+        )}
+
+        {/* Reviews tab */}
+        {activeTab === "reviews" && (
+          <div className="flex-1 overflow-auto">
+            <ProjectChangeRequests
+              orgId={currentOrg!.id}
+              projectId={projectId}
+              members={
+                (members?.data ||
+                  []) as unknown as import("@/types/domain").OrgMember[]
+              }
+            />
+          </div>
+        )}
+
+        {/* Announcements tab */}
+        {activeTab === "announcements" && (
+          <div className="flex-1 overflow-auto">
+            <ProjectAnnouncements
+              orgId={currentOrg!.id}
+              projectId={projectId}
+            />
+          </div>
+        )}
+
+        {/* Settings tab */}
+        {activeTab === "settings" && (
+          <div className="flex-1 overflow-auto">
+            <ProjectSettings orgId={currentOrg!.id} project={project} />
+          </div>
         )}
       </div>
-
-      {/* Members tab */}
-      {activeTab === "members" && (
-        <div className="flex-1 overflow-auto">
-          <ProjectMembersSection orgId={currentOrg!.id} projectId={projectId} />
-        </div>
-      )}
-
-      {/* Teams tab */}
-      {activeTab === "teams" && (
-        <div className="flex-1 overflow-auto">
-          <ProjectTeamsSection orgId={currentOrg!.id} projectId={projectId} />
-        </div>
-      )}
-
-      {/* Reviews tab */}
-      {activeTab === "reviews" && (
-        <div className="flex-1 overflow-auto">
-          <ProjectChangeRequests
-            orgId={currentOrg!.id}
-            projectId={projectId}
-            members={
-              (members?.data ||
-                []) as unknown as import("@/types/domain").OrgMember[]
-            }
-          />
-        </div>
-      )}
-
-      {/* Announcements tab */}
-      {activeTab === "announcements" && (
-        <div className="flex-1 overflow-auto">
-          <ProjectAnnouncements orgId={currentOrg!.id} projectId={projectId} />
-        </div>
-      )}
-
-      {/* Settings tab */}
-      {activeTab === "settings" && (
-        <div className="flex-1 overflow-auto">
-          <ProjectSettings orgId={currentOrg!.id} project={project} />
-        </div>
-      )}
+      {/* end content card */}
     </div>
   );
 }
@@ -600,6 +636,8 @@ function ProjectMembersSection({
   projectId: string;
 }) {
   const qc = useQueryClient();
+  const projPerms = useProjectPermissions(projectId);
+  const canManageMembers = projPerms.can("members", "manage");
   const [subTab, setSubTab] = useState<"internal" | "external">("internal");
   const [addUserId, setAddUserId] = useState("");
   const [addRole, setAddRole] = useState("member");
@@ -667,11 +705,11 @@ function ProjectMembersSection({
     queryFn: () => api.permissions.roles.list(orgId, "project"),
   });
 
-  // Linked teams for the internal add form
+  // Linked teams for the internal add form (only needed when user can manage members)
   const { data: linkedTeams } = useQuery({
     queryKey: ["project-teams", orgId, projectId],
     queryFn: () => api.projectTeams.list(orgId, projectId),
-    enabled: !!orgId,
+    enabled: !!orgId && canManageMembers,
   });
 
   // Members of the currently selected linked team (for internal add)
@@ -850,15 +888,15 @@ function ProjectMembersSection({
   );
 
   return (
-    <div className="space-y-4">
-      {/* Search bar + filter button */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Toolbar: search + filter + sub-tabs ── */}
+      <div className="flex-shrink-0 flex flex-wrap items-center gap-2 px-3 py-2 border-b border-base-200/55">
+        <div className="relative flex-1 min-w-[180px]">
           <Search className="absolute left-2.5 top-2.5 w-4 h-4 text-base-content/40" />
           <input
             type="text"
             placeholder="Search members..."
-            className="h-10 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-9 pr-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none focus:ring-2 focus:ring-oklch(64%_0.18_180_/_0.35)"
+            className="h-9 w-full rounded-xl search-anchor-surface bg-transparent px-3 pl-9 text-sm text-base-content placeholder:text-base-content/45 focus:outline-none"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -877,10 +915,42 @@ function ProjectMembersSection({
             <span className="badge badge-xs badge-primary ml-1">1</span>
           )}
         </button>
+        <div
+          role="tablist"
+          className="project-tabs-shell tabs tabs-boxed rounded-2xl p-1"
+        >
+          <button
+            role="tab"
+            className={cn(
+              "project-tab-btn tab tab-sm rounded-xl",
+              subTab === "internal"
+                ? "project-tab-active"
+                : "project-tab-inactive",
+            )}
+            onClick={() => setSubTab("internal")}
+          >
+            <Users className="w-3.5 h-3.5 mr-1" /> Internal (
+            {internalMembers.length})
+          </button>
+          <button
+            role="tab"
+            className={cn(
+              "project-tab-btn tab tab-sm rounded-xl",
+              subTab === "external"
+                ? "project-tab-active"
+                : "project-tab-inactive",
+            )}
+            onClick={() => setSubTab("external")}
+          >
+            <UserPlus className="w-3.5 h-3.5 mr-1" /> External (
+            {externalMembers.length})
+          </button>
+        </div>
       </div>
 
+      {/* ── Filter panel ── */}
       {showFilter && (
-        <div className="relative z-[340] mb-4 flex items-center gap-3 rounded-xl border border-base-200/60 bg-base-200/35 p-3 backdrop-blur-xl">
+        <div className="flex-shrink-0 flex items-center gap-3 px-3 py-2 border-b border-base-200/55 bg-base-200/15 relative z-[340]">
           <span className="text-sm font-medium">Role:</span>
           <MembersDropdownSelect
             value={filterRole}
@@ -911,43 +981,303 @@ function ProjectMembersSection({
         </div>
       )}
 
-      {/* Sub-tabs */}
-      <div
-        role="tablist"
-        className="relative z-10 project-tabs-shell tabs tabs-boxed w-fit rounded-2xl p-1"
-      >
-        <button
-          role="tab"
-          className={cn(
-            "project-tab-btn tab tab-sm rounded-xl",
-            subTab === "internal"
-              ? "project-tab-active"
-              : "project-tab-inactive",
-          )}
-          onClick={() => setSubTab("internal")}
-        >
-          <Users className="w-3.5 h-3.5 mr-1" /> Internal (
-          {internalMembers.length})
-        </button>
-        <button
-          role="tab"
-          className={cn(
-            "project-tab-btn tab tab-sm rounded-xl",
-            subTab === "external"
-              ? "project-tab-active"
-              : "project-tab-inactive",
-          )}
-          onClick={() => setSubTab("external")}
-        >
-          <UserPlus className="w-3.5 h-3.5 mr-1" /> External (
-          {externalMembers.length})
-        </button>
+      {/* ── Add member form ── */}
+      {subTab === "internal" ? (
+        <div className="flex-shrink-0 px-3 py-3 border-b border-base-200/55 relative z-20 focus-within:z-[360]">
+          <p className="text-xs text-base-content/50 mb-2">
+            Select a linked team and pick a member to add to this project.
+          </p>
+          <form
+            className="flex gap-2 items-end flex-wrap"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (addInternalUserId && addInternalTeamId)
+                addInternalMutation.mutate();
+            }}
+          >
+            <div className="flex-1 min-w-[140px]">
+              <label className="label">
+                <span className="label-text text-xs">Team</span>
+              </label>
+              <MembersDropdownSelect
+                value={addInternalTeamId}
+                onChange={(v) => {
+                  setAddInternalTeamId(v);
+                  setAddInternalUserId("");
+                }}
+                widthClass="w-full"
+                options={[
+                  { value: "", label: "Select team..." },
+                  ...(linkedTeams || []).map((pt: ProjectTeam) => ({
+                    value: pt.team_id,
+                    label: pt.team_name || pt.team_id.slice(0, 12),
+                  })),
+                ]}
+              />
+            </div>
+            <div className="flex-1 min-w-[140px]">
+              <label className="label">
+                <span className="label-text text-xs">Member</span>
+              </label>
+              <MembersDropdownSelect
+                value={addInternalUserId}
+                onChange={setAddInternalUserId}
+                disabled={!addInternalTeamId}
+                widthClass="w-full"
+                options={[
+                  { value: "", label: "Select member..." },
+                  ...availableTeamMembers.map((tm) => ({
+                    value: tm.user_id,
+                    label:
+                      tm.display_name || tm.email || tm.user_id.slice(0, 16),
+                  })),
+                ]}
+              />
+            </div>
+            <div>
+              <label className="label">
+                <span className="label-text text-xs">Role</span>
+              </label>
+              <MembersDropdownSelect
+                value={addInternalRole}
+                onChange={setAddInternalRole}
+                widthClass="w-44"
+                options={roleOptions}
+              />
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              loading={addInternalMutation.isPending}
+              disabled={!addInternalUserId || !addInternalTeamId}
+            >
+              <UserPlus className="w-4 h-4" /> Add
+            </Button>
+          </form>
+        </div>
+      ) : (
+        <div className="flex-shrink-0 px-3 py-3 border-b border-base-200/55 relative z-20 focus-within:z-[360]">
+          <p className="text-xs text-base-content/50 mb-2">
+            Add an organisation member who is not in any linked team directly to
+            this project.
+          </p>
+          <form
+            className="flex gap-2 items-end"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (addUserId) addMutation.mutate();
+            }}
+          >
+            <div className="flex-1">
+              <label className="label">
+                <span className="label-text text-xs">Select Member</span>
+              </label>
+              <MembersDropdownSelect
+                value={addUserId}
+                onChange={setAddUserId}
+                widthClass="w-full"
+                options={[
+                  { value: "", label: "Select member..." },
+                  ...availableExternal.map((m) => ({
+                    value: m.user_id,
+                    label: m.display_name || m.email || m.user_id.slice(0, 16),
+                  })),
+                ]}
+              />
+            </div>
+            <div>
+              <label className="label">
+                <span className="label-text text-xs">Role</span>
+              </label>
+              <MembersDropdownSelect
+                value={addRole}
+                onChange={setAddRole}
+                widthClass="w-44"
+                options={roleOptions}
+              />
+            </div>
+            <Button
+              type="submit"
+              size="sm"
+              loading={addMutation.isPending}
+              disabled={!addUserId}
+            >
+              <UserPlus className="w-4 h-4" /> Add
+            </Button>
+          </form>
+        </div>
+      )}
+
+      {/* ── Member list (scrollable) ── */}
+      <div className="flex-1 min-h-0 overflow-auto">
+        {membersLoading ? (
+          <div className="flex justify-center py-4">
+            <div className="loading loading-spinner" />
+          </div>
+        ) : subTab === "internal" ? (
+          internalMembers.length === 0 ? (
+            <p className="text-center py-8 text-base-content/50">
+              No internal members yet. Add members from linked teams above.
+            </p>
+          ) : (
+            <table className="table table-sm w-full">
+              <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
+                <tr>
+                  <th>User</th>
+                  <th>Role</th>
+                  <th>Joined</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {Array.from(teamGroups.entries()).flatMap(([teamId, group]) => [
+                  <tr key={`grp-${teamId}`}>
+                    <td
+                      colSpan={4}
+                      className="py-1.5 px-2 bg-base-200/15 border-b border-base-200/55"
+                    >
+                      <span className="flex items-center gap-1.5 text-xs font-semibold text-base-content/60">
+                        <Link2 className="w-3.5 h-3.5" /> {group.teamName}
+                      </span>
+                    </td>
+                  </tr>,
+                  ...group.members.map((m) => (
+                    <tr
+                      key={m.user_id}
+                      className="hover:bg-base-200/35 border-b border-base-200/55 transition-colors"
+                    >
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <Avatar
+                            name={
+                              m.display_name || m.email || m.user_id.slice(0, 4)
+                            }
+                            src={m.avatar_url}
+                            size="sm"
+                          />
+                          <div>
+                            <span className="text-sm font-medium">
+                              {m.display_name ||
+                                m.email ||
+                                m.user_id.slice(0, 12)}
+                            </span>
+                            {m.email && m.display_name && (
+                              <span className="block text-xs text-base-content/50">
+                                {m.email}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <MembersDropdownSelect
+                          value={localRoles[m.user_id] ?? m.role}
+                          onChange={(v) => handleRoleChange(m.user_id, v)}
+                          disabled={roleOptions.length === 0}
+                          widthClass="w-44"
+                          size="xs"
+                          options={roleOptions}
+                        />
+                      </td>
+                      <td className="text-sm text-base-content/60">
+                        {formatDate(m.joined_at)}
+                      </td>
+                      <td>
+                        <button
+                          className="btn btn-ghost btn-xs text-error hover:bg-error/15"
+                          onClick={() => openRemoveDialog(m)}
+                          title="Remove from project"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </td>
+                    </tr>
+                  )),
+                ])}
+              </tbody>
+            </table>
+          )
+        ) : externalMembers.length === 0 ? (
+          <p className="text-center py-8 text-base-content/50">
+            No external members yet. Add members above.
+          </p>
+        ) : (
+          <table className="table w-full">
+            <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
+              <tr>
+                <th>User</th>
+                <th>Role</th>
+                <th>Joined</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {externalMembers.map((m) => (
+                <tr
+                  key={m.user_id}
+                  className="hover:bg-base-200/35 border-b border-base-200/55 transition-colors"
+                >
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <Avatar
+                        name={
+                          m.display_name || m.email || m.user_id.slice(0, 4)
+                        }
+                        src={m.avatar_url}
+                        size="sm"
+                      />
+                      <div>
+                        <span className="text-sm font-medium">
+                          {m.display_name || m.email || m.user_id.slice(0, 12)}
+                        </span>
+                        {m.email && m.display_name && (
+                          <span className="block text-xs text-base-content/50">
+                            {m.email}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    <MembersDropdownSelect
+                      value={localRoles[m.user_id] ?? m.role}
+                      onChange={(v) => handleRoleChange(m.user_id, v)}
+                      disabled={roleOptions.length === 0}
+                      widthClass="w-44"
+                      size="xs"
+                      options={roleOptions}
+                    />
+                  </td>
+                  <td className="text-sm text-base-content/60">
+                    {formatDate(m.joined_at)}
+                  </td>
+                  <td>
+                    <button
+                      className="btn btn-ghost btn-xs text-error hover:bg-error/15"
+                      onClick={() => openRemoveDialog(m)}
+                      title="Remove member"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Loading state */}
-      {membersLoading && (
-        <div className="flex justify-center py-4">
-          <div className="loading loading-spinner" />
+      {/* ── Pagination ── */}
+      {membersResponse && membersResponse.total > limit && (
+        <div className="flex-shrink-0 px-3 border-t border-base-200/55">
+          <Pagination
+            page={page}
+            totalPages={Math.ceil(membersResponse.total / limit)}
+            total={membersResponse.total}
+            pageSize={limit}
+            onPageChange={setPage}
+            className="!border-t-0 !mt-0"
+          />
         </div>
       )}
 
@@ -1025,329 +1355,6 @@ function ProjectMembersSection({
             className="modal-backdrop"
             onClick={() => !removeLoading && setRemoveTarget(null)}
           />
-        </div>
-      )}
-
-      {/* Internal tab — members added from linked teams */}
-      {subTab === "internal" && !membersLoading && (
-        <>
-          {/* Add Internal Member form */}
-          <Card allowOverflow className="relative z-20 focus-within:z-[360]">
-            <h3 className="font-semibold mb-1">Add Internal Member</h3>
-            <p className="text-xs text-base-content/50 mb-3">
-              Select a linked team and pick a member to add to this project.
-            </p>
-            <form
-              className="flex gap-2 items-end flex-wrap"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (addInternalUserId && addInternalTeamId)
-                  addInternalMutation.mutate();
-              }}
-            >
-              <div className="flex-1 min-w-[140px]">
-                <label className="label">
-                  <span className="label-text text-xs">Team</span>
-                </label>
-                <MembersDropdownSelect
-                  value={addInternalTeamId}
-                  onChange={(v) => {
-                    setAddInternalTeamId(v);
-                    setAddInternalUserId("");
-                  }}
-                  widthClass="w-full"
-                  options={[
-                    { value: "", label: "Select team..." },
-                    ...(linkedTeams || []).map((pt: ProjectTeam) => ({
-                      value: pt.team_id,
-                      label: pt.team_name || pt.team_id.slice(0, 12),
-                    })),
-                  ]}
-                />
-              </div>
-              <div className="flex-1 min-w-[140px]">
-                <label className="label">
-                  <span className="label-text text-xs">Member</span>
-                </label>
-                <MembersDropdownSelect
-                  value={addInternalUserId}
-                  onChange={setAddInternalUserId}
-                  disabled={!addInternalTeamId}
-                  widthClass="w-full"
-                  options={[
-                    { value: "", label: "Select member..." },
-                    ...availableTeamMembers.map((tm) => ({
-                      value: tm.user_id,
-                      label:
-                        tm.display_name || tm.email || tm.user_id.slice(0, 16),
-                    })),
-                  ]}
-                />
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text text-xs">Role</span>
-                </label>
-                <MembersDropdownSelect
-                  value={addInternalRole}
-                  onChange={setAddInternalRole}
-                  widthClass="w-44"
-                  options={roleOptions}
-                />
-              </div>
-              <Button
-                type="submit"
-                size="sm"
-                loading={addInternalMutation.isPending}
-                disabled={!addInternalUserId || !addInternalTeamId}
-              >
-                <UserPlus className="w-4 h-4" /> Add
-              </Button>
-            </form>
-          </Card>
-
-          {internalMembers.length === 0 ? (
-            <Card>
-              <p className="text-center py-6 text-base-content/50">
-                No internal members yet. Add members from linked teams above.
-              </p>
-            </Card>
-          ) : (
-            Array.from(teamGroups.entries()).map(([teamId, group]) => (
-              <Card key={teamId} allowOverflow className="relative z-10">
-                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                  <Link2 className="w-3.5 h-3.5" /> {group.teamName}
-                </h4>
-                <div className="overflow-x-auto overflow-y-visible">
-                  <table className="table table-sm">
-                    <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
-                      <tr>
-                        <th>User</th>
-                        <th>Role</th>
-                        <th>Joined</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.members.map((m) => (
-                        <tr key={m.user_id}>
-                          <td>
-                            <div className="flex items-center gap-2">
-                              <Avatar
-                                name={
-                                  m.display_name ||
-                                  m.email ||
-                                  m.user_id.slice(0, 4)
-                                }
-                                src={m.avatar_url}
-                                size="sm"
-                              />
-                              <div>
-                                <span className="text-sm font-medium">
-                                  {m.display_name ||
-                                    m.email ||
-                                    m.user_id.slice(0, 12)}
-                                </span>
-                                {m.email && m.display_name && (
-                                  <span className="block text-xs text-base-content/50">
-                                    {m.email}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td>
-                            <MembersDropdownSelect
-                              value={localRoles[m.user_id] ?? m.role}
-                              onChange={(v) => handleRoleChange(m.user_id, v)}
-                              disabled={roleOptions.length === 0}
-                              widthClass="w-44"
-                              size="xs"
-                              options={roleOptions}
-                            />
-                          </td>
-                          <td className="text-sm text-base-content/60">
-                            {formatDate(m.joined_at)}
-                          </td>
-                          <td>
-                            <button
-                              className="btn btn-ghost btn-xs text-error hover:bg-error/15"
-                              onClick={() => openRemoveDialog(m)}
-                              title="Remove from project"
-                            >
-                              <Trash2 className="w-3 h-3 text-error" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </Card>
-            ))
-          )}
-        </>
-      )}
-
-      {/* External tab — directly-added members with add/remove/role */}
-      {subTab === "external" && !membersLoading && (
-        <>
-          <Card allowOverflow className="relative z-20 focus-within:z-[360]">
-            <h3 className="font-semibold mb-1">Add External Member</h3>
-            <p className="text-xs text-base-content/50 mb-3">
-              Add an organisation member who is not in any linked team directly
-              to this project.
-            </p>
-            <form
-              className="flex gap-2 items-end"
-              onSubmit={(e) => {
-                e.preventDefault();
-                if (addUserId) addMutation.mutate();
-              }}
-            >
-              <div className="flex-1">
-                <label className="label">
-                  <span className="label-text text-xs">Select Member</span>
-                </label>
-                <MembersDropdownSelect
-                  value={addUserId}
-                  onChange={setAddUserId}
-                  widthClass="w-full"
-                  options={[
-                    { value: "", label: "Select member..." },
-                    ...availableExternal.map((m) => ({
-                      value: m.user_id,
-                      label:
-                        m.display_name || m.email || m.user_id.slice(0, 16),
-                    })),
-                  ]}
-                />
-              </div>
-              <div>
-                <label className="label">
-                  <span className="label-text text-xs">Role</span>
-                </label>
-                <MembersDropdownSelect
-                  value={addRole}
-                  onChange={setAddRole}
-                  widthClass="w-44"
-                  options={roleOptions}
-                />
-              </div>
-              <Button
-                type="submit"
-                size="sm"
-                loading={addMutation.isPending}
-                disabled={!addUserId}
-              >
-                <UserPlus className="w-4 h-4" /> Add
-              </Button>
-            </form>
-          </Card>
-
-          <Card allowOverflow className="relative z-10">
-            {externalMembers.length === 0 ? (
-              <p className="text-center py-6 text-base-content/50">
-                No external members yet. Add members above.
-              </p>
-            ) : (
-              <div className="overflow-x-auto overflow-y-visible">
-                <table className="table">
-                  <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
-                    <tr>
-                      <th>User</th>
-                      <th>Role</th>
-                      <th>Joined</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {externalMembers.map((m) => (
-                      <tr key={m.user_id}>
-                        <td>
-                          <div className="flex items-center gap-2">
-                            <Avatar
-                              name={
-                                m.display_name ||
-                                m.email ||
-                                m.user_id.slice(0, 4)
-                              }
-                              src={m.avatar_url}
-                              size="sm"
-                            />
-                            <div>
-                              <span className="text-sm font-medium">
-                                {m.display_name ||
-                                  m.email ||
-                                  m.user_id.slice(0, 12)}
-                              </span>
-                              {m.email && m.display_name && (
-                                <span className="block text-xs text-base-content/50">
-                                  {m.email}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                        <td>
-                          <MembersDropdownSelect
-                            value={localRoles[m.user_id] ?? m.role}
-                            onChange={(v) => handleRoleChange(m.user_id, v)}
-                            disabled={roleOptions.length === 0}
-                            widthClass="w-44"
-                            size="xs"
-                            options={roleOptions}
-                          />
-                        </td>
-                        <td className="text-sm text-base-content/60">
-                          {formatDate(m.joined_at)}
-                        </td>
-                        <td>
-                          <button
-                            className="btn btn-ghost btn-xs text-error hover:bg-error/15"
-                            onClick={() => openRemoveDialog(m)}
-                            title="Remove member"
-                          >
-                            <Trash2 className="w-3 h-3 text-error" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
-        </>
-      )}
-
-      {/* Pagination controls */}
-      {membersResponse && membersResponse.total > limit && (
-        <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
-          <span className="text-sm text-base-content/60">
-            Showing {membersResponse.offset + 1}–
-            {Math.min(membersResponse.offset + limit, membersResponse.total)} of{" "}
-            {membersResponse.total}
-          </span>
-          <div className="join">
-            <button
-              className="join-item btn btn-sm"
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              «
-            </button>
-            <button className="join-item btn btn-sm">
-              Page {page + 1} of {Math.ceil(membersResponse.total / limit)}
-            </button>
-            <button
-              className="join-item btn btn-sm"
-              disabled={(page + 1) * limit >= membersResponse.total}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              »
-            </button>
-          </div>
         </div>
       )}
     </div>

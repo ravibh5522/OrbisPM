@@ -3,8 +3,13 @@
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/form-fields";
-import { api } from "@/lib/api"; // kept for CSV file upload (binary)
-import type { ImportJob } from "@/types/domain";
+import { api } from "@/lib/api";
+import type {
+  ExcelColumnMapping,
+  ProcessExcelResult,
+  SheetImportConfig,
+  SheetInfo,
+} from "@/types/domain";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -16,127 +21,136 @@ import {
 } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 
-// Task fields that can be mapped to CSV columns
-const TASK_FIELDS = [
-  { value: "", label: "— Skip —" },
-  { value: "title", label: "Title (required)" },
+// Mapping fields users can assign to columns
+const MAPPING_FIELDS = [
+  { value: "-1", label: "— Skip —" },
+  { value: "task", label: "Task (depth 0)" },
+  { value: "subtask1", label: "Subtask 1 (depth 1)" },
+  { value: "subtask2", label: "Subtask 2 (depth 2)" },
+  { value: "subtask3", label: "Subtask 3 (depth 3)" },
   { value: "description", label: "Description" },
-  { value: "status", label: "Status" },
-  { value: "priority", label: "Priority" },
-  { value: "due_date", label: "Due Date" },
   { value: "start_date", label: "Start Date" },
-  { value: "labels", label: "Labels" },
-];
+  { value: "end_date", label: "End Date" },
+  { value: "priority", label: "Priority" },
+  { value: "status", label: "Status" },
+  { value: "assignee_email", label: "Assignee Email (comma for multi)" },
+] as const;
 
-// Auto-detect mapping from common header names
-function autoDetectMapping(headers: string[]): Record<string, string> {
-  const mapping: Record<string, string> = {};
-  const patterns: Record<string, RegExp> = {
-    title: /^(title|name|task|summary|subject)$/i,
-    description: /^(description|desc|details|body|content|notes?)$/i,
-    status: /^(status|state|stage)$/i,
-    priority: /^(priority|prio|urgency|importance|severity)$/i,
-    due_date: /^(due[_ ]?date|deadline|due|end[_ ]?date)$/i,
-    start_date: /^(start[_ ]?date|start|begin[_ ]?date)$/i,
-    labels: /^(labels?|tags?|categories?|category)$/i,
-  };
+type MappingField = (typeof MAPPING_FIELDS)[number]["value"];
 
-  for (const header of headers) {
-    const trimmed = header.trim();
-    for (const [field, regex] of Object.entries(patterns)) {
-      if (regex.test(trimmed) && !Object.values(mapping).includes(field)) {
-        mapping[trimmed] = field;
+// Auto-detect mappings from header names
+function autoDetectMappings(columns: string[]): Record<number, MappingField> {
+  const mapping: Record<number, MappingField> = {};
+  const patterns: Array<{ field: MappingField; regex: RegExp }> = [
+    { field: "task", regex: /^(task|name|title|summary|item)$/i },
+    {
+      field: "subtask1",
+      regex: /^(sub\s*task\s*1?|child|level\s*1)$/i,
+    },
+    { field: "subtask2", regex: /^(sub\s*task\s*2|level\s*2)$/i },
+    { field: "subtask3", regex: /^(sub\s*task\s*3|level\s*3)$/i },
+    {
+      field: "description",
+      regex: /^(description|desc|details|body|notes?)$/i,
+    },
+    { field: "start_date", regex: /^(start[_ ]?date|start|begin)$/i },
+    {
+      field: "end_date",
+      regex: /^(end[_ ]?date|due[_ ]?date|deadline|due|finish)$/i,
+    },
+    {
+      field: "priority",
+      regex: /^(priority|prio|urgency|importance)$/i,
+    },
+    {
+      field: "status",
+      regex: /^(status|state|stage)$/i,
+    },
+    {
+      field: "assignee_email",
+      regex: /^(assignee[_ ]?email|email|assigned[_ ]?to|assignee|owner)$/i,
+    },
+  ];
+
+  const used = new Set<string>();
+  columns.forEach((col, i) => {
+    const trimmed = col.trim();
+    for (const p of patterns) {
+      if (p.regex.test(trimmed) && !used.has(p.field)) {
+        mapping[i] = p.field;
+        used.add(p.field);
         break;
       }
     }
-  }
+  });
   return mapping;
 }
 
-// Parse CSV text into headers + rows
-function parseCSV(text: string): { headers: string[]; rows: string[][] } {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim() !== "");
-  if (lines.length === 0) return { headers: [], rows: [] };
-
-  // Simple CSV parsing (handles quoted fields)
-  const parseLine = (line: string): string[] => {
-    const result: string[] = [];
-    let current = "";
-    let inQuotes = false;
-    for (let i = 0; i < line.length; i++) {
-      const ch = line[i];
-      if (ch === '"') {
-        if (inQuotes && i + 1 < line.length && line[i + 1] === '"') {
-          current += '"';
-          i++;
-        } else {
-          inQuotes = !inQuotes;
-        }
-      } else if (ch === "," && !inQuotes) {
-        result.push(current.trim());
-        current = "";
-      } else {
-        current += ch;
-      }
-    }
-    result.push(current.trim());
-    return result;
+function buildExcelMapping(
+  colMapping: Record<number, MappingField>,
+): ExcelColumnMapping {
+  const m: ExcelColumnMapping = {
+    task: -1,
+    subtask1: -1,
+    subtask2: -1,
+    subtask3: -1,
+    description: -1,
+    start_date: -1,
+    end_date: -1,
+    priority: -1,
+    status: -1,
+    assignee_email: -1,
   };
-
-  const headers = parseLine(lines[0]);
-  const rows = lines.slice(1).map(parseLine);
-  return { headers, rows };
+  for (const [idx, field] of Object.entries(colMapping)) {
+    if (field !== "-1" && field in m) {
+      (m as Record<string, number>)[field] = Number(idx);
+    }
+  }
+  return m;
 }
 
-interface CSVImportDialogProps {
+interface ImportDialogProps {
   orgId: string;
   projectId: string;
   open: boolean;
   onClose: () => void;
 }
 
-type Step = "upload" | "mapping" | "result";
+type Step = "upload" | "sheets" | "mapping" | "result";
 
 export function CSVImportDialog({
   orgId,
   projectId,
   open,
   onClose,
-}: CSVImportDialogProps) {
+}: ImportDialogProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [previewRows, setPreviewRows] = useState<string[][]>([]);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [result, setResult] = useState<ImportJob | null>(null);
+  const [sheets, setSheets] = useState<SheetInfo[]>([]);
+  const [selectedSheets, setSelectedSheets] = useState<Set<string>>(new Set());
+  // Per-sheet column mapping: sheetName → { colIndex → MappingField }
+  const [sheetMappings, setSheetMappings] = useState<
+    Record<string, Record<number, MappingField>>
+  >({});
+  const [activeSheet, setActiveSheet] = useState<string>("");
+  const [result, setResult] = useState<ProcessExcelResult | null>(null);
   const [parseError, setParseError] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
-  const [importError, setImportError] = useState<Error | null>(null);
-
-  const startImport = async (f: File, m: Record<string, string>) => {
-    setImporting(true);
-    setImportError(null);
-    try {
-      const job = await api.import.start(orgId, projectId, f, m);
-      setResult(job);
-      setStep("result");
-    } catch (e: any) {
-      setImportError(e);
-    } finally {
-      setImporting(false);
-    }
-  };
+  const [analyzing, setAnalyzing] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   const reset = useCallback(() => {
     setStep("upload");
     setFile(null);
-    setHeaders([]);
-    setPreviewRows([]);
-    setMapping({});
+    setSheets([]);
+    setSelectedSheets(new Set());
+    setSheetMappings({});
+    setActiveSheet("");
     setResult(null);
     setParseError(null);
     setImporting(false);
+    setAnalyzing(false);
     setImportError(null);
     if (fileRef.current) fileRef.current.value = "";
   }, []);
@@ -149,34 +163,40 @@ export function CSVImportDialog({
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-
     setParseError(null);
 
-    if (
-      !f.name.endsWith(".csv") &&
-      !f.type.includes("csv") &&
-      !f.type.includes("text/plain")
-    ) {
-      setParseError("Please select a CSV file.");
+    const ext = f.name.split(".").pop()?.toLowerCase();
+    if (!["xlsx", "xls", "xlsm"].includes(ext ?? "")) {
+      setParseError("Please select an Excel file (.xlsx, .xls, .xlsm).");
       return;
     }
 
+    setFile(f);
+    setAnalyzing(true);
     try {
-      const text = await f.text();
-      const { headers: h, rows } = parseCSV(text);
-
-      if (h.length === 0) {
-        setParseError("CSV file is empty or has no headers.");
+      const sheetInfos = await api.import.analyze(orgId, projectId, f);
+      if (!sheetInfos || sheetInfos.length === 0) {
+        setParseError("No sheets with data found in this file.");
+        setAnalyzing(false);
         return;
       }
-
-      setFile(f);
-      setHeaders(h);
-      setPreviewRows(rows.slice(0, 5));
-      setMapping(autoDetectMapping(h));
-      setStep("mapping");
-    } catch {
-      setParseError("Failed to read file.");
+      setSheets(sheetInfos);
+      // Auto-select all sheets
+      setSelectedSheets(new Set(sheetInfos.map((s) => s.name)));
+      // Auto-detect mappings per sheet
+      const mappings: Record<string, Record<number, MappingField>> = {};
+      for (const sheet of sheetInfos) {
+        mappings[sheet.name] = autoDetectMappings(sheet.columns);
+      }
+      setSheetMappings(mappings);
+      setActiveSheet(sheetInfos[0].name);
+      setStep("sheets");
+    } catch (err: unknown) {
+      const msg =
+        err instanceof Error ? err.message : "Failed to analyze file.";
+      setParseError(msg);
+    } finally {
+      setAnalyzing(false);
     }
   };
 
@@ -185,33 +205,70 @@ export function CSVImportDialog({
       e.preventDefault();
       const f = e.dataTransfer.files[0];
       if (f) {
-        // Create synthetic event
         const dt = new DataTransfer();
         dt.items.add(f);
         if (fileRef.current) {
           fileRef.current.files = dt.files;
-          fileRef.current.dispatchEvent(new Event("change", { bubbles: true }));
         }
-        // Directly handle
         handleFileSelect({
           target: { files: dt.files },
         } as unknown as React.ChangeEvent<HTMLInputElement>);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [orgId, projectId],
   );
 
-  const hasTitleMapping = Object.values(mapping).includes("title");
+  const toggleSheet = (name: string) => {
+    setSelectedSheets((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
 
-  const handleImport = () => {
-    if (!file || !hasTitleMapping) return;
-    // Filter out unmapped columns
-    const cleanMapping: Record<string, string> = {};
-    for (const [header, field] of Object.entries(mapping)) {
-      if (field) cleanMapping[header] = field;
+  const totalRows = sheets
+    .filter((s) => selectedSheets.has(s.name))
+    .reduce((sum, s) => sum + s.row_count, 0);
+
+  const hasTaskMapping = () => {
+    for (const name of selectedSheets) {
+      const mapping = sheetMappings[name] ?? {};
+      const hasTask = Object.values(mapping).some(
+        (f) =>
+          f === "task" ||
+          f === "subtask1" ||
+          f === "subtask2" ||
+          f === "subtask3",
+      );
+      if (!hasTask) return false;
     }
-    startImport(file, cleanMapping);
+    return selectedSheets.size > 0;
+  };
+
+  const handleImport = async () => {
+    if (!file || !hasTaskMapping()) return;
+    setImporting(true);
+    setImportError(null);
+
+    try {
+      const config: SheetImportConfig[] = [];
+      for (const name of selectedSheets) {
+        config.push({
+          sheet_name: name,
+          mapping: buildExcelMapping(sheetMappings[name] ?? {}),
+        });
+      }
+      const res = await api.import.importExcel(orgId, projectId, file, config);
+      setResult(res);
+      setStep("result");
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Import failed";
+      setImportError(msg);
+    } finally {
+      setImporting(false);
+    }
   };
 
   if (!open) return null;
@@ -221,7 +278,7 @@ export function CSVImportDialog({
       className="modal modal-open"
       style={{ backgroundColor: "transparent" }}
     >
-      <div className="modal-box w-11/12 max-w-3xl">
+      <div className="modal-box w-11/12 max-w-4xl max-h-[90vh] overflow-y-auto">
         <Button
           variant="ghost"
           size="sm"
@@ -232,18 +289,23 @@ export function CSVImportDialog({
         </Button>
 
         <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-          <FileSpreadsheet className="w-5 h-5" /> Import Tasks from CSV
+          <FileSpreadsheet className="w-5 h-5" /> Import Tasks from Excel
         </h3>
 
         {/* Steps indicator */}
-        <ul className="steps steps-horizontal w-full mb-6">
+        <ul className="steps steps-horizontal w-full mb-6 text-sm">
           <li
-            className={`step ${step === "upload" || step === "mapping" || step === "result" ? "step-primary" : ""}`}
+            className={`step ${["upload", "sheets", "mapping", "result"].includes(step) ? "step-primary" : ""}`}
           >
             Upload
           </li>
           <li
-            className={`step ${step === "mapping" || step === "result" ? "step-primary" : ""}`}
+            className={`step ${["sheets", "mapping", "result"].includes(step) ? "step-primary" : ""}`}
+          >
+            Select Sheets
+          </li>
+          <li
+            className={`step ${["mapping", "result"].includes(step) ? "step-primary" : ""}`}
           >
             Map Columns
           </li>
@@ -260,17 +322,27 @@ export function CSVImportDialog({
             onDragOver={(e) => e.preventDefault()}
             onClick={() => fileRef.current?.click()}
           >
-            <Upload className="w-12 h-12 mx-auto text-base-content/40 mb-4" />
-            <p className="text-lg font-medium mb-1">
-              Drop a CSV file here or click to browse
-            </p>
-            <p className="text-sm text-base-content/60">
-              Supports .csv files. First row should contain column headers.
-            </p>
+            {analyzing ? (
+              <>
+                <span className="loading loading-spinner loading-lg text-primary mb-4" />
+                <p className="text-lg font-medium">Analyzing file...</p>
+              </>
+            ) : (
+              <>
+                <Upload className="w-12 h-12 mx-auto text-base-content/40 mb-4" />
+                <p className="text-lg font-medium mb-1">
+                  Drop an Excel file here or click to browse
+                </p>
+                <p className="text-sm text-base-content/60">
+                  Supports .xlsx, .xls files. First row of each sheet should
+                  contain column headers.
+                </p>
+              </>
+            )}
             <input
               ref={fileRef}
               type="file"
-              accept=".csv,text/csv"
+              accept=".xlsx,.xls,.xlsm"
               className="hidden"
               onChange={handleFileSelect}
             />
@@ -282,96 +354,43 @@ export function CSVImportDialog({
           </div>
         )}
 
-        {/* Step 2: Column Mapping */}
-        {step === "mapping" && (
+        {/* Step 2: Select Sheets */}
+        {step === "sheets" && (
           <div>
             <p className="text-sm text-base-content/60 mb-4">
-              Map each CSV column to a task field. At least{" "}
-              <strong>Title</strong> is required.
+              Select which sheets to import. Each selected sheet will need
+              column mapping.
             </p>
 
-            {/* Mapping table */}
-            <div className="overflow-x-auto mb-4">
-              <table className="table table-sm">
-                <thead>
-                  <tr>
-                    <th>CSV Column</th>
-                    <th>Sample Data</th>
-                    <th>Map To</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {headers.map((h, i) => (
-                    <tr key={i}>
-                      <td className="font-mono text-sm">{h}</td>
-                      <td className="text-sm text-base-content/60 max-w-[200px] truncate">
-                        {previewRows[0]?.[i] || "—"}
-                      </td>
-                      <td>
-                        <Select
-                          size="sm"
-                          className="w-full max-w-xs"
-                          value={mapping[h] || ""}
-                          onChange={(e) =>
-                            setMapping((prev) => ({
-                              ...prev,
-                              [h]: e.target.value,
-                            }))
-                          }
-                        >
-                          {TASK_FIELDS.map((f) => (
-                            <option key={f.value} value={f.value}>
-                              {f.label}
-                            </option>
-                          ))}
-                        </Select>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-2 mb-4">
+              {sheets.map((s) => (
+                <label
+                  key={s.name}
+                  className="flex items-center gap-3 p-3 rounded-lg border border-base-300 hover:bg-base-200 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    className="checkbox checkbox-sm checkbox-primary"
+                    checked={selectedSheets.has(s.name)}
+                    onChange={() => toggleSheet(s.name)}
+                  />
+                  <div className="flex-1">
+                    <span className="font-medium">{s.name}</span>
+                    <span className="ml-2 badge badge-ghost badge-sm">
+                      {s.row_count} rows
+                    </span>
+                    <span className="ml-2 badge badge-ghost badge-sm">
+                      {s.columns.length} cols
+                    </span>
+                  </div>
+                </label>
+              ))}
             </div>
 
-            {/* Preview table */}
-            {previewRows.length > 0 && (
-              <div className="collapse collapse-arrow bg-base-200 mb-4">
-                <input type="checkbox" />
-                <div className="collapse-title text-sm font-medium">
-                  Preview ({previewRows.length} of {previewRows.length}+ rows)
-                </div>
-                <div className="collapse-content overflow-x-auto">
-                  <table className="table table-xs">
-                    <thead>
-                      <tr>
-                        {headers.map((h, i) => (
-                          <th key={i} className="text-xs">
-                            {h}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {previewRows.map((row, ri) => (
-                        <tr key={ri}>
-                          {headers.map((_, ci) => (
-                            <td
-                              key={ci}
-                              className="text-xs max-w-[150px] truncate"
-                            >
-                              {row[ci] || ""}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {!hasTitleMapping && (
+            {totalRows > 200 && (
               <Alert variant="warning" className="mb-4">
-                You must map at least one column to <strong>Title</strong>.
+                Total rows ({totalRows}) exceeds limit of 200. Only first 200
+                tasks will be imported.
               </Alert>
             )}
 
@@ -381,44 +400,149 @@ export function CSVImportDialog({
                 size="sm"
                 onClick={() => {
                   reset();
-                  setStep("upload");
                 }}
               >
                 <ArrowLeft className="w-4 h-4 mr-1" /> Back
               </Button>
               <Button
                 size="sm"
+                onClick={() => {
+                  if (selectedSheets.size > 0) {
+                    setActiveSheet([...selectedSheets][0]);
+                    setStep("mapping");
+                  }
+                }}
+                disabled={selectedSheets.size === 0}
+              >
+                <ArrowRight className="w-4 h-4 mr-1" /> Map Columns
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Map Columns */}
+        {step === "mapping" && (
+          <div>
+            {/* Sheet tabs if multiple sheets selected */}
+            {selectedSheets.size > 1 && (
+              <div role="tablist" className="tabs tabs-bordered mb-4">
+                {[...selectedSheets].map((name) => (
+                  <a
+                    key={name}
+                    role="tab"
+                    className={`tab ${activeSheet === name ? "tab-active" : ""}`}
+                    onClick={() => setActiveSheet(name)}
+                  >
+                    {name}
+                  </a>
+                ))}
+              </div>
+            )}
+
+            <p className="text-sm text-base-content/60 mb-3">
+              Map each column to a task field for <strong>{activeSheet}</strong>
+              . At least one Task/Subtask column is required per sheet.
+            </p>
+
+            {(() => {
+              const sheet = sheets.find((s) => s.name === activeSheet);
+              const mapping = sheetMappings[activeSheet] ?? {};
+              if (!sheet) return null;
+
+              return (
+                <div className="overflow-x-auto mb-4">
+                  <table className="table table-sm">
+                    <thead>
+                      <tr>
+                        <th>Column</th>
+                        <th>Map To</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sheet.columns.map((col, i) => (
+                        <tr key={i}>
+                          <td className="font-mono text-sm">{col}</td>
+                          <td>
+                            <Select
+                              size="sm"
+                              className="w-full max-w-xs"
+                              value={mapping[i] ?? "-1"}
+                              onChange={(e) => {
+                                const val = e.target.value as MappingField;
+                                setSheetMappings((prev) => ({
+                                  ...prev,
+                                  [activeSheet]: {
+                                    ...(prev[activeSheet] ?? {}),
+                                    [i]: val,
+                                  },
+                                }));
+                              }}
+                            >
+                              {MAPPING_FIELDS.map((f) => (
+                                <option key={f.value} value={f.value}>
+                                  {f.label}
+                                </option>
+                              ))}
+                            </Select>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })()}
+
+            {!hasTaskMapping() && (
+              <Alert variant="warning" className="mb-4">
+                Each selected sheet must have at least one Task or Subtask
+                column mapped.
+              </Alert>
+            )}
+
+            {importError && (
+              <Alert variant="error" className="mb-4">
+                {importError}
+              </Alert>
+            )}
+
+            <div className="flex justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setStep("sheets")}
+              >
+                <ArrowLeft className="w-4 h-4 mr-1" /> Back
+              </Button>
+              <Button
+                size="sm"
                 onClick={handleImport}
-                disabled={!hasTitleMapping || importing}
+                disabled={!hasTaskMapping() || importing}
               >
                 {importing ? (
                   <span className="loading loading-spinner loading-sm mr-1" />
                 ) : (
                   <ArrowRight className="w-4 h-4 mr-1" />
                 )}
-                {importing ? "Importing..." : "Import Tasks"}
+                {importing
+                  ? "Importing..."
+                  : `Import ${totalRows > 200 ? 200 : totalRows} Tasks`}
               </Button>
             </div>
-
-            {importError && (
-              <Alert variant="error" className="text-sm">
-                {importError.message || "Import failed"}
-              </Alert>
-            )}
           </div>
         )}
 
-        {/* Step 3: Results */}
+        {/* Step 4: Results */}
         {step === "result" && result && (
           <div className="text-center">
-            {result.status === "completed" ? (
+            {result.job.status === "completed" ? (
               <div className="mb-4">
                 <CheckCircle2 className="w-16 h-16 mx-auto text-success mb-3" />
                 <h4 className="text-xl font-bold text-success">
                   Import Complete!
                 </h4>
               </div>
-            ) : result.status === "completed_with_errors" ? (
+            ) : result.job.status === "completed_with_errors" ? (
               <div className="mb-4">
                 <AlertTriangle className="w-16 h-16 mx-auto text-warning mb-3" />
                 <h4 className="text-xl font-bold text-warning">
@@ -437,29 +561,56 @@ export function CSVImportDialog({
               <div className="stat">
                 <div className="stat-title">Total Rows</div>
                 <div className="stat-value text-lg">
-                  {result.total_rows ?? 0}
+                  {result.job.total_rows ?? 0}
                 </div>
               </div>
               <div className="stat">
                 <div className="stat-title">Created</div>
                 <div className="stat-value text-lg text-success">
-                  {result.processed_rows}
+                  {result.job.processed_rows}
                 </div>
               </div>
               <div className="stat">
                 <div className="stat-title">Errors</div>
                 <div className="stat-value text-lg text-error">
-                  {result.error_rows}
+                  {result.job.error_rows}
                 </div>
               </div>
             </div>
 
+            {/* Assignments */}
+            {result.assignments && result.assignments.length > 0 && (
+              <div className="mb-4 text-left">
+                <h5 className="font-semibold mb-2">
+                  Assigned Users ({result.assignments.length}):
+                </h5>
+                <div className="max-h-40 overflow-y-auto bg-base-200 rounded-lg p-3">
+                  <table className="table table-xs">
+                    <thead>
+                      <tr>
+                        <th>Email</th>
+                        <th>Task</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {result.assignments.map((a, i) => (
+                        <tr key={i}>
+                          <td className="text-sm">{a.email}</td>
+                          <td className="text-sm">{a.task_name}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
             {/* Error details */}
-            {result.errors && result.errors.length > 0 && (
+            {result.job.errors && result.job.errors.length > 0 && (
               <div className="mb-4 text-left">
                 <h5 className="font-semibold mb-2">Error Details:</h5>
                 <div className="max-h-40 overflow-y-auto bg-base-200 rounded-lg p-3">
-                  {result.errors.map((err, i) => (
+                  {result.job.errors.map((err, i) => (
                     <div
                       key={i}
                       className="text-sm py-1 border-b border-base-300 last:border-0"

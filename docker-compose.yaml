@@ -370,6 +370,7 @@ services:
       EMAIL_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_SMTP_FROM: ${SMTP_FROM:-noreply@orbispm.local}
       EMAIL_SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      EMAIL_SMTP_START_TLS: ${SMTP_START_TLS:-false}
       EMAIL_REDIS_URL: ${EMAIL_REDIS_URL:?EMAIL_REDIS_URL required}
       EMAIL_API_KEY: ${EMAIL_SERVICE_API_KEY:-email-service-dev-key}
       EMAIL_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
@@ -401,6 +402,7 @@ services:
       EMAIL_SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       EMAIL_SMTP_FROM: ${SMTP_FROM:-noreply@orbispm.local}
       EMAIL_SMTP_USE_TLS: ${SMTP_USE_TLS:-false}
+      EMAIL_SMTP_START_TLS: ${SMTP_START_TLS:-false}
       EMAIL_REDIS_URL: ${EMAIL_REDIS_URL:?EMAIL_REDIS_URL required}
       EMAIL_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
     depends_on:

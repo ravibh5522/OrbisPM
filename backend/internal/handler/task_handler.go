@@ -25,27 +25,11 @@ func NewTaskHandler(taskSvc *service.TaskService) *TaskHandler {
 	return &TaskHandler{taskSvc: taskSvc}
 }
 
-// Routes registers task routes. Mounted under /orgs/{orgId}/projects/{projectId}/tasks.
+// Routes is intentionally disabled — all task route registrations are done inline
+// in cmd/api/main.go with explicit prm() permission guards per HTTP method.
+// Mounting this router would bypass project-scoped RBAC entirely.
 func (h *TaskHandler) Routes() chi.Router {
-	r := chi.NewRouter()
-
-	r.Post("/", h.Create)
-	r.Get("/", h.List)
-	r.Get("/tree", h.ListTree)
-	r.Get("/export", h.Export)
-	r.Get("/calendar.ics", h.CalendarExport)
-
-	r.Route("/{taskId}", func(r chi.Router) {
-		r.Get("/", h.Get)
-		r.Patch("/", h.Update)
-		r.Delete("/", h.Delete)
-		r.Get("/tree", h.GetTree)
-		r.Post("/submit-review", h.SubmitForReview)
-		r.Post("/complete", h.MarkComplete)
-		r.Post("/duplicate", h.Duplicate)
-	})
-
-	return r
+	panic("TaskHandler.Routes() must not be used; register routes inline with prm() guards in main.go")
 }
 
 // Create godoc
@@ -448,6 +432,9 @@ func (h *TaskHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "max 100 tasks per bulk operation"})
 		return
 	}
+	// Inject actor ID so the service can enforce the review pipeline
+	userID := tenant.UserID(r.Context())
+	params.Changes.ActorID = &userID
 	tasks, err := h.taskSvc.BulkUpdate(r.Context(), params)
 	if err != nil {
 		Error(w, r, err)
@@ -469,6 +456,11 @@ func (h *TaskHandler) BulkUpdate(w http.ResponseWriter, r *http.Request) {
 // @Success 204
 // @Router /orgs/{orgId}/projects/{projectId}/tasks/reorder [patch]
 func (h *TaskHandler) Reorder(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid projectId"})
+		return
+	}
 	var req struct {
 		Items []service.ReorderItem `json:"items" validate:"required,min=1,max=200,dive"`
 	}
@@ -479,6 +471,10 @@ func (h *TaskHandler) Reorder(w http.ResponseWriter, r *http.Request) {
 	if len(req.Items) == 0 {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "at least one item required"})
 		return
+	}
+	// Attach projectID so the service can enforce the review pipeline.
+	for i := range req.Items {
+		req.Items[i].ProjectID = &projectID
 	}
 	if err := h.taskSvc.Reorder(r.Context(), req.Items); err != nil {
 		Error(w, r, err)

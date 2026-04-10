@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -97,10 +99,125 @@ func NewImportHandler(importSvc *service.ImportService) *ImportHandler {
 // Routes registers import routes (nested under /projects/{projectId}).
 func (h *ImportHandler) Routes() chi.Router {
 	r := chi.NewRouter()
-	r.Post("/", h.Create)
+	r.Post("/", h.Create)             // legacy CSV
+	r.Post("/analyze", h.Analyze)     // Excel analyze
+	r.Post("/excel", h.ImportExcel)   // Excel import
+	r.Get("/export", h.ExportExcel)   // Excel export
+	r.Get("/export/csv", h.ExportCSV) // CSV export
 	r.Get("/", h.List)
 	r.Get("/{importId}", h.Get)
 	return r
+}
+
+// Analyze godoc
+// @Summary Analyze Excel file
+// @Description Upload an Excel file and get sheet names with column headers
+// @Tags Imports
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "Excel file to analyze"
+// @Success 200 {array} service.SheetInfo
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/imports/analyze [post]
+func (h *ImportHandler) Analyze(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 10MB)", Detail: err.Error()})
+		return
+	}
+
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing file field", Detail: err.Error()})
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "failed to read file", Detail: err.Error()})
+		return
+	}
+
+	sheets, err := h.importSvc.AnalyzeExcel(data)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "failed to analyze file", Detail: err.Error()})
+		return
+	}
+	JSON(w, http.StatusOK, sheets)
+}
+
+// ImportExcel godoc
+// @Summary Import tasks from Excel
+// @Description Import tasks from an Excel file with sheet selection and column mapping
+// @Tags Imports
+// @Accept multipart/form-data
+// @Produce json
+// @Security BearerAuth
+// @Param file formData file true "Excel file"
+// @Param config formData string true "JSON import config with sheet configs"
+// @Success 201 {object} service.ProcessExcelResult
+// @Failure 400 {object} ErrorResponse
+// @Router /orgs/{orgId}/projects/{projectId}/imports/excel [post]
+func (h *ImportHandler) ImportExcel(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
+
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(10 << 20); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "file too large (max 10MB)", Detail: err.Error()})
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing file field", Detail: err.Error()})
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "failed to read file", Detail: err.Error()})
+		return
+	}
+
+	configStr := r.FormValue("config")
+	if configStr == "" {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "missing config field"})
+		return
+	}
+
+	var sheets []service.SheetImportConfig
+	if err := json.Unmarshal([]byte(configStr), &sheets); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid config JSON", Detail: err.Error()})
+		return
+	}
+
+	if len(sheets) == 0 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "no sheets selected"})
+		return
+	}
+
+	result, err := h.importSvc.ProcessExcel(r.Context(), service.ProcessExcelParams{
+		OrgID:     orgID,
+		ProjectID: projectID,
+		UserID:    userID,
+		FileName:  header.Filename,
+		Data:      data,
+		Sheets:    sheets,
+	})
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	JSON(w, http.StatusCreated, result)
 }
 
 // Create godoc
@@ -220,4 +337,64 @@ func (h *ImportHandler) List(w http.ResponseWriter, r *http.Request) {
 		jobs = []*domain.ImportJob{}
 	}
 	JSON(w, http.StatusOK, ListResponse{Data: jobs, Total: len(jobs), Limit: len(jobs), Offset: 0})
+}
+
+// ExportExcel godoc
+// @Summary Export tasks as Excel
+// @Description Export all tasks in a project as an Excel file with hierarchy
+// @Tags Imports
+// @Produce application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Success 200
+// @Router /orgs/{orgId}/projects/{projectId}/imports/export [get]
+func (h *ImportHandler) ExportExcel(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	orgID := middleware.OrgIDFromCtx(r.Context())
+
+	data, err := h.importSvc.ExportExcel(r.Context(), orgID, projectID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	w.Header().Set("Content-Disposition", "attachment; filename=tasks_export.xlsx")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Write(data)
+}
+
+// ExportCSV godoc
+// @Summary Export tasks as CSV
+// @Description Export all tasks in a project as a CSV file with parent task and assignee emails
+// @Tags Imports
+// @Produce text/csv
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param projectId path string true "Project ID" format(uuid)
+// @Success 200
+// @Router /orgs/{orgId}/projects/{projectId}/imports/export/csv [get]
+func (h *ImportHandler) ExportCSV(w http.ResponseWriter, r *http.Request) {
+	projectID, err := uuidParam(r, "projectId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid project id"})
+		return
+	}
+	orgID := middleware.OrgIDFromCtx(r.Context())
+
+	data, err := h.importSvc.ExportCSV(r.Context(), orgID, projectID)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv")
+	w.Header().Set("Content-Disposition", "attachment; filename=tasks_export.csv")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", len(data)))
+	w.Write(data)
 }

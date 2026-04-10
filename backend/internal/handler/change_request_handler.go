@@ -32,6 +32,12 @@ func (h *ChangeRequestHandler) TaskRoutes() chi.Router {
 func (h *ChangeRequestHandler) ProjectRoutes() chi.Router {
 	r := chi.NewRouter()
 	r.Get("/", h.ListByProject)
+	// Approve/reject scoped to project so project-role reviewers can act via HTTP
+	// (mirrors the WS cr:approve / cr:reject project-scope check).
+	r.Route("/{crId}", func(r chi.Router) {
+		r.Post("/approve", h.Approve)
+		r.Post("/reject", h.Reject)
+	})
 	return r
 }
 

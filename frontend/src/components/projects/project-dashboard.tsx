@@ -1,10 +1,11 @@
 "use client";
 
 import { Avatar, Badge, Card, LoadingPage } from "@/components/ui/shared";
+import { StatCard } from "@/components/ui/stat-card";
 import { api } from "@/lib/api";
 import { CHART_AXIS_STYLE, CHART_TOOLTIP_STYLE } from "@/lib/chart-utils";
 import { PRIORITY_HEX, STATUS_BADGE, STATUS_HEX } from "@/lib/task-colors";
-import { cn, formatDate, formatRelative, statusLabel } from "@/lib/utils";
+import { formatDate, formatRelative, statusLabel } from "@/lib/utils";
 import type { ProjectDashboardStats } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -18,6 +19,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import {
   Area,
   AreaChart,
@@ -25,13 +27,24 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
-  Pie,
-  PieChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
+
+const DonutChart = dynamic(
+  () =>
+    import("@/components/charts/donut-chart").then((mod) => ({
+      default: mod.DonutChart,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[152px] animate-pulse bg-base-200 rounded-lg" />
+    ),
+  },
+);
 
 const LABEL_COLORS = [
   "#6366f1",
@@ -41,107 +54,6 @@ const LABEL_COLORS = [
   "#8b5cf6",
   "#06b6d4",
 ];
-
-function KPI({
-  label,
-  value,
-  icon,
-  accent,
-}: {
-  label: string;
-  value: string | number;
-  icon: React.ReactNode;
-  accent: string;
-}) {
-  return (
-    <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 shadow-sm glass-card">
-      <div
-        className={cn(
-          "flex items-center justify-center w-9 h-9 rounded-lg",
-          accent,
-        )}
-      >
-        {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-lg font-bold leading-tight">{value}</div>
-        <div className="text-[11px] text-base-content/50 truncate">{label}</div>
-      </div>
-    </div>
-  );
-}
-
-function MiniDonut({
-  data,
-  colors,
-  centerLabel,
-}: {
-  data: { name: string; value: number }[];
-  colors: Record<string, string>;
-  centerLabel?: string;
-}) {
-  const total = data.reduce((s, d) => s + d.value, 0);
-  if (total === 0)
-    return (
-      <p className="text-base-content/50 text-sm py-6 text-center">No data</p>
-    );
-
-  return (
-    <div className="flex items-center gap-3">
-      <div className="w-36 h-36 flex-shrink-0 relative">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              cx="50%"
-              cy="50%"
-              innerRadius={38}
-              outerRadius={64}
-              paddingAngle={2}
-              strokeWidth={0}
-            >
-              {data.map((entry) => (
-                <Cell key={entry.name} fill={colors[entry.name] || "#94a3b8"} />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(value) => [value, "Tasks"]}
-              contentStyle={CHART_TOOLTIP_STYLE}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        {centerLabel && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-sm font-bold text-base-content/85">
-              {centerLabel}
-            </span>
-          </div>
-        )}
-      </div>
-      <div className="flex-1 space-y-1 min-w-0">
-        {data.map((entry) => (
-          <div
-            key={entry.name}
-            className="flex items-center justify-between text-xs gap-2"
-          >
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0"
-                style={{ backgroundColor: colors[entry.name] || "#94a3b8" }}
-              />
-              <span className="truncate capitalize">
-                {statusLabel(entry.name)}
-              </span>
-            </div>
-            <span className="font-medium tabular-nums">{entry.value}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
 
 export function ProjectDashboard({
   orgId,
@@ -176,102 +88,107 @@ export function ProjectDashboard({
       : 0;
 
   return (
-    <div className="space-y-5">
-      {/* KPI row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-        <KPI
-          label="Total Tasks"
+    <div className="space-y-4">
+      {/* KPI row — unified grid, 2 rows of 5 on lg */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+        <StatCard
+          compact
+          title="Total Tasks"
           value={stats.total_tasks}
-          icon={<ListTodo className="w-4 h-4 text-primary-content" />}
-          accent="bg-primary"
+          icon={<ListTodo className="w-5 h-5" />}
+          iconBg="bg-primary"
+          iconColor="text-primary-content"
         />
-        <KPI
-          label="Completion"
+        <StatCard
+          compact
+          title="Completion"
           value={`${completionPct}%`}
-          icon={<CheckCircle2 className="w-4 h-4 text-success-content" />}
-          accent="bg-success"
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          iconBg="bg-success"
+          iconColor="text-success-content"
         />
-        <KPI
-          label="In Progress"
+        <StatCard
+          compact
+          title="In Progress"
           value={stats.tasks_by_status?.in_progress || 0}
-          icon={<Gauge className="w-4 h-4 text-info-content" />}
-          accent="bg-info"
+          icon={<Gauge className="w-5 h-5" />}
+          iconBg="bg-info"
+          iconColor="text-info-content"
         />
-        <KPI
-          label="Blocked"
+        <StatCard
+          compact
+          title="Blocked"
           value={stats.tasks_by_status?.blocked || 0}
-          icon={<AlertTriangle className="w-4 h-4 text-warning-content" />}
-          accent="bg-warning"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          iconBg="bg-warning"
+          iconColor="text-warning-content"
         />
-        <KPI
-          label="Overdue"
+        <StatCard
+          compact
+          title="Overdue"
           value={stats.overdue_tasks}
-          icon={<AlertTriangle className="w-4 h-4 text-error-content" />}
-          accent="bg-error"
+          icon={<AlertTriangle className="w-5 h-5" />}
+          iconBg="bg-error"
+          iconColor="text-error-content"
         />
-        <KPI
-          label="Velocity (7d)"
+        <StatCard
+          compact
+          title="Velocity (7d)"
           value={`${velocity >= 0 ? "+" : ""}${velocity}`}
           icon={
             velocity >= 0 ? (
-              <TrendingUp className="w-4 h-4 text-accent-content" />
+              <TrendingUp className="w-5 h-5" />
             ) : (
-              <TrendingDown className="w-4 h-4 text-error-content" />
+              <TrendingDown className="w-5 h-5" />
             )
           }
-          accent={velocity >= 0 ? "bg-accent" : "bg-error"}
+          iconBg={velocity >= 0 ? "bg-accent" : "bg-error"}
+          iconColor={
+            velocity >= 0 ? "text-accent-content" : "text-error-content"
+          }
         />
-        <KPI
-          label="Members"
+        <StatCard
+          compact
+          title="Members"
           value={stats.total_members}
-          icon={<Users className="w-4 h-4 text-secondary-content" />}
-          accent="bg-secondary"
+          icon={<Users className="w-5 h-5" />}
+          iconBg="bg-secondary"
+          iconColor="text-secondary-content"
         />
-      </div>
-
-      {/* Velocity + Time tracking compact bar */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-        <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 glass-card">
-          <div className="bg-success/10 text-success p-2 rounded-lg">
-            <CheckCircle2 className="w-4 h-4" />
-          </div>
-          <div>
-            <p className="text-[10px] text-base-content/50 uppercase tracking-wider">
-              Completed (7d)
-            </p>
-            <p className="text-lg font-bold">{stats.completed_last_7_days}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 glass-card">
-          <div className="bg-info/10 text-info p-2 rounded-lg">
-            <TrendingUp className="w-4 h-4" />
-          </div>
-          <div>
-            <p className="text-[10px] text-base-content/50 uppercase tracking-wider">
-              Created (7d)
-            </p>
-            <p className="text-lg font-bold">{stats.created_last_7_days}</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-3 p-3 bg-base-100 rounded-xl border border-base-200 glass-card">
-          <div className="bg-primary/10 text-primary p-2 rounded-lg">
-            <Clock className="w-4 h-4" />
-          </div>
-          <div>
-            <p className="text-[10px] text-base-content/50 uppercase tracking-wider">
-              Hours (est / actual)
-            </p>
-            <p className="text-lg font-bold">
+        <StatCard
+          compact
+          title="Completed (7d)"
+          value={stats.completed_last_7_days}
+          icon={<CheckCircle2 className="w-5 h-5" />}
+          iconBg="bg-success"
+          iconColor="text-success-content"
+        />
+        <StatCard
+          compact
+          title="Created (7d)"
+          value={stats.created_last_7_days}
+          icon={<TrendingUp className="w-5 h-5" />}
+          iconBg="bg-info"
+          iconColor="text-info-content"
+        />
+        <StatCard
+          compact
+          title="Hours (est / actual)"
+          value={
+            <>
               {stats.estimated_hours.toFixed(1)}h{" "}
               <span className="text-sm font-normal text-base-content/50">
                 / {stats.actual_hours.toFixed(1)}h
               </span>
-            </p>
-          </div>
-        </div>
+            </>
+          }
+          icon={<Clock className="w-5 h-5" />}
+          iconBg="bg-primary"
+          iconColor="text-primary-content"
+        />
       </div>
 
-      {/* Charts: Burndown + Created  */}
+      {/* Charts: Burndown + Created */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="Burndown (30 days)" compact>
           {stats.burndown_data && stats.burndown_data.length > 0 ? (
@@ -362,19 +279,18 @@ export function ProjectDashboard({
         </Card>
       </div>
 
-      {/* Distribution row: Status + Priority donuts + time tracking */}
+      {/* Distribution row: Status + Priority donuts + Progress ring */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card title="Status" compact>
-          <MiniDonut
-            data={statusData}
-            colors={STATUS_HEX}
-            centerLabel={`${completionPct}%`}
-          />
+          <DonutChart data={statusData} colors={STATUS_HEX} title="By Status" />
         </Card>
         <Card title="Priority" compact>
-          <MiniDonut data={priorityData} colors={PRIORITY_HEX} />
+          <DonutChart
+            data={priorityData}
+            colors={PRIORITY_HEX}
+            title="By Priority"
+          />
         </Card>
-        {/* Completion ring */}
         <Card title="Progress" compact>
           <div className="flex flex-col items-center justify-center py-5 gap-2.5">
             <div
@@ -525,7 +441,7 @@ export function ProjectDashboard({
             {stats.recent_tasks.map((task) => (
               <div
                 key={task.id}
-                className="flex items-center gap-2 text-sm py-1.5 px-1 rounded hover:bg-base-200/50 transition-colors"
+                className="flex items-center gap-2 text-sm py-1.5 px-1 rounded hover:bg-base-200/35 transition-colors"
               >
                 <span
                   className="w-2 h-2 rounded-full flex-shrink-0"

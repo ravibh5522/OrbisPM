@@ -15,6 +15,7 @@ from app.services.template_engine import (
     get_custom_template,
     list_custom_templates,
     list_default_templates,
+    render_template,
     set_custom_template,
 )
 
@@ -102,3 +103,16 @@ async def remove_org_template(org_id: str, template_name: str):
     if not delete_custom_template(org_id, template_name):
         raise HTTPException(status_code=404, detail="Template not found")
     return {"status": "deleted"}
+
+
+@router.post("/templates/{org_id}/render", dependencies=[Depends(verify_api_key)])
+async def render_template_endpoint(org_id: str, body: dict):
+    """Render a template (custom or default) with provided context and return HTML."""
+    template_name = body.get("template", "")
+    if not template_name:
+        raise HTTPException(status_code=400, detail="template field required")
+    context = body.get("context") or {}
+    if not isinstance(context, dict):
+        raise HTTPException(status_code=400, detail="context must be an object")
+    html = render_template(template_name, context, org_id=org_id)
+    return {"html": html}

@@ -4,7 +4,7 @@ import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
-import { Avatar, Badge, Card } from "@/components/ui/shared";
+import { Avatar, Badge } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api"; // kept for CR attachment binary ops
@@ -135,11 +135,11 @@ export function TaskChangeRequests({
   const resolved = items.filter((cr) => cr.status !== "pending");
 
   return (
-    <Card title="Change Requests">
+    <div className="space-y-3 p-3">
       {pending.length > 0 && (
-        <div className="mb-4">
-          <h4 className="text-sm font-semibold text-warning flex items-center gap-1 mb-2">
-            <Clock className="w-4 h-4" /> Pending Review ({pending.length})
+        <div>
+          <h4 className="text-xs font-semibold text-warning flex items-center gap-1 mb-2 px-1">
+            <Clock className="w-3.5 h-3.5" /> Pending Review ({pending.length})
           </h4>
           <CRTable
             items={pending}
@@ -154,7 +154,7 @@ export function TaskChangeRequests({
       )}
       {resolved.length > 0 && (
         <div>
-          <h4 className="text-sm font-semibold text-base-content/60 mb-2">
+          <h4 className="text-xs font-semibold text-base-content/50 mb-2 px-1">
             Resolved ({resolved.length})
           </h4>
           <CRTable
@@ -168,7 +168,7 @@ export function TaskChangeRequests({
           />
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -336,37 +336,35 @@ export function ProjectChangeRequests({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="space-y-4">
-      <Card allowOverflow className="relative z-20">
-        {/* ── Header row ── */}
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <h3 className="font-semibold flex items-center gap-2 mr-auto">
-            <GitPullRequest className="w-5 h-5" /> Change Requests
-            {total > 0 && (
-              <span className="badge badge-ghost badge-sm">{total}</span>
-            )}
-          </h3>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* ── Header: title + status tabs + search + proposer filter ── */}
+      <div className="flex-shrink-0 flex flex-wrap items-center gap-3 px-3 py-2 border-b border-base-200/55 relative z-30">
+        <h3 className="font-semibold flex items-center gap-2 mr-auto text-sm">
+          <GitPullRequest className="w-4 h-4" /> Change Requests
+          {total > 0 && (
+            <span className="badge badge-ghost badge-sm">{total}</span>
+          )}
+        </h3>
 
-          {/* Status filter pills */}
-          <Tabs
-            tabs={[
-              { id: "all", label: "All" },
-              { id: "pending", label: "Pending" },
-              { id: "approved", label: "Approved" },
-              { id: "rejected", label: "Rejected" },
-            ]}
-            activeTab={statusFilter}
-            onChange={(v) => {
-              setStatusFilter(v as "pending" | "approved" | "rejected" | "all");
-              setPage(1);
-            }}
-            variant="boxed"
-            size="xs"
-          />
-        </div>
+        {/* Status filter pills */}
+        <Tabs
+          tabs={[
+            { id: "all", label: "All" },
+            { id: "pending", label: "Pending" },
+            { id: "approved", label: "Approved" },
+            { id: "rejected", label: "Rejected" },
+          ]}
+          activeTab={statusFilter}
+          onChange={(v) => {
+            setStatusFilter(v as "pending" | "approved" | "rejected" | "all");
+            setPage(1);
+          }}
+          variant="boxed"
+          size="xs"
+        />
 
-        {/* ── Filter / Search bar ── */}
-        <div className="relative z-30 flex flex-wrap gap-2 mb-4">
+        {/* Search + proposer filter */}
+        <div className="flex flex-wrap gap-2">
           {/* Search box */}
           <div className="relative flex-1 min-w-[160px]">
             <span className="absolute inset-y-0 left-2.5 flex items-center pointer-events-none">
@@ -411,25 +409,22 @@ export function ProjectChangeRequests({
             }}
           />
         </div>
+      </div>
 
-        {/* ── Table ── */}
+      {/* ── Scrollable table ── */}
+      <div className="flex-1 min-h-0 overflow-auto">
         {isLoading ? (
-          <div className="flex justify-center py-8">
+          <div className="flex justify-center py-12">
             <div className="loading loading-spinner" />
           </div>
         ) : items.length === 0 ? (
-          <div className="text-center py-8 space-y-1">
-            <p className="text-base-content/50 text-sm">
-              No change requests found
-            </p>
+          <div className="flex flex-col items-center justify-center h-full py-12 space-y-2">
+            <p className="text-base-content/50 text-sm">No change requests found</p>
             {(debouncedSearch || proposerFilter !== "all") && (
               <Button
                 variant="ghost"
                 size="xs"
-                onClick={() => {
-                  setSearch("");
-                  setProposerFilter("all");
-                }}
+                onClick={() => { setSearch(""); setProposerFilter("all"); }}
               >
                 Clear filters
               </Button>
@@ -447,51 +442,33 @@ export function ProjectChangeRequests({
             onItemUpdate={handleItemUpdate}
           />
         )}
+      </div>
 
-        {/* ── Pagination ── */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-4 pt-3 border-t border-base-200">
-            <span className="text-xs text-base-content/50">
-              {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)}{" "}
-              of {total}
-            </span>
-            <div className="flex items-center gap-1">
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                ← Prev
-              </Button>
-              {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-                const p =
-                  totalPages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3;
-                if (p < 1 || p > totalPages) return null;
-                return (
-                  <Button
-                    key={p}
-                    size="xs"
-                    variant={p === page ? "primary" : "ghost"}
-                    className="btn-square"
-                    onClick={() => setPage(p)}
-                  >
-                    {p}
-                  </Button>
-                );
-              })}
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={page >= totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Next →
-              </Button>
-            </div>
+      {/* ── Pagination ── */}
+      {totalPages > 1 && (
+        <div className="flex-shrink-0 flex items-center justify-between px-3 py-2 border-t border-base-200/55">
+          <span className="text-xs text-base-content/50">
+            {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+          </span>
+          <div className="flex items-center gap-1">
+            <Button size="xs" variant="ghost" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+              ← Prev
+            </Button>
+            {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
+              const p = totalPages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3;
+              if (p < 1 || p > totalPages) return null;
+              return (
+                <Button key={p} size="xs" variant={p === page ? "primary" : "ghost"} className="btn-square" onClick={() => setPage(p)}>
+                  {p}
+                </Button>
+              );
+            })}
+            <Button size="xs" variant="ghost" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+              Next →
+            </Button>
           </div>
-        )}
-      </Card>
+        </div>
+      )}
     </div>
   );
 }
@@ -520,36 +497,34 @@ function CRTable({
   onItemUpdate?: (id: string, patch: Partial<TaskChangeRequest>) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-base-200">
-      <table className="table table-xs w-full">
-        <thead>
-          <tr className="text-xs text-base-content/50 border-b border-base-200">
-            <th className="py-2 pl-3">Proposer</th>
-            <th className="py-2">Fields</th>
-            {showTask && <th className="py-2">Task</th>}
-            <th className="py-2">Reason</th>
-            <th className="py-2">Date</th>
-            <th className="py-2">Status</th>
-            <th className="py-2 pr-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((cr) => (
-            <ChangeRequestRow
-              key={cr.id}
-              cr={cr}
-              orgId={orgId}
-              projectId={projectId}
-              members={members}
-              showTask={showTask}
-              canReview={canReview}
-              onRefresh={onRefresh}
-              onItemUpdate={onItemUpdate}
-            />
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <table className="table table-sm w-full">
+      <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
+        <tr>
+          <th className="pl-3">Proposer</th>
+          <th>Fields</th>
+          {showTask && <th>Task</th>}
+          <th>Reason</th>
+          <th>Date</th>
+          <th>Status</th>
+          <th className="pr-3 w-8"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((cr) => (
+          <ChangeRequestRow
+            key={cr.id}
+            cr={cr}
+            orgId={orgId}
+            projectId={projectId}
+            members={members}
+            showTask={showTask}
+            canReview={canReview}
+            onRefresh={onRefresh}
+            onItemUpdate={onItemUpdate}
+          />
+        ))}
+      </tbody>
+    </table>
   );
 }
 
@@ -633,7 +608,7 @@ function ChangeRequestRow({
     <>
       {/* Compact table row — click to open detail popup */}
       <tr
-        className="hover:bg-base-200/50 cursor-pointer border-b border-base-200 last:border-0"
+        className="hover:bg-base-200/35 cursor-pointer border-b border-base-200/55 last:border-0 transition-colors"
         onClick={() => setDetailOpen(true)}
       >
         <td className="py-2 pl-3">
@@ -715,28 +690,26 @@ function ChangeRequestRow({
             <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-2">
               Proposed Changes
             </p>
-            <div className="overflow-x-auto rounded-lg border border-base-200">
-              <table className="table table-sm w-full">
-                <thead>
-                  <tr className="text-xs text-base-content/40">
-                    <th className="font-medium">Field</th>
-                    <th className="font-medium">New Value</th>
+            <table className="table table-xs w-full border border-base-200/55 rounded-xl overflow-hidden">
+              <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b">
+                <tr>
+                  <th>Field</th>
+                  <th>New Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(changes).map(([field, value]) => (
+                  <tr key={field} className="border-t border-base-200/55">
+                    <td className="text-xs font-medium text-base-content/70 py-1.5">
+                      {FIELD_LABELS[field] || field}
+                    </td>
+                    <td className="text-xs py-1.5">
+                      {formatFieldValue(field, value, members)}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(changes).map(([field, value]) => (
-                    <tr key={field} className="border-t border-base-200">
-                      <td className="text-xs font-medium text-base-content/70 py-1.5">
-                        {FIELD_LABELS[field] || field}
-                      </td>
-                      <td className="text-xs py-1.5">
-                        {formatFieldValue(field, value, members)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                ))}
+              </tbody>
+            </table>
           </div>
 
           {/* Reason */}
@@ -745,7 +718,7 @@ function ChangeRequestRow({
               <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-1">
                 Reason
               </p>
-              <p className="text-sm text-base-content/80 bg-base-200/60 rounded-lg px-3 py-2 italic">
+              <p className="text-sm text-base-content/80 bg-base-200/30 rounded-xl px-3 py-2 italic border border-base-200/55">
                 &ldquo;{cr.reason}&rdquo;
               </p>
             </div>
@@ -762,7 +735,7 @@ function ChangeRequestRow({
                   </span>
                 )}
               </p>
-              <p className="text-sm text-base-content/80 bg-base-200/60 rounded-lg px-3 py-2 italic">
+              <p className="text-sm text-base-content/80 bg-base-200/30 rounded-xl px-3 py-2 italic border border-base-200/55">
                 &ldquo;{cr.review_note}&rdquo;
               </p>
             </div>
@@ -773,7 +746,7 @@ function ChangeRequestRow({
 
           {/* Review actions (only for pending + canReview) */}
           {cr.status === "pending" && canReview && (
-            <div className="space-y-3 border-t border-base-200 pt-4">
+            <div className="space-y-3 border-t border-base-200/55 pt-4">
               <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide">
                 Your Decision
               </p>

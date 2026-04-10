@@ -300,7 +300,7 @@ func main() {
 	watcherSvc := service.NewWatcherService(watcherRepo, txm)
 	webhookSvc := service.NewWebhookService(webhookRepo, txm)
 	apikeySvc := service.NewAPIKeyService(apikeyRepo, txm)
-	importSvc := service.NewImportService(importJobRepo, taskRepo, txm)
+	importSvc := service.NewImportService(importJobRepo, taskRepo, orgMemberRepo, txm, workerSrv)
 	billingSvc := service.NewBillingService(planRepo, subRepo, txm)
 	dashboardSvc := service.NewDashboardService(taskRepo, projectRepo, projectMemberRepo, orgMemberRepo, txm)
 	dashboardSvc.SetRedis(rdb)
@@ -639,10 +639,20 @@ func main() {
 							r.With(prm("project", "projectId", "project", "read")).Mount("/analytics", analyticsHandler.ProjectAnalyticsRoutes())
 
 							// Project teams (multi-team)
-							r.With(prm("project", "projectId", "members", "manage")).Mount("/teams", projectTeamHandler.Routes())
+							// GET list requires only project:read so external members can see linked teams.
+							// Mutating operations keep members:manage.
+							r.With(prm("project", "projectId", "project", "read")).Get("/teams", projectTeamHandler.ListTeams)
+							r.With(prm("project", "projectId", "members", "manage")).Post("/teams", projectTeamHandler.LinkTeams)
+							r.With(prm("project", "projectId", "members", "manage")).Delete("/teams/{teamId}", projectTeamHandler.UnlinkTeam)
+							r.With(prm("project", "projectId", "project", "read")).Get("/teams/{teamId}/unlink-preview", projectTeamHandler.PreviewUnlinkTeam)
+							r.With(prm("project", "projectId", "members", "manage")).Get("/teams/eligible-members", projectTeamHandler.ListEligibleMembers)
 
-							// Project-level change requests
-							r.With(prm("project", "projectId", "tasks", "read")).Mount("/change-requests", changeReqHandler.ProjectRoutes())
+							// Project-level change requests (list + project-scoped approve/reject)
+							r.With(prm("project", "projectId", "tasks", "read")).Get("/change-requests", changeReqHandler.ListByProject)
+							r.With(prm("project", "projectId", "tasks", "review")).Route("/change-requests/{crId}", func(r chi.Router) {
+								r.Post("/approve", changeReqHandler.Approve)
+								r.Post("/reject", changeReqHandler.Reject)
+							})
 
 							// Imports
 							r.With(prm("project", "projectId", "tasks", "create")).Mount("/imports", importHandler.Routes())
@@ -663,19 +673,58 @@ func main() {
 									r.With(prm("project", "projectId", "tasks", "delete")).Delete("/", taskHandler.Delete)
 									r.With(prm("project", "projectId", "tasks", "read")).Get("/tree", taskHandler.GetTree)
 									r.With(prm("project", "projectId", "tasks", "update")).Post("/submit-review", taskHandler.SubmitForReview)
-									r.With(prm("project", "projectId", "tasks", "update")).Post("/complete", taskHandler.MarkComplete)
+									r.With(prm("project", "projectId", "tasks", "review")).Post("/complete", taskHandler.MarkComplete)
 									r.With(prm("project", "projectId", "tasks", "create")).Post("/duplicate", taskHandler.Duplicate)
 
-									// Task sub-resources
-									r.Mount("/checklists", checklistHandler.Routes())
-									r.Mount("/comments", commentHandler.Routes())
-									r.Mount("/rules", ruleHandler.Routes())
-									r.Mount("/attachments", attachmentHandler.Routes())
-									r.Mount("/dependencies", depHandler.Routes())
-									r.Mount("/watchers", watcherHandler.Routes())
+									// Task sub-resources — each HTTP method carries its own permission guard.
+									// GET operations require tasks:read; mutations require tasks:update.
+									// Watchers (watch/unwatch self) only require tasks:read.
+									r.Route("/checklists", func(r chi.Router) {
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/", checklistHandler.List)
+										r.With(prm("project", "projectId", "tasks", "update")).Post("/", checklistHandler.Create)
+										r.Route("/{checklistId}", func(r chi.Router) {
+											r.With(prm("project", "projectId", "tasks", "update")).Patch("/", checklistHandler.Update)
+											r.With(prm("project", "projectId", "tasks", "update")).Delete("/", checklistHandler.Delete)
+										})
+									})
+									r.Route("/comments", func(r chi.Router) {
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/", commentHandler.List)
+										r.With(prm("project", "projectId", "tasks", "update")).Post("/", commentHandler.Create)
+										r.Route("/{commentId}", func(r chi.Router) {
+											r.With(prm("project", "projectId", "tasks", "update")).Delete("/", commentHandler.Delete)
+										})
+									})
+									r.Route("/rules", func(r chi.Router) {
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/", ruleHandler.List)
+										r.With(prm("project", "projectId", "tasks", "update")).Post("/", ruleHandler.Create)
+										r.Route("/{ruleId}", func(r chi.Router) {
+											r.With(prm("project", "projectId", "tasks", "update")).Delete("/", ruleHandler.Delete)
+										})
+									})
+									r.Route("/attachments", func(r chi.Router) {
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/", attachmentHandler.ListByTask)
+										r.With(prm("project", "projectId", "tasks", "update")).Post("/", attachmentHandler.Create)
+										r.With(prm("project", "projectId", "tasks", "update")).Post("/upload", attachmentHandler.DirectUpload)
+										r.Route("/{attachmentId}", func(r chi.Router) {
+											r.With(prm("project", "projectId", "tasks", "read")).Get("/download", attachmentHandler.Download)
+											r.With(prm("project", "projectId", "tasks", "read")).Get("/content", attachmentHandler.Content)
+											r.With(prm("project", "projectId", "tasks", "update")).Delete("/", attachmentHandler.Delete)
+										})
+									})
+									r.Route("/dependencies", func(r chi.Router) {
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/", depHandler.List)
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/dependents", depHandler.ListDependents)
+										r.With(prm("project", "projectId", "tasks", "update")).Post("/", depHandler.Add)
+										r.With(prm("project", "projectId", "tasks", "update")).Delete("/{dependsOnId}", depHandler.Remove)
+									})
+									r.Route("/watchers", func(r chi.Router) {
+										r.With(prm("project", "projectId", "tasks", "read")).Get("/", watcherHandler.List)
+										r.With(prm("project", "projectId", "tasks", "read")).Post("/", watcherHandler.Watch)
+										r.With(prm("project", "projectId", "tasks", "read")).Delete("/", watcherHandler.Unwatch)
+									})
 
 									// Task-level change requests
-									r.Mount("/change-requests", changeReqHandler.TaskRoutes())
+									r.With(prm("project", "projectId", "tasks", "update")).Mount("/change-requests", changeReqHandler.TaskRoutes())
 								})
 							})
 						})
@@ -710,6 +759,7 @@ func main() {
 		MeiliMasterKey:     cfg.MeiliMasterKey,
 		EmailServiceURL:    emailServiceURL,
 		EmailServiceAPIKey: emailServiceAPIKey,
+		OrgRepo:            orgRepo,
 	}
 	workerMux := asynq.NewServeMux()
 	workerHandlers.RegisterAll(workerMux)

@@ -567,9 +567,37 @@ type BulkUpdateParams struct {
 }
 
 // BulkUpdate applies the same changes to multiple tasks in a single transaction.
+// If the project has a review pipeline configured, any attempt to bulk-update reviewable
+// fields by an actor without tasks:direct_update permission is blocked with 403.
+// Observers without tasks:update permission are blocked at the route layer.
 func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) ([]*domain.Task, error) {
 	if len(params.TaskIDs) == 0 {
 		return nil, fmt.Errorf("no task IDs provided")
+	}
+
+	// --- Review pipeline pre-check ---
+	// Permission-first: actors lacking tasks:direct_update cannot bulk-update tasks
+	// directly.  Bulk-update does not support creating per-task change requests, so
+	// we reject the entire call when the actor lacks direct_update permission.
+	if s.permResolver != nil {
+		if params.Changes.ActorID == nil {
+			return nil, domain.NewAppError(403, "actor identity required for bulk update")
+		}
+		// Resolve org/project from the first task.
+		firstTask, fErr := s.taskRepo.GetByID(ctx, params.TaskIDs[0])
+		if fErr != nil {
+			return nil, fmt.Errorf("resolve first task for permission check: %w", fErr)
+		}
+		canBypass, _ := s.permResolver.HasPermission(
+			ctx, *params.Changes.ActorID, firstTask.OrgID,
+			domain.ScopeProject, &firstTask.ProjectID,
+			"tasks", "direct_update",
+		)
+		if !canBypass {
+			return nil, domain.NewAppError(403,
+				"bulk update requires direct_update permission; submit individual change requests instead",
+			)
+		}
 	}
 
 	updated := make([]*domain.Task, 0, len(params.TaskIDs))
@@ -782,24 +810,17 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	}
 
 	// --- Review pipeline ---
-	// If review deps are wired and project has reviewable_fields, partition changes.
-	var reviewableFields []string
-	if s.projectRepo != nil && s.crRepo != nil && s.permResolver != nil {
-		project, projErr := s.projectRepo.GetByID(ctx, task.ProjectID)
-		if projErr == nil {
-			reviewableFields = extractReviewableFields(project.Settings)
-		}
-	}
-
+	// Permission-first design: users lacking tasks:direct_update ALWAYS submit a
+	// change request — regardless of which fields are in reviewable_fields.
+	// reviewable_fields is a secondary constraint: even holders of direct_update
+	// must go through CR for those specific fields (project-admin control).
 	directChanges := changes
 	var reviewChanges map[string]any
 
-	if len(reviewableFields) > 0 {
-		directChanges, reviewChanges = partitionChanges(changes, reviewableFields)
-
-		// Check if the actor can bypass review (direct_update permission)
+	if s.crRepo != nil && s.permResolver != nil {
+		// 1. Check whether actor can apply changes without review.
 		canBypass := false
-		if params.ActorID != nil && s.permResolver != nil {
+		if params.ActorID != nil {
 			projectID := task.ProjectID
 			canBypass, _ = s.permResolver.HasPermission(
 				ctx, *params.ActorID, task.OrgID,
@@ -808,34 +829,59 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 			)
 		}
 
-		if canBypass {
-			// User has direct_update — apply everything directly
-			for k, v := range reviewChanges {
-				directChanges[k] = v
+		// 2. Load project's explicit reviewable_fields (optional granular control).
+		var reviewableFields []string
+		if s.projectRepo != nil {
+			if project, projErr := s.projectRepo.GetByID(ctx, task.ProjectID); projErr == nil {
+				reviewableFields = extractReviewableFields(project.Settings)
 			}
-			reviewChanges = nil
-		} else {
-			// User does NOT have direct_update permission.
-			// Non-reviewable field updates are blocked entirely.
-			if len(directChanges) > 0 {
-				blocked := make([]string, 0, len(directChanges))
-				for k := range directChanges {
-					blocked = append(blocked, k)
-				}
-				return nil, domain.NewAppError(403,
-					fmt.Sprintf("cannot update non-reviewable fields: %s; only reviewable fields (%s) can be changed via review",
-						strings.Join(blocked, ", "), strings.Join(reviewableFields, ", ")))
+		}
+
+		if !canBypass {
+			// Actor lacks direct_update: ALL changes go through a change request.
+			if len(changes) == 0 {
+				return &domain.TaskUpdateResult{Task: task}, nil
 			}
-			// All changes are reviewable — skip direct DB update, create CR only
-			if len(reviewChanges) > 0 && s.crRepo != nil {
-				var proposerID uuid.UUID
-				if params.ActorID != nil {
-					proposerID = *params.ActorID
-				}
+			if params.ActorID == nil {
+				return nil, domain.NewAppError(403, "actor identity required to submit a change request")
+			}
+			cr := &domain.TaskChangeRequest{
+				OrgID:      task.OrgID,
+				TaskID:     task.ID,
+				ProposerID: *params.ActorID,
+				Changes:    changes,
+				Reason:     "Update requires approval",
+			}
+			var created *domain.TaskChangeRequest
+			crErr := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+				var e error
+				created, e = s.crRepo.Create(ctx, tx, cr)
+				return e
+			})
+			if crErr != nil {
+				return nil, crErr
+			}
+			s.publishEvent(ctx, domain.EventChangeRequestCreated, task.OrgID.String(), created.ID.String(), map[string]any{
+				"task_id":     task.ID.String(),
+				"proposer_id": params.ActorID.String(),
+			})
+			return &domain.TaskUpdateResult{
+				Task:          task,
+				ChangeRequest: created,
+				PendingReview: true,
+			}, nil
+		}
+
+		// Actor has direct_update. Apply most changes immediately.
+		// However, explicitly-listed reviewable_fields still require a CR even
+		// for privileged actors (project-admin-controlled exception fields).
+		if len(reviewableFields) > 0 {
+			directChanges, reviewChanges = partitionChanges(changes, reviewableFields)
+			if len(reviewChanges) > 0 {
 				cr := &domain.TaskChangeRequest{
 					OrgID:      task.OrgID,
 					TaskID:     task.ID,
-					ProposerID: proposerID,
+					ProposerID: *params.ActorID,
 					Changes:    reviewChanges,
 					Reason:     "Field requires review",
 				}
@@ -850,16 +896,18 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 				}
 				s.publishEvent(ctx, domain.EventChangeRequestCreated, task.OrgID.String(), created.ID.String(), map[string]any{
 					"task_id":     task.ID.String(),
-					"proposer_id": proposerID.String(),
+					"proposer_id": params.ActorID.String(),
 				})
-				return &domain.TaskUpdateResult{
-					Task:          task,
-					ChangeRequest: created,
-					PendingReview: true,
-				}, nil
+				if len(directChanges) == 0 {
+					// Nothing can be applied directly — everything is reviewable
+					return &domain.TaskUpdateResult{
+						Task:          task,
+						ChangeRequest: created,
+						PendingReview: true,
+					}, nil
+				}
+				// Fall through: apply directChanges immediately, CR is pending for the rest
 			}
-			// No reviewable changes either — nothing to update
-			return &domain.TaskUpdateResult{Task: task}, nil
 		}
 	}
 
@@ -1397,13 +1445,67 @@ func (s *TaskService) MarkComplete(ctx context.Context, id uuid.UUID) (*domain.T
 
 // ReorderItem represents a single task reorder operation.
 type ReorderItem struct {
-	ID       uuid.UUID  `json:"id" validate:"required"`
-	Position int        `json:"position" validate:"min=0"`
-	ParentID *uuid.UUID `json:"parent_id,omitempty"`
+	ID        uuid.UUID  `json:"id" validate:"required"`
+	Position  int        `json:"position" validate:"min=0"`
+	ParentID  *uuid.UUID `json:"parent_id,omitempty"`
+	ProjectID *uuid.UUID `json:"project_id,omitempty"`
 }
 
 // Reorder updates the positions (and optionally parents) of multiple tasks in a single transaction.
 func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
+	// If the project has parent_task_id as a reviewable field, structural moves
+	// (reparenting) must go through the change-request pipeline, not direct reorder.
+	if s.projectRepo != nil {
+		// Collect the project ID from the first item that carries it.
+		var projectID uuid.UUID
+		for _, item := range items {
+			if item.ProjectID != nil {
+				projectID = *item.ProjectID
+				break
+			}
+		}
+		if projectID != uuid.Nil {
+			project, projErr := s.projectRepo.GetByID(ctx, projectID)
+			if projErr == nil && project != nil {
+				reviewableFields := extractReviewableFields(project.Settings)
+				for _, f := range reviewableFields {
+					if f == "parent_task_id" {
+						// Check whether any item actually changes its parent.
+						// We run a single query: are there items whose current
+						// parent_task_id differs from what is being requested?
+						ids := make([]uuid.UUID, len(items))
+						for i, it := range items {
+							ids[i] = it.ID
+						}
+						rows, qerr := s.txm.Pool().Query(ctx,
+							`SELECT id, parent_task_id FROM tasks WHERE id = ANY($1)`, ids)
+						if qerr == nil {
+							defer rows.Close()
+							// Build a lookup of item.ID → desired parent
+							desired := make(map[uuid.UUID]*uuid.UUID, len(items))
+							for _, it := range items {
+								desired[it.ID] = it.ParentID
+							}
+							for rows.Next() {
+								var taskID uuid.UUID
+								var currentParent *uuid.UUID
+								if serr := rows.Scan(&taskID, &currentParent); serr == nil {
+									newParent := desired[taskID]
+									// nil != nil is false; compare carefully
+									if (currentParent == nil) != (newParent == nil) ||
+										(currentParent != nil && newParent != nil && *currentParent != *newParent) {
+										return domain.ErrReviewRequired
+									}
+								}
+							}
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
 	type cacheEntry struct {
 		OldParentID *uuid.UUID
 		UpdatedTask *domain.Task
@@ -1412,6 +1514,57 @@ func (s *TaskService) Reorder(ctx context.Context, items []ReorderItem) error {
 
 	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		for _, item := range items {
+			// ── Depth & circular validation before reparent ──
+			if item.ParentID != nil {
+				// 1. Circular check: ensure the new parent is NOT a descendant of the task being moved
+				var isCircular bool
+				err := tx.QueryRow(ctx,
+					`WITH RECURSIVE anc AS (
+						SELECT parent_task_id FROM tasks WHERE id = $1
+						UNION ALL
+						SELECT t.parent_task_id FROM tasks t JOIN anc a ON t.id = a.parent_task_id
+					)
+					SELECT EXISTS(SELECT 1 FROM anc WHERE parent_task_id = $2)`,
+					*item.ParentID, item.ID,
+				).Scan(&isCircular)
+				if err != nil {
+					return fmt.Errorf("circular check task %s: %w", item.ID, err)
+				}
+				if isCircular {
+					return fmt.Errorf("reparent task %s: %w", item.ID, domain.ErrMaxDepth)
+				}
+				// Self-drop check
+				if *item.ParentID == item.ID {
+					return fmt.Errorf("reparent task %s: cannot move task under itself", item.ID)
+				}
+
+				// 2. Depth overflow check: newParentDepth + 1 + subtreeHeight must not exceed MaxTaskDepth
+				var parentDepth int
+				err = tx.QueryRow(ctx, `SELECT depth FROM tasks WHERE id = $1`, *item.ParentID).Scan(&parentDepth)
+				if err != nil {
+					return fmt.Errorf("get parent depth for task %s: %w", item.ID, err)
+				}
+				newDepth := parentDepth + 1
+
+				// Get the max relative depth of all descendants of the task being moved
+				var subtreeHeight int
+				err = tx.QueryRow(ctx,
+					`WITH RECURSIVE task_tree AS (
+						SELECT id, depth FROM tasks WHERE id = $1
+						UNION ALL
+						SELECT t.id, t.depth FROM tasks t JOIN task_tree d ON t.parent_task_id = d.id
+					)
+					SELECT COALESCE(MAX(depth) - MIN(depth), 0) FROM task_tree`,
+					item.ID,
+				).Scan(&subtreeHeight)
+				if err != nil {
+					return fmt.Errorf("get subtree height for task %s: %w", item.ID, err)
+				}
+				if newDepth+subtreeHeight > domain.MaxTaskDepth {
+					return domain.ErrMaxDepth
+				}
+			}
+
 			// Capture old parent before reparenting (needed to clean Redis cache)
 			var oldParentID *uuid.UUID
 			if s.cache != nil {

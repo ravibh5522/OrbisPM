@@ -1,130 +1,125 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Welcome to {{ app_name }}</title>
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+  <title>Welcome to {{ org_name | default(app_name) }}</title>
+  <style>
+    @media only screen and (max-width:600px) {
+      .wrap { padding: 20px 12px 32px !important; }
+      .hero-pad { padding: 30px 20px 26px !important; }
+      .body-pad { padding: 24px 20px 28px !important; }
+      .cta-btn { padding: 13px 28px !important; font-size: 14px !important; display: block !important; text-align: center !important; }
+      .h1 { font-size: 23px !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:#f0eef9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <div style="display:none;font-size:1px;color:#f0eef9;line-height:1px;max-height:0;overflow:hidden;mso-hide:all;">You're in, {{ user_name | default("there") }}. Your {{ org_name | default(app_name) }} workspace is ready.</div>
 
-  <!-- Preheader text (hidden) -->
-  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
-    Welcome to {{ app_name }}, {{ user_name | default("there") }}! Your account is ready. Start managing your projects today.
-  </div>
-
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f4f6;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0eef9;">
     <tr>
-      <td align="center" style="padding:40px 16px 48px;">
+      <td align="center" class="wrap" style="padding:36px 16px 48px;">
+        <!--[if mso]><table role="presentation" width="580" cellspacing="0" cellpadding="0" border="0" align="center"><tr><td><![endif]-->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:580px;">
 
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;">
-
-          <!-- Header -->
+          <!-- Org header -->
           <tr>
-            <td style="padding-bottom:24px;text-align:center;">
-              <span style="font-size:20px;font-weight:700;color:#6366f1;letter-spacing:-0.3px;">{{ app_name }}</span>
-            </td>
-          </tr>
-
-          <!-- Main card -->
-          <tr>
-            <td style="background-color:#ffffff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);overflow:hidden;">
-
-              <!-- Hero gradient header -->
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <td style="padding-bottom:16px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                 <tr>
-                  <td style="background:linear-gradient(135deg,#6366f1 0%,#818cf8 50%,#a5b4fc 100%);padding:44px 40px 40px;text-align:center;">
-                    <div style="display:inline-block;background:rgba(255,255,255,0.15);border-radius:16px;width:64px;height:64px;line-height:64px;text-align:center;margin-bottom:16px;font-size:30px;">
-                      &#x1F680;
-                    </div>
-                    <h1 style="margin:0 0 8px;font-size:26px;font-weight:700;color:#ffffff;letter-spacing:-0.4px;line-height:1.25;">Welcome to {{ app_name }}!</h1>
-                    <p style="margin:0;font-size:15px;color:rgba(255,255,255,0.85);line-height:1.5;">Your account is ready. Let's get you started.</p>
+                  <td style="vertical-align:middle;">
+                    {% if org_icon %}<img src="{{ org_icon }}" alt="{{ org_name | default(app_name) }}" width="34" height="34" style="display:inline-block;vertical-align:middle;border-radius:8px;border:1px solid #e5e7eb;margin-right:9px;">{% endif %}
+                    <span style="font-size:15px;font-weight:700;color:#374151;vertical-align:middle;">{{ org_name | default(app_name) }}</span>
                   </td>
                 </tr>
               </table>
+            </td>
+          </tr>
 
-              <!-- Card body -->
+          <!-- Card -->
+          <tr>
+            <td style="background-color:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+              <!-- Indigo top strip -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr><td style="background-color:#6366f1;height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
+              </table>
+              <!-- Hero — left-aligned, no generic emoji -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
-                  <td style="padding:36px 40px;">
+                  <td class="hero-pad" style="background-color:#6366f1;padding:38px 44px 34px;text-align:left;">
+                    <p style="margin:0 0 8px;font-size:11px;font-weight:700;color:rgba(255,255,255,.6);text-transform:uppercase;letter-spacing:1.4px;">New member</p>
+                    <h1 class="h1" style="margin:0 0 10px;font-size:26px;font-weight:800;color:#ffffff;line-height:1.3;letter-spacing:-0.4px;">Hi {{ user_name | default("there") }}, welcome aboard.</h1>
+                    <p style="margin:0;font-size:14px;color:rgba(255,255,255,.8);line-height:1.6;">Your <strong style="color:#ffffff;">{{ org_name | default(app_name) }}</strong> account is live. Start exploring below.</p>
+                  </td>
+                </tr>
+              </table>
+              <!-- Body -->
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td class="body-pad" style="padding:30px 44px 36px;">
 
-                    <!-- Greeting -->
-                    <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6;">Hi <strong style="color:#111827;">{{ user_name | default("there") }}</strong>,</p>
-                    <p style="margin:0 0 32px;font-size:15px;color:#4b5563;line-height:1.75;">Your {{ app_name }} account has been created successfully. You now have everything you need to manage your projects, collaborate with your team, and ship faster.</p>
-
-                    <!-- Feature highlights -->
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:32px;">
+                    <!-- Step 1 -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:14px;">
                       <tr>
-                        <td style="padding-bottom:4px;">
-                          <p style="margin:0 0 12px;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:#9ca3af;">What you can do</p>
+                        <td style="width:40px;vertical-align:top;padding-right:14px;padding-top:2px;">
+                          <div style="width:32px;height:32px;background-color:#eef2ff;border-radius:8px;text-align:center;line-height:32px;">
+                            <span style="font-size:13px;font-weight:800;color:#6366f1;">1</span>
+                          </div>
+                        </td>
+                        <td style="vertical-align:top;">
+                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#111827;">Create a project</p>
+                          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.55;">Group your tasks, set milestones, and track everything in one place.</p>
                         </td>
                       </tr>
+                    </table>
 
-                      <!-- Feature 1 -->
+                    <!-- Step 2 -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:14px;">
                       <tr>
-                        <td style="padding-bottom:12px;">
-                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td style="width:44px;vertical-align:top;">
-                                <div style="background-color:#eef2ff;border-radius:8px;width:36px;height:36px;text-align:center;line-height:36px;font-size:17px;">&#x1F4CB;</div>
-                              </td>
-                              <td style="vertical-align:top;padding-left:12px;">
-                                <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#111827;">Projects</p>
-                                <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">Organize your work into projects and track progress at a glance.</p>
-                              </td>
-                            </tr>
-                          </table>
+                        <td style="width:40px;vertical-align:top;padding-right:14px;padding-top:2px;">
+                          <div style="width:32px;height:32px;background-color:#f0fdf4;border-radius:8px;text-align:center;line-height:32px;">
+                            <span style="font-size:13px;font-weight:800;color:#16a34a;">2</span>
+                          </div>
+                        </td>
+                        <td style="vertical-align:top;">
+                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#111827;">Invite your team</p>
+                          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.55;">Add members, assign roles &mdash; collaborators are up and running in seconds.</p>
                         </td>
                       </tr>
+                    </table>
 
-                      <!-- Feature 2 -->
+                    <!-- Step 3 -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:30px;">
                       <tr>
-                        <td style="padding-bottom:12px;">
-                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td style="width:44px;vertical-align:top;">
-                                <div style="background-color:#eef2ff;border-radius:8px;width:36px;height:36px;text-align:center;line-height:36px;font-size:17px;">&#x2705;</div>
-                              </td>
-                              <td style="vertical-align:top;padding-left:12px;">
-                                <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#111827;">Tasks</p>
-                                <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">Create, assign, and prioritize tasks to keep your team aligned.</p>
-                              </td>
-                            </tr>
-                          </table>
+                        <td style="width:40px;vertical-align:top;padding-right:14px;padding-top:2px;">
+                          <div style="width:32px;height:32px;background-color:#faf5ff;border-radius:8px;text-align:center;line-height:32px;">
+                            <span style="font-size:13px;font-weight:800;color:#7c3aed;">3</span>
+                          </div>
                         </td>
-                      </tr>
-
-                      <!-- Feature 3 -->
-                      <tr>
-                        <td>
-                          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td style="width:44px;vertical-align:top;">
-                                <div style="background-color:#eef2ff;border-radius:8px;width:36px;height:36px;text-align:center;line-height:36px;font-size:17px;">&#x1F465;</div>
-                              </td>
-                              <td style="vertical-align:top;padding-left:12px;">
-                                <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#111827;">Teams</p>
-                                <p style="margin:0;font-size:13px;color:#6b7280;line-height:1.5;">Invite teammates, set roles, and collaborate in real time.</p>
-                              </td>
-                            </tr>
-                          </table>
+                        <td style="vertical-align:top;">
+                          <p style="margin:0 0 2px;font-size:13px;font-weight:700;color:#111827;">Ship work on time</p>
+                          <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.55;">Assign tasks, set deadlines, and keep everyone aligned automatically.</p>
                         </td>
                       </tr>
                     </table>
 
                     <!-- Divider -->
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:32px;">
-                      <tr>
-                        <td style="border-top:1px solid #f3f4f6;font-size:0;line-height:0;">&nbsp;</td>
-                      </tr>
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:26px;">
+                      <tr><td style="height:1px;background-color:#f3f4f6;font-size:0;line-height:0;">&nbsp;</td></tr>
                     </table>
 
-                    <!-- CTA Button -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto;">
+                    <!-- CTA -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                       <tr>
-                        <td align="center" style="border-radius:8px;background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);">
-                          <a href="{{ frontend_url }}" style="display:inline-block;padding:14px 40px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">
-                            Get Started &rarr;
+                        <td style="border-radius:10px;background-color:#6366f1;">
+                          <a href="{{ frontend_url }}" target="_blank" class="cta-btn"
+                            style="display:inline-block;padding:14px 40px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:10px;">
+                            Open {{ org_name | default(app_name) }} &#8594;
                           </a>
                         </td>
                       </tr>
@@ -133,22 +128,20 @@
                   </td>
                 </tr>
               </table>
-
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding-top:28px;text-align:center;">
-              <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;"><strong style="color:#6b7280;">{{ app_name }}</strong> &mdash; Project management made simple.</p>
-              <p style="margin:0;font-size:12px;color:#d1d5db;">You received this because an account was created with your email address.</p>
+            <td style="padding-top:18px;text-align:left;">
+              <p style="margin:0 0 3px;font-size:11px;color:#9ca3af;">You received this because an account was created for your email at <strong style="color:#6b7280;">{{ org_name | default(app_name) }}</strong>.</p>
             </td>
           </tr>
 
         </table>
+        <!--[if mso]></td></tr></table><![endif]-->
       </td>
     </tr>
   </table>
-
 </body>
 </html>

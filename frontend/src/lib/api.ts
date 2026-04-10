@@ -285,6 +285,7 @@ import type {
   OrgThemeConfig,
   PerformanceReport,
   Permission,
+  ProcessExcelResult,
   Project,
   ProjectAnalytics,
   ProjectDashboardStats,
@@ -293,6 +294,8 @@ import type {
   RiskScore,
   Role,
   ScopePermissionsResponse,
+  SheetImportConfig,
+  SheetInfo,
   StickyNote,
   StickyNoteStats,
   Task,
@@ -866,7 +869,7 @@ export const api = {
       ),
     export: (orgId: string, projId: string) =>
       downloadBlob(
-        `${V1}/orgs/${orgId}/projects/${projId}/tasks/export`,
+        `${V1}/orgs/${orgId}/projects/${projId}/imports/export/csv`,
         "tasks_export.csv",
       ),
     exportCalendar: (orgId: string, projId: string) =>
@@ -1211,6 +1214,33 @@ export const api = {
         fd,
       );
     },
+    analyze: (orgId: string, projId: string, file: File) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      return upload<SheetInfo[]>(
+        `${V1}/orgs/${orgId}/projects/${projId}/imports/analyze`,
+        fd,
+      );
+    },
+    importExcel: (
+      orgId: string,
+      projId: string,
+      file: File,
+      config: SheetImportConfig[],
+    ) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("config", JSON.stringify(config));
+      return upload<ProcessExcelResult>(
+        `${V1}/orgs/${orgId}/projects/${projId}/imports/excel`,
+        fd,
+      );
+    },
+    exportExcel: (orgId: string, projId: string) =>
+      downloadBlob(
+        `${V1}/orgs/${orgId}/projects/${projId}/imports/export`,
+        "tasks_export.xlsx",
+      ),
     status: (orgId: string, projId: string, jobId: string) =>
       get<ImportJob>(`${V1}/orgs/${orgId}/projects/${projId}/imports/${jobId}`),
     list: (orgId: string, projId: string) =>

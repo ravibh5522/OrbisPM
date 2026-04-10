@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
-import { Avatar, Card } from "@/components/ui/shared";
+import { Avatar } from "@/components/ui/shared";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import type { Project, TaskStatusConfig } from "@/types/domain";
@@ -129,82 +129,86 @@ export function ProjectSettings({ orgId, project }: ProjectSettingsProps) {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <Card allowOverflow className="relative z-20 focus-within:z-[340]">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h3 className="text-lg font-semibold">Task Workflow Statuses</h3>
-            <p className="text-sm text-base-content/60">
-              Configure the workflow statuses for tasks in this project. Drag to
-              reorder. Mark one status as &quot;Done&quot; for progress
-              tracking.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={resetToDefaults}>
-              Reset to Defaults
-            </Button>
-            <Button variant="outline" size="sm" onClick={addStatus}>
-              <Plus className="w-4 h-4 mr-1" /> Add Status
-            </Button>
-          </div>
-        </div>
+    <div className="h-full overflow-auto">
+      <div className="divide-y divide-base-200/55">
 
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragEnd={handleDragEnd}
-        >
-          <SortableContext
-            items={statuses.map((s) => s.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="space-y-2">
-              {statuses.map((status) => (
-                <SortableStatusRow
-                  key={status.id}
-                  status={status}
-                  isEditing={editingId === status.id}
-                  onEdit={() => setEditingId(status.id)}
-                  onStopEdit={() => setEditingId(null)}
-                  onUpdate={(updates) => updateStatus(status.id, updates)}
-                  onRemove={() => removeStatus(status.id)}
-                  canRemove={statuses.length > 1}
-                />
-              ))}
+        {/* Task Workflow Statuses */}
+        <section className="py-5 px-4 relative z-20 focus-within:z-[340]">
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <h3 className="font-semibold">Task Workflow Statuses</h3>
+              <p className="text-sm text-base-content/55 mt-0.5">
+                Configure workflow statuses. Drag to reorder. Mark one as
+                &quot;Done&quot; for progress tracking.
+              </p>
             </div>
-          </SortableContext>
-        </DndContext>
-
-        {hasChanges && (
-          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                setStatuses(currentStatuses);
-                setHasChanges(false);
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => saveMutation.mutate(statuses)}
-              loading={saveMutation.isPending}
-            >
-              Save Changes
-            </Button>
+            <div className="flex gap-2 flex-shrink-0">
+              <Button variant="ghost" size="sm" onClick={resetToDefaults}>
+                Reset to Defaults
+              </Button>
+              <Button variant="outline" size="sm" onClick={addStatus}>
+                <Plus className="w-4 h-4 mr-1" /> Add Status
+              </Button>
+            </div>
           </div>
-        )}
-      </Card>
 
-      {/* Reviewable Fields Configuration */}
-      <ReviewableFieldsSettings orgId={orgId} project={project} />
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={statuses.map((s) => s.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="space-y-1.5">
+                {statuses.map((status) => (
+                  <SortableStatusRow
+                    key={status.id}
+                    status={status}
+                    isEditing={editingId === status.id}
+                    onEdit={() => setEditingId(status.id)}
+                    onStopEdit={() => setEditingId(null)}
+                    onUpdate={(updates) => updateStatus(status.id, updates)}
+                    onRemove={() => removeStatus(status.id)}
+                    canRemove={statuses.length > 1}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
 
-      {/* Designated Approvers */}
-      <ApproversSettings orgId={orgId} project={project} />
+          {hasChanges && (
+            <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200/55">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setStatuses(currentStatuses);
+                  setHasChanges(false);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => saveMutation.mutate(statuses)}
+                loading={saveMutation.isPending}
+              >
+                Save Changes
+              </Button>
+            </div>
+          )}
+        </section>
 
-      {/* Project Info (Name/Description) */}
-      <ProjectInfoSettings orgId={orgId} project={project} />
+        {/* Reviewable Fields Configuration */}
+        <ReviewableFieldsSettings orgId={orgId} project={project} />
+
+        {/* Designated Approvers */}
+        <ApproversSettings orgId={orgId} project={project} />
+
+        {/* Project Info (Name/Description) */}
+        <ProjectInfoSettings orgId={orgId} project={project} />
+
+      </div>
     </div>
   );
 }
@@ -253,7 +257,7 @@ function SortableStatusRow({
       ref={setNodeRef}
       style={style}
       className={cn(
-        "flex items-center gap-3 p-3 rounded-lg border border-base-300 bg-base-100",
+        "flex items-center gap-3 px-3 py-2.5 rounded-xl border border-base-200/55 bg-base-200/20 hover:bg-base-200/30 transition-colors",
         isDragging && "opacity-50",
       )}
     >
@@ -401,8 +405,8 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
   });
 
   return (
-    <Card allowOverflow>
-      <h3 className="text-lg font-semibold mb-4">Project Information</h3>
+    <section className="py-5 px-4">
+      <h3 className="font-semibold mb-4">Project Information</h3>
       <div className="space-y-4">
         <div>
           <label className="label">
@@ -451,7 +455,7 @@ function ProjectInfoSettings({ orgId, project }: ProjectSettingsProps) {
           </div>
         )}
       </div>
-    </Card>
+    </section>
   );
 }
 
@@ -502,25 +506,24 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
   };
 
   return (
-    <Card className="relative z-10">
+    <section className="py-5 px-4 relative z-10">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold">Review Required Fields</h3>
-        <p className="text-sm text-base-content/60">
-          Changes to these fields will require approval from a reviewer before
-          being applied. If no fields are selected, all updates are applied
-          immediately.
+        <h3 className="font-semibold">Review Required Fields</h3>
+        <p className="text-sm text-base-content/55 mt-0.5">
+          Changes to these fields will require approval before being applied.
+          If no fields are selected, all updates are applied immediately.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
         {REVIEWABLE_FIELD_OPTIONS.map((field) => (
           <label
             key={field.id}
             className={cn(
-              "flex items-center gap-2 p-3 rounded-lg border cursor-pointer transition-colors",
+              "flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition-colors",
               selected.has(field.id)
-                ? "border-primary bg-primary/5"
-                : "border-base-300 hover:bg-base-200",
+                ? "border-primary/50 bg-primary/8"
+                : "border-base-200/55 hover:bg-base-200/35",
             )}
           >
             <input
@@ -535,7 +538,7 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
       </div>
 
       {hasChanges && (
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200">
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200/55">
           <Button
             variant="ghost"
             onClick={() => {
@@ -553,7 +556,7 @@ function ReviewableFieldsSettings({ orgId, project }: ProjectSettingsProps) {
           </Button>
         </div>
       )}
-    </Card>
+    </section>
   );
 }
 
@@ -606,15 +609,14 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
     .filter(Boolean);
 
   return (
-    <Card allowOverflow className="relative z-10">
+    <section className="py-5 px-4 relative z-10 overflow-visible">
       <div className="mb-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <Shield className="w-5 h-5" /> Designated Approvers
+        <h3 className="font-semibold flex items-center gap-2">
+          <Shield className="w-4 h-4" /> Designated Approvers
         </h3>
-        <p className="text-sm text-base-content/60">
-          Select one or more members who can approve change requests. If no
-          approvers are selected, any member with the review permission can
-          approve.
+        <p className="text-sm text-base-content/55 mt-0.5">
+          Select members who can approve change requests. If none are selected,
+          any reviewer can approve.
         </p>
       </div>
 
@@ -703,7 +705,7 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
       )}
 
       {hasChanges && (
-        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200">
+        <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-base-200/55">
           <Button
             variant="ghost"
             onClick={() => {
@@ -721,6 +723,6 @@ function ApproversSettings({ orgId, project }: ProjectSettingsProps) {
           </Button>
         </div>
       )}
-    </Card>
+    </section>
   );
 }

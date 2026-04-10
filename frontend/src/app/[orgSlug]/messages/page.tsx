@@ -72,11 +72,11 @@ export default function MessagesPage() {
   }, []);
 
   return (
-    <div className="flex h-full rounded-2xl border border-base-200 shadow-sm overflow-hidden">
+    <div className="flex h-full bg-base-100 border border-base-200 rounded-2xl overflow-hidden shadow-sm">
       {/* Left: Conversation List + Channel Panel */}
       <div
         className={cn(
-          "border-r border-base-300/50 overflow-hidden",
+          "border-r border-base-300 overflow-hidden",
           activeChannelId
             ? "hidden md:flex md:w-80 lg:w-96 flex-shrink-0"
             : "flex-1",

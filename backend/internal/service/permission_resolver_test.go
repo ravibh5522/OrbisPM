@@ -49,14 +49,14 @@ func (m *mockOrgMemberRepo) Get(_ context.Context, orgID, userID uuid.UUID) (*do
 	return mem, nil
 }
 
-func (m *mockOrgMemberRepo) ListByOrg(_ context.Context, orgID uuid.UUID) ([]*domain.OrgMember, error) {
+func (m *mockOrgMemberRepo) ListByOrg(_ context.Context, orgID uuid.UUID, _ repository.MemberFilter) ([]*domain.OrgMember, int, error) {
 	var out []*domain.OrgMember
 	for _, mem := range m.members {
 		if mem.OrgID == orgID {
 			out = append(out, mem)
 		}
 	}
-	return out, nil
+	return out, len(out), nil
 }
 
 func (m *mockOrgMemberRepo) UpdateRole(_ context.Context, _ pgx.Tx, _, _ uuid.UUID, _ string) error {

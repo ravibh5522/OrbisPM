@@ -76,6 +76,18 @@ func (h *WSHandler) checkProjectPermission(ctx context.Context, conn *websocket.
 	return true
 }
 
+// resolveProjectIDFromTask looks up the project_id for a given task.
+// Used by WS handlers whose payloads carry only task_id (no project_id).
+// Returns the project UUID and true on success; sends an error reply and returns false on failure.
+func (h *WSHandler) resolveProjectIDFromTask(ctx context.Context, conn *websocket.OrgConn, msgID, action string, taskID uuid.UUID) (uuid.UUID, bool) {
+	task, err := h.taskSvc.Get(ctx, taskID)
+	if err != nil || task == nil {
+		h.reply(conn, msgID, action, nil, "task not found")
+		return uuid.Nil, false
+	}
+	return task.ProjectID, true
+}
+
 // ServeWS upgrades to WebSocket and runs the read/write pump for an org connection.
 func (h *WSHandler) ServeWS(w http.ResponseWriter, r *http.Request) {
 	userID := middleware.UserIDFromCtx(r.Context())
@@ -660,6 +672,8 @@ func (h *WSHandler) handleTaskBulkUpdate(ctx context.Context, conn *websocket.Or
 		h.reply(conn, msg.ID, msg.Action, nil, "invalid payload")
 		return
 	}
+	// Inject actor ID so the service enforces the review pipeline.
+	params.Changes.ActorID = &conn.UserID
 
 	tasks, err := h.taskSvc.BulkUpdate(ctx, params)
 	if err != nil {
@@ -689,6 +703,10 @@ func (h *WSHandler) handleTaskReorder(ctx context.Context, conn *websocket.OrgCo
 		Items []service.ReorderItem `json:"items"`
 	}
 	req, _ := parsePayload[reorderReq](msg.Payload)
+	// Attach projectID to every item so the service can enforce the review pipeline.
+	for i := range req.Items {
+		req.Items[i].ProjectID = &projectID
+	}
 	if err := h.taskSvc.Reorder(ctx, req.Items); err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
 		return
@@ -767,7 +785,8 @@ func (h *WSHandler) handleTaskComplete(ctx context.Context, conn *websocket.OrgC
 		return
 	}
 
-	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "update") {
+	// MarkComplete sets status=done and review_status=approved — requires tasks:review
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "review") {
 		return
 	}
 
@@ -803,6 +822,15 @@ func (h *WSHandler) handleChecklistList(ctx context.Context, conn *websocket.Org
 	taskID, err := uuid.Parse(r.TaskID)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, "invalid task_id")
+		return
+	}
+
+	// Resolve project to enforce project-scoped read access.
+	projectID, ok := h.resolveProjectIDFromTask(ctx, conn, msg.ID, msg.Action, taskID)
+	if !ok {
+		return
+	}
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
 		return
 	}
 
@@ -935,6 +963,15 @@ func (h *WSHandler) handleCommentList(ctx context.Context, conn *websocket.OrgCo
 		return
 	}
 
+	// Resolve project to enforce project-scoped read access.
+	projectID, ok := h.resolveProjectIDFromTask(ctx, conn, msg.ID, msg.Action, taskID)
+	if !ok {
+		return
+	}
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "comments", "read") {
+		return
+	}
+
 	items, err := h.commentSvc.ListByTask(ctx, taskID)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
@@ -1032,6 +1069,15 @@ func (h *WSHandler) handleDependencyList(ctx context.Context, conn *websocket.Or
 		return
 	}
 
+	// Resolve project to enforce project-scoped read access.
+	projectID, ok := h.resolveProjectIDFromTask(ctx, conn, msg.ID, msg.Action, taskID)
+	if !ok {
+		return
+	}
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
+		return
+	}
+
 	items, err := h.depSvc.ListByTask(ctx, taskID)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
@@ -1118,6 +1164,15 @@ func (h *WSHandler) handleWatcherList(ctx context.Context, conn *websocket.OrgCo
 		return
 	}
 
+	// Resolve project to enforce project-scoped read access.
+	projectID, ok := h.resolveProjectIDFromTask(ctx, conn, msg.ID, msg.Action, taskID)
+	if !ok {
+		return
+	}
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
+		return
+	}
+
 	items, err := h.watcherSvc.ListByTask(ctx, taskID)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
@@ -1131,7 +1186,19 @@ func (h *WSHandler) handleWatcherWatch(ctx context.Context, conn *websocket.OrgC
 		TaskID string `json:"task_id"`
 	}
 	r, _ := parsePayload[req](msg.Payload)
-	taskID, _ := uuid.Parse(r.TaskID)
+	taskID, err := uuid.Parse(r.TaskID)
+	if err != nil {
+		h.reply(conn, msg.ID, msg.Action, nil, "invalid task_id")
+		return
+	}
+
+	projectID, ok := h.resolveProjectIDFromTask(ctx, conn, msg.ID, msg.Action, taskID)
+	if !ok {
+		return
+	}
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
+		return
+	}
 
 	if err := h.watcherSvc.Watch(ctx, taskID, conn.UserID); err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
@@ -1145,7 +1212,19 @@ func (h *WSHandler) handleWatcherUnwatch(ctx context.Context, conn *websocket.Or
 		TaskID string `json:"task_id"`
 	}
 	r, _ := parsePayload[req](msg.Payload)
-	taskID, _ := uuid.Parse(r.TaskID)
+	taskID, err := uuid.Parse(r.TaskID)
+	if err != nil {
+		h.reply(conn, msg.ID, msg.Action, nil, "invalid task_id")
+		return
+	}
+
+	projectID, ok := h.resolveProjectIDFromTask(ctx, conn, msg.ID, msg.Action, taskID)
+	if !ok {
+		return
+	}
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
+		return
+	}
 
 	if err := h.watcherSvc.Unwatch(ctx, taskID, conn.UserID); err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
@@ -1162,6 +1241,10 @@ func (h *WSHandler) handleCRList(ctx context.Context, conn *websocket.OrgConn, m
 	projectID, err := extractProjectID(msg.Payload)
 	if err != nil {
 		h.reply(conn, msg.ID, msg.Action, nil, err.Error())
+		return
+	}
+
+	if !h.checkProjectPermission(ctx, conn, msg.ID, msg.Action, projectID, "tasks", "read") {
 		return
 	}
 

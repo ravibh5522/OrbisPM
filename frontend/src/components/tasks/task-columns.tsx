@@ -5,7 +5,10 @@ import {
   ChangeRequestToast,
   PendingReviewBadge,
 } from "@/components/tasks/change-requests";
-import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import {
+  isGlobalFilterActive,
+  type GlobalFilterState,
+} from "@/components/tasks/global-filter-dropdown";
 import { TaskContextMenu } from "@/components/tasks/task-context-menu";
 import { TaskPreviewPanel } from "@/components/tasks/task-preview-panel";
 import { Alert } from "@/components/ui/alert";
@@ -15,7 +18,7 @@ import { Modal } from "@/components/ui/modal";
 import { AvatarStack, ConfirmDialog } from "@/components/ui/shared";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { useReviewableFields } from "@/hooks/use-reviewable-fields";
-import { useUndoRedo } from "@/hooks/use-undo-redo";
+
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
@@ -38,10 +41,8 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Redo2,
   Tags,
   Trash2,
-  Undo2,
   UserPlus,
   X,
 } from "lucide-react";
@@ -90,54 +91,55 @@ function isFilterActive(f: ColumnFilterState | undefined): boolean {
   );
 }
 
-function applyFilter(
-  tasks: Task[],
+/**
+ * Returns true if task t passes the given column filter AND global filter directly.
+ * No ancestor/descendant logic — this is the per-task predicate.
+ */
+function taskPassesCriteria(
+  t: Task,
   f: ColumnFilterState | undefined,
   gf?: GlobalFilterState,
-): Task[] {
-  let result = tasks;
-  // Apply global filter first
-  if (gf) {
-    result = result.filter((t) => {
-      if (gf.assigneeIds.length > 0) {
-        const ids = t.assignee_ids?.length
-          ? t.assignee_ids
-          : t.assignee_id
-            ? [t.assignee_id]
-            : [];
-        // "" means unassigned
-        const matchesUnassigned =
-          gf.assigneeIds.includes("") && ids.length === 0;
-        const matchesAny = ids.some((id) => gf.assigneeIds.includes(id));
-        if (!matchesUnassigned && !matchesAny) return false;
-      }
-      if (gf.statuses.length > 0 && !gf.statuses.includes(t.status))
+): boolean {
+  // Global filter
+  if (gf && isGlobalFilterActive(gf)) {
+    if (gf.assigneeIds.length > 0) {
+      const ids = t.assignee_ids?.length
+        ? t.assignee_ids
+        : t.assignee_id
+          ? [t.assignee_id]
+          : [];
+      const matchesUnassigned = gf.assigneeIds.includes("") && ids.length === 0;
+      const matchesAny = ids.some((id) => gf.assigneeIds.includes(id));
+      if (!matchesUnassigned && !matchesAny) return false;
+    }
+    if (gf.statuses.length > 0 && !gf.statuses.includes(t.status)) return false;
+    if (gf.priorities.length > 0 && !gf.priorities.includes(t.priority))
+      return false;
+    if (gf.labels.length > 0) {
+      if (!t.labels || !t.labels.some((l) => gf.labels.includes(l)))
         return false;
-      if (gf.priorities.length > 0 && !gf.priorities.includes(t.priority))
-        return false;
-      if (gf.labels.length > 0) {
-        if (!t.labels || !t.labels.some((l) => gf.labels.includes(l)))
-          return false;
-      }
-      if (gf.dueDateFrom && (!t.due_date || t.due_date < gf.dueDateFrom))
-        return false;
-      if (gf.dueDateTo && (!t.due_date || t.due_date > gf.dueDateTo))
-        return false;
-      if (gf.search) {
-        const q = gf.search.toLowerCase();
-        if (!t.title.toLowerCase().includes(q)) return false;
-      }
-      return true;
-    });
+    }
+    if (gf.dueDateFrom && (!t.due_date || t.due_date < gf.dueDateFrom))
+      return false;
+    if (gf.dueDateTo && (!t.due_date || t.due_date > gf.dueDateTo))
+      return false;
+    if (gf.search) {
+      const q = gf.search.toLowerCase();
+      if (!t.title.toLowerCase().includes(q)) return false;
+    }
   }
-  if (!f || !isFilterActive(f)) return result;
-  return result.filter((t) => {
+  // Column-level filter
+  if (f && isFilterActive(f)) {
     if (f.statuses.length > 0 && !f.statuses.includes(t.status)) return false;
     if (f.priorities.length > 0 && !f.priorities.includes(t.priority))
       return false;
     if (f.assigneeIds.length > 0) {
-      const aid = t.assignee_id || "";
-      if (!f.assigneeIds.includes(aid)) return false;
+      const ids = t.assignee_ids?.length
+        ? t.assignee_ids
+        : t.assignee_id
+          ? [t.assignee_id]
+          : [];
+      if (!ids.some((id) => f.assigneeIds.includes(id))) return false;
     }
     if (f.labels.length > 0) {
       if (!t.labels || !t.labels.some((l) => f.labels.includes(l)))
@@ -150,8 +152,84 @@ function applyFilter(
       const q = f.search.toLowerCase();
       if (!t.title.toLowerCase().includes(q)) return false;
     }
-    return true;
-  });
+  }
+  return true;
+}
+
+/**
+ * Filters multiple columns with ancestor-inclusion:
+ * a task is kept if it directly matches the filter OR it is an ancestor of
+ * any task in any column that directly matches.
+ * This ensures parent tasks remain visible when only their descendants match,
+ * letting users navigate down to the matching items.
+ */
+function applyFilterWithAncestors(
+  columns: Task[][],
+  columnFilters: Map<number, ColumnFilterState>,
+  globalFilter?: GlobalFilterState,
+  allProjectTasks?: Task[],
+): Task[][] {
+  const anyActive =
+    columnFilters.size > 0 ||
+    (!!globalFilter && isGlobalFilterActive(globalFilter));
+  if (!anyActive) return columns;
+
+  // Build id → task lookup from ALL available tasks (columns + full project list)
+  const taskById = new Map<string, Task>();
+  for (const col of columns) {
+    for (const t of col) taskById.set(t.id, t);
+  }
+  // Merge in full project tasks for complete ancestry resolution
+  if (allProjectTasks) {
+    for (const t of allProjectTasks) {
+      if (!taskById.has(t.id)) taskById.set(t.id, t);
+    }
+  }
+
+  // Find all tasks that directly match the global filter across ALL known tasks
+  const directMatchIds = new Set<string>();
+  // Check tasks visible in columns (with column-specific filter)
+  for (let depth = 0; depth < columns.length; depth++) {
+    const colFilter = columnFilters.get(depth);
+    for (const task of columns[depth]) {
+      if (taskPassesCriteria(task, colFilter, globalFilter)) {
+        directMatchIds.add(task.id);
+      }
+    }
+  }
+  // Also check ALL project tasks (global filter only, no column filter)
+  if (allProjectTasks && globalFilter && isGlobalFilterActive(globalFilter)) {
+    for (const task of allProjectTasks) {
+      if (taskPassesCriteria(task, undefined, globalFilter)) {
+        directMatchIds.add(task.id);
+      }
+    }
+  }
+
+  // Walk up each matching task's parent chain; mark every ancestor for inclusion
+  const keepIds = new Set<string>(directMatchIds);
+  for (const id of directMatchIds) {
+    let cur = taskById.get(id);
+    while (cur?.parent_task_id) {
+      keepIds.add(cur.parent_task_id);
+      const parent = taskById.get(cur.parent_task_id);
+      if (!parent) break;
+      cur = parent;
+    }
+  }
+
+  // Filter each column: keep direct matches + ancestors
+  return columns.map((tasks) => tasks.filter((t) => keepIds.has(t.id)));
+}
+
+/** Legacy single-column wrapper (kept for any external callers). */
+function applyFilter(
+  tasks: Task[],
+  f: ColumnFilterState | undefined,
+  gf?: GlobalFilterState,
+): Task[] {
+  if (!isFilterActive(f) && (!gf || !isGlobalFilterActive(gf))) return tasks;
+  return tasks.filter((t) => taskPassesCriteria(t, f, gf));
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -405,6 +483,38 @@ export function TaskColumns({
     if (send) fetchColumn(0, null);
   }, [send, fetchColumn]);
 
+  // When global filter is active, fetch ALL project tasks into a separate ref
+  // so applyFilterWithAncestors can resolve full ancestry chains across all depths.
+  // This does NOT change columnData — columns still load based on selection.
+  const globalFilterActive =
+    !!globalFilter && isGlobalFilterActive(globalFilter);
+  const allProjectTasksRef = useRef<Task[]>([]);
+  const [allProjectTasksVersion, setAllProjectTasksVersion] = useState(0);
+  useEffect(() => {
+    if (!globalFilterActive || !send) {
+      if (allProjectTasksRef.current.length > 0) {
+        allProjectTasksRef.current = [];
+        setAllProjectTasksVersion((v) => v + 1);
+      }
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await send("task:list", { limit: 5000 });
+        if (cancelled) return;
+        const allTasks: Task[] = res?.data || [];
+        allProjectTasksRef.current = allTasks;
+        setAllProjectTasksVersion((v) => v + 1);
+      } catch {
+        // Fall back to column-only filtering
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [globalFilterActive, send]);
+
   // Load split view root when split is activated
   useEffect(() => {
     if (splitView && send) {
@@ -609,29 +719,6 @@ export function TaskColumns({
     }
   }, [storeTasks, splitView]);
 
-  /* ── Undo / Redo ── */
-  const { pushCommand, undo, redo, canUndo, canRedo } = useUndoRedo();
-
-  // Keyboard: Ctrl+Z → undo, Ctrl+Y / Ctrl+Shift+Z → redo
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      const isMeta = e.ctrlKey || e.metaKey;
-      if (!isMeta) return;
-      if (e.key === "z" && !e.shiftKey) {
-        e.preventDefault();
-        void undo();
-      } else if (e.key === "z" && e.shiftKey) {
-        e.preventDefault();
-        void redo();
-      } else if (e.key === "y") {
-        e.preventDefault();
-        void redo();
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
-  }, [undo, redo]);
-
   // Helper: refetch all visible columns
   const refetchAll = useCallback(() => {
     softRefetch(0, null);
@@ -640,11 +727,6 @@ export function TaskColumns({
       if (sel[i]) softRefetch(i + 1, sel[i]);
     }
   }, [softRefetch]);
-
-  // Stable refs for undo/redo closures (avoid stale captures)
-  const refetchAllRef = useRef(refetchAll);
-  refetchAllRef.current = refetchAll;
-  const getSend = () => useProjectTaskStore.getState().send;
 
   /* ── Mutations via WS ── */
   const handleDelete = useCallback(
@@ -670,55 +752,13 @@ export function TaskColumns({
       setDeleteTarget(null);
       try {
         await send("task:delete", { task_id: id });
-        // Push undo command — re-create the task to "undo" a delete
-        if (deletedTask) {
-          pushCommand({
-            type: "delete",
-            description: `Delete "${deletedTask.title}"`,
-            undo: async () => {
-              const s = getSend();
-              if (!s) return;
-              const payload: Record<string, unknown> = {
-                title: deletedTask.title,
-                status: deletedTask.status,
-                priority: deletedTask.priority,
-              };
-              if (deletedTask.assignee_id)
-                payload.assignee_id = deletedTask.assignee_id;
-              if (deletedTask.parent_task_id)
-                payload.parent_task_id = deletedTask.parent_task_id;
-              if (deletedTask.labels) payload.labels = deletedTask.labels;
-              if (deletedTask.description)
-                payload.description = deletedTask.description;
-              const recreated = await s("task:create", payload);
-              if (recreated?.id) {
-                const store = useProjectTaskStore.getState();
-                const parentKey = recreated.parent_task_id || "root";
-                const existing = store.tasks.get(parentKey) || [];
-                store.setTasks(
-                  parentKey,
-                  [...existing, recreated],
-                  (store.totals.get(parentKey) ?? 0) + 1,
-                );
-              }
-              refetchAllRef.current();
-            },
-            redo: async () => {
-              const s = getSend();
-              if (!s) return;
-              await s("task:delete", { task_id: id });
-              useProjectTaskStore.getState().removeTask(id);
-              refetchAllRef.current();
-            },
-          });
-        }
       } catch {
         refetchAll();
       } finally {
         setDeletePending(false);
       }
     },
-    [send, refetchAll, columnData, pushCommand],
+    [send, refetchAll, columnData],
   );
 
   const handleUpdate = useCallback(
@@ -726,13 +766,6 @@ export function TaskColumns({
       if (!send) return;
       // Find current task to get version for optimistic concurrency
       const currentTask = columnData.flat().find((t) => t.id === taskId);
-      // Snapshot old values for undo
-      const oldValues: Partial<Task> = {};
-      if (currentTask) {
-        for (const key of Object.keys(data) as (keyof Task)[]) {
-          (oldValues as Record<string, unknown>)[key] = currentTask[key];
-        }
-      }
       // Optimistic update in column data — instant, no loading
       setColumnData((prev) =>
         prev.map((col) =>
@@ -802,30 +835,6 @@ export function TaskColumns({
             useProjectTaskStore.getState().upsertTask(anc);
           }
         }
-        // Push undo command
-        pushCommand({
-          type: "update",
-          description: `Update "${currentTask?.title || "task"}"`,
-          undo: async () => {
-            const s = getSend();
-            if (!s) return;
-            await s("task:update", {
-              task_id: taskId,
-              base_version: task?.version ?? updated?.version ?? 0,
-              ...oldValues,
-            });
-            refetchAllRef.current();
-          },
-          redo: async () => {
-            const s = getSend();
-            if (!s) return;
-            await s("task:update", {
-              task_id: taskId,
-              ...data,
-            });
-            refetchAllRef.current();
-          },
-        });
       } catch (e) {
         if (e instanceof Error && e.message) {
           setUpdateError(e.message);
@@ -835,7 +844,7 @@ export function TaskColumns({
         setUpdatePending(false);
       }
     },
-    [send, refetchAll, columnData, pushCommand],
+    [send, refetchAll, columnData],
   );
 
   /**
@@ -848,23 +857,13 @@ export function TaskColumns({
   const handleUpdateWithReviewCheck = useCallback(
     (taskId: string, data: Partial<Task>) => {
       if (!canEditColumns) return;
-      if (hasReviewPipeline && !canDirectUpdate) {
-        const changedFields = Object.keys(data);
-        const allReviewable = changedFields.every((f) => isReviewable(f));
-        if (allReviewable && changedFields.length > 0) {
-          setCrModal({ taskId, changes: data });
-          return;
-        }
+      if (!canDirectUpdate && Object.keys(data).length > 0) {
+        setCrModal({ taskId, changes: data });
+        return;
       }
       handleUpdate(taskId, data);
     },
-    [
-      canEditColumns,
-      hasReviewPipeline,
-      canDirectUpdate,
-      isReviewable,
-      handleUpdate,
-    ],
+    [canEditColumns, canDirectUpdate, handleUpdate],
   );
 
   const confirmExtendDeadlinesOnUpdate = useCallback(async () => {
@@ -964,9 +963,33 @@ export function TaskColumns({
 
   const handleDropOnTask = useCallback(
     async (targetTask: Task) => {
+      if (!canEditColumns) return;
       if (!send || !draggedTask || draggedTask.id === targetTask.id) return;
       if (targetTask.depth >= MAX_DEPTH) return;
       if (draggedTask.parent_task_id === targetTask.id) return;
+
+      // Prevent circular: target must NOT be a descendant of the dragged task
+      // Walk the loaded column data to check if targetTask is inside draggedTask's subtree
+      const allTasks = columnData.flat();
+      const isDescendant = (ancestorId: string, checkId: string): boolean => {
+        let cur = allTasks.find((t) => t.id === checkId);
+        while (cur?.parent_task_id) {
+          if (cur.parent_task_id === ancestorId) return true;
+          cur = allTasks.find((t) => t.id === cur!.parent_task_id);
+        }
+        return false;
+      };
+      if (isDescendant(draggedTask.id, targetTask.id)) return;
+
+      // Depth overflow: calculate max subtree depth of dragged task
+      const getSubtreeHeight = (taskId: string): number => {
+        const children = allTasks.filter((t) => t.parent_task_id === taskId);
+        if (children.length === 0) return 0;
+        return 1 + Math.max(...children.map((c) => getSubtreeHeight(c.id)));
+      };
+      const subtreeHeight = getSubtreeHeight(draggedTask.id);
+      const newDepth = targetTask.depth + 1;
+      if (newDepth + subtreeHeight > MAX_DEPTH) return;
 
       // Determine tasks to move (multi-select support)
       const tasksToMove: Task[] =
@@ -977,11 +1000,19 @@ export function TaskColumns({
           : [draggedTask];
       if (tasksToMove.length === 0) return;
 
-      // Snapshot old parents for undo
-      const oldParents = tasksToMove.map((t) => ({
-        id: t.id,
-        parentId: t.parent_task_id,
-      }));
+      // Review pipeline check: reparent always needs review for users without direct_update
+      if (!canDirectUpdate) {
+        // Only single-task reparent goes through review
+        if (tasksToMove.length === 1) {
+          setCrModal({
+            taskId: tasksToMove[0].id,
+            changes: { parent_task_id: targetTask.id },
+          });
+          setDraggedTask(null);
+          setDragOverTaskId(null);
+          return;
+        }
+      }
 
       // Optimistic: remove moved tasks from BOTH local state AND store BEFORE await
       const movedIds = new Set(tasksToMove.map((t) => t.id));
@@ -1002,35 +1033,11 @@ export function TaskColumns({
         // Refetch all columns to get fresh data from server
         refetchAll();
 
-        // Push undo command
-        pushCommand({
-          type: "reparent",
-          description: `Move ${tasksToMove.length} task(s) to "${targetTask.title}"`,
-          undo: async () => {
-            const s = getSend();
-            if (!s) return;
-            const undoItems = oldParents.map((op, i) => ({
-              id: op.id,
-              parent_id: op.parentId ?? null,
-              position: i,
-            }));
-            await s("task:reorder", { items: undoItems });
-            for (const tid of movedIds)
-              useProjectTaskStore.getState().removeTask(tid);
-            refetchAllRef.current();
-          },
-          redo: async () => {
-            const s = getSend();
-            if (!s) return;
-            await s("task:reorder", { items: reorderItems });
-            for (const tid of movedIds)
-              useProjectTaskStore.getState().removeTask(tid);
-            refetchAllRef.current();
-          },
-        });
-
         if (bulkActionMode) clearMultiSelection();
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message) {
+          setUpdateError(e.message);
+        }
         refetchAll();
       }
       setDraggedTask(null);
@@ -1041,7 +1048,8 @@ export function TaskColumns({
       draggedTask,
       columnData,
       refetchAll,
-      pushCommand,
+      canEditColumns,
+      canDirectUpdate,
       bulkActionMode,
       multiSelected,
       clearMultiSelection,
@@ -1051,11 +1059,42 @@ export function TaskColumns({
   // Drop on blank column space → reparent to that column's parent
   const handleDropOnColumn = useCallback(
     async (depth: number) => {
+      if (!canEditColumns) return;
       if (!send || !draggedTask) return;
       // Column at depth N shows children of selected[depth-1]. Dropping here means reparent to selected[depth-1].
       const newParentId = depth > 0 ? (selected[depth - 1] ?? null) : null;
       // Don't reparent to same parent
       if ((draggedTask.parent_task_id || null) === newParentId) return;
+
+      // Prevent circular: if dropping into a column whose parent is a descendant of draggedTask
+      if (newParentId) {
+        const allTasks = columnData.flat();
+        const isDescendant = (ancestorId: string, checkId: string): boolean => {
+          let cur = allTasks.find((t) => t.id === checkId);
+          while (cur?.parent_task_id) {
+            if (cur.parent_task_id === ancestorId) return true;
+            cur = allTasks.find((t) => t.id === cur!.parent_task_id);
+          }
+          return false;
+        };
+        if (
+          newParentId === draggedTask.id ||
+          isDescendant(draggedTask.id, newParentId)
+        )
+          return;
+      }
+
+      // Depth overflow: calculate max subtree depth of dragged task
+      const allTasks = columnData.flat();
+      const getSubtreeHeight = (taskId: string): number => {
+        const children = allTasks.filter((t) => t.parent_task_id === taskId);
+        if (children.length === 0) return 0;
+        return 1 + Math.max(...children.map((c) => getSubtreeHeight(c.id)));
+      };
+      const subtreeHeight = getSubtreeHeight(draggedTask.id);
+      // newDepth is the depth the task will land at
+      const newDepth = depth;
+      if (newDepth + subtreeHeight > MAX_DEPTH) return;
 
       const tasksToMove: Task[] =
         bulkActionMode && multiSelected.has(draggedTask.id)
@@ -1063,10 +1102,19 @@ export function TaskColumns({
           : [draggedTask];
       if (tasksToMove.length === 0) return;
 
-      const oldParents = tasksToMove.map((t) => ({
-        id: t.id,
-        parentId: t.parent_task_id,
-      }));
+      // Review pipeline check: reparent always needs review for users without direct_update
+      if (!canDirectUpdate) {
+        if (tasksToMove.length === 1) {
+          setCrModal({
+            taskId: tasksToMove[0].id,
+            changes: { parent_task_id: newParentId ?? null },
+          });
+          setDraggedTask(null);
+          setDragOverTaskId(null);
+          return;
+        }
+      }
+
       // Optimistic: remove from BOTH local state AND store BEFORE await
       const movedIds = new Set(tasksToMove.map((t) => t.id));
       setColumnData((prev) =>
@@ -1084,34 +1132,11 @@ export function TaskColumns({
         await send("task:reorder", { items: reorderItems });
         refetchAll();
 
-        pushCommand({
-          type: "reparent",
-          description: `Move ${tasksToMove.length} task(s) to column`,
-          undo: async () => {
-            const s = getSend();
-            if (!s) return;
-            const undoItems = oldParents.map((op, i) => ({
-              id: op.id,
-              parent_id: op.parentId ?? null,
-              position: i,
-            }));
-            await s("task:reorder", { items: undoItems });
-            for (const tid of movedIds)
-              useProjectTaskStore.getState().removeTask(tid);
-            refetchAllRef.current();
-          },
-          redo: async () => {
-            const s = getSend();
-            if (!s) return;
-            await s("task:reorder", { items: reorderItems });
-            for (const tid of movedIds)
-              useProjectTaskStore.getState().removeTask(tid);
-            refetchAllRef.current();
-          },
-        });
-
         if (bulkActionMode) clearMultiSelection();
-      } catch {
+      } catch (e) {
+        if (e instanceof Error && e.message) {
+          setUpdateError(e.message);
+        }
         refetchAll();
       }
       setDraggedTask(null);
@@ -1123,7 +1148,8 @@ export function TaskColumns({
       selected,
       columnData,
       refetchAll,
-      pushCommand,
+      canEditColumns,
+      canDirectUpdate,
       bulkActionMode,
       multiSelected,
       clearMultiSelection,
@@ -1325,18 +1351,26 @@ export function TaskColumns({
 
   const filteredColumnData = useMemo(
     () =>
-      columnData.map((tasks, depth) =>
-        applyFilter(tasks, columnFilters.get(depth), globalFilter),
+      applyFilterWithAncestors(
+        columnData,
+        columnFilters,
+        globalFilter,
+        allProjectTasksRef.current,
       ),
-    [columnData, columnFilters, globalFilter],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [columnData, columnFilters, globalFilter, allProjectTasksVersion],
   );
 
   const filteredSplitColumnData = useMemo(
     () =>
-      splitColumnData.map((tasks, depth) =>
-        applyFilter(tasks, columnFilters.get(depth), globalFilter),
+      applyFilterWithAncestors(
+        splitColumnData,
+        columnFilters,
+        globalFilter,
+        allProjectTasksRef.current,
       ),
-    [splitColumnData, columnFilters, globalFilter],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [splitColumnData, columnFilters, globalFilter, allProjectTasksVersion],
   );
 
   /* ── Render ── */
@@ -1431,32 +1465,12 @@ export function TaskColumns({
         >
           {splitView ? "Unsplit" : "Split"}
         </Button>
-        <Button
-          variant="ghost"
-          size="xs"
-          className="btn-square"
-          onClick={undo}
-          disabled={!canUndo}
-          title="Undo (Ctrl+Z)"
-        >
-          <Undo2 className="w-3.5 h-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          size="xs"
-          className="btn-square"
-          onClick={redo}
-          disabled={!canRedo}
-          title="Redo (Ctrl+Y)"
-        >
-          <Redo2 className="w-3.5 h-3.5" />
-        </Button>
       </div>
     </>
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 border border-base-200 rounded-t-lg overflow-hidden bg-base-200/30 relative">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden relative">
       {/* Pending review toast */}
       <ChangeRequestToast
         result={pendingReviewResult}
@@ -1495,7 +1509,7 @@ export function TaskColumns({
       {toolbarPortal ? (
         createPortal(toolbarContent, toolbarPortal)
       ) : (
-        <div className="flex items-center justify-between px-3 py-1 border-b border-base-200 bg-base-200/20">
+        <div className="flex items-center justify-between px-3 py-1 border-b border-base-200/55">
           {toolbarContent}
         </div>
       )}
@@ -1641,7 +1655,7 @@ export function TaskColumns({
         </div>
 
         {/* Detail panel — flexible width, shrinks with viewport */}
-        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none bg-base-200/30">
+        <div className="w-full lg:w-[320px] lg:min-w-[200px] lg:max-w-[400px] shrink border-t lg:border-t-0 lg:border-l border-base-200/55 overflow-hidden flex flex-col max-h-[50vh] lg:max-h-none">
           {focusedTask ? (
             <TaskPreviewPanel
               task={focusedTask}
@@ -2162,11 +2176,11 @@ function TaskColumn({
 
   return (
     <div
-      className="flex flex-col border-r border-base-200 relative flex-1 min-w-0"
+      className="flex flex-col border-r border-base-200/55 relative flex-1 min-w-0"
       style={{ flex: `${width} 1 0%` }}
     >
       {/* Header */}
-      <div className="px-3 py-2 border-b border-base-200 flex items-center justify-between bg-base-200/30">
+      <div className="px-3 py-2 border-b border-base-200/55 flex items-center justify-between bg-base-200/20">
         {isEditing ? (
           <div className="flex items-center gap-1 flex-1">
             <input
@@ -2359,8 +2373,12 @@ function TaskColumn({
                 <button
                   key={task.id}
                   data-task-drop
-                  draggable
+                  draggable={canEdit}
                   onDragStart={(e) => {
+                    if (!canEdit) {
+                      e.preventDefault();
+                      return;
+                    }
                     e.dataTransfer.effectAllowed = "move";
                     e.dataTransfer.setData("text/plain", task.id);
                     onDragStart(task);
@@ -2394,16 +2412,15 @@ function TaskColumn({
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                   className={cn(
-                    "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2 rounded-2xl",
-                    "hover:bg-pink-50 dark:hover:bg-pink-950/20",
+                    "w-full text-left px-2 pt-1 pb-0.5 flex flex-col transition-all duration-200 border-l-2 border-b border-base-200/40 bg-base-100/20",
+                    "hover:bg-base-100/50",
                     isSelected && !bulkMode
-                      ? "bg-primary/20 border-l-primary shadow-sm"
+                      ? "bg-primary/15 border-l-primary"
                       : "border-l-transparent",
                     bulkMode &&
                       isMultiSelected &&
-                      "bg-primary/20 border-l-primary shadow-sm",
-                    isDragOver &&
-                      "bg-accent/20 border-l-accent scale-[1.02] shadow-md",
+                      "bg-primary/15 border-l-primary",
+                    isDragOver && "bg-accent/15 border-l-accent",
                   )}
                 >
                   {/* Row 1: checkbox + status dot + title + avatars + chevron */}

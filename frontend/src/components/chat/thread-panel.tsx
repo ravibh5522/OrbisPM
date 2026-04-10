@@ -67,7 +67,7 @@ export function ThreadPanel() {
   if (!threadParentId) return null;
 
   return (
-    <div className="w-80 border-l border-base-200 bg-base-100 flex flex-col flex-shrink-0 h-full">
+    <div className="w-80 border-l border-base-200 flex flex-col flex-shrink-0 h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-base-200 flex-shrink-0">
         <div className="flex items-center gap-2">
@@ -134,7 +134,7 @@ export function ThreadPanel() {
 
       {/* Reply input */}
       <div className="border-t border-base-200 p-3 flex-shrink-0">
-        <div className="flex items-center gap-2 bg-base-200 rounded-xl px-3 py-2">
+        <div className="flex items-center gap-2 bg-base-100/50 border border-base-200/60 rounded-xl px-3 py-2">
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}

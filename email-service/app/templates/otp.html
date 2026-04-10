@@ -1,119 +1,104 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <title>Your Verification Code — {{ app_name }}</title>
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+  <title>Your verification code &mdash; {{ org_name | default(app_name) }}</title>
+  <style>
+    @media only screen and (max-width:600px) {
+      .wrap { padding: 20px 12px 32px !important; }
+      .body-pad { padding: 28px 20px 32px !important; }
+      .code-text { font-size: 36px !important; letter-spacing: 10px !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:#f0eef9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <div style="display:none;font-size:1px;color:#f0eef9;line-height:1px;max-height:0;overflow:hidden;mso-hide:all;">{{ org_name | default(app_name) }} verification code: {{ otp_code }}. Valid for {{ expiry_minutes | default(10) }} min. Do not share.</div>
 
-  <!-- Preheader text (hidden) -->
-  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">
-    Your {{ app_name }} verification code. Expires in {{ expiry_minutes | default(10) }} minutes. Do not share this code.
-  </div>
-
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f4f4f6;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#f0eef9;">
     <tr>
-      <td align="center" style="padding:40px 16px 48px;">
+      <td align="center" class="wrap" style="padding:36px 16px 48px;">
+        <!--[if mso]><table role="presentation" width="520" cellspacing="0" cellpadding="0" border="0" align="center"><tr><td><![endif]-->
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:520px;">
 
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;">
-
-          <!-- Header -->
+          <!-- Org header -->
           <tr>
-            <td style="padding-bottom:24px;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+            <td style="padding-bottom:16px;">
+              <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                 <tr>
-                  <td>
-                    <span style="font-size:18px;font-weight:700;color:#6366f1;letter-spacing:-0.3px;">{{ app_name }}</span>
-                  </td>
-                  <td align="right">
-                    <span style="font-size:12px;color:#9ca3af;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;">Verification</span>
+                  <td style="vertical-align:middle;">
+                    {% if org_icon %}<img src="{{ org_icon }}" alt="{{ org_name | default(app_name) }}" width="34" height="34" style="display:inline-block;vertical-align:middle;border-radius:8px;border:1px solid #e5e7eb;margin-right:9px;">{% endif %}
+                    <span style="font-size:15px;font-weight:700;color:#374151;vertical-align:middle;">{{ org_name | default(app_name) }}</span>
                   </td>
                 </tr>
               </table>
             </td>
           </tr>
 
-          <!-- Main card -->
+          <!-- Card — OTP dominant, nothing else competes -->
           <tr>
-            <td style="background-color:#ffffff;border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,0.06),0 4px 16px rgba(0,0,0,0.04);overflow:hidden;">
-
-              <!-- Top accent bar -->
+            <td style="background-color:#ffffff;border:1px solid #e5e7eb;border-radius:16px;overflow:hidden;">
+              <!-- Purple top strip -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td style="background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);height:4px;font-size:0;line-height:0;">&nbsp;</td>
-                </tr>
+                <tr><td style="background-color:#7c3aed;height:4px;font-size:0;line-height:0;">&nbsp;</td></tr>
               </table>
 
-              <!-- Card body -->
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
-                  <td style="padding:40px 40px 36px;text-align:center;">
+                  <td class="body-pad" style="padding:36px 44px 38px;text-align:center;">
 
-                    <!-- Shield icon -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 24px;">
-                      <tr>
-                        <td style="background-color:#eef2ff;border-radius:14px;width:60px;height:60px;text-align:center;vertical-align:middle;">
-                          <span style="font-size:26px;line-height:60px;display:block;">&#x1F6E1;&#xFE0F;</span>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Title -->
-                    <h1 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#111827;line-height:1.35;letter-spacing:-0.2px;">Verification Code</h1>
-                    <p style="margin:0 0 32px;font-size:15px;color:#4b5563;line-height:1.6;">Use the code below to verify your identity. Enter it in the {{ app_name }} app to proceed.</p>
-
-                    <!-- OTP code display -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 12px;">
-                      <tr>
-                        <td style="background:linear-gradient(135deg,#f5f3ff 0%,#ede9fe 100%);border:2px solid #c4b5fd;border-radius:14px;padding:28px 40px;text-align:center;">
-                          <span style="display:block;font-size:42px;font-weight:800;color:#4f46e5;letter-spacing:14px;font-family:'Courier New',Courier,monospace;line-height:1.1;text-align:center;">{{ otp_code }}</span>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- Copy hint -->
-                    <p style="margin:0 0 32px;font-size:12px;color:#9ca3af;">Copy and paste this code into the verification field.</p>
-
-                    <!-- Divider -->
-                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:24px;">
-                      <tr>
-                        <td style="border-top:1px solid #f3f4f6;font-size:0;line-height:0;">&nbsp;</td>
-                      </tr>
-                    </table>
-
-                    <!-- Expiry warning -->
+                    <!-- Label chip -->
                     <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 20px;">
                       <tr>
-                        <td style="background-color:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 20px;text-align:center;">
-                          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.5;">&#x23F0;&nbsp; This code expires in <strong>{{ expiry_minutes | default(10) }} minutes</strong>.</p>
+                        <td style="background-color:#f5f3ff;border-radius:20px;padding:6px 16px;">
+                          <span style="font-size:12px;font-weight:700;color:#6d28d9;text-transform:uppercase;letter-spacing:1px;">Verification Code</span>
                         </td>
                       </tr>
                     </table>
 
-                    <!-- Security notice -->
-                    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center;">Never share this code with anyone. {{ app_name }} will never ask for your code over the phone or via email.</p>
+                    <h1 style="margin:0 0 8px;font-size:20px;font-weight:700;color:#111827;line-height:1.3;">Enter this code in {{ org_name | default(app_name) }}</h1>
+                    <p style="margin:0 0 28px;font-size:13px;color:#9ca3af;line-height:1.6;">This code is single-use and expires in <strong style="color:#374151;">{{ expiry_minutes | default(10) }} minutes</strong>.</p>
+
+                    <!-- The code — dominant, nothing else near it -->
+                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 auto 8px;">
+                      <tr>
+                        <td style="background-color:#f5f3ff;border:2px solid #ddd6fe;border-radius:14px;padding:24px 40px;">
+                          <span class="code-text" style="display:block;font-size:44px;font-weight:900;color:#5b21b6;letter-spacing:14px;font-family:'Courier New',Courier,monospace;line-height:1.1;">{{ otp_code }}</span>
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:0 0 28px;font-size:11px;color:#c4b5fd;">Select and copy the code above</p>
+
+                    <!-- Divider -->
+                    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:20px;">
+                      <tr><td style="height:1px;background-color:#f3f4f6;font-size:0;line-height:0;">&nbsp;</td></tr>
+                    </table>
+
+                    <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
+                      Never share this code with anyone &mdash; <strong style="color:#374151;">{{ org_name | default(app_name) }}</strong> will never ask you for it.
+                    </p>
 
                   </td>
                 </tr>
               </table>
-
             </td>
           </tr>
 
           <!-- Footer -->
           <tr>
-            <td style="padding-top:28px;text-align:center;">
-              <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;"><strong style="color:#6b7280;">{{ app_name }}</strong> &mdash; Secure verification.</p>
-              <p style="margin:0;font-size:12px;color:#d1d5db;">If you did not request this code, please ignore this email or contact support.</p>
+            <td style="padding-top:18px;text-align:left;">
+              <p style="margin:0;font-size:11px;color:#9ca3af;">Sent by <strong style="color:#6b7280;">{{ org_name | default(app_name) }}</strong>. If you didn't request this, ignore this email.</p>
             </td>
           </tr>
 
         </table>
+        <!--[if mso]></td></tr></table><![endif]-->
       </td>
     </tr>
   </table>
-
 </body>
 </html>

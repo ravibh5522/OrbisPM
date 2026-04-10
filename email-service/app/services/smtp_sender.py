@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 async def send_email(to: str, subject: str, html_body: str) -> None:
-    """Send a single email via SMTP."""
+    """Send a single email via SMTP (supports plain, SSL/TLS, and STARTTLS)."""
     msg = MIMEMultipart("alternative")
     msg["From"] = settings.smtp_from
     msg["To"] = to
@@ -21,6 +21,7 @@ async def send_email(to: str, subject: str, html_body: str) -> None:
         "hostname": settings.smtp_host,
         "port": settings.smtp_port,
         "use_tls": settings.smtp_use_tls,
+        "start_tls": settings.smtp_start_tls,
     }
     if settings.smtp_user:
         kwargs["username"] = settings.smtp_user

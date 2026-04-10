@@ -1993,7 +1993,9 @@
 
 /* Project detail header tabs */
 .project-tabs-shell {
-  border: 1px solid oklch(100% 0 0 / 0.14);
+  background: color-mix(in oklch, var(--color-base-100) 26%, transparent);
+  backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in oklch, var(--color-base-200) 55%, transparent);
 }
 
 .project-tab-btn {

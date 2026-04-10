@@ -32,11 +32,12 @@ type Handlers struct {
 	MeiliMasterKey     string
 	EmailServiceURL    string
 	EmailServiceAPIKey string
+	OrgRepo            repository.OrgRepository
 }
 
 // sendViaEmailService attempts to send an email through the email-service microservice.
-// It maps notifType to a template name and passes org_id so custom org templates are used.
-func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, notifType, title, body string) error {
+// It maps notifType to a template name and passes org context so custom org templates are used.
+func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, notifType, title, body, orgName, orgIcon string) error {
 	svcURL := h.EmailServiceURL
 	if svcURL == "" {
 		svcURL = "http://email-service:8050"
@@ -54,6 +55,8 @@ func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, 
 		template = "change_request_rejected"
 	case "message.mention":
 		template = "mention"
+	case "task_import_assigned":
+		template = "task_import_assigned"
 	}
 
 	payload := map[string]any{
@@ -64,6 +67,8 @@ func (h *Handlers) sendViaEmailService(ctx context.Context, to, subject, orgID, 
 			"title":        title,
 			"body":         body,
 			"org_id":       orgID,
+			"org_name":     orgName,
+			"org_icon":     orgIcon,
 			"frontend_url": h.FrontendURL,
 		},
 	}
@@ -209,10 +214,22 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 			if err != nil || userEmail == "" {
 				log.Warn().Err(err).Str("user_id", p.UserID).Msg("could not find user email")
 			} else {
-				subject := fmt.Sprintf("[OrbisPM] %s", p.Title)
+				// Fetch org branding (name + logo) to personalise email templates.
+				orgName := "OrbisPM"
+				orgIcon := ""
+				if h.OrgRepo != nil {
+					if org, orgErr := h.OrgRepo.GetByID(ctx, orgID); orgErr == nil {
+						orgName = org.Name
+						orgIcon = org.LogoURL
+					} else {
+						log.Warn().Err(orgErr).Str("org_id", p.OrgID).Msg("could not fetch org for email branding")
+					}
+				}
+
+				subject := fmt.Sprintf("[%s] %s", orgName, p.Title)
 
 				// Try email-service first (supports custom org templates).
-				svcErr := h.sendViaEmailService(ctx, userEmail, subject, p.OrgID, p.Type, p.Title, p.Body)
+				svcErr := h.sendViaEmailService(ctx, userEmail, subject, p.OrgID, p.Type, p.Title, p.Body, orgName, orgIcon)
 				if svcErr == nil {
 					log.Debug().Str("to", userEmail).Str("type", p.Type).Msg("notification email sent via email-service")
 				} else {

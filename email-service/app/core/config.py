@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
     smtp_from: str = "noreply@orbispm.local"
     smtp_use_tls: bool = False
+    smtp_start_tls: bool = False
 
     # Redis (for arq job queue)
     redis_url: str = "redis://localhost:6379/1"

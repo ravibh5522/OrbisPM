@@ -1,0 +1,294 @@
+<!doctype html>
+<html
+  lang="en"
+  xmlns="http://www.w3.org/1999/xhtml"
+  xmlns:v="urn:schemas-microsoft-com:vml"
+  xmlns:o="urn:schemas-microsoft-com:office:office"
+>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta
+      name="format-detection"
+      content="telephone=no,address=no,email=no,date=no,url=no"
+    />
+    <!--[if mso
+      ]><noscript
+        ><xml
+          ><o:OfficeDocumentSettings
+            ><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings
+          ></xml
+        ></noscript
+      ><!
+    [endif]-->
+    <title>
+      Tasks assigned to you &mdash; {{ org_name | default(app_name) }}
+    </title>
+    <style>
+      @media only screen and (max-width: 600px) {
+        .wrap {
+          padding: 20px 12px 32px !important;
+        }
+        .pad {
+          padding: 22px 20px 28px !important;
+        }
+      }
+    </style>
+  </head>
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #eff6ff;
+      font-family:
+        -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, Roboto,
+        &quot;Helvetica Neue&quot;, Arial, sans-serif;
+    "
+  >
+    <div
+      style="
+        display: none;
+        font-size: 1px;
+        color: #eff6ff;
+        line-height: 1px;
+        max-height: 0;
+        overflow: hidden;
+        mso-hide: all;
+      "
+    >
+      You have been assigned tasks via import in {{ org_name | default('your
+      organization') }}
+    </div>
+
+    <table
+      role="presentation"
+      width="100%"
+      cellspacing="0"
+      cellpadding="0"
+      border="0"
+      style="background-color: #eff6ff"
+    >
+      <tr>
+        <td align="center" class="wrap" style="padding: 36px 16px 48px">
+          <!--[if mso]><table role="presentation" width="560" cellspacing="0" cellpadding="0" border="0" align="center"><tr><td><![endif]-->
+          <table
+            role="presentation"
+            width="100%"
+            cellspacing="0"
+            cellpadding="0"
+            border="0"
+            style="max-width: 560px"
+          >
+            <!-- Org header -->
+            <tr>
+              <td style="padding-bottom: 16px">
+                {% if org_icon %}<img
+                  src="{{ org_icon }}"
+                  alt="{{ org_name | default(app_name) }}"
+                  width="30"
+                  height="30"
+                  style="
+                    display: inline-block;
+                    vertical-align: middle;
+                    border-radius: 7px;
+                    border: 1px solid #e5e7eb;
+                    margin-right: 8px;
+                  "
+                />{% endif %}
+                <span
+                  style="
+                    font-size: 14px;
+                    font-weight: 700;
+                    color: #374151;
+                    vertical-align: middle;
+                  "
+                  >{{ org_name | default(app_name) }}</span
+                >
+              </td>
+            </tr>
+
+            <!-- Card -->
+            <tr>
+              <td
+                style="
+                  background-color: #ffffff;
+                  border: 1px solid #e5e7eb;
+                  border-radius: 16px;
+                  overflow: hidden;
+                "
+              >
+                <!-- Blue strip -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td
+                      style="
+                        background-color: #2563eb;
+                        height: 4px;
+                        font-size: 0;
+                        line-height: 0;
+                      "
+                    >
+                      &nbsp;
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Heading block -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td
+                      class="pad"
+                      style="
+                        padding: 28px 36px 20px;
+                        border-bottom: 1px solid #dbeafe;
+                      "
+                    >
+                      <table
+                        role="presentation"
+                        width="100%"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              background-color: #dbeafe;
+                              border-radius: 10px;
+                              padding: 14px 18px;
+                            "
+                          >
+                            <p
+                              style="
+                                margin: 0 0 4px;
+                                font-size: 12px;
+                                font-weight: 700;
+                                color: #1e40af;
+                                text-transform: uppercase;
+                                letter-spacing: 0.8px;
+                              "
+                            >
+                              Import complete
+                            </p>
+                            <p
+                              style="
+                                margin: 0;
+                                font-size: 17px;
+                                font-weight: 800;
+                                color: #1f2937;
+                                line-height: 1.3;
+                              "
+                            >
+                              {{ title | default('Tasks assigned to you') }}
+                            </p>
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Body / task list -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td class="pad" style="padding: 22px 36px 10px">
+                      <p
+                        style="
+                          margin: 0 0 14px;
+                          font-size: 14px;
+                          color: #374151;
+                          line-height: 1.6;
+                        "
+                      >
+                        {{ body | default('The following tasks have been
+                        assigned to you from a recent import:') }}
+                      </p>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- CTA -->
+                <table
+                  role="presentation"
+                  width="100%"
+                  cellspacing="0"
+                  cellpadding="0"
+                  border="0"
+                >
+                  <tr>
+                    <td style="padding: 10px 36px 32px">
+                      <table
+                        role="presentation"
+                        cellspacing="0"
+                        cellpadding="0"
+                        border="0"
+                      >
+                        <tr>
+                          <td
+                            style="
+                              border-radius: 9px;
+                              background-color: #2563eb;
+                            "
+                          >
+                            <a
+                              href="{{ frontend_url }}"
+                              target="_blank"
+                              style="
+                                display: inline-block;
+                                padding: 12px 28px;
+                                font-size: 14px;
+                                font-weight: 700;
+                                color: #ffffff;
+                                text-decoration: none;
+                                letter-spacing: 0.2px;
+                              "
+                              >View tasks &rarr;</a
+                            >
+                          </td>
+                        </tr>
+                      </table>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="padding-top: 18px; text-align: left">
+                <p style="margin: 0; font-size: 11px; color: #9ca3af">
+                  Sent by
+                  <strong style="color: #6b7280"
+                    >{{ org_name | default(app_name) }}</strong
+                  >
+                  &mdash; tasks were assigned to you during an import.
+                </p>
+              </td>
+            </tr>
+          </table>
+          <!--[if mso]></td></tr></table><![endif]-->
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

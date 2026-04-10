@@ -456,6 +456,42 @@ export interface ImportJob {
   completed_at?: string | null;
 }
 
+// Excel import types
+export interface SheetInfo {
+  name: string;
+  columns: string[];
+  row_count: number;
+}
+
+export interface ExcelColumnMapping {
+  task: number;
+  subtask1: number;
+  subtask2: number;
+  subtask3: number;
+  description: number;
+  start_date: number;
+  end_date: number;
+  priority: number;
+  status: number;
+  assignee_email: number;
+}
+
+export interface SheetImportConfig {
+  sheet_name: string;
+  mapping: ExcelColumnMapping;
+}
+
+export interface ImportAssignment {
+  email: string;
+  user_id: string;
+  task_name: string;
+}
+
+export interface ProcessExcelResult {
+  job: ImportJob;
+  assignments?: ImportAssignment[];
+}
+
 export interface DashboardStats {
   total_projects: number;
   total_tasks: number;

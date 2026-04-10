@@ -6,10 +6,12 @@ import {
   PendingReviewBadge,
 } from "@/components/tasks/change-requests";
 import type { GlobalFilterState } from "@/components/tasks/global-filter-dropdown";
+import { isGlobalFilterActive } from "@/components/tasks/global-filter-dropdown";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select } from "@/components/ui/form-fields";
 import { Modal } from "@/components/ui/modal";
+import { Pagination } from "@/components/ui/pagination";
 import { ConfirmDialog } from "@/components/ui/shared";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { useReviewableFields } from "@/hooks/use-reviewable-fields";
@@ -51,7 +53,6 @@ import {
   Loader2,
   MoreHorizontal,
   Plus,
-  Search,
   Trash2,
   X,
 } from "lucide-react";
@@ -93,24 +94,11 @@ export function TaskListView({
   const { hasReviewPipeline, isReviewable } = useReviewableFields(projectId);
   const canDirectUpdate = policies.canDirectUpdate;
 
-  /* ── Sort, filter, pagination state ── */
+  /* ── Sort, pagination state ── */
   const [sortBy, setSortBy] = useState<SortField>("created_at");
   const [sortOrder, setSortOrder] = useState<SortDir>("desc");
-  const [filterStatus, setFilterStatus] = useState<string>("");
-  const [filterPriority, setFilterPriority] = useState<string>("");
-  const [searchInput, setSearchInput] = useState<string>("");
-  const [searchText, setSearchText] = useState<string>("");
   const [page, setPage] = useState(0);
   const limit = 25;
-
-  // Debounce search input: apply after 300ms of inactivity
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setSearchText(searchInput.trim());
-      setPage(0);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchInput]);
 
   /* ── Modal state ── */
   const [showCreate, setShowCreate] = useState(false);
@@ -145,10 +133,7 @@ export function TaskListView({
         offset: page * limit,
         sort_by: sortBy,
         sort_order: sortOrder,
-        status: filterStatus || undefined,
-        priority: filterPriority || undefined,
-        search: searchText.trim() || globalFilter?.search || undefined,
-        // Global filter fields (server-side)
+        search: globalFilter?.search || undefined,
         statuses: globalFilter?.statuses?.length
           ? globalFilter.statuses
           : undefined,
@@ -170,20 +155,16 @@ export function TaskListView({
       setIsLoading(false);
       setIsFetching(false);
     }
-  }, [
-    send,
-    page,
-    sortBy,
-    sortOrder,
-    filterStatus,
-    filterPriority,
-    searchText,
-    globalFilter,
-  ]);
+  }, [send, page, sortBy, sortOrder, globalFilter]);
 
   useEffect(() => {
     fetchList();
   }, [fetchList]);
+
+  // Reset to page 0 when filter changes
+  useEffect(() => {
+    setPage(0);
+  }, [globalFilter]);
 
   const totalPages = Math.ceil(total / limit);
 
@@ -217,22 +198,16 @@ export function TaskListView({
     [send, fetchList, tasks],
   );
 
-  /** Intercepts updates for reviewable fields — shows modal instead of WS send */
+  /** Intercepts updates — users without direct_update always go through CR modal */
   const handleUpdateWithReviewCheck = useCallback(
     (id: string, changes: Partial<Task>) => {
-      if (hasReviewPipeline && !canDirectUpdate) {
-        const changedFields = Object.keys(changes);
-        if (
-          changedFields.length > 0 &&
-          changedFields.every((f) => isReviewable(f))
-        ) {
-          setCrModal({ taskId: id, changes });
-          return;
-        }
+      if (!canDirectUpdate && Object.keys(changes).length > 0) {
+        setCrModal({ taskId: id, changes });
+        return;
       }
       handleUpdate(id, changes);
     },
-    [hasReviewPipeline, canDirectUpdate, isReviewable, handleUpdate],
+    [canDirectUpdate, handleUpdate],
   );
 
   /* ── Delete ── */
@@ -288,7 +263,7 @@ export function TaskListView({
   /* ── Reorder ── */
   const handleReorder = useCallback(
     async (items: { id: string; position: number }[]) => {
-      if (!send) return;
+      if (!send || !policies.canEditTask) return;
       try {
         await send("task:reorder", { items });
         fetchList();
@@ -296,7 +271,7 @@ export function TaskListView({
         // WS reorder failed
       }
     },
-    [send, fetchList],
+    [send, fetchList, policies.canEditTask],
   );
 
   /* ── DnD sensors ── */
@@ -373,18 +348,11 @@ export function TaskListView({
     return members.find((m) => m.user_id === userId)?.avatar_url;
   };
 
-  const clearFilters = () => {
-    setFilterStatus("");
-    setFilterPriority("");
-    setSearchInput("");
-    setPage(0);
-  };
-
-  const hasFilters = filterStatus || filterPriority || searchInput;
+  const hasFilters = !!(globalFilter && isGlobalFilterActive(globalFilter));
 
   return (
-    <div className="space-y-3">
-      {/* Pending review toast */}
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Floating overlays */}
       <ChangeRequestToast
         result={pendingReviewResult}
         onDismiss={() => setPendingReviewResult(null)}
@@ -420,7 +388,7 @@ export function TaskListView({
 
       {/* ── Bulk action bar ── */}
       {selectedIds.size > 0 && policies.canEditTask && (
-        <div className="flex items-center gap-2 p-2 bg-primary/10 border border-primary/20 rounded-lg">
+        <div className="flex flex-shrink-0 items-center gap-2 px-3 py-1.5 bg-primary/10 border-b border-primary/20">
           <span className="text-sm font-medium">
             {selectedIds.size} selected
           </span>
@@ -494,62 +462,13 @@ export function TaskListView({
         </div>
       )}
 
-      {/* ── Toolbar: Search + Filters + Create ── */}
-      <div className="flex flex-wrap items-center gap-2">
-        {/* Search */}
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-base-content/40" />
-          <Input
-            type="text"
-            placeholder="Search tasks…"
-            className="input-sm w-full pl-9"
-            value={searchInput}
-            onChange={(e) => {
-              setSearchInput(e.target.value);
-            }}
-          />
-        </div>
-
-        {/* Status filter */}
-        <Select
-          className="select-sm"
-          value={filterStatus}
-          onChange={(e) => {
-            setFilterStatus(e.target.value);
-            setPage(0);
-          }}
-          options={[
-            { value: "", label: "All Status" },
-            { value: "todo", label: "Todo" },
-            { value: "in_progress", label: "In Progress" },
-            { value: "done", label: "Done" },
-            { value: "blocked", label: "Blocked" },
-          ]}
-        />
-
-        {/* Priority filter */}
-        <Select
-          className="select-sm"
-          value={filterPriority}
-          onChange={(e) => {
-            setFilterPriority(e.target.value);
-            setPage(0);
-          }}
-          options={[
-            { value: "", label: "All Priority" },
-            { value: "critical", label: "Critical" },
-            { value: "high", label: "High" },
-            { value: "medium", label: "Medium" },
-            { value: "low", label: "Low" },
-          ]}
-        />
-
-        {hasFilters && (
-          <Button variant="ghost" size="sm" onClick={clearFilters}>
-            <X className="w-3 h-3" /> Clear
-          </Button>
-        )}
-
+      {/* ── Toolbar: results + create ── */}
+      <div className="flex flex-shrink-0 items-center justify-between px-3 py-2 border-b border-base-200/55">
+        <span className="text-sm text-base-content/50 flex items-center gap-1.5">
+          {total} task{total !== 1 ? "s" : ""}
+          {hasFilters && " (filtered)"}
+          {isFetching && <Loader2 className="w-3 h-3 animate-spin" />}
+        </span>
         {policies.canCreateTask && (
           <Button size="sm" onClick={() => setShowCreate(true)}>
             <Plus className="w-4 h-4" /> New Task
@@ -557,24 +476,15 @@ export function TaskListView({
         )}
       </div>
 
-      {/* ── Results info ── */}
-      <div className="flex items-center justify-between text-xs text-base-content/50">
-        <span>
-          {total} task{total !== 1 ? "s" : ""}
-          {hasFilters ? " (filtered)" : ""}
-        </span>
-        {isFetching && <Loader2 className="w-3 h-3 animate-spin" />}
-      </div>
-
-      {/* ── Table ── */}
+      {/* ── Table — scrollable ── */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <div className="overflow-x-auto border border-base-200 rounded-lg">
+        <div className="flex-1 min-h-0 overflow-auto">
           <table className="table table-sm">
-            <thead className="bg-base-200/50">
+            <thead className="table-header-surface [&_th]:backdrop-blur-sm [&_th]:border-b [&_th]:font-semibold [&_th:first-child]:rounded-l-xl [&_th:last-child]:rounded-r-xl">
               <tr>
                 <th className="w-6"></th>
                 <th className="w-8">
@@ -588,7 +498,7 @@ export function TaskListView({
                   />
                 </th>
                 <th
-                  className="cursor-pointer select-none hover:bg-base-200 transition-colors"
+                  className="cursor-pointer select-none hover:bg-base-200/35 transition-colors"
                   onClick={() => toggleSort("title")}
                 >
                   <span className="flex items-center gap-1">
@@ -596,7 +506,7 @@ export function TaskListView({
                   </span>
                 </th>
                 <th
-                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  className="cursor-pointer select-none hover:bg-base-200/35 transition-colors w-28"
                   onClick={() => toggleSort("status")}
                 >
                   <span className="flex items-center gap-1">
@@ -604,7 +514,7 @@ export function TaskListView({
                   </span>
                 </th>
                 <th
-                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  className="cursor-pointer select-none hover:bg-base-200/35 transition-colors w-28"
                   onClick={() => toggleSort("priority")}
                 >
                   <span className="flex items-center gap-1">
@@ -613,7 +523,7 @@ export function TaskListView({
                 </th>
                 <th className="w-32">Assignee</th>
                 <th
-                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  className="cursor-pointer select-none hover:bg-base-200/35 transition-colors w-28"
                   onClick={() => toggleSort("due_date")}
                 >
                   <span className="flex items-center gap-1">
@@ -621,7 +531,7 @@ export function TaskListView({
                   </span>
                 </th>
                 <th
-                  className="cursor-pointer select-none hover:bg-base-200 transition-colors w-28"
+                  className="cursor-pointer select-none hover:bg-base-200/35 transition-colors w-28"
                   onClick={() => toggleSort("updated_at")}
                 >
                   <span className="flex items-center gap-1">
@@ -687,29 +597,15 @@ export function TaskListView({
       </DndContext>
 
       {/* ── Pagination ── */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={page === 0}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >
-            Previous
-          </Button>
-          <span className="text-sm text-base-content/60">
-            Page {page + 1} of {totalPages}
-          </span>
-          <Button
-            variant="ghost"
-            size="sm"
-            disabled={page >= totalPages - 1}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            Next
-          </Button>
-        </div>
-      )}
+      <div className="flex-shrink-0 px-3">
+        <Pagination
+          page={page}
+          totalPages={totalPages}
+          total={total}
+          pageSize={limit}
+          onPageChange={setPage}
+        />
+      </div>
 
       {/* ── Create Task Modal ── */}
       {showCreate && (
@@ -942,7 +838,7 @@ function TaskRow({
           </label>
           <ul
             tabIndex={0}
-            className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-40 border border-base-200"
+            className="dropdown-content z-[999] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-xl w-40 border border-base-200/55"
           >
             <li>
               <a onClick={onNavigate} className="text-sm">
@@ -1037,10 +933,10 @@ function MultiAssigneeCell({
         {label}
       </Button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[20px] border border-base-200 rounded-lg shadow-xl py-1 min-w-[180px] max-h-48 overflow-y-auto z-50">
+        <div className="absolute top-full left-0 mt-1 bg-base-100/95 backdrop-blur-[20px] border border-base-200/55 rounded-xl shadow-xl py-1 min-w-[180px] max-h-48 overflow-y-auto z-50">
           <button
             className={cn(
-              "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200",
+              "flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200/35 rounded-lg transition-colors",
               assigneeIds.length === 0 && "font-medium",
             )}
             onClick={() => {
@@ -1055,7 +951,7 @@ function MultiAssigneeCell({
             return (
               <button
                 key={m.user_id}
-                className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200"
+                className="flex items-center gap-2 w-full text-left px-3 py-1.5 text-sm hover:bg-base-200/35 rounded-lg transition-colors"
                 onClick={() => toggle(m.user_id)}
               >
                 <input

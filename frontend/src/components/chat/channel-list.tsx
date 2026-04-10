@@ -260,7 +260,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
 
   if (isLoading) {
     return (
-      <div className="flex h-full bg-base-200 px-3 py-3">
+      <div className="flex h-full px-3 py-3">
         <div className="w-full">
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="skeleton h-12 w-full rounded-lg mb-2" />
@@ -275,9 +275,9 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
       {/* ─── Panel 1: Unified Conversation List ──── */}
       <div
         className={cn(
-          "bg-base-200 flex flex-col min-w-0",
+          "flex flex-col min-w-0",
           showTeamPanel || showGroupPanel
-            ? "w-[200px] flex-shrink-0 border-r border-base-300/30"
+            ? "w-[200px] flex-shrink-0 border-r border-base-300"
             : "flex-1",
         )}
       >
@@ -295,7 +295,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
 
       {/* ─── Panel 2: Channels + Members (teams) ─── */}
       {showTeamPanel && selectedItem.team && (
-        <div className="flex-1 bg-base-200 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0">
           <TeamChannelPanel
             team={selectedItem.team}
             activeChannelId={activeChannelId}
@@ -309,7 +309,7 @@ export function ChannelList({ onCreateChannel }: ChannelListProps) {
 
       {/* ─── Panel 2: Channels + Members (groups) ── */}
       {showGroupPanel && selectedItem.channel && (
-        <div className="flex-1 bg-base-200 flex flex-col min-w-0">
+        <div className="flex-1 flex flex-col min-w-0">
           <GroupMemberPanel
             channel={selectedItem.channel}
             activeChannelId={activeChannelId}
@@ -397,7 +397,7 @@ function ConversationPanel({
           <input
             type="text"
             placeholder="Search..."
-            className="input input-xs input-bordered w-full pl-8 bg-base-300/50 h-8 text-xs"
+            className="input input-xs input-bordered w-full pl-8 h-8 text-xs"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
           />
@@ -583,7 +583,7 @@ function ConversationRow({
         "w-full flex items-center gap-2.5 px-2 py-2 rounded-lg transition-all text-left mb-0.5",
         isActive
           ? "bg-primary/10 text-base-content"
-          : "text-base-content/70 hover:text-base-content hover:bg-base-300/40",
+          : "text-base-content/70 hover:text-base-content hover:bg-base-300",
       )}
     >
       {icon}
@@ -670,7 +670,7 @@ function TeamChannelPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 pt-3 pb-2 border-b border-base-300/30">
+      <div className="px-3 pt-3 pb-2 border-b border-base-300">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-md bg-primary/10 flex items-center justify-center">
             <Users className="w-3.5 h-3.5 text-primary" />
@@ -806,7 +806,7 @@ function GroupMemberPanel({
 
   return (
     <div className="flex flex-col h-full">
-      <div className="px-3 pt-3 pb-2 border-b border-base-300/30">
+      <div className="px-3 pt-3 pb-2 border-b border-base-300">
         <div className="flex items-center gap-2">
           <Hash className="w-4 h-4 text-info" />
           <h2 className="text-sm font-bold text-base-content truncate flex-1">
@@ -947,7 +947,7 @@ function MemberRow({
   };
 
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-base-300/30 group/member relative">
+    <div className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-base-300 group/member relative">
       <div className="relative flex-shrink-0">
         <div className="w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[10px]">
           {member.avatar_url ? (
@@ -1000,7 +1000,7 @@ function MemberRow({
                 <Shield className="w-3 h-3" />
               </button>
               {showRoleMenu && (
-                <div className="absolute right-0 top-full mt-1 z-50 bg-base-200 border border-base-300 rounded-lg shadow-lg py-1 min-w-[120px]">
+                <div className="absolute right-0 top-full mt-1 z-50 bg-base-100 border border-base-200/60 rounded-lg shadow-lg py-1 min-w-[120px]">
                   {assignableRoles.map((r) => (
                     <button
                       key={r}
@@ -1080,7 +1080,7 @@ function AddMemberSearch({
 
   return (
     <div className="mt-1 border border-base-300 rounded-lg bg-base-100 overflow-hidden">
-      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300/50">
+      <div className="flex items-center gap-1.5 px-2 py-1.5 border-b border-base-300">
         <UserPlus className="w-3.5 h-3.5 text-base-content/40" />
         <input
           ref={inputRef}
@@ -1344,7 +1344,7 @@ function CreateConversationOverlay({ onClose }: { onClose: () => void }) {
             placeholder={
               mode === "team" ? "Team name *" : "Group name (optional)"
             }
-            className="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/30 border-b border-base-300/50 pb-1"
+            className="w-full bg-transparent text-sm outline-none text-base-content placeholder:text-base-content/40 border-b border-base-300 pb-1"
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
@@ -1414,7 +1414,7 @@ function CreateConversationOverlay({ onClose }: { onClose: () => void }) {
         {filteredResults?.map((u) => (
           <button
             key={u.user_id}
-            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-base-300/60 transition-colors text-left"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-base-300 transition-colors text-left"
             onClick={() => toggleUser(u)}
           >
             <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs flex-shrink-0">
@@ -1526,7 +1526,7 @@ function ChannelRow({
         "w-full flex items-center gap-2 px-2 py-1.5 rounded-md transition-all text-left",
         isActive
           ? "bg-primary/10 text-base-content font-medium"
-          : "text-base-content/60 hover:text-base-content hover:bg-base-300/40",
+          : "text-base-content/60 hover:text-base-content hover:bg-base-300",
       )}
     >
       <span

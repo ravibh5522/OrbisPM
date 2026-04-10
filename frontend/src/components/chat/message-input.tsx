@@ -324,7 +324,7 @@ export function MessageInput() {
   // Viewer read-only banner
   if (!permLoading && !canSend) {
     return (
-      <div className="border-t border-base-300 bg-base-200 p-3">
+      <div className="border-t border-base-300 p-3">
         <div className="flex items-center justify-center gap-2 text-base-content/50 text-sm py-2">
           <Eye className="w-4 h-4" />
           <span>You have view-only access to this channel</span>
@@ -336,8 +336,8 @@ export function MessageInput() {
   return (
     <div
       className={cn(
-        "border-t border-base-300 bg-base-200 p-3 transition-colors",
-        isDragging && "border-primary bg-primary/5",
+        "border-t border-base-300 p-3 transition-colors",
+        isDragging && "border-primary bg-primary/10",
       )}
       onDrop={handleDrop}
       onDragOver={handleDragOver}
@@ -345,7 +345,7 @@ export function MessageInput() {
     >
       {/* File previews */}
       {files.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-2 p-2 bg-base-200 rounded-lg">
+        <div className="flex flex-wrap gap-2 mb-2 p-2 bg-base-100/50 border border-base-200/60 rounded-lg">
           {files.map((fp, i) => (
             <div key={i} className="relative group">
               {fp.preview ? (
@@ -360,7 +360,7 @@ export function MessageInput() {
               ) : (
                 <div
                   className={cn(
-                    "w-16 h-16 flex flex-col items-center justify-center rounded-lg border-2 bg-base-200 text-xs",
+                    "w-16 h-16 flex flex-col items-center justify-center rounded-lg border-2 bg-base-100/50 text-xs",
                     fp.error ? "border-error" : "border-base-300",
                   )}
                 >
@@ -398,7 +398,7 @@ export function MessageInput() {
         </div>
       )}
 
-      <div className="relative flex items-end gap-2 bg-base-200 rounded-2xl px-3 py-2">
+      <div className="relative flex items-end gap-2 bg-base-100/50 border border-base-200/60 rounded-xl px-3 py-2">
         {/* @mention dropdown */}
         {mentionQuery !== null && mentionResults.length > 0 && (
           <div
@@ -414,8 +414,8 @@ export function MessageInput() {
               <button
                 key={u.user_id}
                 className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-base-200/60 transition-colors",
-                  i === mentionIndex && "bg-base-200/60",
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-base-300 transition-colors",
+                  i === mentionIndex && "bg-base-300",
                 )}
                 onMouseDown={(e) => {
                   e.preventDefault(); // prevent blur
@@ -499,7 +499,7 @@ export function MessageInput() {
           onChange={handleInput}
           onKeyDown={handleKeyDown}
           placeholder="Type a message..."
-          className="flex-1 bg-transparent resize-none outline-none text-sm text-base-content placeholder-base-content/40 max-h-40 min-h-[2rem] py-1"
+          className="flex-1 bg-transparent resize-none outline-none text-sm text-base-content placeholder:text-base-content/40 max-h-40 min-h-[2rem] py-1"
           rows={1}
           disabled={sending}
         />
