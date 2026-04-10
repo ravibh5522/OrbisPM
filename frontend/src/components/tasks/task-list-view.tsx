@@ -183,10 +183,11 @@ export function TaskListView({
           base_version: currentTask?.version ?? 0,
           ...changes,
         });
-        // Handle pending review — rollback optimistic update
+        // Handle pending review — open modal so user can submit the CR properly
         if (result?.pending_review) {
           fetchList();
-          setPendingReviewResult(result);
+          setCrModal({ taskId: id, changes });
+          return;
         }
       } catch (e) {
         if (e instanceof Error && e.message) {

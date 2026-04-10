@@ -810,10 +810,8 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 	}
 
 	// --- Review pipeline ---
-	// Permission-first design: users lacking tasks:direct_update ALWAYS submit a
-	// change request — regardless of which fields are in reviewable_fields.
-	// reviewable_fields is a secondary constraint: even holders of direct_update
-	// must go through CR for those specific fields (project-admin control).
+	// Permission-first design: users with tasks:direct_update apply changes immediately.
+	// Users without direct_update must submit a change request via the CR API.
 	directChanges := changes
 	var reviewChanges map[string]any
 
@@ -829,86 +827,20 @@ func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTas
 			)
 		}
 
-		// 2. Load project's explicit reviewable_fields (optional granular control).
-		var reviewableFields []string
-		if s.projectRepo != nil {
-			if project, projErr := s.projectRepo.GetByID(ctx, task.ProjectID); projErr == nil {
-				reviewableFields = extractReviewableFields(project.Settings)
-			}
-		}
-
 		if !canBypass {
-			// Actor lacks direct_update: ALL changes go through a change request.
+			// Actor lacks direct_update: signal that review is required.
+			// The frontend will open the change-request modal so the user can
+			// add a reason / attachments before submitting via the CR API.
 			if len(changes) == 0 {
 				return &domain.TaskUpdateResult{Task: task}, nil
 			}
-			if params.ActorID == nil {
-				return nil, domain.NewAppError(403, "actor identity required to submit a change request")
-			}
-			cr := &domain.TaskChangeRequest{
-				OrgID:      task.OrgID,
-				TaskID:     task.ID,
-				ProposerID: *params.ActorID,
-				Changes:    changes,
-				Reason:     "Update requires approval",
-			}
-			var created *domain.TaskChangeRequest
-			crErr := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
-				var e error
-				created, e = s.crRepo.Create(ctx, tx, cr)
-				return e
-			})
-			if crErr != nil {
-				return nil, crErr
-			}
-			s.publishEvent(ctx, domain.EventChangeRequestCreated, task.OrgID.String(), created.ID.String(), map[string]any{
-				"task_id":     task.ID.String(),
-				"proposer_id": params.ActorID.String(),
-			})
 			return &domain.TaskUpdateResult{
 				Task:          task,
-				ChangeRequest: created,
 				PendingReview: true,
 			}, nil
 		}
-
-		// Actor has direct_update. Apply most changes immediately.
-		// However, explicitly-listed reviewable_fields still require a CR even
-		// for privileged actors (project-admin-controlled exception fields).
-		if len(reviewableFields) > 0 {
-			directChanges, reviewChanges = partitionChanges(changes, reviewableFields)
-			if len(reviewChanges) > 0 {
-				cr := &domain.TaskChangeRequest{
-					OrgID:      task.OrgID,
-					TaskID:     task.ID,
-					ProposerID: *params.ActorID,
-					Changes:    reviewChanges,
-					Reason:     "Field requires review",
-				}
-				var created *domain.TaskChangeRequest
-				crErr := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
-					var e error
-					created, e = s.crRepo.Create(ctx, tx, cr)
-					return e
-				})
-				if crErr != nil {
-					return nil, crErr
-				}
-				s.publishEvent(ctx, domain.EventChangeRequestCreated, task.OrgID.String(), created.ID.String(), map[string]any{
-					"task_id":     task.ID.String(),
-					"proposer_id": params.ActorID.String(),
-				})
-				if len(directChanges) == 0 {
-					// Nothing can be applied directly — everything is reviewable
-					return &domain.TaskUpdateResult{
-						Task:          task,
-						ChangeRequest: created,
-						PendingReview: true,
-					}, nil
-				}
-				// Fall through: apply directChanges immediately, CR is pending for the rest
-			}
-		}
+		// Actor has direct_update — apply ALL changes immediately.
+		// reviewable_fields does NOT override direct_update permission.
 	}
 
 	// Apply direct changes to the task struct

@@ -158,9 +158,10 @@ export function TaskTreeView({
           base_version: currentTask?.version ?? 0,
           ...data,
         });
-        // Handle pending review
+        // Handle pending review — open modal so user can submit the CR properly
         if (result?.pending_review) {
-          setPendingReviewResult(result);
+          setCrModal({ taskId, changes: data });
+          return;
         }
         fetchTree();
       } catch (e) {

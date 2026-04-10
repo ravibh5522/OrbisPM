@@ -13,10 +13,8 @@ import {
   RichTextEditor,
   RichTextViewer,
 } from "@/components/editor/rich-text-editor";
-import {
-  ChangeRequestToast,
-  TaskChangeRequests,
-} from "@/components/tasks/change-requests";
+import { ChangeRequestModal } from "@/components/tasks/change-request-modal";
+import { TaskChangeRequests } from "@/components/tasks/change-requests";
 import { RecurrenceSelector } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
 import { Alert } from "@/components/ui/alert";
@@ -162,25 +160,25 @@ export default function TaskDetailPage({
   });
 
   // ── Mutations ──
-  const [pendingReviewResult, setPendingReviewResult] =
-    useState<TaskUpdateResult | null>(null);
+  const [pendingCRChanges, setPendingCRChanges] =
+    useState<Partial<Task> | null>(null);
   const updateTaskMutation = useMutation({
     mutationFn: (data: Partial<Task>) =>
       api.tasks.update(orgId, projectId, taskId, data),
-    onSuccess: (result) => {
+    onSuccess: (result, variables) => {
       qc.invalidateQueries({ queryKey: ["task", orgId, projectId, taskId] });
       qc.invalidateQueries({ queryKey: ["tasks", orgId, projectId] });
       qc.invalidateQueries({
         queryKey: ["change-requests", orgId, projectId, taskId],
       });
-      // Show toast if some changes are pending review
+      // Open CR modal so user can add reason / attachments before submitting
       if (
         result &&
         typeof result === "object" &&
         "pending_review" in result &&
-        result.pending_review
+        (result as TaskUpdateResult).pending_review
       ) {
-        setPendingReviewResult(result as TaskUpdateResult);
+        setPendingCRChanges(variables);
       }
     },
   });
@@ -216,11 +214,23 @@ export default function TaskDetailPage({
         />
       </div>
 
-      {/* Pending review toast */}
-      <ChangeRequestToast
-        result={pendingReviewResult}
-        onDismiss={() => setPendingReviewResult(null)}
-      />
+      {/* Change request modal — opens when user lacks direct_update */}
+      {pendingCRChanges && task && (
+        <ChangeRequestModal
+          open
+          onClose={() => setPendingCRChanges(null)}
+          task={task}
+          changes={pendingCRChanges}
+          orgId={orgId}
+          projectId={projectId}
+          onCreated={() => {
+            setPendingCRChanges(null);
+            qc.invalidateQueries({
+              queryKey: ["change-requests", orgId, projectId, taskId],
+            });
+          }}
+        />
+      )}
 
       {/* Mutation error toast */}
       {updateTaskMutation.isError && (

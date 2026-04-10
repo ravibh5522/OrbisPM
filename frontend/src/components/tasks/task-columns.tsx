@@ -808,7 +808,7 @@ export function TaskColumns({
           setUpdateDeadlineConflicts(updated.deadline_conflicts);
           return;
         }
-        // Handle pending review — revert optimistic update
+        // Handle pending review — open modal so user can submit the CR properly
         if (updated?.pending_review) {
           if (currentTask) {
             useProjectTaskStore.getState().upsertTask(currentTask);
@@ -818,7 +818,7 @@ export function TaskColumns({
               ),
             );
           }
-          setPendingReviewResult(updated);
+          setCrModal({ taskId, changes: data });
           return;
         }
         // Reconcile with server response — handle both direct task and wrapped result
