@@ -14,6 +14,76 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
+// ── Demo personas ─────────────────────────────────────────────────────────
+interface DemoUser {
+  email: string;
+  name: string;
+  initials: string;
+  color: string;
+  role: string;
+  roleColor: string;
+  title: string;
+}
+
+const DEMO_USERS: DemoUser[] = [
+  {
+    email: "sarah.chen@acme.demo",
+    name: "Sarah Chen",
+    initials: "SC",
+    color: "bg-violet-500",
+    role: "Owner",
+    roleColor: "badge-primary",
+    title: "VP of Engineering",
+  },
+  {
+    email: "marcus.johnson@acme.demo",
+    name: "Marcus Johnson",
+    initials: "MJ",
+    color: "bg-blue-500",
+    role: "Admin",
+    roleColor: "badge-info",
+    title: "Engineering Manager",
+  },
+  {
+    email: "priya.patel@acme.demo",
+    name: "Priya Patel",
+    initials: "PP",
+    color: "bg-emerald-500",
+    role: "Member",
+    roleColor: "badge-success",
+    title: "Backend Engineer",
+  },
+  {
+    email: "olivia.brown@acme.demo",
+    name: "Olivia Brown",
+    initials: "OB",
+    color: "bg-rose-500",
+    role: "Member",
+    roleColor: "badge-success",
+    title: "Lead Designer",
+  },
+  {
+    email: "mia.anderson@acme.demo",
+    name: "Mia Anderson",
+    initials: "MA",
+    color: "bg-amber-500",
+    role: "Member",
+    roleColor: "badge-success",
+    title: "QA Lead",
+  },
+  {
+    email: "mason.walker@acme.demo",
+    name: "Mason Walker",
+    initials: "MW",
+    color: "bg-slate-500",
+    role: "Billing",
+    roleColor: "badge-warning",
+    title: "Finance",
+  },
+];
+
+const DEMO_PASSWORD = "Demo@Acme2026!";
+
 const IDP_ICONS: Record<string, string> = {
   google: "G",
   microsoft: "M",
@@ -82,6 +152,8 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [idps, setIdps] = useState<IDPInfo[]>([]);
   const [idpLoading, setIdpLoading] = useState<string | null>(null);
+  const [demoLoading, setDemoLoading] = useState<string | null>(null);
+  const [showDemo, setShowDemo] = useState(false);
 
   // MFA two-step state
   const [mfaChallenge, setMfaChallenge] = useState<MFAChallenge | null>(null);
@@ -202,6 +274,18 @@ export default function LoginPage() {
     } catch (err) {
       setError(parseAuthError(err));
       setIdpLoading(null);
+    }
+  };
+
+  const handleDemoLogin = async (user: DemoUser) => {
+    setError("");
+    setDemoLoading(user.email);
+    try {
+      await login(user.email, DEMO_PASSWORD);
+      redirectAfterLogin();
+    } catch (err) {
+      setError(parseAuthError(err));
+      setDemoLoading(null);
     }
   };
 
@@ -404,6 +488,68 @@ export default function LoginPage() {
             Create one
           </Link>
         </p>
+
+        {/* Demo Login Panel */}
+        <div className="mt-6">
+          <div className="divider text-xs text-base-content/40 my-0">
+            <button
+              type="button"
+              onClick={() => setShowDemo((v) => !v)}
+              className="btn btn-ghost btn-xs gap-1 text-base-content/50 hover:text-base-content"
+            >
+              <span>Try a demo account</span>
+              <span
+                className={`transition-transform duration-200 ${showDemo ? "rotate-180" : ""}`}
+              >
+                ▾
+              </span>
+            </button>
+          </div>
+
+          {showDemo && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs text-center text-base-content/50 mb-3">
+                Click any persona to sign in instantly — no setup needed.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {DEMO_USERS.map((user) => (
+                  <button
+                    key={user.email}
+                    type="button"
+                    onClick={() => handleDemoLogin(user)}
+                    disabled={demoLoading !== null}
+                    className="flex items-center gap-2.5 p-3 rounded-xl border border-base-200 hover:border-primary/40 hover:bg-base-200/60 transition-all text-left disabled:opacity-60 disabled:cursor-not-allowed group"
+                  >
+                    <div
+                      className={`w-8 h-8 rounded-lg ${user.color} flex items-center justify-center text-white text-xs font-bold shrink-0`}
+                    >
+                      {demoLoading === user.email ? (
+                        <span className="loading loading-spinner loading-xs" />
+                      ) : (
+                        user.initials
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-base-content truncate group-hover:text-primary transition-colors">
+                        {user.name}
+                      </div>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <span
+                          className={`badge badge-xs ${user.roleColor} shrink-0`}
+                        >
+                          {user.role}
+                        </span>
+                        <span className="text-[10px] text-base-content/50 truncate">
+                          {user.title}
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
