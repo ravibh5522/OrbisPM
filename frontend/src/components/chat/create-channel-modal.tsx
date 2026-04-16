@@ -50,7 +50,7 @@ export function CreateChannelModal({
       const channel = await api.chat.channels.create({
         name: name.trim(),
         description: description.trim(),
-        type: "team",
+        type: teamId ? "team" : "group",
         ...(teamId ? { team_id: teamId } : {}),
       });
       addChannel(channel);

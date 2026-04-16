@@ -152,10 +152,12 @@ func (h *RESTHandler) CreateChannel(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "description too long (max 500 chars)"})
 		return
 	}
-	// Only 'group' channels can be created manually; team/project channels are
-	// auto-managed by backend events, and DMs are created via POST /channels/dm.
-	if domain.ChannelType(req.Type) != domain.ChannelTypeGroup {
-		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "channel type must be 'group'; use /channels/dm for direct messages"})
+	// Allowed manual types: 'group' (standalone) and 'team' (scoped to a team).
+	// DMs are created via POST /channels/dm; project channels are auto-managed.
+	allowedType := domain.ChannelType(req.Type) == domain.ChannelTypeGroup ||
+		(domain.ChannelType(req.Type) == domain.ChannelTypeTeam && req.TeamID != "")
+	if !allowedType {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "channel type must be 'group', or 'team' with a team_id; use /channels/dm for direct messages"})
 		return
 	}
 
