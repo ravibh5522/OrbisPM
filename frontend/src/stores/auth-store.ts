@@ -1,5 +1,13 @@
 import { api } from "@/lib/api";
-import { clearAuth, getAccessToken, getRefreshToken, getStoredUser, isTokenExpired, saveTokens, saveUser } from "@/lib/auth";
+import {
+  clearAuth,
+  getAccessToken,
+  getRefreshToken,
+  getStoredUser,
+  isTokenExpired,
+  saveTokens,
+  saveUser,
+} from "@/lib/auth";
 import type { AuthTokens, AuthUser, Org, OrgMember } from "@/types/domain";
 import { create } from "zustand";
 
@@ -51,18 +59,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       }
     }
 
-    set({ user: storedUser, isAuthenticated: true, mfaEnabled: storedUser.mfa_enabled ?? false });
+    set({
+      user: storedUser,
+      isAuthenticated: true,
+      mfaEnabled: storedUser.mfa_enabled ?? false,
+    });
     // Refresh user from backend in background so profile/avatar are always fresh
-    api.auth.getUser().then((freshUser) => {
-      saveUser(freshUser);
-      set({ user: freshUser, mfaEnabled: freshUser.mfa_enabled ?? false });
-    }).catch(() => {});
+    api.auth
+      .getUser()
+      .then((freshUser) => {
+        saveUser(freshUser);
+        set({ user: freshUser, mfaEnabled: freshUser.mfa_enabled ?? false });
+      })
+      .catch(() => {});
     try {
       const orgsRes = await api.orgs.list();
       const orgs = orgsRes.data || [];
       // Try to restore last selected org
       const lastOrgId = localStorage.getItem("current_org_id");
-      const currentOrg = orgs.find((o) => o.id === lastOrgId) || orgs[0] || null;
+      const currentOrg =
+        orgs.find((o) => o.id === lastOrgId) || orgs[0] || null;
       let membership: OrgMember | null = null;
       if (currentOrg) {
         try {
@@ -71,11 +87,23 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           // ignore
         }
       }
-      set({ orgs, currentOrg, currentMembership: membership, isLoading: false });
+      set({
+        orgs,
+        currentOrg,
+        currentMembership: membership,
+        isLoading: false,
+      });
     } catch {
       // Token may be invalid
       clearAuth();
-      set({ user: null, orgs: [], currentOrg: null, isAuthenticated: false, isLoading: false, mfaEnabled: false });
+      set({
+        user: null,
+        orgs: [],
+        currentOrg: null,
+        isAuthenticated: false,
+        isLoading: false,
+        mfaEnabled: false,
+      });
     }
   },
 
@@ -90,27 +118,50 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   loginComplete: async (tokens: AuthTokens) => {
     saveTokens(tokens);
-    set({ user: tokens.user, isAuthenticated: true, mfaEnabled: tokens.user?.mfa_enabled ?? false });
-    // Load orgs
-    const orgsRes = await api.orgs.list();
-    const orgs = orgsRes.data || [];
-    const currentOrg = orgs[0] || null;
-    let membership: OrgMember | null = null;
-    if (currentOrg) {
-      localStorage.setItem("current_org_id", currentOrg.id);
-      try {
-        membership = await api.orgs.me(currentOrg.id);
-      } catch {
-        // ignore
+    // Keep isLoading:true until orgs are fetched so redirect guards
+    // (useRedirectIfAuth / useRequireAuth) don't fire while orgs:[].
+    set({
+      user: tokens.user,
+      isAuthenticated: true,
+      isLoading: true,
+      mfaEnabled: tokens.user?.mfa_enabled ?? false,
+    });
+    try {
+      // Load orgs
+      const orgsRes = await api.orgs.list();
+      const orgs = orgsRes.data || [];
+      const currentOrg = orgs[0] || null;
+      let membership: OrgMember | null = null;
+      if (currentOrg) {
+        localStorage.setItem("current_org_id", currentOrg.id);
+        try {
+          membership = await api.orgs.me(currentOrg.id);
+        } catch {
+          // ignore
+        }
       }
+      set({
+        orgs,
+        currentOrg,
+        currentMembership: membership,
+        isLoading: false,
+      });
+    } catch {
+      // Orgs fetch failed after login — still mark loading done so UI unblocks
+      set({ isLoading: false });
     }
-    set({ orgs, currentOrg, currentMembership: membership });
   },
 
   signup: async (email: string, password: string, name?: string) => {
     const tokens: AuthTokens = await api.auth.signup(email, password, name);
     saveTokens(tokens);
-    set({ user: tokens.user, isAuthenticated: true, orgs: [], currentOrg: null, mfaEnabled: false });
+    set({
+      user: tokens.user,
+      isAuthenticated: true,
+      orgs: [],
+      currentOrg: null,
+      mfaEnabled: false,
+    });
   },
 
   logout: async () => {
@@ -121,7 +172,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     clearAuth();
     localStorage.removeItem("current_org_id");
-    set({ user: null, orgs: [], currentOrg: null, currentMembership: null, isAuthenticated: false, mfaEnabled: false });
+    set({
+      user: null,
+      orgs: [],
+      currentOrg: null,
+      currentMembership: null,
+      isAuthenticated: false,
+      mfaEnabled: false,
+    });
     window.location.href = "/login";
   },
 
@@ -131,7 +189,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const tokens = await api.auth.refresh(refreshToken);
       saveTokens(tokens);
-      set({ user: tokens.user, isAuthenticated: true, mfaEnabled: tokens.user?.mfa_enabled ?? false });
+      set({
+        user: tokens.user,
+        isAuthenticated: true,
+        mfaEnabled: tokens.user?.mfa_enabled ?? false,
+      });
       return true;
     } catch {
       return false;
@@ -160,7 +222,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const orgs = orgsRes.data || [];
       const currentOrg = get().currentOrg;
       // If current org was deleted, switch to first
-      const stillExists = currentOrg && orgs.find((o) => o.id === currentOrg.id);
+      const stillExists =
+        currentOrg && orgs.find((o) => o.id === currentOrg.id);
       set({
         orgs,
         currentOrg: stillExists ? currentOrg : orgs[0] || null,

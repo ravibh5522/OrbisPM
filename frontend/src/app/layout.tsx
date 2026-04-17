@@ -115,6 +115,15 @@ export default function RootLayout({
   return (
     <html lang="en" data-theme="orbis-light" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans min-h-screen bg-base-200`}>
+        {/* Inline script runs synchronously before first paint, preventing
+            the glass-theme FOUC where data-theme="orbis-light" briefly
+            shows before React's ThemeInitializer useEffect fires. */}
+        <script
+          suppressHydrationWarning
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme');var v=['glass-light','glass-dark','orbis-light','orbis-dark'];if(v.indexOf(t)!==-1&&t!=='orbis-light'){document.documentElement.setAttribute('data-theme',t);}}catch(e){}})();`,
+          }}
+        />
         <Providers>{children}</Providers>
       </body>
     </html>

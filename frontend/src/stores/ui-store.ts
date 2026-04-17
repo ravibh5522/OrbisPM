@@ -1,8 +1,8 @@
 import {
-    DEFAULT_PROFILE_ID,
-    findProfile,
-    PROFILES_BY_THEME,
-    ThemeColorProfile,
+  DEFAULT_PROFILE_ID,
+  findProfile,
+  PROFILES_BY_THEME,
+  ThemeColorProfile,
 } from "@/lib/theme-profiles";
 import { create } from "zustand";
 
@@ -216,7 +216,7 @@ export const useUIStore = create<UIState>((set, get) => {
       const { colorSchemaLocked, orgCustomisation } = get();
       if (colorSchemaLocked && orgCustomisation) {
         // Admin enforced colour schema — keep it when switching theme
-        set({ theme: t, customisation: orgCustomisation });
+        // Apply CSS vars BEFORE set() so React never renders with stale vars
         applyThemeCustomisation(t, orgCustomisation);
         if (typeof window !== "undefined") {
           localStorage.setItem(
@@ -224,13 +224,15 @@ export const useUIStore = create<UIState>((set, get) => {
             JSON.stringify(orgCustomisation),
           );
         }
+        set({ theme: t, customisation: orgCustomisation });
       } else {
         // No org enforcement — clear customisation on theme switch
-        set({ theme: t, customisation: null });
+        // Apply CSS vars BEFORE set() so React never renders with stale vars
         if (typeof window !== "undefined") {
           applyThemeCustomisation(t, null);
           localStorage.removeItem("theme_customisation");
         }
+        set({ theme: t, customisation: null });
       }
     },
 
@@ -339,4 +341,3 @@ export const THEMES: {
 /** Re-export for convenience */
 export { DEFAULT_PROFILE_ID, findProfile, PROFILES_BY_THEME };
 export type { ThemeColorProfile };
-

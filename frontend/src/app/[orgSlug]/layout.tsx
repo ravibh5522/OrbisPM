@@ -150,9 +150,26 @@ function Sidebar() {
     if (!colorSchemaLocked) {
       updateData.theme_customisation = null;
     }
-    api.auth.updateUser({ data: updateData }).catch(() => {
-      /* non-critical */
-    });
+    api.auth
+      .updateUser({ data: updateData })
+      .then(() => {
+        // Keep auth store in sync so OrgLayout's useEffect won't override
+        // the user's just-selected theme if it re-fires (e.g. on org switch).
+        if (user) {
+          const { updateUser } = useAuthStore.getState();
+          updateUser({
+            ...user,
+            user_metadata: {
+              ...user.user_metadata,
+              theme: value,
+              ...(colorSchemaLocked ? {} : { theme_customisation: null }),
+            },
+          });
+        }
+      })
+      .catch(() => {
+        /* non-critical */
+      });
   };
 
   const filteredSettings = settingsItems.filter(
