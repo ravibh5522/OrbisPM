@@ -308,7 +308,7 @@ func main() {
 	notifPrefSvc := service.NewNotificationPrefService(notifPrefRepo, txm)
 
 	// --- Services (Announcements) ---
-	announcementSvc := service.NewAnnouncementService(announcementRepo, orgMemberRepo, txm, workerSrv, publisher)
+	announcementSvc := service.NewAnnouncementService(announcementRepo, orgMemberRepo, projectMemberRepo, txm, workerSrv, publisher)
 
 	// --- Services (Analytics) ---
 	analyticsSvc := service.NewAnalyticsService(analyticsRepo, taskRepo, projectRepo, orgMemberRepo, txm, workerSrv)

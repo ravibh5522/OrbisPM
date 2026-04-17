@@ -17,26 +17,29 @@ import (
 
 // AnnouncementService manages announcements.
 type AnnouncementService struct {
-	repo       repository.AnnouncementRepository
-	memberRepo repository.OrgMemberRepository
-	txm        *repository.TxManager
-	workerSrv  *worker.Server
-	publisher  EventPublisher
+	repo              repository.AnnouncementRepository
+	memberRepo        repository.OrgMemberRepository
+	projectMemberRepo repository.ProjectMemberRepository
+	txm               *repository.TxManager
+	workerSrv         *worker.Server
+	publisher         EventPublisher
 }
 
 // NewAnnouncementService creates a new AnnouncementService.
 func NewAnnouncementService(
 	repo repository.AnnouncementRepository,
 	memberRepo repository.OrgMemberRepository,
+	projectMemberRepo repository.ProjectMemberRepository,
 	txm *repository.TxManager,
 	workerSrv *worker.Server,
 	publisher ...EventPublisher,
 ) *AnnouncementService {
 	s := &AnnouncementService{
-		repo:       repo,
-		memberRepo: memberRepo,
-		txm:        txm,
-		workerSrv:  workerSrv,
+		repo:              repo,
+		memberRepo:        memberRepo,
+		projectMemberRepo: projectMemberRepo,
+		txm:               txm,
+		workerSrv:         workerSrv,
 	}
 	if len(publisher) > 0 {
 		s.publisher = publisher[0]
@@ -106,15 +109,28 @@ func (s *AnnouncementService) Create(ctx context.Context, params CreateAnnouncem
 
 	s.enqueueActivity(params.OrgID.String(), "announcement", created.ID.String(), "created", params.AuthorID.String(), nil)
 
-	// Notify all org members about the new announcement
-	s.notifyOrgMembers(ctx, params.OrgID, params.AuthorID, "announcement_created",
-		created.Title,
-		created.Body,
-		map[string]any{
-			"announcement_id": created.ID.String(),
-			"priority":        created.Priority,
-		},
-	)
+	// Notify only the relevant audience:
+	// - project announcements → project members only
+	// - org-wide announcements → all org members
+	if params.ProjectID != nil {
+		s.notifyProjectMembers(ctx, *params.ProjectID, params.OrgID, params.AuthorID, "announcement_created",
+			created.Title,
+			created.Body,
+			map[string]any{
+				"announcement_id": created.ID.String(),
+				"priority":        created.Priority,
+			},
+		)
+	} else {
+		s.notifyOrgMembers(ctx, params.OrgID, params.AuthorID, "announcement_created",
+			created.Title,
+			created.Body,
+			map[string]any{
+				"announcement_id": created.ID.String(),
+				"priority":        created.Priority,
+			},
+		)
+	}
 
 	return created, nil
 }
@@ -255,6 +271,26 @@ func (s *AnnouncementService) enqueueNotification(userID, orgID, ntype, title, b
 	// Delay announcement email by 2 minutes to batch with nearby announcements
 	if err := s.workerSrv.Enqueue(task, asynq.ProcessIn(2*time.Minute)); err != nil {
 		log.Error().Err(err).Msg("enqueue announcement notification task")
+	}
+}
+
+func (s *AnnouncementService) notifyProjectMembers(ctx context.Context, projectID, orgID, authorID uuid.UUID, ntype, title, body string, payload map[string]any) {
+	if s.projectMemberRepo == nil || s.workerSrv == nil {
+		log.Warn().Bool("projectMemberRepo_nil", s.projectMemberRepo == nil).Bool("workerSrv_nil", s.workerSrv == nil).Msg("skipping project announcement notifications: missing dependency")
+		return
+	}
+	members, err := s.projectMemberRepo.ListByProject(ctx, projectID)
+	if err != nil {
+		log.Error().Err(err).Msg("list project members for announcement notification")
+		return
+	}
+	log.Debug().Int("member_count", len(members)).Str("author_id", authorID.String()).Msg("notifying project members about announcement")
+	for _, m := range members {
+		if m.UserID == authorID {
+			continue // Don't notify the author
+		}
+		log.Debug().Str("user_id", m.UserID.String()).Str("type", ntype).Msg("enqueuing project announcement notification")
+		s.enqueueNotification(m.UserID.String(), orgID.String(), ntype, title, body, payload)
 	}
 }
 

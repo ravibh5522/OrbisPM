@@ -10,7 +10,6 @@ import { useAuthStore } from "@/stores/auth-store";
 import type { IDPInfo } from "@/types/domain";
 import { Key, Mail, Shield, Smartphone } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 
@@ -147,7 +146,6 @@ interface MFAChallenge {
 
 export default function LoginPage() {
   useRedirectIfAuth();
-  const router = useRouter();
   const { login, loginComplete } = useAuthStore();
   const [error, setError] = useState("");
   const [idps, setIdps] = useState<IDPInfo[]>([]);
@@ -176,20 +174,10 @@ export default function LoginPage() {
       .catch(() => {});
   }, []);
 
-  const redirectAfterLogin = () => {
-    const orgs = useAuthStore.getState().orgs;
-    if (orgs.length === 0) {
-      router.push("/onboarding");
-    } else {
-      router.push(`/${orgs[0].slug}`);
-    }
-  };
-
   const onSubmit = async (data: LoginForm) => {
     setError("");
     try {
       await login(data.email, data.password);
-      redirectAfterLogin();
     } catch (err) {
       // Check if this is an MFA challenge (thrown by the store)
       if (
@@ -252,7 +240,6 @@ export default function LoginPage() {
         mfaCode.trim(),
       );
       await loginComplete(tokens);
-      redirectAfterLogin();
     } catch (err) {
       setError(parseAuthError(err));
     } finally {
@@ -282,7 +269,6 @@ export default function LoginPage() {
     setDemoLoading(user.email);
     try {
       await login(user.email, DEMO_PASSWORD);
-      redirectAfterLogin();
     } catch (err) {
       setError(parseAuthError(err));
       setDemoLoading(null);
