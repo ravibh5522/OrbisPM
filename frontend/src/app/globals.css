@@ -2202,3 +2202,249 @@
     inset 0 1px 0 oklch(100% 0 0 / 0.16),
     0 16px 40px oklch(0% 0 0 / 0.18);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   ORBIS THEMES — Solid surface system
+   ─────────────────────────────────────────────────────────────
+   DaisyUI 5 .card has NO default background-color. Glass themes
+   cover this via the global [data-theme="glass-*"] :is(.bg-base-100, .card)
+   rule. Orbis themes have no gradient to show through, so all
+   alpha-opacity (bg-base-100/XX) surfaces must collapse to solid
+   opaque colours. Backdrop-filters are also cleared — there is
+   nothing to blur through in a flat-colour orbis background.
+
+   This block is the SINGLE place to control orbis solid rendering:
+   do not duplicate these overrides in individual components.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── 1. Solid card surface (DaisyUI 5 sets no card bg by default) ── */
+[data-theme="orbis-light"] .card,
+[data-theme="orbis-dark"] .card {
+  background-color: var(--color-base-100);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+/* ── 2. Collapse all alpha-opacity bg-base-100/XX to solid ── */
+[data-theme="orbis-light"] [class*="bg-base-100/"] {
+  background-color: var(--color-base-100) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+[data-theme="orbis-dark"] [class*="bg-base-100/"] {
+  background-color: var(--color-base-100) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── 3. Collapse all alpha-opacity bg-base-200/XX to solid ── */
+[data-theme="orbis-light"] [class*="bg-base-200/"] {
+  background-color: var(--color-base-200) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+[data-theme="orbis-dark"] [class*="bg-base-200/"] {
+  background-color: var(--color-base-200) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── 4. Reset all backdrop-blur-* utilities in orbis themes ──
+        (flat surface has no gradient to blur through; saves GPU) */
+[data-theme="orbis-light"] [class*="backdrop-blur"],
+[data-theme="orbis-dark"] [class*="backdrop-blur"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* ── 5. Alpha-opacity borders → solid theme borders in orbis ── */
+[data-theme="orbis-light"] [class*="border-base-200/"],
+[data-theme="orbis-light"] [class*="border-base-300/"] {
+  border-color: var(--ol-border) !important;
+}
+[data-theme="orbis-dark"] [class*="border-base-200/"],
+[data-theme="orbis-dark"] [class*="border-base-300/"] {
+  border-color: var(--od-border) !important;
+}
+
+/* ── 6. Frosted dialog / notes / search surfaces → solid in orbis ──
+        These classes have base-level (all-theme) backdrop-filter rules
+        that must be explicitly reset for orbis. */
+[data-theme="orbis-light"] :is(
+    .frosted-dialog-surface,
+    .notes-dialog-surface,
+    .search-anchor-surface
+  ) {
+  background: var(--color-base-100) !important;
+  border-color: var(--ol-border) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    0 4px 24px oklch(0% 0 0 / 0.1),
+    0 1px 4px oklch(0% 0 0 / 0.06) !important;
+}
+[data-theme="orbis-dark"] :is(
+    .frosted-dialog-surface,
+    .notes-dialog-surface,
+    .search-anchor-surface
+  ) {
+  background: var(--od-surface) !important;
+  border-color: var(--od-border) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow:
+    0 8px 32px oklch(0% 0 0 / 0.35),
+    0 2px 8px oklch(0% 0 0 / 0.2) !important;
+}
+
+/* ── 7. card-glass-shadow → plain elevation in orbis ── */
+[data-theme="orbis-light"] .card-glass-shadow,
+[data-theme="orbis-light"] .hover\:card-glass-shadow-hover:hover {
+  box-shadow:
+    0 4px 16px oklch(0% 0 0 / 0.08),
+    0 1px 4px oklch(0% 0 0 / 0.04) !important;
+}
+[data-theme="orbis-dark"] .card-glass-shadow,
+[data-theme="orbis-dark"] .hover\:card-glass-shadow-hover:hover {
+  box-shadow:
+    0 4px 16px oklch(0% 0 0 / 0.28),
+    0 1px 4px oklch(0% 0 0 / 0.16) !important;
+}
+
+/* ── 8. Dropdown menus and modals need solid bg in orbis ── */
+[data-theme="orbis-light"] :is(.dropdown-content, .modal-box) {
+  background-color: var(--color-base-100) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: var(--ol-border) !important;
+  box-shadow:
+    0 8px 24px oklch(0% 0 0 / 0.1),
+    0 2px 8px oklch(0% 0 0 / 0.06) !important;
+}
+[data-theme="orbis-dark"] :is(.dropdown-content, .modal-box) {
+  background-color: var(--color-base-100) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: var(--od-border) !important;
+  box-shadow:
+    0 8px 32px oklch(0% 0 0 / 0.4),
+    0 2px 8px oklch(0% 0 0 / 0.2) !important;
+}
+
+/* ── 9. Segmented control active-tab elevation in orbis ──────────────
+        bg-base-100/70 is the active-tab indicator class in my-tasks and
+        projects view-switchers. Without this override the active and
+        inactive tabs look identical once bg-base-100/XX → solid.
+        Override to bg-base-200 so the active pill is visually elevated
+        above the bg-base-100 container. */
+[data-theme="orbis-light"] [class*="bg-base-100/70"] {
+  background-color: var(--color-base-200) !important;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.08) !important;
+}
+[data-theme="orbis-dark"] [class*="bg-base-100/70"] {
+  background-color: var(--color-base-300) !important;
+  box-shadow: 0 1px 3px oklch(0% 0 0 / 0.2) !important;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   10. Alert variant fixes — all 4 themes
+   DaisyUI v5 places `.alert` base styles in @layer daisyui.l1.l2.l3
+   and variant styles in @layer daisyui.l1.l2. Because l3 > l2 in
+   the layer cascade, the base `color` and `background-color` win
+   over variant values. Glass themes also add !important on
+   background-color for the frosted-glass reset. These scoped
+   overrides restore the correct per-variant appearance for every
+   theme without touching DaisyUI internals.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ── Orbis Light — alert variants ── */
+[data-theme="orbis-light"] .alert-error {
+  background-color: var(--color-error) !important;
+  color: var(--color-error-content) !important;
+  border-color: var(--color-error) !important;
+}
+[data-theme="orbis-light"] .alert-warning {
+  background-color: var(--color-warning) !important;
+  color: var(--color-warning-content) !important;
+  border-color: var(--color-warning) !important;
+}
+[data-theme="orbis-light"] .alert-info {
+  background-color: var(--color-info) !important;
+  color: var(--color-info-content) !important;
+  border-color: var(--color-info) !important;
+}
+[data-theme="orbis-light"] .alert-success {
+  background-color: var(--color-success) !important;
+  color: var(--color-success-content) !important;
+  border-color: var(--color-success) !important;
+}
+
+/* ── Orbis Dark — alert variants ── */
+[data-theme="orbis-dark"] .alert-error {
+  background-color: var(--color-error) !important;
+  color: var(--color-error-content) !important;
+  border-color: var(--color-error) !important;
+}
+[data-theme="orbis-dark"] .alert-warning {
+  background-color: var(--color-warning) !important;
+  color: var(--color-warning-content) !important;
+  border-color: var(--color-warning) !important;
+}
+[data-theme="orbis-dark"] .alert-info {
+  background-color: var(--color-info) !important;
+  color: var(--color-info-content) !important;
+  border-color: var(--color-info) !important;
+}
+[data-theme="orbis-dark"] .alert-success {
+  background-color: var(--color-success) !important;
+  color: var(--color-success-content) !important;
+  border-color: var(--color-success) !important;
+}
+
+/* ── Glass Light — alert variants keep frosted glass but with color tint ──
+   The base [data-theme="glass-light"] .alert rule sets a white translucent
+   background with !important. These overrides apply a colored translucent
+   tint instead, so the backdrop-filter blur from the base rule still works. */
+[data-theme="glass-light"] .alert-error {
+  background-color: oklch(65% 0.22 20 / 0.14) !important;
+  border-color: oklch(55% 0.2 20 / 0.45) !important;
+  color: oklch(30% 0.16 20) !important;
+}
+[data-theme="glass-light"] .alert-warning {
+  background-color: oklch(78% 0.18 85 / 0.18) !important;
+  border-color: oklch(65% 0.17 85 / 0.45) !important;
+  color: oklch(30% 0.12 85) !important;
+}
+[data-theme="glass-light"] .alert-info {
+  background-color: oklch(64% 0.15 235 / 0.14) !important;
+  border-color: oklch(54% 0.14 235 / 0.45) !important;
+  color: oklch(26% 0.12 235) !important;
+}
+[data-theme="glass-light"] .alert-success {
+  background-color: oklch(67% 0.17 155 / 0.14) !important;
+  border-color: oklch(55% 0.16 155 / 0.45) !important;
+  color: oklch(26% 0.14 155) !important;
+}
+
+/* ── Glass Dark — alert variants keep frosted glass but with color tint ──
+   Same approach: colored translucent tint so backdrop-blur still applies. */
+[data-theme="glass-dark"] .alert-error {
+  background-color: oklch(62% 0.22 20 / 0.22) !important;
+  border-color: oklch(62% 0.22 20 / 0.5) !important;
+  color: oklch(94% 0.04 20) !important;
+}
+[data-theme="glass-dark"] .alert-warning {
+  background-color: oklch(78% 0.18 85 / 0.18) !important;
+  border-color: oklch(78% 0.18 85 / 0.45) !important;
+  color: oklch(94% 0.05 85) !important;
+}
+[data-theme="glass-dark"] .alert-info {
+  background-color: oklch(64% 0.15 235 / 0.2) !important;
+  border-color: oklch(64% 0.15 235 / 0.45) !important;
+  color: oklch(92% 0.04 235) !important;
+}
+[data-theme="glass-dark"] .alert-success {
+  background-color: oklch(67% 0.17 155 / 0.2) !important;
+  border-color: oklch(67% 0.17 155 / 0.45) !important;
+  color: oklch(92% 0.05 155) !important;
+}

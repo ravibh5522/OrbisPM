@@ -1,16 +1,17 @@
 "use client";
 
 import { CalendarView, getDateRange } from "@/components/calendar";
+import { ProjectCanvasPanel } from "@/components/canvas/project-canvas-panel";
 import { ProjectAnnouncements } from "@/components/projects/project-announcements";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
 import { CSVImportDialog } from "@/components/tasks/csv-import-dialog";
 import {
-  activeFilterCount,
-  EMPTY_GLOBAL_FILTER,
-  GlobalFilterDropdown,
-  isGlobalFilterActive,
-  type GlobalFilterState,
+    activeFilterCount,
+    EMPTY_GLOBAL_FILTER,
+    GlobalFilterDropdown,
+    isGlobalFilterActive,
+    type GlobalFilterState,
 } from "@/components/tasks/global-filter-dropdown";
 import { TaskColumns } from "@/components/tasks/task-columns";
 import { TaskTreeView } from "@/components/tasks/task-tree-view";
@@ -27,24 +28,25 @@ import { useUIStore } from "@/stores/ui-store";
 import type { ProjectMember, ProjectTeam, Role, Team } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  CalendarDays,
-  Columns3,
-  Download,
-  Filter,
-  GitFork,
-  GitPullRequest,
-  Link2,
-  List,
-  ListTodo,
-  Megaphone,
-  Search,
-  Settings,
-  Trash2,
-  Unlink,
-  Upload,
-  UserPlus,
-  Users,
-  X,
+    CalendarDays,
+    Columns3,
+    Download,
+    Filter,
+    GitFork,
+    GitPullRequest,
+    Link2,
+    List,
+    ListTodo,
+    Megaphone,
+    Palette,
+    Search,
+    Settings,
+    Trash2,
+    Unlink,
+    Upload,
+    UserPlus,
+    Users,
+    X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -104,6 +106,7 @@ export default function ProjectDetailPage({
     | "reviews"
     | "announcements"
     | "dashboard"
+    | "canvas"
     | "settings"
   >(
     getProjectTab(projectId) as
@@ -113,6 +116,7 @@ export default function ProjectDetailPage({
       | "reviews"
       | "announcements"
       | "dashboard"
+      | "canvas"
       | "settings",
   );
   const [taskView, setTaskViewLocal] = useState<
@@ -277,6 +281,11 @@ export default function ProjectDetailPage({
               id: "announcements",
               label: "Announcements",
               icon: <Megaphone className="w-3.5 h-3.5" />,
+            },
+            {
+              id: "canvas",
+              label: "Canvas",
+              icon: <Palette className="w-3.5 h-3.5" />,
             },
             ...(projPerms.can("project", "update")
               ? [
@@ -538,6 +547,13 @@ export default function ProjectDetailPage({
               orgId={currentOrg!.id}
               projectId={projectId}
             />
+          </div>
+        )}
+
+        {/* Canvas tab */}
+        {activeTab === "canvas" && (
+          <div className="flex-1 overflow-hidden flex flex-col">
+            <ProjectCanvasPanel orgId={currentOrg!.id} projectId={projectId} />
           </div>
         )}
 

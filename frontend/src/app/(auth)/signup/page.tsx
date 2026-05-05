@@ -104,7 +104,7 @@ export default function SignupPage() {
         </div>
 
         {error && (
-          <Alert variant="error" className="mb-5 text-sm py-3">
+          <Alert variant="error" className="mb-5 text-sm py-3" onDismiss={() => setError("")}>
             {error}
           </Alert>
         )}

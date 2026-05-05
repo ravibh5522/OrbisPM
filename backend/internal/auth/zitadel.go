@@ -260,7 +260,9 @@ type IDPInfo struct {
 // --- OIDC PKCE Flow ---
 
 // GenerateAuthURL creates an OIDC authorize URL with PKCE parameters.
-func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string) (*AuthURLResponse, error) {
+// If idpID is non-empty, adds the IDP hint scope so Zitadel bypasses its own
+// login page and redirects the user directly to the specified identity provider.
+func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID ...string) (*AuthURLResponse, error) {
 	verifier, err := generateCodeVerifier()
 	if err != nil {
 		return nil, fmt.Errorf("generate code verifier: %w", err)
@@ -268,11 +270,19 @@ func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string) (*AuthURLResp
 
 	challenge := generateCodeChallenge(verifier)
 
+	scope := "openid profile email offline_access"
+	// urn:zitadel:iam:org:idp:id:{id} — Zitadel reserved scope that causes the
+	// hosted login to skip its own UI and redirect directly to the named IDP.
+	// See https://zitadel.com/docs/apis/openidoauth/scopes#reserved-scopes
+	if len(idpID) > 0 && idpID[0] != "" {
+		scope += " urn:zitadel:iam:org:idp:id:" + idpID[0]
+	}
+
 	params := url.Values{
 		"client_id":             {c.clientID},
 		"redirect_uri":          {redirectURI},
 		"response_type":         {"code"},
-		"scope":                 {"openid profile email offline_access"},
+		"scope":                 {scope},
 		"state":                 {state},
 		"code_challenge":        {challenge},
 		"code_challenge_method": {"S256"},

@@ -85,7 +85,7 @@ export default function ResetPasswordPage() {
         </div>
 
         {error && (
-          <Alert variant="error" className="mb-5 text-sm py-3">
+          <Alert variant="error" className="mb-5 text-sm py-3" onDismiss={() => setError("")}>
             {error}
           </Alert>
         )}
@@ -96,6 +96,7 @@ export default function ResetPasswordPage() {
             type="email"
             placeholder="you@example.com"
             autoComplete="email"
+            error={errors.email?.message}
             {...register("email", { required: "Email is required" })}
           />
           <Input
@@ -103,6 +104,7 @@ export default function ResetPasswordPage() {
             placeholder="Enter the code from your email"
             autoComplete="one-time-code"
             autoFocus={!!searchParams.get("email")}
+            error={errors.code?.message}
             {...register("code", { required: "Reset code is required" })}
           />
           <PasswordInput

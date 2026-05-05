@@ -24,7 +24,7 @@ export default function ForgotPasswordPage() {
   const {
     register,
     handleSubmit,
-    formState: { isSubmitting },
+    formState: { isSubmitting, errors },
   } = useForm<ForgotForm>();
 
   const onSubmit = async (data: ForgotForm) => {
@@ -109,7 +109,7 @@ export default function ForgotPasswordPage() {
         </div>
 
         {error && (
-          <Alert variant="error" className="mb-5 text-sm py-3">
+          <Alert variant="error" className="mb-5 text-sm py-3" onDismiss={() => setError("")}>
             {error}
           </Alert>
         )}
@@ -121,6 +121,7 @@ export default function ForgotPasswordPage() {
             placeholder="you@example.com"
             autoComplete="email"
             autoFocus
+            error={errors.email?.message}
             {...register("email", { required: "Email is required" })}
           />
           <Button type="submit" loading={isSubmitting} className="w-full mt-1">

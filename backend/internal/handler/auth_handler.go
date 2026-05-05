@@ -531,6 +531,10 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 type oidcAuthorizeRequest struct {
 	RedirectURI string `json:"redirect_uri" validate:"required,url"`
 	State       string `json:"state" validate:"required"`
+	// IDPID is optional. When set, Zitadel adds the IDP hint scope
+	// (urn:zitadel:iam:org:idp:id:{id}) to bypass its own login page and
+	// redirect directly to the named identity provider (e.g. Google, GitHub).
+	IDPID string `json:"idp_id"`
 }
 
 func (h *AuthHandler) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -540,7 +544,7 @@ func (h *AuthHandler) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.zitadel.GenerateAuthURL(req.RedirectURI, req.State)
+	result, err := h.zitadel.GenerateAuthURL(req.RedirectURI, req.State, req.IDPID)
 	if err != nil {
 		handleAuthError(w, err)
 		return

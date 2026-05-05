@@ -94,6 +94,22 @@ function httpStatusMessage(status: number): string {
  *   "rpc error: code = InvalidArgument desc = Password is invalid (COMMAND-3M0fs) (code=400)"
  */
 export function parseAuthError(err: unknown): string {
+  // Network / offline errors (TypeError from fetch)
+  if (err instanceof TypeError) {
+    const msg = err.message.toLowerCase();
+    if (
+      msg.includes("failed to fetch") ||
+      msg.includes("networkerror") ||
+      msg.includes("network request failed") ||
+      msg.includes("load failed") ||
+      msg.includes("fetch")
+    ) {
+      return typeof navigator !== "undefined" && !navigator.onLine
+        ? "You appear to be offline. Please check your internet connection."
+        : "Unable to reach the server. Please check your connection and try again.";
+    }
+  }
+
   if (err instanceof ApiError) {
     const raw = err.message ?? "";
 

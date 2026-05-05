@@ -235,6 +235,17 @@ type StickyNoteRepository interface {
 	Stats(ctx context.Context, userID uuid.UUID) (*domain.StickyNoteStats, error)
 }
 
+// --- Project Canvas (whiteboard) ---
+
+type ProjectCanvasRepository interface {
+	Create(ctx context.Context, tx pgx.Tx, c *domain.ProjectCanvas) (*domain.ProjectCanvas, error)
+	GetByID(ctx context.Context, tx pgx.Tx, id uuid.UUID) (*domain.ProjectCanvas, error)
+	UpdateMeta(ctx context.Context, tx pgx.Tx, id uuid.UUID, title, description string) (*domain.ProjectCanvas, error)
+	UpdateState(ctx context.Context, tx pgx.Tx, id uuid.UUID, state domain.CanvasState, expectedVersion int) (*domain.ProjectCanvas, error)
+	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
+	ListByProject(ctx context.Context, tx pgx.Tx, projectID uuid.UUID, filter ListFilter) ([]*domain.ProjectCanvas, int, error)
+}
+
 // --- Attachment ---
 
 type AttachmentRepository interface {

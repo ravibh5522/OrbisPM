@@ -252,6 +252,7 @@ func main() {
 	activityRepo := repository.NewActivityRepo(pool)
 	notifRepo := repository.NewNotificationRepo(pool)
 	stickyNoteRepo := repository.NewStickyNoteRepo(pool)
+	projectCanvasRepo := repository.NewProjectCanvasRepo(pool)
 
 	// --- Repositories (new) ---
 	attachmentRepo := repository.NewAttachmentRepo(pool)
@@ -292,6 +293,7 @@ func main() {
 	activitySvc := service.NewActivityService(activityRepo, txm)
 	notifSvc := service.NewNotificationService(notifRepo, txm)
 	stickyNoteSvc := service.NewStickyNoteService(stickyNoteRepo, txm)
+	projectCanvasSvc := service.NewProjectCanvasService(projectCanvasRepo, txm, publisher)
 
 	// --- Services (new) ---
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, storageClient, txm)
@@ -353,6 +355,7 @@ func main() {
 	ruleHandler := handler.NewRuleHandler(ruleSvc)
 	activityHandler := handler.NewActivityHandler(activitySvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
+	projectCanvasHandler := handler.NewProjectCanvasHandler(projectCanvasSvc)
 	stickyNoteHandler := handler.NewStickyNoteHandler(stickyNoteSvc)
 	healthHandler := handler.NewHealthHandler(pool, rdb)
 
@@ -656,6 +659,18 @@ func main() {
 
 							// Imports
 							r.With(prm("project", "projectId", "tasks", "create")).Mount("/imports", importHandler.Routes())
+
+							// Project canvases (whiteboards)
+							r.Route("/canvases", func(r chi.Router) {
+								r.With(prm("project", "projectId", "project", "read")).Get("/", projectCanvasHandler.List)
+								r.With(prm("project", "projectId", "project", "update")).Post("/", projectCanvasHandler.Create)
+								r.Route("/{canvasId}", func(r chi.Router) {
+									r.With(prm("project", "projectId", "project", "read")).Get("/", projectCanvasHandler.Get)
+									r.With(prm("project", "projectId", "project", "update")).Patch("/", projectCanvasHandler.UpdateMeta)
+									r.With(prm("project", "projectId", "project", "update")).Put("/state", projectCanvasHandler.SaveState)
+									r.With(prm("project", "projectId", "project", "update")).Delete("/", projectCanvasHandler.Delete)
+								})
+							})
 
 							// Tasks
 							r.Route("/tasks", func(r chi.Router) {

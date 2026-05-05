@@ -288,6 +288,7 @@ import type {
   ProcessExcelResult,
   Project,
   ProjectAnalytics,
+  ProjectCanvas,
   ProjectDashboardStats,
   ProjectMember,
   ProjectTeam,
@@ -376,15 +377,21 @@ export const api = {
     },
 
     // OIDC PKCE flow (public — called pre-auth)
+    // Pass idpId to add the IDP hint scope and skip Zitadel's own login page.
     oidcAuthorize(
       redirectUri: string,
       state: string,
+      idpId?: string,
     ): Promise<OIDCAuthorizeResponse> {
       return request(
         `${V1}/auth/oidc/authorize`,
         {
           method: "POST",
-          body: JSON.stringify({ redirect_uri: redirectUri, state }),
+          body: JSON.stringify({
+            redirect_uri: redirectUri,
+            state,
+            ...(idpId ? { idp_id: idpId } : {}),
+          }),
         },
         true,
       );
@@ -975,6 +982,59 @@ export const api = {
       ),
     delete: (orgId: string, projId: string, taskId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/tasks/${taskId}/rules/${id}`),
+  },
+
+  // Project canvases (whiteboards) — scoped to a project, RLS-isolated by org.
+  canvases: {
+    list: (orgId: string, projId: string, params?: { limit?: number; offset?: number }) => {
+      const qs = params
+        ? "?" +
+          new URLSearchParams(
+            Object.entries(params)
+              .filter(([, v]) => v != null)
+              .map(([k, v]) => [k, String(v)]),
+          ).toString()
+        : "";
+      return get<ListResponse<ProjectCanvas>>(
+        `${V1}/orgs/${orgId}/projects/${projId}/canvases${qs}`,
+      );
+    },
+    get: (orgId: string, projId: string, canvasId: string) =>
+      get<ProjectCanvas>(
+        `${V1}/orgs/${orgId}/projects/${projId}/canvases/${canvasId}`,
+      ),
+    create: (
+      orgId: string,
+      projId: string,
+      data: { title: string; description?: string },
+    ) =>
+      post<ProjectCanvas>(
+        `${V1}/orgs/${orgId}/projects/${projId}/canvases`,
+        data,
+      ),
+    updateMeta: (
+      orgId: string,
+      projId: string,
+      canvasId: string,
+      data: { title: string; description?: string },
+    ) =>
+      patch<ProjectCanvas>(
+        `${V1}/orgs/${orgId}/projects/${projId}/canvases/${canvasId}`,
+        data,
+      ),
+    saveState: (
+      orgId: string,
+      projId: string,
+      canvasId: string,
+      state: ProjectCanvas["state"],
+      expectedVersion: number,
+    ) =>
+      put<ProjectCanvas>(
+        `${V1}/orgs/${orgId}/projects/${projId}/canvases/${canvasId}/state`,
+        { state, expected_version: expectedVersion },
+      ),
+    delete: (orgId: string, projId: string, canvasId: string) =>
+      del(`${V1}/orgs/${orgId}/projects/${projId}/canvases/${canvasId}`),
   },
 
   // Notifications (user-scoped, no org prefix)
