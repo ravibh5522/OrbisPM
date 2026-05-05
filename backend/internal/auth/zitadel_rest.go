@@ -1085,3 +1085,110 @@ func (c *ZitadelClient) setActionInFlowTrigger(ctx context.Context, flowType, tr
 	})
 	return err
 }
+
+// EnsureLoginPolicy updates (or creates) the org's custom login policy so that
+// the MFA-init prompt is disabled for SSO users. The Zitadel docs confirm:
+// "mfaInitSkipLifetime value 0 will deactivate the prompt".
+//
+// This prevents the "2-Factor Setup" screen from appearing after Google/GitHub
+// OAuth when a user hasn't configured MFA yet.
+func (c *ZitadelClient) EnsureLoginPolicy(ctx context.Context) error {
+	// 1. Read the current login policy (may be org-custom or inherited default).
+	respBody, err := c.doRESTCall(ctx, "GET", "/management/v1/policies/login", nil)
+	if err != nil {
+		return fmt.Errorf("get login policy: %w", err)
+	}
+
+	var current struct {
+		Policy    map[string]any `json:"policy"`
+		IsDefault bool           `json:"isDefault"`
+	}
+	if err := json.Unmarshal(respBody, &current); err != nil {
+		return fmt.Errorf("unmarshal login policy: %w", err)
+	}
+
+	// Already configured — nothing to do.
+	if skip, ok := current.Policy["mfaInitSkipLifetime"].(string); ok && skip == "0s" {
+		return nil
+	}
+
+	// 2. Build update body, preserving all existing settings but setting
+	// mfaInitSkipLifetime=0s (disables MFA-init prompt) and ensuring forceMfa=false.
+	body := buildLoginPolicyBody(current.Policy)
+	body["mfaInitSkipLifetime"] = "0s"
+	body["forceMfa"] = false
+	body["forceMfaLocalOnly"] = false
+
+	// 3. PUT updates an existing custom policy; POST creates a new one.
+	method := "PUT"
+	if current.IsDefault {
+		method = "POST"
+	}
+
+	if _, err := c.doRESTCall(ctx, method, "/management/v1/policies/login", body); err != nil {
+		// PUT returns 404 if no custom policy exists yet — fall back to POST.
+		if authErr, ok := err.(*AuthError); ok && authErr.Code == 404 && method == "PUT" {
+			if _, postErr := c.doRESTCall(ctx, "POST", "/management/v1/policies/login", body); postErr != nil {
+				return fmt.Errorf("create login policy: %w", postErr)
+			}
+		} else {
+			return fmt.Errorf("update login policy: %w", err)
+		}
+	}
+
+	log.Info().Msg("zitadel: disabled MFA-init prompt in org login policy (mfaInitSkipLifetime=0s)")
+	return nil
+}
+
+// buildLoginPolicyBody extracts only the fields accepted by
+// AddCustomLoginPolicy / UpdateCustomLoginPolicy from a raw policy map.
+// This avoids sending read-only fields like "details" or "idps".
+func buildLoginPolicyBody(p map[string]any) map[string]any {
+	body := map[string]any{}
+
+	boolFields := []string{
+		"allowUsernamePassword", "allowRegister", "allowExternalIdp",
+		"forceMfa", "forceMfaLocalOnly", "hidePasswordReset",
+		"ignoreUnknownUsernames", "allowDomainDiscovery",
+		"disableLoginWithEmail", "disableLoginWithPhone",
+	}
+	for _, f := range boolFields {
+		if v, ok := p[f]; ok {
+			body[f] = v
+		}
+	}
+
+	stringFields := []string{
+		"passwordlessType", "defaultRedirectUri",
+		"passwordCheckLifetime", "externalLoginCheckLifetime",
+		"mfaInitSkipLifetime", "secondFactorCheckLifetime",
+		"multiFactorCheckLifetime",
+	}
+	for _, f := range stringFields {
+		if v, ok := p[f]; ok && v != nil {
+			if s, isStr := v.(string); isStr && s != "" {
+				body[f] = s
+			}
+		}
+	}
+
+	// Preserve second/multi factor type arrays; strip UNSPECIFIED placeholder values.
+	for _, af := range []string{"secondFactors", "multiFactors"} {
+		if arr, ok := p[af].([]any); ok {
+			filtered := make([]any, 0, len(arr))
+			for _, item := range arr {
+				if s, ok := item.(string); ok &&
+					s != "SECOND_FACTOR_TYPE_UNSPECIFIED" &&
+					s != "MULTI_FACTOR_TYPE_UNSPECIFIED" &&
+					s != "" {
+					filtered = append(filtered, s)
+				}
+			}
+			if len(filtered) > 0 {
+				body[af] = filtered
+			}
+		}
+	}
+
+	return body
+}

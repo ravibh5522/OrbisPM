@@ -193,6 +193,14 @@ func main() {
 		}
 	}
 
+	// Disable the MFA-init prompt in the org login policy so that SSO users
+	// (Google, GitHub) are not redirected to a "2-Factor Setup" screen after
+	// authenticating via their IDP. Setting mfaInitSkipLifetime=0s deactivates
+	// the prompt entirely per Zitadel docs.
+	if policyErr := zitadelClient.EnsureLoginPolicy(ctx); policyErr != nil {
+		log.Warn().Err(policyErr).Msg("failed to configure Zitadel org login policy (MFA prompt may appear for SSO users)")
+	}
+
 	// --- MinIO Storage Client (best-effort) ---
 	var storageClient *storage.Client
 	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL)
