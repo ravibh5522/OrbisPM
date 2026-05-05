@@ -661,6 +661,9 @@ export interface AuthTokens {
   session_id?: string;
   session_token?: string;
   available_methods?: string[];
+  // Set when an SSO provider (e.g. GitHub with a private account) did not
+  // return an email. The frontend must redirect to /auth/complete-profile.
+  needs_email?: boolean;
 }
 
 export interface BackupCodesResponse {

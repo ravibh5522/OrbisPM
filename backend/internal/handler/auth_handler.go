@@ -275,6 +275,9 @@ func (h *AuthHandler) Routes() chi.Router {
 	r.Post("/oidc/authorize", h.OIDCAuthorize)
 	r.Post("/oidc/callback", h.OIDCCallback)
 	r.Post("/oidc/refresh", h.OIDCRefresh)
+	// Called after SSO when the IDP (e.g. GitHub with private email) did not
+	// supply an email address. The user provides it here and we update Zitadel.
+	r.Post("/oidc/complete-profile", h.OIDCCompleteProfile)
 
 	// MFA
 	r.Post("/mfa/totp/register", h.RegisterTOTP)
@@ -590,6 +593,51 @@ func (h *AuthHandler) OIDCRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	JSON(w, http.StatusOK, result)
+}
+
+// OIDCCompleteProfile is called when an SSO provider (e.g. GitHub with a
+// private account) didn't return an email. The user has already exchanged the
+// code and holds a valid access_token; this endpoint sets their email in
+// Zitadel and returns a refreshed UserInfo so the frontend can continue.
+type oidcCompleteProfileRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+func (h *AuthHandler) OIDCCompleteProfile(w http.ResponseWriter, r *http.Request) {
+	token := extractBearerToken(r)
+	if token == "" {
+		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "missing authorization header"})
+		return
+	}
+
+	claims, err := h.zitadel.ValidateToken(r.Context(), token)
+	if err != nil {
+		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "invalid or expired token"})
+		return
+	}
+
+	var req oidcCompleteProfileRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+
+	// Update the email in Zitadel (marks it as verified immediately).
+	if err := h.zitadel.UpdateUserEmail(r.Context(), claims.Subject, req.Email); err != nil {
+		handleAuthError(w, err)
+		return
+	}
+
+	// Re-fetch the full user so the client gets the updated profile.
+	user, err := h.zitadel.GetUser(r.Context(), claims.Subject)
+	if err != nil {
+		handleAuthError(w, err)
+		return
+	}
+	user.InternalID = zitadelIDToUUID(user.ID).String()
+	h.upsertUserProfile(r.Context(), user)
+	h.enrichUserFromDB(r.Context(), user)
+	JSON(w, http.StatusOK, user)
 }
 
 // --- MFA Endpoints ---

@@ -40,9 +40,9 @@ type CanvasShape struct {
 type CanvasConnectorMode string
 
 const (
-	ConnectorStraight    CanvasConnectorMode = "straight"
-	ConnectorOrthogonal  CanvasConnectorMode = "orthogonal"
-	ConnectorCurve       CanvasConnectorMode = "curve"
+	ConnectorStraight   CanvasConnectorMode = "straight"
+	ConnectorOrthogonal CanvasConnectorMode = "orthogonal"
+	ConnectorCurve      CanvasConnectorMode = "curve"
 )
 
 // CanvasConnector represents a directed edge between two shapes.

@@ -193,6 +193,11 @@ type TokenResponse struct {
 	SessionID        string   `json:"session_id,omitempty"`
 	SessionToken     string   `json:"session_token,omitempty"`
 	AvailableMethods []string `json:"available_methods,omitempty"`
+
+	// NeedsEmail is true when the identity provider (e.g. GitHub with a private
+	// account) did not supply an email address. The frontend should redirect the
+	// user to a "complete profile" screen to collect their email.
+	NeedsEmail bool `json:"needs_email,omitempty"`
 }
 
 // UserInfo holds user information.
@@ -339,22 +344,43 @@ func (c *ZitadelClient) ExchangeCode(ctx context.Context, code, redirectURI, cod
 		return nil, fmt.Errorf("decode token response: %w", err)
 	}
 
-	// Parse ID Token to extract user info
-	userInfo, err := c.extractUserInfoFromIDToken(tokenResp.IDToken)
-	if err != nil {
-		userInfo, _ = c.extractUserInfoFromIDToken(tokenResp.AccessToken)
+	// Per OIDC Core 1.0 §5.4: when an access_token is issued alongside an
+	// id_token, the id_token MUST NOT contain profile/email claims — those are
+	// only available via the userinfo endpoint.
+	// We therefore call /oidc/v1/userinfo first and fall back to id_token parsing
+	// only when the userinfo call fails (e.g. network partition).
+	userInfo, err := c.fetchUserInfoFromEndpoint(ctx, tokenResp.AccessToken)
+	if err != nil || userInfo == nil {
+		log.Debug().Err(err).Msg("userinfo endpoint failed, falling back to id_token")
+		userInfo, _ = c.extractUserInfoFromIDToken(tokenResp.IDToken)
+		if userInfo == nil {
+			userInfo, _ = c.extractUserInfoFromIDToken(tokenResp.AccessToken)
+		}
+	}
+
+	// If email is still empty after all attempts, try the management API by
+	// Zitadel user ID (handles GitHub accounts with 100% private email).
+	if userInfo != nil && userInfo.Email == "" && userInfo.ID != "" {
+		if managed, mErr := c.getUserUncached(ctx, userInfo.ID); mErr == nil && managed.Email != "" {
+			userInfo.Email = managed.Email
+			userInfo.EmailConfirmedAt = managed.EmailConfirmedAt
+		}
 	}
 
 	expiresAt := time.Now().Unix() + int64(tokenResp.ExpiresIn)
 
-	return &TokenResponse{
+	tokRes := &TokenResponse{
 		AccessToken:  tokenResp.AccessToken,
 		RefreshToken: tokenResp.RefreshToken,
 		TokenType:    tokenResp.TokenType,
 		ExpiresIn:    tokenResp.ExpiresIn,
 		ExpiresAt:    expiresAt,
 		User:         userInfo,
-	}, nil
+	}
+	if userInfo == nil || userInfo.Email == "" {
+		tokRes.NeedsEmail = true
+	}
+	return tokRes, nil
 }
 
 // RefreshOIDCToken exchanges a refresh token for new OIDC tokens.
@@ -398,17 +424,25 @@ func (c *ZitadelClient) RefreshOIDCToken(ctx context.Context, refreshToken strin
 		return nil, fmt.Errorf("decode refresh response: %w", err)
 	}
 
-	userInfo, _ := c.extractUserInfoFromIDToken(tokenResp.IDToken)
+	// Same as ExchangeCode: userinfo endpoint is authoritative for email/profile.
+	userInfo, uiErr := c.fetchUserInfoFromEndpoint(ctx, tokenResp.AccessToken)
+	if uiErr != nil || userInfo == nil {
+		userInfo, _ = c.extractUserInfoFromIDToken(tokenResp.IDToken)
+	}
 	expiresAt := time.Now().Unix() + int64(tokenResp.ExpiresIn)
 
-	return &TokenResponse{
+	refreshTokRes := &TokenResponse{
 		AccessToken:  tokenResp.AccessToken,
 		RefreshToken: tokenResp.RefreshToken,
 		TokenType:    tokenResp.TokenType,
 		ExpiresIn:    tokenResp.ExpiresIn,
 		ExpiresAt:    expiresAt,
 		User:         userInfo,
-	}, nil
+	}
+	if userInfo == nil || userInfo.Email == "" {
+		refreshTokRes.NeedsEmail = true
+	}
+	return refreshTokRes, nil
 }
 
 // --- Session-based Auth (direct login via gRPC) ---
@@ -1552,6 +1586,75 @@ func (c *ZitadelClient) extractUserInfoFromIDToken(tokenStr string) (*UserInfo, 
 	return &UserInfo{
 		ID:               sub,
 		Email:            email,
+		EmailConfirmedAt: confirmed,
+		UserMetadata:     metadata,
+		AppMetadata:      map[string]any{},
+	}, nil
+}
+
+// fetchUserInfoFromEndpoint calls the OIDC userinfo endpoint to retrieve the
+// authenticated user's profile claims (including email) using the access token.
+// This is required by OIDC Core 1.0 §5.4: when an access_token is also issued,
+// profile/email claims are omitted from the id_token and must be fetched here.
+func (c *ZitadelClient) fetchUserInfoFromEndpoint(ctx context.Context, accessToken string) (*UserInfo, error) {
+	userinfoURL := c.internalURL + "/oidc/v1/userinfo"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, userinfoURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("build userinfo request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	if c.externalHost != "" {
+		req.Host = c.externalHost
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("userinfo request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseHTTPError(resp)
+	}
+
+	var claims struct {
+		Sub               string `json:"sub"`
+		Email             string `json:"email"`
+		EmailVerified     bool   `json:"email_verified"`
+		Name              string `json:"name"`
+		GivenName         string `json:"given_name"`
+		FamilyName        string `json:"family_name"`
+		PreferredUsername string `json:"preferred_username"`
+		Picture           string `json:"picture"`
+		Locale            string `json:"locale"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&claims); err != nil {
+		return nil, fmt.Errorf("decode userinfo: %w", err)
+	}
+
+	var confirmed *string
+	if claims.EmailVerified {
+		t := time.Now().Format(time.RFC3339)
+		confirmed = &t
+	}
+
+	metadata := map[string]any{"name": claims.Name}
+	if claims.GivenName != "" {
+		metadata["given_name"] = claims.GivenName
+	}
+	if claims.FamilyName != "" {
+		metadata["family_name"] = claims.FamilyName
+	}
+	if claims.Picture != "" {
+		metadata["picture"] = claims.Picture
+	}
+	if claims.PreferredUsername != "" {
+		metadata["preferred_username"] = claims.PreferredUsername
+	}
+
+	return &UserInfo{
+		ID:               claims.Sub,
+		Email:            claims.Email,
 		EmailConfirmedAt: confirmed,
 		UserMetadata:     metadata,
 		AppMetadata:      map[string]any{},

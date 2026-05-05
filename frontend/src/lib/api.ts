@@ -424,6 +424,15 @@ export const api = {
         true,
       );
     },
+    /** Called after SSO when the provider (GitHub private account) returned no
+     *  email. The user supplies their email; the backend updates Zitadel and
+     *  returns a refreshed AuthUser. Requires a valid Bearer token. */
+    completeProfile(email: string): Promise<import("@/types/domain").AuthUser> {
+      return request(`${V1}/auth/oidc/complete-profile`, {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+    },
 
     verifyLoginMFA(
       sessionId: string,
