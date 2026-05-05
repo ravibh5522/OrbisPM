@@ -1107,14 +1107,23 @@ func (c *ZitadelClient) EnsureLoginPolicy(ctx context.Context) error {
 		return fmt.Errorf("unmarshal login policy: %w", err)
 	}
 
-	// Already configured — nothing to do.
-	if skip, ok := current.Policy["mfaInitSkipLifetime"].(string); ok && skip == "0s" {
+	// Check if already correctly configured.
+	mfaSkip, _ := current.Policy["mfaInitSkipLifetime"].(string)
+	extIdp, _ := current.Policy["allowExternalIdp"].(bool)
+	if mfaSkip == "0s" && extIdp {
 		return nil
 	}
 
-	// 2. Build update body, preserving all existing settings but setting
-	// mfaInitSkipLifetime=0s (disables MFA-init prompt) and ensuring forceMfa=false.
+	// 2. Build update body with safe required values explicitly set.
+	// DO NOT derive allowExternalIdp/allowRegister from the existing policy —
+	// if the org is using the inherited default those fields may be missing
+	// from the response, which would cause the PUT/POST to disable them.
 	body := buildLoginPolicyBody(current.Policy)
+
+	// Always force these to safe values regardless of what the existing policy says.
+	body["allowExternalIdp"] = true
+	body["allowUsernamePassword"] = true
+	body["allowRegister"] = true
 	body["mfaInitSkipLifetime"] = "0s"
 	body["forceMfa"] = false
 	body["forceMfaLocalOnly"] = false
