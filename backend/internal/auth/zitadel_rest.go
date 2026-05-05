@@ -858,9 +858,9 @@ func (c *ZitadelClient) restRequestPasswordReset(ctx context.Context, userID str
 // This is idempotent — safe to call on every startup.
 func (c *ZitadelClient) EnsureGitHubNameAction(ctx context.Context, githubIDPID string) error {
 	const (
-		flowTypeExtAuth  = "2" // FLOW_TYPE_EXTERNAL_AUTHENTICATION
-		triggerTypePost  = "1" // TRIGGER_TYPE_POST_AUTHENTICATION
-		actionName       = "setNameFromGitHub"
+		flowTypeExtAuth = "2" // FLOW_TYPE_EXTERNAL_AUTHENTICATION
+		triggerTypePost = "1" // TRIGGER_TYPE_POST_AUTHENTICATION
+		actionName      = "setNameFromGitHub"
 	)
 
 	script := fmt.Sprintf(`function setNameFromGitHub(ctx, api) {
