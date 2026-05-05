@@ -847,88 +847,110 @@ func (c *ZitadelClient) restRequestPasswordReset(ctx context.Context, userID str
 
 // --- Zitadel Actions (IDP name-mapping) ---
 
-// EnsureGitHubNameAction creates a Zitadel Action (if it doesn't already exist) that
-// maps the GitHub `name` claim to Zitadel's required first/last name fields, then links
-// it to the External Authentication → Post Authentication flow trigger.
+// EnsureGitHubNameAction creates (or updates) a Zitadel Action that maps the GitHub
+// `name` claim to Zitadel's required first/last name fields, then links it to the
+// External Authentication → Post Authentication flow trigger.
 //
-// GitHub's OAuth does not return `given_name`/`family_name`, so Zitadel's automatic user
-// creation fails with "First name in profile is empty". This action reads the `name` field
-// from GitHub's userinfo and sets the first/last name before Zitadel creates the account.
+// GitHub's OAuth does not return `given_name`/`family_name`, so Zitadel's automatic
+// user creation fails with "First name in profile is empty". This action reads
+// ctx.v1.providerInfo.name (the raw GitHub name field) and sets first/last name so
+// Zitadel auto-registers the user without showing its hosted registration form.
+//
+// Based on the official Zitadel example:
+//
+//	https://github.com/zitadel/actions/blob/main/examples/github_identity_provider.js
 //
 // This is idempotent — safe to call on every startup.
 func (c *ZitadelClient) EnsureGitHubNameAction(ctx context.Context, githubIDPID string) error {
+	// From Zitadel docs (https://zitadel.com/docs/apis/actions/external-authentication):
+	//   FLOW_TYPE_EXTERNAL_AUTHENTICATION = "1"  (NOT "2" — "2" is internal auth)
+	//   TRIGGER_TYPE_POST_AUTHENTICATION  = "1"
 	const (
-		flowTypeExtAuth = "2" // FLOW_TYPE_EXTERNAL_AUTHENTICATION
+		flowTypeExtAuth = "1" // FLOW_TYPE_EXTERNAL_AUTHENTICATION
 		triggerTypePost = "1" // TRIGGER_TYPE_POST_AUTHENTICATION
-		actionName      = "setNameFromGitHub"
+		actionName      = "mapGitHubOAuth"
 	)
 
-	script := fmt.Sprintf(`function setNameFromGitHub(ctx, api) {
-  if (!ctx.v1.externalUser || ctx.v1.externalUser.idpID !== "%s") {
+	// Script mirrors the official Zitadel GitHub example exactly:
+	//   ctx.v1.externalUser.externalIdpId — correct IDP ID field
+	//   ctx.v1.providerInfo.name          — GitHub's raw `name` field
+	//   api.setFirstName / api.setLastName — available at Post Authentication
+	script := fmt.Sprintf(`function mapGitHubOAuth(ctx, api) {
+  if (ctx.v1.externalUser.externalIdpId != "%s") {
     return;
   }
-  var name = "";
-  if (ctx.v1.providerInfo && ctx.v1.providerInfo.name) {
-    name = ctx.v1.providerInfo.name;
-  }
-  if (!name && ctx.v1.externalUser.preferredUsername) {
-    name = ctx.v1.externalUser.preferredUsername;
-  }
-  if (!name) { name = "User"; }
-  var parts = name.split(" ");
-  var first = parts[0] || name;
-  var last = parts.length > 1 ? parts.slice(1).join(" ") : "-";
-  api.setFirstName(first);
-  api.setLastName(last);
+  var name = ctx.v1.providerInfo.name || ctx.v1.providerInfo.login || "User";
+  api.setFirstName(name);
+  api.setLastName(name);
 }`, githubIDPID)
 
-	// Step 1: Search for an existing action with the same name.
-	actionID, err := c.findActionByName(ctx, actionName)
-	if err != nil {
-		return fmt.Errorf("search actions: %w", err)
+	// Step 0: Clean up any previous broken action (old name used wrong flow type).
+	if oldID, _ := c.findActionByName(ctx, "setNameFromGitHub"); oldID != "" {
+		if delErr := c.deleteAction(ctx, oldID); delErr != nil {
+			log.Warn().Err(delErr).Str("actionId", oldID).Msg("could not delete old setNameFromGitHub action")
+		} else {
+			log.Info().Str("actionId", oldID).Msg("deleted stale setNameFromGitHub action")
+		}
 	}
 
-	// Step 2: Create the action if it doesn't exist yet.
+	// Step 1: Try to find an existing action with this name.
+	actionID, err := c.findActionByName(ctx, actionName)
+	if err != nil {
+		return fmt.Errorf("search Zitadel actions: %w", err)
+	}
+
 	if actionID == "" {
+		// Step 2a: Action doesn't exist — create it.
 		id, createErr := c.createAction(ctx, actionName, script)
 		if createErr != nil {
-			return fmt.Errorf("create action %q: %w", actionName, createErr)
+			return fmt.Errorf("create Zitadel action %q: %w", actionName, createErr)
 		}
 		actionID = id
 		log.Info().Str("actionId", actionID).Str("name", actionName).Msg("created Zitadel GitHub name action")
 	} else {
-		log.Debug().Str("actionId", actionID).Str("name", actionName).Msg("Zitadel GitHub name action already exists")
+		// Step 2b: Action exists — always update its script so that previous broken
+		// versions (wrong field names, wrong flow type linkage) get fixed on restart.
+		if updateErr := c.updateAction(ctx, actionID, actionName, script); updateErr != nil {
+			log.Warn().Err(updateErr).Str("actionId", actionID).Msg("failed to update Zitadel GitHub name action script")
+		} else {
+			log.Debug().Str("actionId", actionID).Str("name", actionName).Msg("updated Zitadel GitHub name action script")
+		}
 	}
 
-	// Step 3: Check if the action is already linked to the flow trigger.
+	// Step 3: Check if the action is already linked to the correct flow+trigger.
 	linked, err := c.isActionInFlowTrigger(ctx, flowTypeExtAuth, triggerTypePost, actionID)
 	if err != nil {
 		return fmt.Errorf("check flow trigger: %w", err)
 	}
-
 	if linked {
 		log.Debug().Str("actionId", actionID).Msg("GitHub name action already linked to External Auth Post-Authentication trigger")
 		return nil
 	}
 
-	// Step 4: Link the action to the flow trigger.
-	if err := c.addActionToFlowTrigger(ctx, flowTypeExtAuth, triggerTypePost, actionID); err != nil {
+	// Step 4: Link the action. SetTriggerActions replaces the list, so we merge
+	// with any existing actions to avoid removing others.
+	if err := c.setActionInFlowTrigger(ctx, flowTypeExtAuth, triggerTypePost, actionID); err != nil {
 		return fmt.Errorf("link action to flow trigger: %w", err)
 	}
 	log.Info().Str("actionId", actionID).Msg("linked GitHub name action to External Auth Post-Authentication trigger")
 	return nil
 }
 
-// findActionByName searches for a Zitadel action by name and returns its ID,
+// findActionByName searches for a Zitadel action by exact name and returns its ID,
 // or an empty string if not found.
 func (c *ZitadelClient) findActionByName(ctx context.Context, name string) (string, error) {
 	body := map[string]any{
 		"queries": []map[string]any{
-			{"nameQuery": map[string]any{"name": name, "method": "ACTION_NAME_METHOD_EQUALS"}},
+			// TEXT_QUERY_METHOD_EQUALS = 1 (exact match, case-sensitive)
+			{"nameQuery": map[string]any{"name": name, "method": "TEXT_QUERY_METHOD_EQUALS"}},
 		},
 	}
 	respBody, err := c.doRESTCall(ctx, "POST", "/management/v1/actions/_search", body)
 	if err != nil {
+		// 404 means no actions exist yet — not an error.
+		if authErr, ok := err.(*AuthError); ok && authErr.Code == 404 {
+			return "", nil
+		}
 		return "", err
 	}
 	var resp struct {
@@ -972,19 +994,49 @@ func (c *ZitadelClient) createAction(ctx context.Context, name, script string) (
 	return resp.ID, nil
 }
 
+// updateAction updates an existing Zitadel action's script.
+func (c *ZitadelClient) updateAction(ctx context.Context, id, name, script string) error {
+	body := map[string]any{
+		"name":          name,
+		"script":        script,
+		"timeout":       "10s",
+		"allowedToFail": false,
+	}
+	_, err := c.doRESTCall(ctx, "PUT", "/management/v1/actions/"+id, body)
+	return err
+}
+
+// deleteAction deletes a Zitadel action by ID.
+func (c *ZitadelClient) deleteAction(ctx context.Context, id string) error {
+	_, err := c.doRESTCall(ctx, "DELETE", "/management/v1/actions/"+id, nil)
+	return err
+}
+
 // isActionInFlowTrigger returns true if actionID is already registered on the given
 // flow type + trigger type combination.
 func (c *ZitadelClient) isActionInFlowTrigger(ctx context.Context, flowType, triggerType, actionID string) (bool, error) {
-	path := "/management/v1/flows/" + flowType
-	respBody, err := c.doRESTCall(ctx, "GET", path, nil)
+	ids, err := c.getFlowTriggerActionIDs(ctx, flowType, triggerType)
 	if err != nil {
-		// A 404 means no flow has been configured yet — not an error.
-		if authErr, ok := err.(*AuthError); ok && authErr.Code == 404 {
-			return false, nil
-		}
 		return false, err
 	}
-	// The response structure nests trigger actions under numeric trigger-type keys.
+	for _, id := range ids {
+		if id == actionID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// getFlowTriggerActionIDs returns the current action IDs for a flow+trigger combination.
+func (c *ZitadelClient) getFlowTriggerActionIDs(ctx context.Context, flowType, triggerType string) ([]string, error) {
+	respBody, err := c.doRESTCall(ctx, "GET", "/management/v1/flows/"+flowType, nil)
+	if err != nil {
+		// 404 = flow not configured yet; not an error.
+		if authErr, ok := err.(*AuthError); ok && authErr.Code == 404 {
+			return nil, nil
+		}
+		return nil, err
+	}
 	var resp struct {
 		Flow struct {
 			TriggerActions map[string]struct {
@@ -995,23 +1047,41 @@ func (c *ZitadelClient) isActionInFlowTrigger(ctx context.Context, flowType, tri
 		} `json:"flow"`
 	}
 	if err := json.Unmarshal(respBody, &resp); err != nil {
-		return false, fmt.Errorf("unmarshal flow response: %w", err)
+		return nil, fmt.Errorf("unmarshal flow response: %w", err)
 	}
-	if triggerEntry, ok := resp.Flow.TriggerActions[triggerType]; ok {
-		for _, a := range triggerEntry.Actions {
-			if a.ID == actionID {
-				return true, nil
-			}
+	var ids []string
+	if entry, ok := resp.Flow.TriggerActions[triggerType]; ok {
+		for _, a := range entry.Actions {
+			ids = append(ids, a.ID)
 		}
 	}
-	return false, nil
+	return ids, nil
 }
 
-// addActionToFlowTrigger links actionID to the given flow type + trigger type.
-func (c *ZitadelClient) addActionToFlowTrigger(ctx context.Context, flowType, triggerType, actionID string) error {
+// setActionInFlowTrigger links actionID to the given flow+trigger, merging with
+// any existing action IDs so other actions are not removed.
+func (c *ZitadelClient) setActionInFlowTrigger(ctx context.Context, flowType, triggerType, actionID string) error {
+	existingIDs, err := c.getFlowTriggerActionIDs(ctx, flowType, triggerType)
+	if err != nil {
+		log.Warn().Err(err).Msg("could not read existing flow trigger actions; replacing with new action only")
+		existingIDs = nil
+	}
+
+	merged := make([]string, 0, len(existingIDs)+1)
+	already := false
+	for _, id := range existingIDs {
+		merged = append(merged, id)
+		if id == actionID {
+			already = true
+		}
+	}
+	if !already {
+		merged = append(merged, actionID)
+	}
+
 	path := "/management/v1/flows/" + flowType + "/trigger/" + triggerType + "/actions"
-	_, err := c.doRESTCall(ctx, "POST", path, map[string]any{
-		"actionIds": []string{actionID},
+	_, err = c.doRESTCall(ctx, "POST", path, map[string]any{
+		"actionIds": merged,
 	})
 	return err
 }
