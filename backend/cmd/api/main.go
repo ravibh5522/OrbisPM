@@ -183,6 +183,16 @@ func main() {
 	}
 	log.Info().Str("issuer", cfg.ZitadelIssuer).Msg("Zitadel gRPC client connected")
 
+	// Ensure the GitHub-name-mapping action exists in Zitadel so that new users who
+	// sign up via GitHub SSO have their first/last name populated automatically.
+	// GitHub OAuth does not return given_name/family_name, so without this action
+	// Zitadel shows "First name in profile is empty" when auto-creating the account.
+	if cfg.ZitadelGitHubIDPID != "" {
+		if actionErr := zitadelClient.EnsureGitHubNameAction(ctx, cfg.ZitadelGitHubIDPID); actionErr != nil {
+			log.Warn().Err(actionErr).Msg("failed to ensure GitHub name action in Zitadel (GitHub SSO name mapping may not work)")
+		}
+	}
+
 	// --- MinIO Storage Client (best-effort) ---
 	var storageClient *storage.Client
 	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL)

@@ -844,3 +844,174 @@ func (c *ZitadelClient) restResetPasswordWithCode(ctx context.Context, userID, c
 func (c *ZitadelClient) restRequestPasswordReset(ctx context.Context, userID string) (string, error) {
 	return c.restPasswordReset(ctx, userID)
 }
+
+// --- Zitadel Actions (IDP name-mapping) ---
+
+// EnsureGitHubNameAction creates a Zitadel Action (if it doesn't already exist) that
+// maps the GitHub `name` claim to Zitadel's required first/last name fields, then links
+// it to the External Authentication → Post Authentication flow trigger.
+//
+// GitHub's OAuth does not return `given_name`/`family_name`, so Zitadel's automatic user
+// creation fails with "First name in profile is empty". This action reads the `name` field
+// from GitHub's userinfo and sets the first/last name before Zitadel creates the account.
+//
+// This is idempotent — safe to call on every startup.
+func (c *ZitadelClient) EnsureGitHubNameAction(ctx context.Context, githubIDPID string) error {
+	const (
+		flowTypeExtAuth  = "2" // FLOW_TYPE_EXTERNAL_AUTHENTICATION
+		triggerTypePost  = "1" // TRIGGER_TYPE_POST_AUTHENTICATION
+		actionName       = "setNameFromGitHub"
+	)
+
+	script := fmt.Sprintf(`function setNameFromGitHub(ctx, api) {
+  if (!ctx.v1.externalUser || ctx.v1.externalUser.idpID !== "%s") {
+    return;
+  }
+  var name = "";
+  if (ctx.v1.providerInfo && ctx.v1.providerInfo.name) {
+    name = ctx.v1.providerInfo.name;
+  }
+  if (!name && ctx.v1.externalUser.preferredUsername) {
+    name = ctx.v1.externalUser.preferredUsername;
+  }
+  if (!name) { name = "User"; }
+  var parts = name.split(" ");
+  var first = parts[0] || name;
+  var last = parts.length > 1 ? parts.slice(1).join(" ") : "-";
+  api.setFirstName(first);
+  api.setLastName(last);
+}`, githubIDPID)
+
+	// Step 1: Search for an existing action with the same name.
+	actionID, err := c.findActionByName(ctx, actionName)
+	if err != nil {
+		return fmt.Errorf("search actions: %w", err)
+	}
+
+	// Step 2: Create the action if it doesn't exist yet.
+	if actionID == "" {
+		id, createErr := c.createAction(ctx, actionName, script)
+		if createErr != nil {
+			return fmt.Errorf("create action %q: %w", actionName, createErr)
+		}
+		actionID = id
+		log.Info().Str("actionId", actionID).Str("name", actionName).Msg("created Zitadel GitHub name action")
+	} else {
+		log.Debug().Str("actionId", actionID).Str("name", actionName).Msg("Zitadel GitHub name action already exists")
+	}
+
+	// Step 3: Check if the action is already linked to the flow trigger.
+	linked, err := c.isActionInFlowTrigger(ctx, flowTypeExtAuth, triggerTypePost, actionID)
+	if err != nil {
+		return fmt.Errorf("check flow trigger: %w", err)
+	}
+
+	if linked {
+		log.Debug().Str("actionId", actionID).Msg("GitHub name action already linked to External Auth Post-Authentication trigger")
+		return nil
+	}
+
+	// Step 4: Link the action to the flow trigger.
+	if err := c.addActionToFlowTrigger(ctx, flowTypeExtAuth, triggerTypePost, actionID); err != nil {
+		return fmt.Errorf("link action to flow trigger: %w", err)
+	}
+	log.Info().Str("actionId", actionID).Msg("linked GitHub name action to External Auth Post-Authentication trigger")
+	return nil
+}
+
+// findActionByName searches for a Zitadel action by name and returns its ID,
+// or an empty string if not found.
+func (c *ZitadelClient) findActionByName(ctx context.Context, name string) (string, error) {
+	body := map[string]any{
+		"queries": []map[string]any{
+			{"nameQuery": map[string]any{"name": name, "method": "ACTION_NAME_METHOD_EQUALS"}},
+		},
+	}
+	respBody, err := c.doRESTCall(ctx, "POST", "/management/v1/actions/_search", body)
+	if err != nil {
+		return "", err
+	}
+	var resp struct {
+		Result []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"result"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return "", fmt.Errorf("unmarshal actions search: %w", err)
+	}
+	for _, a := range resp.Result {
+		if a.Name == name {
+			return a.ID, nil
+		}
+	}
+	return "", nil
+}
+
+// createAction creates a new Zitadel action and returns its ID.
+func (c *ZitadelClient) createAction(ctx context.Context, name, script string) (string, error) {
+	body := map[string]any{
+		"name":          name,
+		"script":        script,
+		"timeout":       "10s",
+		"allowedToFail": false,
+	}
+	respBody, err := c.doRESTCall(ctx, "POST", "/management/v1/actions", body)
+	if err != nil {
+		return "", err
+	}
+	var resp struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return "", fmt.Errorf("unmarshal create action response: %w", err)
+	}
+	if resp.ID == "" {
+		return "", fmt.Errorf("create action returned empty ID")
+	}
+	return resp.ID, nil
+}
+
+// isActionInFlowTrigger returns true if actionID is already registered on the given
+// flow type + trigger type combination.
+func (c *ZitadelClient) isActionInFlowTrigger(ctx context.Context, flowType, triggerType, actionID string) (bool, error) {
+	path := "/management/v1/flows/" + flowType
+	respBody, err := c.doRESTCall(ctx, "GET", path, nil)
+	if err != nil {
+		// A 404 means no flow has been configured yet — not an error.
+		if authErr, ok := err.(*AuthError); ok && authErr.Code == 404 {
+			return false, nil
+		}
+		return false, err
+	}
+	// The response structure nests trigger actions under numeric trigger-type keys.
+	var resp struct {
+		Flow struct {
+			TriggerActions map[string]struct {
+				Actions []struct {
+					ID string `json:"id"`
+				} `json:"actions"`
+			} `json:"triggerActions"`
+		} `json:"flow"`
+	}
+	if err := json.Unmarshal(respBody, &resp); err != nil {
+		return false, fmt.Errorf("unmarshal flow response: %w", err)
+	}
+	if triggerEntry, ok := resp.Flow.TriggerActions[triggerType]; ok {
+		for _, a := range triggerEntry.Actions {
+			if a.ID == actionID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// addActionToFlowTrigger links actionID to the given flow type + trigger type.
+func (c *ZitadelClient) addActionToFlowTrigger(ctx context.Context, flowType, triggerType, actionID string) error {
+	path := "/management/v1/flows/" + flowType + "/trigger/" + triggerType + "/actions"
+	_, err := c.doRESTCall(ctx, "POST", path, map[string]any{
+		"actionIds": []string{actionID},
+	})
+	return err
+}
