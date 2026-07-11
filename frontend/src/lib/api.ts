@@ -1884,6 +1884,10 @@ export const api = {
           `${V1}/chat/users?q=${encodeURIComponent(query)}&limit=${limit}`,
         ),
     },
+    unfurl: (url: string) =>
+      get<import("@/types/domain").ChatLinkPreview>(
+        `${V1}/chat/unfurl?url=${encodeURIComponent(url)}`,
+      ),
     // Presence
     presence: {
       get: () =>

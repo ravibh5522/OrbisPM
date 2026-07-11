@@ -787,6 +787,14 @@ export interface ChatReaction {
   users: string[];
 }
 
+export interface ChatLinkPreview {
+  url: string;
+  title?: string;
+  description?: string;
+  image?: string;
+  site?: string;
+}
+
 export interface ChatMessageAttachment {
   id: string;
   org_id: string;
