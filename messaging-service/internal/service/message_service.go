@@ -193,7 +193,12 @@ func (s *MessageService) EditMessage(ctx context.Context, messageID uuid.UUID, b
 			return domain.ErrEditWindowClosed
 		}
 		msg.Body = body
-		msg.BodyFormat = bodyFormat
+		// Only change the format when the caller supplied one; otherwise keep the
+		// message's existing format. An empty value would violate the
+		// messages_body_format_check constraint (SQLSTATE 23514).
+		if bodyFormat != "" {
+			msg.BodyFormat = bodyFormat
+		}
 		return s.messageR.Update(ctx, tx, msg)
 	})
 	if err != nil {
@@ -435,9 +440,29 @@ func (s *MessageService) ToggleReaction(ctx context.Context, messageID uuid.UUID
 // PinMessage pins a message in a channel.
 func (s *MessageService) PinMessage(ctx context.Context, channelID, messageID uuid.UUID) error {
 	userID := tenant.UserID(ctx)
+	const maxPins = 5
+	var evicted *uuid.UUID
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "message", "pin"); err != nil {
+		if err := s.requirePinPermission(ctx, tx, channelID, userID); err != nil {
 			return err
+		}
+		// Enforce a max of 5 pins per channel — pinning a 6th evicts the oldest (FIFO).
+		existing, err := s.pinR.ListByChannel(ctx, tx, channelID)
+		if err != nil {
+			return err
+		}
+		if len(existing) >= maxPins {
+			oldest := existing[0]
+			for _, p := range existing {
+				if p.PinnedAt.Before(oldest.PinnedAt) {
+					oldest = p
+				}
+			}
+			if err := s.pinR.Unpin(ctx, tx, channelID, oldest.MessageID); err != nil {
+				return err
+			}
+			id := oldest.MessageID
+			evicted = &id
 		}
 		pin := &domain.PinnedMessage{ChannelID: channelID, MessageID: messageID, PinnedBy: userID}
 		return s.pinR.Pin(ctx, tx, pin)
@@ -446,14 +471,59 @@ func (s *MessageService) PinMessage(ctx context.Context, channelID, messageID uu
 		return err
 	}
 
+	if evicted != nil {
+		s.publishEvent(ctx, domain.EventMessageUnpinned, channelID.String(), evicted.String(), nil)
+	}
 	s.publishEvent(ctx, domain.EventMessagePinned, channelID.String(), messageID.String(), nil)
 	return nil
 }
 
+// RepublishMessage reloads a message with its reactions/attachments and emits a
+// message.edited event, so live clients update (used after an attachment is
+// added to a freshly-created message).
+func (s *MessageService) RepublishMessage(ctx context.Context, messageID uuid.UUID) error {
+	var msg domain.Message
+	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
+		m, err := s.messageR.GetByID(ctx, tx, messageID)
+		if err != nil {
+			return err
+		}
+		msgs := []domain.Message{*m}
+		if err := s.enrichMessages(ctx, tx, msgs); err != nil {
+			return err
+		}
+		msg = msgs[0]
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	s.publishEvent(ctx, domain.EventMessageEdited, msg.ChannelID.String(), msg.ID.String(), &msg)
+	return nil
+}
+
+// requirePinPermission allows the pin action for channel admins/mods, and for
+// either participant of a DM (a DM has no admin — both people own it).
+func (s *MessageService) requirePinPermission(ctx context.Context, tx pgx.Tx, channelID, userID uuid.UUID) error {
+	ch, err := s.channelR.GetByID(ctx, tx, channelID)
+	if err != nil {
+		return err
+	}
+	if ch.Type == domain.ChannelTypeDM {
+		if _, err := s.memberR.GetRole(ctx, tx, channelID, userID); err != nil {
+			return domain.ErrForbidden.WithDetail("not a channel member")
+		}
+		return nil
+	}
+	_, err = s.rbac.RequirePermission(ctx, tx, channelID, "message", "pin")
+	return err
+}
+
 // UnpinMessage unpins a message.
 func (s *MessageService) UnpinMessage(ctx context.Context, channelID, messageID uuid.UUID) error {
+	userID := tenant.UserID(ctx)
 	err := s.txMgr.WithTx(ctx, func(tx pgx.Tx) error {
-		if _, err := s.rbac.RequirePermission(ctx, tx, channelID, "message", "pin"); err != nil {
+		if err := s.requirePinPermission(ctx, tx, channelID, userID); err != nil {
 			return err
 		}
 		return s.pinR.Unpin(ctx, tx, channelID, messageID)
