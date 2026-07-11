@@ -34,7 +34,6 @@ import {
   getWeekGrid,
   navigateDate,
   sortTasksByPriority,
-  TIMELINE_COLORS,
   type CalendarDay,
   type CalendarGroupBy,
   type CalendarViewMode,
@@ -43,42 +42,16 @@ import {
   type TimelineEntry,
   type TimelineStrip,
 } from "./calendar-utils";
+import {
+  colorForIndex,
+  colorForKey,
+  type CalendarColor,
+} from "./calendar-colors";
 
-/* ── Status-first, priority-secondary strip colors ── */
-// Status drives the hue (what action is needed?), priority drives urgency for todo tasks.
-function stripBg(priority: TaskPriority, status: TaskStatus): string {
-  switch (status) {
-    case "done":
-      // Completed — green, slightly muted so it reads as "past"
-      return "bg-success/80 text-success-content";
-    case "in_progress":
-      // Actively being worked on — vivid primary blue
-      return "bg-primary text-primary-content";
-    case "in_review":
-      // Waiting on review — secondary violet/indigo
-      return "bg-secondary text-secondary-content";
-    case "blocked":
-      // Blocked — always full-opacity red to demand attention
-      return "bg-error text-error-content";
-    case "cancelled":
-      // Cancelled — neutral, faded
-      return "bg-neutral/60 text-neutral-content";
-    case "todo":
-    default:
-      // Not started yet — use priority to signal urgency
-      switch (priority) {
-        case "critical":
-          return "bg-error text-error-content";
-        case "high":
-          return "bg-warning text-warning-content";
-        case "medium":
-          return "bg-info text-info-content";
-        case "low":
-          return "bg-accent/80 text-accent-content";
-      }
-  }
-}
-
+/* ── Priority/status emphasis, layered over the palette fill as a secondary cue ── */
+// The bar fill comes from the per-project (or per-task) palette color; status and
+// priority only add subtle emphasis so the calendar reads by project, not as a
+// status rainbow.
 function stripBorder(priority: TaskPriority, status: TaskStatus): string {
   // Blocked tasks get an extra emphasis ring
   if (status === "blocked") return "ring-2 ring-error/60 ring-offset-0";
@@ -122,9 +95,11 @@ function statusRing(status: TaskStatus): string {
 /* ── Task Strip Bar for month grid ── */
 function StripBar({
   strip,
+  color,
   onClick,
 }: {
   strip: TaskStrip;
+  color: CalendarColor;
   onClick?: (task: Task) => void;
 }) {
   const { task, startCol, span, lane, clippedStart, clippedEnd } = strip;
@@ -138,12 +113,11 @@ function StripBar({
         "absolute h-[20px] text-[11px] leading-[20px] px-1.5 truncate z-10",
         "cursor-pointer transition-all hover:brightness-110 hover:shadow-md shadow-sm",
         "font-medium",
-        stripBg(task.priority, task.status),
         stripBorder(task.priority, task.status),
         clippedStart ? "rounded-l-none" : "rounded-l-md",
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
-      style={{ left, width, top }}
+      style={{ left, width, top, backgroundColor: color.bg, color: color.text }}
       title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
       onClick={(e) => {
         e.stopPropagation();
@@ -236,11 +210,13 @@ const MAX_VISIBLE_LANES = 5;
 function MonthWeekRowView({
   row,
   weekdays,
+  getColor,
   onClickTask,
   onClickDay,
 }: {
   row: MonthWeekRow;
   weekdays: string[];
+  getColor: (task: Task) => CalendarColor;
   onClickTask?: (task: Task) => void;
   onClickDay?: (date: Date) => void;
 }) {
@@ -302,6 +278,7 @@ function MonthWeekRowView({
         <StripBar
           key={`${strip.task.id}-${i}`}
           strip={strip}
+          color={getColor(strip.task)}
           onClick={onClickTask}
         />
       ))}
@@ -321,7 +298,7 @@ function TimelineStripBar({
   const left = `${(startCol / 7) * 100}%`;
   const width = `${(span / 7) * 100}%`;
   const top = `${lane * 28 + 24}px`;
-  const colorClass = TIMELINE_COLORS[entry.colorIndex % TIMELINE_COLORS.length];
+  const c = colorForIndex(entry.colorIndex);
 
   return (
     <button
@@ -329,11 +306,10 @@ function TimelineStripBar({
         "absolute h-[24px] text-[11px] leading-[24px] px-2 truncate z-10",
         "cursor-pointer transition-all hover:brightness-110 hover:shadow-md",
         "font-medium shadow-sm",
-        colorClass,
         clippedStart ? "rounded-l-none" : "rounded-l-md",
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
-      style={{ left, width, top }}
+      style={{ left, width, top, backgroundColor: c.bg, color: c.text }}
       title={`${entry.title} — ${entry.taskCount} task${entry.taskCount !== 1 ? "s" : ""}`}
       onClick={(e) => {
         e.stopPropagation();
@@ -471,6 +447,20 @@ export function CalendarView({
     if (isTimelineMode) return [{ key: "__timeline__", label: "", tasks }];
     return [{ key: "__all__", label: "", tasks }];
   }, [tasks, isTimelineMode]);
+
+  // Bar color resolver. Color by project when several projects are on screen
+  // (org/team calendar) so each project reads as its own hue; fall back to a
+  // per-task color when only one project is present (project calendar) so the
+  // view is never a single flat color. Status/priority remain secondary cues.
+  const getTaskColor = useMemo(() => {
+    const keyOf = (t: Task) => projectNames?.get(t.project_id) || t.project_id;
+    const distinct = Array.from(new Set(tasks.map(keyOf)));
+    if (distinct.length > 1) {
+      const map = new Map(distinct.map((k, i) => [k, colorForIndex(i)]));
+      return (t: Task) => map.get(keyOf(t)) ?? colorForKey(t.id);
+    }
+    return (t: Task) => colorForKey(t.id);
+  }, [tasks, projectNames]);
 
   const headerText = useMemo(() => {
     if (mode === "month") return formatMonthYear(viewDate);
@@ -617,6 +607,7 @@ export function CalendarView({
                     tasks={group.tasks}
                     viewDate={viewDate}
                     weekdays={weekdays}
+                    getColor={getTaskColor}
                     onClickTask={onTaskClick}
                     onClickDay={handleDayClick}
                   />
@@ -681,10 +672,8 @@ function TimelineMonthGridView({
             (entry) => (
               <div key={entry.id} className="flex items-center gap-1.5">
                 <div
-                  className={cn(
-                    "w-3 h-3 rounded-sm",
-                    TIMELINE_COLORS[entry.colorIndex % TIMELINE_COLORS.length],
-                  )}
+                  className="w-3 h-3 rounded-sm"
+                  style={{ backgroundColor: colorForIndex(entry.colorIndex).bg }}
                 />
                 <span className="text-xs text-base-content/70">
                   {entry.title}
@@ -787,8 +776,7 @@ function TimelineSummaryView({
           </div>
         ) : (
           uniqueEntries.map((entry) => {
-            const colorClass =
-              TIMELINE_COLORS[entry.colorIndex % TIMELINE_COLORS.length];
+            const c = colorForIndex(entry.colorIndex);
             return (
               <button
                 key={entry.id}
@@ -797,7 +785,8 @@ function TimelineSummaryView({
                   hover:shadow-md transition-all cursor-pointer flex items-center gap-3"
               >
                 <div
-                  className={cn("w-2 h-10 rounded-full shrink-0", colorClass)}
+                  className="w-2 h-10 rounded-full shrink-0"
+                  style={{ backgroundColor: c.bg }}
                 />
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">
@@ -824,12 +813,14 @@ function MonthGridView({
   tasks,
   viewDate,
   weekdays,
+  getColor,
   onClickTask,
   onClickDay,
 }: {
   tasks: Task[];
   viewDate: Date;
   weekdays: string[];
+  getColor: (task: Task) => CalendarColor;
   onClickTask?: (task: Task) => void;
   onClickDay?: (date: Date) => void;
 }) {
@@ -862,6 +853,7 @@ function MonthGridView({
           key={i}
           row={row}
           weekdays={weekdays}
+          getColor={getColor}
           onClickTask={onClickTask}
           onClickDay={onClickDay}
         />

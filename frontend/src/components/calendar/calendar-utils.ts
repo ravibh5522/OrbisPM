@@ -370,21 +370,6 @@ export interface TimelineStrip {
   clippedEnd: boolean;
 }
 
-export const TIMELINE_COLORS = [
-  "bg-primary text-primary-content",
-  "bg-secondary text-secondary-content",
-  "bg-accent text-accent-content",
-  "bg-info text-info-content",
-  "bg-success text-success-content",
-  "bg-warning text-warning-content",
-  "bg-error text-error-content",
-  "bg-[#6366f1] text-white",
-  "bg-[#8b5cf6] text-white",
-  "bg-[#ec4899] text-white",
-  "bg-[#14b8a6] text-white",
-  "bg-[#f97316] text-white",
-];
-
 /** Aggregate tasks into project timeline entries (merges duplicate project names) */
 export function aggregateProjectTimelines(
   tasks: Task[],
