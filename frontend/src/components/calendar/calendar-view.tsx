@@ -50,8 +50,8 @@ import {
 
 // Bar geometry — a little more height and vertical breathing room than a dense
 // grid, so stacked strips read as separate bars rather than a solid block.
-const BAR_LANE_PITCH = 26; // px between stacked lanes (22px bar + 4px gap)
-const BAR_TOP_OFFSET = 26; // px below the day-number row
+const BAR_LANE_PITCH = 30; // px between stacked lanes (26px bar + 4px gap)
+const BAR_TOP_OFFSET = 28; // px below the day-number row
 
 // A due-only task is a deadline — render it as a diamond marker, not a 1-day bar.
 function isMilestone(task: Task): boolean {
@@ -110,8 +110,8 @@ function StripBar({
   return (
     <button
       className={cn(
-        "cal-bar absolute flex items-center gap-1.5 h-[22px] text-[11px] leading-[22px] px-2 truncate z-10",
-        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-semibold",
+        "cal-bar absolute flex items-center gap-1.5 h-[26px] text-sm leading-[26px] px-2 truncate z-10",
+        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-medium",
         clippedStart && "cal-clipL",
         task.status === "done" && "cal-done",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
@@ -150,7 +150,7 @@ function MilestoneMark({
   return (
     <button
       className={cn(
-        "cal-ms absolute flex items-center gap-1.5 h-[22px] text-[11px] font-bold",
+        "cal-ms absolute flex items-center gap-1.5 h-[26px] text-sm font-semibold",
         "whitespace-nowrap cursor-pointer z-10 transition-all hover:brightness-110",
       )}
       style={{ ["--cal-a"]: color.bg, left, top } as CSSProperties}
@@ -345,14 +345,14 @@ function TimelineStripBar({
   const { entry, startCol, span, lane, clippedStart, clippedEnd } = strip;
   const left = `${(startCol / 7) * 100}%`;
   const width = `${(span / 7) * 100}%`;
-  const top = `${lane * 28 + 24}px`;
+  const top = `${lane * 32 + 26}px`;
   const c = colorForIndex(entry.colorIndex);
 
   return (
     <button
       className={cn(
-        "cal-bar absolute flex items-center gap-1 h-[24px] text-[11px] leading-[24px] px-2 truncate z-10",
-        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-semibold",
+        "cal-bar absolute flex items-center gap-1 h-[28px] text-sm leading-[28px] px-2 truncate z-10",
+        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-medium",
         clippedStart && "cal-clipL",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
@@ -365,7 +365,7 @@ function TimelineStripBar({
       }}
     >
       <span className="cal-lbl cal-z min-w-0 truncate">{entry.title}</span>
-      <span className="cal-z opacity-70 text-[10px]">({entry.taskCount})</span>
+      <span className="cal-z opacity-70 text-xs">({entry.taskCount})</span>
     </button>
   );
 }
@@ -382,7 +382,7 @@ function TimelineWeekRowView({
 }) {
   const maxLane = row.strips.reduce((max, s) => Math.max(max, s.lane), -1);
   const lanesUsed = Math.min(maxLane + 1, MAX_TIMELINE_LANES);
-  const rowH = 24 + lanesUsed * 28 + 8;
+  const rowH = 26 + lanesUsed * 32 + 8;
 
   const visibleStrips = row.strips.filter((s) => s.lane < MAX_TIMELINE_LANES);
 
