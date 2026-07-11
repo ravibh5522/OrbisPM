@@ -116,8 +116,17 @@ func (h *ChatHub) HandleEvent(event domain.DomainEvent) {
 		}
 	}
 
-	// Inject channel_id and entity_id into map payloads for frontend routing
-	if pm, ok := payloadData.(map[string]any); ok {
+	// Inject channel_id and entity_id into map payloads for frontend routing.
+	// A type assertion on a typed-nil map[string]any succeeds with ok=true but
+	// leaves pm nil, so assigning to it would panic. Events published with a nil
+	// payload (e.g. pin/unpin) hit this — replace with a fresh map so we can still
+	// carry the routing keys. Non-map payloads (structs/arrays) are left untouched.
+	pm, ok := payloadData.(map[string]any)
+	if ok && pm == nil {
+		pm = map[string]any{}
+		payloadData = pm
+	}
+	if ok {
 		if event.ChannelID != "" {
 			if _, exists := pm["channel_id"]; !exists {
 				pm["channel_id"] = event.ChannelID
