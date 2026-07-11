@@ -5,6 +5,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"github.com/orbispm/messaging-service/internal/domain"
 	"github.com/orbispm/messaging-service/internal/middleware"
@@ -20,6 +21,7 @@ type RESTHandler struct {
 	presenceSvc *service.PresenceService
 	sidebarSvc  *service.SidebarService
 	categorySvc *service.CategoryService
+	unfurlSvc   *service.UnfurlService
 	rbac        *service.ChannelRBAC
 }
 
@@ -31,6 +33,7 @@ func NewRESTHandler(
 	presenceSvc *service.PresenceService,
 	sidebarSvc *service.SidebarService,
 	categorySvc *service.CategoryService,
+	unfurlSvc *service.UnfurlService,
 	rbac *service.ChannelRBAC,
 ) *RESTHandler {
 	return &RESTHandler{
@@ -40,6 +43,7 @@ func NewRESTHandler(
 		presenceSvc: presenceSvc,
 		sidebarSvc:  sidebarSvc,
 		categorySvc: categorySvc,
+		unfurlSvc:   unfurlSvc,
 		rbac:        rbac,
 	}
 }
@@ -51,6 +55,9 @@ func (h *RESTHandler) Routes(r chi.Router) {
 
 	// User search (for DMs, mentions)
 	r.Get("/users", h.SearchUsers)
+
+	// Link preview (Open Graph unfurl)
+	r.Get("/unfurl", h.Unfurl)
 
 	// Presence
 	r.Get("/presence", h.GetPresence)
@@ -767,6 +774,24 @@ func (h *RESTHandler) SearchUsers(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, users)
 }
 
+// ─── Link Preview Handler ─────────────────────
+
+func (h *RESTHandler) Unfurl(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("url")
+	if raw == "" || len(raw) > 2048 {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "url required (max 2048 chars)"})
+		return
+	}
+	lp, err := h.unfurlSvc.Unfurl(r.Context(), raw)
+	if err != nil {
+		// Graceful: no preview available — return the bare url, not an error,
+		// so the frontend simply renders the plain link.
+		JSON(w, http.StatusOK, service.LinkPreview{URL: raw})
+		return
+	}
+	JSON(w, http.StatusOK, lp)
+}
+
 // ─── Presence Handler ─────────────────────────
 
 func (h *RESTHandler) GetPresence(w http.ResponseWriter, r *http.Request) {
@@ -826,11 +851,10 @@ func (h *RESTHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// Create a placeholder message with the file
+		// Create a placeholder message with the file. Leave the body empty when
+		// there's no caption — the client renders the image thumbnail / file chip,
+		// so we don't want a "📎 filename" string in the message bubble.
 		body := r.FormValue("body")
-		if body == "" {
-			body = "📎 " + header.Filename
-		}
 		msg := &domain.Message{
 			ChannelID:  channelID,
 			Body:       body,
@@ -853,6 +877,12 @@ func (h *RESTHandler) UploadFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		Error(w, r, err)
 		return
+	}
+
+	// Re-broadcast the message now that the attachment is attached, so live
+	// clients render the image/file without needing a refresh. Best-effort.
+	if err := h.messageSvc.RepublishMessage(r.Context(), messageID); err != nil {
+		log.Warn().Err(err).Str("message_id", messageID.String()).Msg("failed to republish message after attachment")
 	}
 
 	JSON(w, http.StatusCreated, att)
@@ -1038,6 +1068,22 @@ func (h *RESTHandler) GetMyChannelPermissions(w http.ResponseWriter, r *http.Req
 	if err != nil {
 		Error(w, r, err)
 		return
+	}
+	// DMs have no admin role — either participant can pin. Surface it so the
+	// client shows the Pin action.
+	if ch, cerr := h.channelSvc.GetChannel(r.Context(), channelID); cerr == nil &&
+		ch.Type == domain.ChannelTypeDM {
+		hasPin := false
+		for _, p := range perms.Permissions {
+			if p.Resource == "message" && p.Action == "pin" {
+				hasPin = true
+				break
+			}
+		}
+		if !hasPin {
+			perms.Permissions = append(perms.Permissions,
+				domain.ChannelPermission{Resource: "message", Action: "pin"})
+		}
 	}
 	JSON(w, http.StatusOK, perms)
 }

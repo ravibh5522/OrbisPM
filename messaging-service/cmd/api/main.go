@@ -205,7 +205,8 @@ func main() {
 	}
 
 	// ─── Handlers ─────────────────────────────
-	restHandler := handler.NewRESTHandler(channelSvc, messageSvc, uploadSvc, presenceSvc, sidebarSvc, categorySvc, rbac)
+	unfurlSvc := service.NewUnfurlService(rdb)
+	restHandler := handler.NewRESTHandler(channelSvc, messageSvc, uploadSvc, presenceSvc, sidebarSvc, categorySvc, unfurlSvc, rbac)
 	wsHandler := handler.NewWSHandler(hub, channelSvc, messageSvc, presenceSvc, cfg.AllowedOrigins)
 
 	// ─── Router ───────────────────────────────
