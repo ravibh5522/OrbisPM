@@ -4,26 +4,118 @@ import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
+import { ForwardModal } from "@/components/chat/forward-modal";
+import { getChatBackground } from "@/components/chat/chat-backgrounds";
+import { toast } from "sonner";
 import { useChatStore } from "@/stores/chat-store";
-import type { ChatMessage } from "@/types/domain";
+import type {
+  ChatChannelMember,
+  ChatMessage,
+  ChatPinnedMessage,
+  ChatReaction,
+} from "@/types/domain";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { format, isSameDay, isToday, isYesterday } from "date-fns";
 import {
+  ArrowDown,
   Bookmark,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  Copy,
   Download,
+  Forward,
   MessageSquare,
   MoreHorizontal,
   Pencil,
+  Pin,
+  PinOff,
   Search,
   SmilePlus,
   Trash2,
   X,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const EMOJI_LIST = ["👍", "❤️", "😂", "🎉", "😮", "😢", "🔥", "👀"];
 const EMPTY_MESSAGES: ChatMessage[] = [];
 const EMPTY_TYPING = new Set<string>();
+const EMPTY_MEMBERS: ChatChannelMember[] = [];
+const EMOJI_LIST = [
+  "👍", "❤️", "😂", "🎉", "😮", "😢", "🔥", "👀",
+  "🙏", "✅", "💯", "🚀", "👏", "😍", "🤔", "😅",
+];
+
+// First http(s) URL in a string, trimmed of trailing punctuation.
+function firstUrl(text: string): string | null {
+  const m = text.match(/https?:\/\/[^\s]+/);
+  return m ? m[0].replace(/[).,!?;:]+$/, "") : null;
+}
+
+// Rich Open Graph preview card for a link (Teams/Slack-style).
+function LinkPreview({ url }: { url: string }) {
+  const { data } = useQuery({
+    queryKey: ["chat-unfurl", url],
+    queryFn: () => api.chat.unfurl(url),
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  });
+  const [imgOk, setImgOk] = useState(true);
+  if (!data || (!data.title && !data.description && !data.image)) return null;
+  return (
+    <a
+      href={url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 flex max-w-sm overflow-hidden rounded-lg border border-base-200 bg-base-100 hover:bg-base-200/60 transition-colors"
+    >
+      {data.image && imgOk && (
+        <img
+          src={data.image}
+          alt=""
+          className="w-20 h-20 object-cover flex-shrink-0"
+          onError={() => setImgOk(false)}
+        />
+      )}
+      <div className="p-2.5 min-w-0">
+        {data.site && (
+          <div className="text-[10px] uppercase tracking-wide text-base-content/40 truncate">
+            {data.site}
+          </div>
+        )}
+        {data.title && (
+          <div className="text-xs font-semibold text-base-content line-clamp-1">
+            {data.title}
+          </div>
+        )}
+        {data.description && (
+          <div className="text-xs text-base-content/60 line-clamp-2 mt-0.5">
+            {data.description}
+          </div>
+        )}
+      </div>
+    </a>
+  );
+}
+
+// Render message text with clickable links. Splits on whitespace (kept as
+// separate tokens) so exact spacing is preserved under whitespace-pre-wrap.
+function linkify(text: string) {
+  return text.split(/(\s+)/).map((tok, i) =>
+    /^https?:\/\/\S+$/.test(tok) ? (
+      <a
+        key={i}
+        href={tok}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline break-all hover:opacity-80"
+      >
+        {tok}
+      </a>
+    ) : (
+      tok
+    ),
+  );
+}
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8080";
 
@@ -148,6 +240,17 @@ export function MessageList() {
   const typingUsers = useChatStore(
     (s) => s.typingUsers.get(activeChannelId || "") ?? EMPTY_TYPING,
   );
+  const channelMembers = useChatStore(
+    (s) => s.channelMembers.get(activeChannelId || "") ?? EMPTY_MEMBERS,
+  );
+  const typingNames = useMemo(() => {
+    const byId = new Map(
+      channelMembers.map((m) => [m.user_id, m.display_name || "Someone"]),
+    );
+    return Array.from(typingUsers, (id) => byId.get(id) || "Someone");
+  }, [typingUsers, channelMembers]);
+  const chatBackground = useChatStore((s) => s.chatBackground);
+  const bg = getChatBackground(chatBackground);
   const searchQuery = useChatStore((s) => s.searchQuery);
 
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -180,7 +283,7 @@ export function MessageList() {
   const isSearching = !!debouncedSearch.trim();
 
   // Fetch initial messages
-  const { isLoading } = useQuery({
+  const { isLoading, isFetching } = useQuery({
     queryKey: ["chat-messages", activeChannelId],
     queryFn: async () => {
       if (!activeChannelId) return [];
@@ -193,7 +296,55 @@ export function MessageList() {
     },
     enabled: !!activeChannelId,
     staleTime: 30_000,
+    // The UI renders from the store (populated by queryFn), so always re-run on
+    // mount — otherwise a persisted "fresh" cache skips queryFn and the channel
+    // renders blank after a refresh.
+    refetchOnMount: "always",
   });
+
+  const { data: pinnedMessages } = useQuery({
+    queryKey: ["chat-pins", activeChannelId],
+    queryFn: async () => (await api.chat.pins.list(activeChannelId!)) ?? [],
+    enabled: !!activeChannelId,
+  });
+  const pinnedIds = useMemo(
+    () => new Set((pinnedMessages ?? []).map((p) => p.message_id)),
+    [pinnedMessages],
+  );
+
+  const { data: bookmarks } = useQuery({
+    queryKey: ["chat-bookmarks"],
+    queryFn: async () => (await api.chat.bookmarks.list(100, 0)).data ?? [],
+  });
+  const bookmarkedIds = useMemo(
+    () => new Set((bookmarks ?? []).map((b) => b.message_id)),
+    [bookmarks],
+  );
+
+  const qc = useQueryClient();
+  const channelPerms = useChannelPermissions(activeChannelId || undefined);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+
+  const scrollToMessage = (id: string) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (!el) {
+      toast.error("Message isn't loaded yet — scroll up to find it.");
+      return;
+    }
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightId(id);
+    setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 2000);
+  };
+
+  const handleUnpin = async (messageId: string) => {
+    if (!activeChannelId) return;
+    try {
+      await api.chat.pins.unpin(activeChannelId, messageId);
+      qc.invalidateQueries({ queryKey: ["chat-pins", activeChannelId] });
+    } catch {
+      toast.error("Couldn't unpin the message. Please try again.");
+    }
+  };
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -264,7 +415,7 @@ export function MessageList() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading || (isFetching && messages.length === 0)) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <span className="loading loading-spinner loading-md text-primary" />
@@ -299,6 +450,8 @@ export function MessageList() {
                 message={msg}
                 isOwn={msg.user_id === user?.internal_id}
                 isGrouped={false}
+                isPinned={pinnedIds.has(msg.id)}
+                isBookmarked={bookmarkedIds.has(msg.id)}
                 onOpenThread={() => openThread(msg.id)}
               />
             ))}
@@ -311,12 +464,26 @@ export function MessageList() {
   // ─── Normal Message List ────────────────────
 
   return (
-    <div
-      ref={scrollRef}
-      onScroll={handleScroll}
-      className="flex-1 overflow-y-auto px-4 py-3"
-    >
-      {isLoadingMore && (
+    <div className="flex flex-col flex-1 min-h-0">
+      {(pinnedMessages?.length ?? 0) > 0 && (
+        <PinnedBar
+          pins={pinnedMessages ?? []}
+          canUnpin={channelPerms.can("message", "pin")}
+          onJump={scrollToMessage}
+          onUnpin={handleUnpin}
+        />
+      )}
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-4 py-3"
+        style={
+          bg.image
+            ? { backgroundImage: bg.image, backgroundSize: bg.size }
+            : undefined
+        }
+      >
+        {isLoadingMore && (
         <div className="flex justify-center py-2">
           <span className="loading loading-spinner loading-sm text-primary" />
         </div>
@@ -347,12 +514,21 @@ export function MessageList() {
                 5 * 60 * 1000;
 
             return (
-              <div key={msg.id}>
+              <div
+                key={msg.id}
+                id={`msg-${msg.id}`}
+                className={cn(
+                  "rounded-lg transition-colors",
+                  highlightId === msg.id && "ring-2 ring-primary/60 bg-primary/5",
+                )}
+              >
                 {showDateSep && <DateSeparator date={msg.created_at} />}
                 <MessageBubble
                   message={msg}
                   isOwn={msg.user_id === user?.internal_id}
                   isGrouped={!!isGrouped}
+                  isPinned={pinnedIds.has(msg.id)}
+                  isBookmarked={bookmarkedIds.has(msg.id)}
                   onOpenThread={() => openThread(msg.id)}
                 />
               </div>
@@ -366,13 +542,103 @@ export function MessageList() {
         <div className="px-2 py-1.5">
           <span className="text-xs text-base-content/50 italic">
             {typingUsers.size === 1
-              ? "Someone is typing..."
-              : `${typingUsers.size} people are typing...`}
+              ? `${typingNames[0]} is typing...`
+              : typingUsers.size === 2
+                ? `${typingNames[0]} and ${typingNames[1]} are typing...`
+                : "Several people are typing..."}
           </span>
         </div>
       )}
 
-      <div ref={bottomRef} />
+      {!autoScroll && messages.length > 0 && (
+        <div className="sticky bottom-2 flex justify-end pointer-events-none pr-1">
+          <button
+            className="btn btn-circle btn-sm shadow-lg bg-base-100 border border-base-200 pointer-events-auto z-20"
+            title="Jump to latest"
+            onClick={() => {
+              setAutoScroll(true);
+              bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+            }}
+          >
+            <ArrowDown className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+        <div ref={bottomRef} />
+      </div>
+    </div>
+  );
+}
+
+function PinnedBar({
+  pins,
+  canUnpin,
+  onJump,
+  onUnpin,
+}: {
+  pins: ChatPinnedMessage[];
+  canUnpin: boolean;
+  onJump: (id: string) => void;
+  onUnpin: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const latest = pins[0];
+  return (
+    <div className="border-b border-base-200 bg-base-200/40 flex-shrink-0">
+      <button
+        className="flex items-center gap-2 w-full px-4 py-2 text-left hover:bg-base-200/70 transition-colors"
+        onClick={() => setOpen((o) => !o)}
+      >
+        <Pin className="w-3.5 h-3.5 text-warning flex-shrink-0" />
+        <span className="text-xs font-semibold flex-shrink-0">
+          {pins.length} pinned
+        </span>
+        <span className="text-xs text-base-content/50 truncate flex-1">
+          {latest?.message?.body?.trim() || "(attachment)"}
+        </span>
+        <ChevronDown
+          className={cn(
+            "w-4 h-4 text-base-content/40 transition-transform flex-shrink-0",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      {open && (
+        <div className="max-h-56 overflow-y-auto px-2 pb-2 flex flex-col gap-1">
+          {pins.map((p) => (
+            <div
+              key={p.message_id}
+              className="group flex items-start gap-2 px-2 py-1.5 rounded-lg hover:bg-base-100"
+            >
+              <Pin className="w-3 h-3 text-warning mt-1 flex-shrink-0" />
+              <button
+                className="flex-1 text-left min-w-0"
+                onClick={() => {
+                  onJump(p.message_id);
+                  setOpen(false);
+                }}
+              >
+                <span className="text-xs font-medium">
+                  {p.message?.sender_name || "Unknown"}
+                </span>
+                <p className="text-xs text-base-content/60 line-clamp-2">
+                  {p.message?.body?.trim() || "(attachment)"}
+                </p>
+              </button>
+              {canUnpin && (
+                <button
+                  className="btn btn-ghost btn-xs btn-square text-base-content/40 hover:text-error opacity-0 group-hover:opacity-100"
+                  title="Unpin"
+                  onClick={() => onUnpin(p.message_id)}
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -397,17 +663,22 @@ function MessageBubble({
   message,
   isOwn,
   isGrouped,
+  isPinned,
+  isBookmarked,
   onOpenThread,
 }: {
   message: ChatMessage;
   isOwn: boolean;
   isGrouped: boolean;
+  isPinned: boolean;
+  isBookmarked: boolean;
   onOpenThread: () => void;
 }) {
   const [showActions, setShowActions] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [bookmarked, setBookmarked] = useState(false);
+  const [showForward, setShowForward] = useState(false);
+  const [bookmarked, setBookmarked] = useState(isBookmarked);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [editBody, setEditBody] = useState(message.body);
@@ -416,6 +687,9 @@ function MessageBubble({
   const user = useAuthStore((s) => s.user);
   const removeMessage = useChatStore((s) => s.removeMessage);
   const updateMessage = useChatStore((s) => s.updateMessage);
+  const bubbleMembers = useChatStore(
+    (s) => s.channelMembers.get(message.channel_id) ?? EMPTY_MEMBERS,
+  );
 
   const { can } = useChannelPermissions(message.channel_id);
   const canReact = can("message", "react");
@@ -423,6 +697,52 @@ function MessageBubble({
   const canDeleteOwn = isOwn && can("message", "delete_own");
   const canDeleteAny = can("message", "delete_any");
   const canBookmark = can("message", "bookmark");
+  const canPin = can("message", "pin");
+  const canForward = can("message", "forward");
+
+  const myReactedEmojis = useMemo(
+    () =>
+      new Set(
+        (message.reactions ?? [])
+          .filter((r) => r.users?.includes(user?.internal_id || ""))
+          .map((r) => r.emoji),
+      ),
+    [message.reactions, user?.internal_id],
+  );
+
+  // Read status / Seen-by — computed from other members' last_read_at.
+  const myId = user?.internal_id || "";
+  const [showSeen, setShowSeen] = useState(false);
+  const seenRef = useRef<HTMLDivElement>(null);
+  const otherMembers = useMemo(
+    () => bubbleMembers.filter((m) => m.user_id !== myId),
+    [bubbleMembers, myId],
+  );
+  const readers = useMemo(
+    () =>
+      otherMembers.filter(
+        (m) =>
+          m.last_read_at &&
+          new Date(m.last_read_at).getTime() >=
+            new Date(message.created_at).getTime(),
+      ),
+    [otherMembers, message.created_at],
+  );
+  useEffect(() => {
+    if (!showSeen) return;
+    const handler = (e: MouseEvent) => {
+      if (seenRef.current && !seenRef.current.contains(e.target as Node)) {
+        setShowSeen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [showSeen]);
+
+  // Sync bookmark state when the saved-messages list resolves.
+  useEffect(() => {
+    setBookmarked(isBookmarked);
+  }, [isBookmarked]);
 
   // Resolve sender name
   const senderName =
@@ -442,13 +762,69 @@ function MessageBubble({
   }, [showMenu]);
 
   const handleReaction = async (emoji: string) => {
-    try {
-      await api.chat.reactions.toggle(message.id, emoji);
-      qc.invalidateQueries({ queryKey: ["chat-messages", message.channel_id] });
-    } catch {
-      // ignore
-    }
     setShowEmoji(false);
+    const uid = user?.internal_id || "";
+    // Optimistically toggle the reaction so the UI responds immediately.
+    const current = message.reactions ?? [];
+    const existing = current.find((r) => r.emoji === emoji);
+    let next: ChatReaction[];
+    if (existing && existing.users?.includes(uid)) {
+      const users = existing.users.filter((u) => u !== uid);
+      next =
+        users.length > 0
+          ? current.map((r) =>
+              r.emoji === emoji ? { ...r, users, count: users.length } : r,
+            )
+          : current.filter((r) => r.emoji !== emoji);
+    } else if (existing) {
+      const users = [...(existing.users ?? []), uid];
+      next = current.map((r) =>
+        r.emoji === emoji ? { ...r, users, count: users.length } : r,
+      );
+    } else {
+      next = [...current, { emoji, count: 1, users: [uid] }];
+    }
+    updateMessage(message.channel_id, { ...message, reactions: next });
+    try {
+      // Optimistic update above + the WebSocket reaction echo keep everyone in
+      // sync. Do NOT invalidate/refetch here — a refetch can overwrite the
+      // optimistic reaction before the server reflects it, so the actor would
+      // lose their own reaction while others (who only get the echo) keep it.
+      await api.chat.reactions.toggle(message.id, emoji);
+    } catch {
+      updateMessage(message.channel_id, message); // revert on failure
+      toast.error("Couldn't update reaction. Please try again.");
+    }
+  };
+
+  const handleTogglePin = async () => {
+    setShowMenu(false);
+    try {
+      if (isPinned) {
+        await api.chat.pins.unpin(message.channel_id, message.id);
+      } else {
+        await api.chat.pins.pin(message.channel_id, message.id);
+      }
+      qc.invalidateQueries({ queryKey: ["chat-pins", message.channel_id] });
+    } catch {
+      toast.error("Couldn't update pin. Please try again.");
+    }
+  };
+
+  const handleBookmark = async () => {
+    setShowMenu(false);
+    try {
+      if (bookmarked) {
+        await api.chat.bookmarks.remove(message.id);
+        setBookmarked(false);
+      } else {
+        await api.chat.bookmarks.add(message.id);
+        setBookmarked(true);
+      }
+      qc.invalidateQueries({ queryKey: ["chat-bookmarks"] });
+    } catch {
+      toast.error("Couldn't update saved message. Please try again.");
+    }
   };
 
   const handleDelete = async () => {
@@ -457,7 +833,7 @@ function MessageBubble({
       await api.chat.messages.delete(message.id);
       removeMessage(message.channel_id, message.id);
     } catch {
-      // ignore
+      toast.error("Couldn't delete message. Please try again.");
     }
   };
 
@@ -473,7 +849,7 @@ function MessageBubble({
       updateMessage(message.channel_id, updated);
       setEditing(false);
     } catch {
-      // ignore
+      toast.error("Couldn't save edit. Please try again.");
     }
   };
 
@@ -504,7 +880,6 @@ function MessageBubble({
           "group relative flex gap-3 px-2 py-1 rounded-lg transition-colors",
           !isGrouped && "mt-3",
           isOwn ? "flex-row-reverse" : "flex-row",
-          !isOwn && "hover:bg-base-200/40",
         )}
         onMouseEnter={() => setShowActions(true)}
         onMouseLeave={() => {
@@ -555,6 +930,30 @@ function MessageBubble({
             </div>
           )}
 
+          {isPinned && (
+            <div
+              className={cn(
+                "flex items-center gap-1 mb-0.5 text-xs text-warning/80",
+                isOwn && "flex-row-reverse",
+              )}
+            >
+              <Pin className="w-3 h-3" />
+              <span>Pinned</span>
+            </div>
+          )}
+
+          {message.forwarded_from_id && (
+            <div
+              className={cn(
+                "flex items-center gap-1 mb-0.5 text-xs text-base-content/40 italic",
+                isOwn && "flex-row-reverse",
+              )}
+            >
+              <Forward className="w-3 h-3" />
+              <span>Forwarded</span>
+            </div>
+          )}
+
           {/* Message bubble or edit mode */}
           {editing ? (
             <div className="w-full">
@@ -587,14 +986,18 @@ function MessageBubble({
           ) : (
             <div
               className={cn(
-                "inline-block px-3 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words",
+                "inline-block text-sm whitespace-pre-wrap break-words",
                 isOwn
-                  ? "bg-primary text-primary-content rounded-tr-sm"
-                  : "bg-base-300/60 text-base-content rounded-tl-sm",
+                  ? "px-3 py-2 rounded-2xl rounded-tr-sm bg-primary text-primary-content"
+                  : "py-0.5 text-base-content",
               )}
             >
-              {message.body}
+              {linkify(message.body)}
             </div>
+          )}
+
+          {!message.is_deleted && !editing && firstUrl(message.body) && (
+            <LinkPreview url={firstUrl(message.body)!} />
           )}
 
           {/* Image attachments — thumbnail grid with lightbox */}
@@ -649,12 +1052,25 @@ function MessageBubble({
               )}
             >
               {message.reactions.map((rg) => {
-                const userId = user?.id || "";
+                const userId = user?.internal_id || "";
                 const hasReacted = rg.users?.includes(userId);
+                const reactorNames = (rg.users ?? [])
+                  .map(
+                    (id) =>
+                      bubbleMembers.find((m) => m.user_id === id)
+                        ?.display_name ||
+                      (id === userId ? "You" : "Someone"),
+                  )
+                  .join(", ");
                 return (
                   <button
                     key={rg.emoji}
                     onClick={() => handleReaction(rg.emoji)}
+                    title={
+                      hasReacted
+                        ? `You reacted — click to remove${reactorNames ? ` · ${reactorNames}` : ""}`
+                        : reactorNames
+                    }
                     className={cn(
                       "inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border transition-colors leading-none",
                       hasReacted
@@ -683,6 +1099,78 @@ function MessageBubble({
               {message.thread_count}{" "}
               {message.thread_count === 1 ? "reply" : "replies"}
             </button>
+          )}
+
+          {/* Read status / Seen-by (own messages) */}
+          {isOwn && !message.is_deleted && otherMembers.length > 0 && (
+            <div className="relative flex justify-end mt-0.5" ref={seenRef}>
+              <button
+                className="flex items-center gap-1 text-[10px] text-base-content/40 hover:text-base-content/70 transition-colors"
+                onClick={() => setShowSeen((s) => !s)}
+                title={
+                  readers.length > 0
+                    ? `Seen by ${readers.map((m) => m.display_name || "member").join(", ")}`
+                    : "Sent"
+                }
+              >
+                {readers.length > 0 ? (
+                  <>
+                    <CheckCheck className="w-3.5 h-3.5 text-success" />
+                    {otherMembers.length > 1 && (
+                      <span>Seen by {readers.length}</span>
+                    )}
+                  </>
+                ) : (
+                  <Check className="w-3.5 h-3.5" />
+                )}
+              </button>
+              {showSeen && (
+                <div className="absolute bottom-full right-0 mb-1 w-52 bg-base-100 border border-base-200 rounded-lg shadow-lg py-1 z-30 text-left max-h-64 overflow-y-auto">
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wide text-base-content/40">
+                    Seen by {readers.length > 0 && `(${readers.length})`}
+                  </div>
+                  {readers.length === 0 ? (
+                    <div className="px-3 py-1 text-xs text-base-content/50">
+                      No one yet
+                    </div>
+                  ) : (
+                    readers.map((m) => (
+                      <div
+                        key={m.user_id}
+                        className="px-3 py-1 text-xs flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate">
+                          {m.display_name || "Member"}
+                        </span>
+                        {m.last_read_at && (
+                          <span className="text-base-content/40 flex-shrink-0">
+                            {format(new Date(m.last_read_at), "HH:mm")}
+                          </span>
+                        )}
+                      </div>
+                    ))
+                  )}
+                  {otherMembers.length - readers.length > 0 && (
+                    <>
+                      <div className="px-3 py-1 mt-1 text-[10px] uppercase tracking-wide text-base-content/40 border-t border-base-200">
+                        Not seen yet
+                      </div>
+                      {otherMembers
+                        .filter((m) => !readers.includes(m))
+                        .slice(0, 10)
+                        .map((m) => (
+                          <div
+                            key={m.user_id}
+                            className="px-3 py-1 text-xs text-base-content/50 truncate"
+                          >
+                            {m.display_name || "Member"}
+                          </div>
+                        ))}
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
 
@@ -716,20 +1204,8 @@ function MessageBubble({
                   "btn btn-ghost btn-xs btn-square",
                   bookmarked && "text-warning",
                 )}
-                title={bookmarked ? "Bookmarked!" : "Bookmark"}
-                onClick={async () => {
-                  try {
-                    if (bookmarked) {
-                      await api.chat.bookmarks.remove(message.id);
-                      setBookmarked(false);
-                    } else {
-                      await api.chat.bookmarks.add(message.id);
-                      setBookmarked(true);
-                    }
-                  } catch {
-                    // toggle failed silently
-                  }
-                }}
+                title={bookmarked ? "Saved — click to remove" : "Save message"}
+                onClick={handleBookmark}
               >
                 <Bookmark
                   className={cn("w-3.5 h-3.5", bookmarked && "fill-current")}
@@ -804,6 +1280,62 @@ function MessageBubble({
                     <MessageSquare className="w-3.5 h-3.5" />
                     Reply in Thread
                   </button>
+                  {canForward && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                      onClick={() => {
+                        setShowMenu(false);
+                        setShowForward(true);
+                      }}
+                    >
+                      <Forward className="w-3.5 h-3.5" />
+                      Forward
+                    </button>
+                  )}
+                  {message.body?.trim() && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                      onClick={async () => {
+                        setShowMenu(false);
+                        try {
+                          await navigator.clipboard.writeText(message.body);
+                          toast.success("Message copied");
+                        } catch {
+                          toast.error("Couldn't copy the message.");
+                        }
+                      }}
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      Copy Text
+                    </button>
+                  )}
+                  {canBookmark && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                      onClick={handleBookmark}
+                    >
+                      <Bookmark
+                        className={cn(
+                          "w-3.5 h-3.5",
+                          bookmarked && "fill-current text-warning",
+                        )}
+                      />
+                      {bookmarked ? "Remove from Saved" : "Save Message"}
+                    </button>
+                  )}
+                  {canPin && (
+                    <button
+                      className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-base-200 transition-colors"
+                      onClick={handleTogglePin}
+                    >
+                      {isPinned ? (
+                        <PinOff className="w-3.5 h-3.5" />
+                      ) : (
+                        <Pin className="w-3.5 h-3.5" />
+                      )}
+                      {isPinned ? "Unpin Message" : "Pin Message"}
+                    </button>
+                  )}
                   {(canDeleteOwn || canDeleteAny) && (
                     <button
                       className="flex items-center gap-2 w-full px-3 py-2 text-sm text-error hover:bg-error/10 transition-colors"
@@ -819,6 +1351,14 @@ function MessageBubble({
           </div>
         )}
 
+        {showForward && (
+          <ForwardModal
+            open={showForward}
+            onClose={() => setShowForward(false)}
+            message={message}
+          />
+        )}
+
         {/* Emoji picker */}
         {showEmoji && (
           <div
@@ -831,7 +1371,11 @@ function MessageBubble({
               <button
                 key={e}
                 onClick={() => handleReaction(e)}
-                className="btn btn-ghost btn-xs btn-square text-base hover:scale-125 transition-transform"
+                title={myReactedEmojis.has(e) ? "Remove reaction" : "React"}
+                className={cn(
+                  "btn btn-ghost btn-xs btn-square text-base hover:scale-125 transition-transform",
+                  myReactedEmojis.has(e) && "bg-primary/15 ring-1 ring-primary/40",
+                )}
               >
                 {e}
               </button>
