@@ -1955,6 +1955,68 @@
   color: currentColor;
 }
 
+/* ── Calendar month/timeline strips — premium tinted bars ── */
+/* Theme-aware ink so colored bar text stays readable on both grounds. The two
+   dark themes flip it to a light ink; light themes inherit the dark default. */
+:root {
+  --cal-ink: #17171d;
+}
+[data-theme="glass-dark"],
+[data-theme="orbis-dark"] {
+  --cal-ink: #eef0f6;
+}
+
+/* --cal-a is set inline per bar to the project's palette color. */
+.cal-bar {
+  --cal-fill: color-mix(in srgb, var(--cal-a) 22%, transparent);
+  --cal-fill-strong: color-mix(in srgb, var(--cal-a) 38%, transparent);
+  background: var(--cal-fill);
+  border-left: 3px solid var(--cal-a);
+  color: color-mix(in srgb, var(--cal-a) 50%, var(--cal-ink));
+}
+.cal-bar .cal-prog {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--cal-fill-strong);
+  z-index: 0;
+}
+/* Content sits above the progress fill. */
+.cal-z {
+  position: relative;
+  z-index: 1;
+}
+.cal-bar.cal-clipL {
+  border-left-width: 0;
+}
+.cal-bar.cal-done {
+  opacity: 0.6;
+}
+.cal-bar.cal-done .cal-lbl {
+  text-decoration: line-through;
+  text-decoration-thickness: 1px;
+}
+.cal-dot-red {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 26%, transparent);
+  flex: none;
+}
+/* Deadline (due-only) tasks render as a diamond marker instead of a 1-day bar. */
+.cal-ms {
+  color: color-mix(in srgb, var(--cal-a) 58%, var(--cal-ink));
+}
+.cal-ms .cal-dia {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  background: var(--cal-a);
+  transform: rotate(45deg);
+  border-radius: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cal-a) 16%, transparent);
+}
+
 /* Table header surface: increase light-mode contrast while preserving dark readability */
 .table-header-surface th {
   border-color: oklch(60% 0.02 260 / 0.22) !important;

@@ -18,7 +18,7 @@ import {
   Layers,
   Repeat,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, type CSSProperties } from "react";
 import {
   aggregateProjectTimelines,
   aggregateTeamTimelines,
@@ -48,18 +48,14 @@ import {
   type CalendarColor,
 } from "./calendar-colors";
 
-/* ── Priority/status emphasis, layered over the palette fill as a secondary cue ── */
-// The bar fill comes from the per-project (or per-task) palette color; status and
-// priority only add subtle emphasis so the calendar reads by project, not as a
-// status rainbow.
-function stripBorder(priority: TaskPriority, status: TaskStatus): string {
-  // Blocked tasks get an extra emphasis ring
-  if (status === "blocked") return "ring-2 ring-error/60 ring-offset-0";
-  // done tasks are slightly de-emphasised
-  if (status === "done") return "opacity-75";
-  // critical priority on non-blocked tasks gets a subtle white inner ring
-  if (priority === "critical") return "ring-1 ring-white/20";
-  return "";
+// Bar geometry — a little more height and vertical breathing room than a dense
+// grid, so stacked strips read as separate bars rather than a solid block.
+const BAR_LANE_PITCH = 26; // px between stacked lanes (22px bar + 4px gap)
+const BAR_TOP_OFFSET = 26; // px below the day-number row
+
+// A due-only task is a deadline — render it as a diamond marker, not a 1-day bar.
+function isMilestone(task: Task): boolean {
+  return !task.start_date && !!task.due_date;
 }
 
 function priorityDot(priority: TaskPriority): string {
@@ -105,26 +101,67 @@ function StripBar({
   const { task, startCol, span, lane, clippedStart, clippedEnd } = strip;
   const left = `${(startCol / 7) * 100}%`;
   const width = `${(span / 7) * 100}%`;
-  const top = `${lane * 24 + 22}px`; // 22px offset for day number row
+  const top = `${lane * BAR_LANE_PITCH + BAR_TOP_OFFSET}px`;
+  const progress =
+    typeof task.progress === "number"
+      ? Math.max(0, Math.min(100, task.progress))
+      : 0;
 
   return (
     <button
       className={cn(
-        "absolute h-[20px] text-[11px] leading-[20px] px-1.5 truncate z-10",
-        "cursor-pointer transition-all hover:brightness-110 hover:shadow-md shadow-sm",
-        "font-medium",
-        stripBorder(task.priority, task.status),
+        "cal-bar absolute flex items-center gap-1.5 h-[22px] text-[11px] leading-[22px] px-2 truncate z-10",
+        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-semibold",
+        clippedStart && "cal-clipL",
+        task.status === "done" && "cal-done",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
-      style={{ left, width, top, backgroundColor: color.bg, color: color.text }}
+      style={{ ["--cal-a"]: color.bg, left, width, top } as CSSProperties}
       title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
       }}
     >
-      {task.title}
+      {progress > 0 && (
+        <span className="cal-prog" style={{ width: `${progress}%` }} />
+      )}
+      {task.status === "blocked" && <span className="cal-dot-red cal-z" />}
+      <span className="cal-lbl cal-z min-w-0 truncate">{task.title}</span>
+    </button>
+  );
+}
+
+/* ── Milestone (deadline) diamond marker for month grid ── */
+function MilestoneMark({
+  strip,
+  color,
+  onClick,
+}: {
+  strip: TaskStrip;
+  color: CalendarColor;
+  onClick?: (task: Task) => void;
+}) {
+  const { task, startCol, lane } = strip;
+  const left = `calc(${(startCol / 7) * 100}% + 6px)`;
+  const top = `${lane * BAR_LANE_PITCH + BAR_TOP_OFFSET}px`;
+
+  return (
+    <button
+      className={cn(
+        "cal-ms absolute flex items-center gap-1.5 h-[22px] text-[11px] font-bold",
+        "whitespace-nowrap cursor-pointer z-10 transition-all hover:brightness-110",
+      )}
+      style={{ ["--cal-a"]: color.bg, left, top } as CSSProperties}
+      title={`${task.title} — due ${formatDateRange(null, task.due_date)}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(task);
+      }}
+    >
+      <span className="cal-dia" />
+      <span className="truncate max-w-[150px]">{task.title}</span>
     </button>
   );
 }
@@ -220,8 +257,8 @@ function MonthWeekRowView({
   onClickTask?: (task: Task) => void;
   onClickDay?: (date: Date) => void;
 }) {
-  // Fixed row height: day number (22px) + MAX_VISIBLE_LANES * 24px + overflow row (18px) + padding
-  const rowH = 22 + MAX_VISIBLE_LANES * 24 + 18 + 4;
+  // Fixed row height: day-number row + visible lanes + overflow row + padding
+  const rowH = BAR_TOP_OFFSET + MAX_VISIBLE_LANES * BAR_LANE_PITCH + 18;
 
   // Only show strips in visible lanes
   const visibleStrips = row.strips.filter((s) => s.lane < MAX_VISIBLE_LANES);
@@ -242,9 +279,11 @@ function MonthWeekRowView({
         <div
           key={col}
           className={cn(
-            "border border-base-200/60 px-1 pt-0.5 cursor-pointer hover:bg-base-200/20 transition-colors overflow-hidden",
-            !day.isCurrentMonth && "opacity-30",
-            day.isToday && "ring-2 ring-primary ring-inset bg-primary/5",
+            "border border-base-200/30 px-1 pt-0.5 cursor-pointer hover:bg-base-200/15 transition-colors overflow-hidden",
+            !day.isCurrentMonth && "opacity-40",
+            col >= 5 && !day.isToday && "bg-base-200/15",
+            day.isToday &&
+              "ring-1 ring-inset ring-primary/40 bg-primary/[0.06]",
           )}
           style={{ height: `${rowH}px` }}
           onClick={() => onClickDay?.(day.date)}
@@ -274,14 +313,23 @@ function MonthWeekRowView({
       ))}
 
       {/* Strip overlay — only visible lanes */}
-      {visibleStrips.map((strip, i) => (
-        <StripBar
-          key={`${strip.task.id}-${i}`}
-          strip={strip}
-          color={getColor(strip.task)}
-          onClick={onClickTask}
-        />
-      ))}
+      {visibleStrips.map((strip, i) =>
+        isMilestone(strip.task) ? (
+          <MilestoneMark
+            key={`${strip.task.id}-${i}`}
+            strip={strip}
+            color={getColor(strip.task)}
+            onClick={onClickTask}
+          />
+        ) : (
+          <StripBar
+            key={`${strip.task.id}-${i}`}
+            strip={strip}
+            color={getColor(strip.task)}
+            onClick={onClickTask}
+          />
+        ),
+      )}
     </div>
   );
 }
@@ -303,21 +351,21 @@ function TimelineStripBar({
   return (
     <button
       className={cn(
-        "absolute h-[24px] text-[11px] leading-[24px] px-2 truncate z-10",
-        "cursor-pointer transition-all hover:brightness-110 hover:shadow-md",
-        "font-medium shadow-sm",
+        "cal-bar absolute flex items-center gap-1 h-[24px] text-[11px] leading-[24px] px-2 truncate z-10",
+        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-semibold",
+        clippedStart && "cal-clipL",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
-      style={{ left, width, top, backgroundColor: c.bg, color: c.text }}
+      style={{ ["--cal-a"]: c.bg, left, width, top } as CSSProperties}
       title={`${entry.title} — ${entry.taskCount} task${entry.taskCount !== 1 ? "s" : ""}`}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(entry);
       }}
     >
-      {entry.title}
-      <span className="ml-1 opacity-75 text-[10px]">({entry.taskCount})</span>
+      <span className="cal-lbl cal-z min-w-0 truncate">{entry.title}</span>
+      <span className="cal-z opacity-70 text-[10px]">({entry.taskCount})</span>
     </button>
   );
 }
