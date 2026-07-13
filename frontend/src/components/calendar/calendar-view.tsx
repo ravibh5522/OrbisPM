@@ -81,7 +81,7 @@ function StripBar({
     <button
       className={cn(
         "cal-bar absolute flex items-center gap-1.5 h-[26px] text-sm leading-[26px] px-2 truncate z-10",
-        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-medium",
+        "cursor-pointer transition-colors font-medium",
         clippedStart && "cal-clipL",
         task.status === "done" && "cal-done",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
@@ -247,7 +247,7 @@ function TimelineStripBar({
     <button
       className={cn(
         "cal-bar absolute flex items-center gap-1 h-[28px] text-sm leading-[28px] px-2 truncate z-10",
-        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md font-medium",
+        "cursor-pointer transition-colors font-medium",
         clippedStart && "cal-clipL",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
@@ -763,7 +763,7 @@ function WeekBar({
     <button
       className={cn(
         "cal-bar absolute flex items-center gap-1.5 px-2 z-20 overflow-hidden",
-        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md",
+        "cursor-pointer transition-colors",
         clippedStart && "cal-clipL",
         task.status === "done" && "cal-done",
         clippedStart ? "rounded-l-none" : "rounded-l-md",
@@ -872,7 +872,7 @@ function DayMarkerChip({
     <button
       className={cn(
         "flex items-start gap-2 rounded-lg border border-base-200/50 bg-base-100 p-2 text-left",
-        "shadow-sm transition-all cursor-pointer hover:-translate-y-px hover:shadow-md",
+        "cal-chip transition-colors cursor-pointer",
       )}
       style={{ ["--cal-a"]: color.bg } as CSSProperties}
       title={task.title}
@@ -1475,7 +1475,7 @@ function DayBar({
     <button
       className={cn(
         "cal-bar relative flex h-[34px] w-full items-center gap-2 rounded-lg px-3 overflow-hidden",
-        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md",
+        "cursor-pointer transition-colors",
         task.status === "done" && "cal-done",
       )}
       style={{ ["--cal-a"]: color.bg } as CSSProperties}
