@@ -28,10 +28,15 @@ type TaskFilter struct {
 	Search      *string
 	ParentID    *string // "root" for root tasks (parent IS NULL), UUID for children of a specific task, nil for all
 	Labels      []string
-	DueDateFrom *string // "YYYY-MM-DD"
-	DueDateTo   *string // "YYYY-MM-DD"
-	SortBy      string  // column to sort by (title, status, priority, due_date, created_at, updated_at, position)
-	SortOrder   string  // "asc" or "desc"
+	DueDateFrom *string // "YYYY-MM-DD" — filters on due_date only
+	DueDateTo   *string // "YYYY-MM-DD" — filters on due_date only
+	// Calendar window: keep tasks whose [start_date, due_date] interval overlaps
+	// [RangeFrom, RangeTo]. Distinct from DueDateFrom/To, which match the due date
+	// alone and would drop a task that starts inside the window but is due after it.
+	RangeFrom *string // "YYYY-MM-DD"
+	RangeTo   *string // "YYYY-MM-DD"
+	SortBy    string  // column to sort by (title, status, priority, due_date, created_at, updated_at, position)
+	SortOrder string  // "asc" or "desc"
 }
 
 // TeamFilter for paginated team listing.

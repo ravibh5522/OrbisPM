@@ -425,6 +425,7 @@ func (s *TaskService) List(ctx context.Context, projectID uuid.UUID, filter repo
 		len(filter.Statuses) == 0 && len(filter.Priorities) == 0 &&
 		len(filter.AssigneeIDs) == 0 && len(filter.Labels) == 0 &&
 		filter.DueDateFrom == nil && filter.DueDateTo == nil &&
+		filter.RangeFrom == nil && filter.RangeTo == nil &&
 		s.cache.IsProjectLoaded(ctx, projectID) {
 		tasks, err := s.cache.ListTasks(ctx, projectID, *filter.ParentID)
 		if err == nil {

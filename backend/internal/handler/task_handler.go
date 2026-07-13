@@ -196,6 +196,8 @@ func buildTaskTree(tasks []*domain.Task) []*domain.TaskTree {
 // @Param priority query string false "Filter by priority"
 // @Param assignee_id query string false "Filter by assignee ID" format(uuid)
 // @Param parent_id query string false "Filter by parent task ID" format(uuid)
+// @Param range_from query string false "Calendar window start (YYYY-MM-DD) - keeps tasks whose start/due interval overlaps the window"
+// @Param range_to query string false "Calendar window end (YYYY-MM-DD)"
 // @Param limit query int false "Limit" default(20)
 // @Param offset query int false "Offset" default(0)
 // @Success 200 {object} ListResponse
@@ -219,6 +221,8 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 		ParentID:    queryStr(r, "parent_id"),
 		DueDateFrom: queryStr(r, "due_date_from"),
 		DueDateTo:   queryStr(r, "due_date_to"),
+		RangeFrom:   queryStr(r, "range_from"),
+		RangeTo:     queryStr(r, "range_to"),
 	}
 	// Multi-value query params (comma-separated)
 	if s := r.URL.Query().Get("statuses"); s != "" {
