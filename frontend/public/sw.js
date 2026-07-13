@@ -4,8 +4,8 @@
 // Bump these on every deploy that ships new frontend code — the activate
 // handler deletes any cache whose name doesn't match, clearing stale chunks so
 // the new build is served without a manual "clear site data".
-const STATIC_CACHE = "orbispm-static-v4";
-const API_CACHE = "orbispm-api-v4";
+const STATIC_CACHE = "orbispm-static-v5";
+const API_CACHE = "orbispm-api-v5";
 
 // ── Install: pre-cache the offline shell ────────────────────────
 self.addEventListener("install", (event) => {
