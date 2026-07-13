@@ -66,7 +66,14 @@ export function calendarFilterCount(f: CalendarFilterState): number {
   return c;
 }
 
-const ALL_STATUSES: TaskStatus[] = ["todo", "in_progress", "done", "blocked"];
+const ALL_STATUSES: TaskStatus[] = [
+  "todo",
+  "in_progress",
+  "in_review",
+  "blocked",
+  "done",
+  "cancelled",
+];
 const ALL_PRIORITIES: TaskPriority[] = ["critical", "high", "medium", "low"];
 
 /* ── Applied Filter Chips Bar ── */

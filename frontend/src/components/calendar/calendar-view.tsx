@@ -3,12 +3,7 @@
 import { Avatar, Badge } from "@/components/ui/shared";
 import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
 import { cn, statusLabel } from "@/lib/utils";
-import type {
-  ProjectMember,
-  Task,
-  TaskPriority,
-  TaskStatus,
-} from "@/types/domain";
+import type { ProjectMember, Task, TaskStatus } from "@/types/domain";
 import {
   CalendarDays,
   Check,
@@ -56,19 +51,6 @@ const BAR_TOP_OFFSET = 28; // px below the day-number row
 // A due-only task is a deadline — render it as a diamond marker, not a 1-day bar.
 function isMilestone(task: Task): boolean {
   return !task.start_date && !!task.due_date;
-}
-
-function priorityDot(priority: TaskPriority): string {
-  switch (priority) {
-    case "critical":
-      return "bg-error";
-    case "high":
-      return "bg-warning";
-    case "medium":
-      return "bg-info";
-    case "low":
-      return "bg-accent";
-  }
 }
 
 function statusRing(status: TaskStatus): string {

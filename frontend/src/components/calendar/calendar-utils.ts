@@ -65,6 +65,9 @@ export function getMonthGridWithStrips(
     });
   }
 
+  // Built once — this map is the same for every week row.
+  const tasksByDate = buildTaskDateMap(tasks);
+
   const rows: MonthWeekRow[] = [];
   for (let r = 0; r < 6; r++) {
     const days = allDays.slice(r * 7, r * 7 + 7);
@@ -73,7 +76,6 @@ export function getMonthGridWithStrips(
     const strips = layoutStrips(tasks, rowStart, rowEnd);
 
     // Also populate day.tasks for point-in-time tasks
-    const tasksByDate = buildTaskDateMap(tasks);
     for (const day of days) {
       day.tasks = tasksByDate.get(toDateKey(day.date)) || [];
     }
