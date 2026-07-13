@@ -428,6 +428,64 @@ export interface TimelineStrip {
   clippedEnd: boolean;
 }
 
+/**
+ * A group of tasks (one project, or one team) for the swimlane week/day views.
+ * colorIndex is assigned by first appearance, exactly like the month timelines,
+ * so a project keeps the same colour across month / week / day.
+ */
+export interface TaskGroup {
+  key: string;
+  label: string;
+  colorIndex: number;
+  tasks: Task[];
+}
+
+function toGroups(nameTaskMap: Map<string, Task[]>, prefix: string): TaskGroup[] {
+  let colorIndex = 0;
+  return Array.from(nameTaskMap, ([label, tasks]) => ({
+    key: `${prefix}-${label}`,
+    label,
+    colorIndex: colorIndex++,
+    tasks,
+  }));
+}
+
+/** Group tasks by project name (merging duplicate names, as the timelines do). */
+export function groupTasksByProject(
+  tasks: Task[],
+  projectNames: Map<string, string>,
+): TaskGroup[] {
+  const byName = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const name =
+      projectNames.get(t.project_id) || `Project ${t.project_id.slice(0, 8)}`;
+    const arr = byName.get(name);
+    if (arr) arr.push(t);
+    else byName.set(name, [t]);
+  }
+  return toGroups(byName, "project");
+}
+
+/** Group tasks by the team owning their project. */
+export function groupTasksByTeam(
+  tasks: Task[],
+  projectTeamMap: Map<string, string>,
+  teamNames: Map<string, string>,
+): TaskGroup[] {
+  const byName = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const teamId = projectTeamMap.get(t.project_id) || "unassigned";
+    const name =
+      teamId === "unassigned"
+        ? "No Team"
+        : teamNames.get(teamId) || `Team ${teamId.slice(0, 8)}`;
+    const arr = byName.get(name);
+    if (arr) arr.push(t);
+    else byName.set(name, [t]);
+  }
+  return toGroups(byName, "team");
+}
+
 /** Aggregate tasks into project timeline entries (merges duplicate project names) */
 export function aggregateProjectTimelines(
   tasks: Task[],

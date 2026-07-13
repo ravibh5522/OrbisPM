@@ -9,7 +9,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Clock,
-  Layers,
   Repeat,
 } from "lucide-react";
 import { useCallback, useMemo, useState, type CSSProperties } from "react";
@@ -28,11 +27,14 @@ import {
   getWeekdayLabels,
   getWeekGrid,
   getWeekStrips,
+  groupTasksByProject,
+  groupTasksByTeam,
   navigateDate,
   sortTasksByPriority,
   toDateKey,
   type CalendarDay,
   type DayMarker,
+  type TaskGroup,
   type CalendarGroupBy,
   type CalendarViewMode,
   type MonthWeekRow,
@@ -316,12 +318,25 @@ function TimelineWeekRowView({
 }
 
 /* ── Group-By section header ── */
-function GroupHeader({ label, count }: { label: string; count: number }) {
+function GroupHeader({
+  label,
+  count,
+  color,
+}: {
+  label: string;
+  count: number;
+  color: CalendarColor;
+}) {
   return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-base-200/40 border-b border-base-200/60 sticky top-0 z-20 backdrop-blur-sm">
-      <Layers className="w-3.5 h-3.5 text-primary/60" />
-      <span className="text-sm font-semibold">{label}</span>
-      <span className="badge badge-ghost badge-xs">{count} tasks</span>
+    <div className="relative z-20 flex items-center gap-2 border-y border-base-200/40 bg-base-200/30 px-3 py-1.5 backdrop-blur-sm">
+      <span
+        className="h-3 w-3 shrink-0 rounded-sm"
+        style={{ backgroundColor: color.bg }}
+      />
+      <span className="text-[13px] font-semibold">{label}</span>
+      <span className="text-[11px] font-medium text-base-content/50">
+        {count} task{count !== 1 ? "s" : ""}
+      </span>
     </div>
   );
 }
@@ -383,11 +398,16 @@ export function CalendarView({
   }, [tasks, groupBy, projectNames, teamNames, projectTeamMap]);
 
   // Group tasks (only used in "none" mode for grouped sections)
-  const grouped = useMemo(() => {
-    // In timeline mode we use a single unified view, not grouped sections
-    if (isTimelineMode) return [{ key: "__timeline__", label: "", tasks }];
-    return [{ key: "__all__", label: "", tasks }];
-  }, [tasks, isTimelineMode]);
+  // Swimlane groups for the week/day views when grouping by project or team.
+  const taskGroups = useMemo(() => {
+    if (groupBy === "project" && projectNames) {
+      return groupTasksByProject(tasks, projectNames);
+    }
+    if (groupBy === "team" && projectTeamMap && teamNames) {
+      return groupTasksByTeam(tasks, projectTeamMap, teamNames);
+    }
+    return [];
+  }, [tasks, groupBy, projectNames, teamNames, projectTeamMap]);
 
   // Bar color resolver. Color by project when several projects are on screen
   // (org/team calendar) so each project reads as its own hue; fall back to a
@@ -520,62 +540,60 @@ export function CalendarView({
       {!isLoading && (
         <div className="flex-1 min-h-0 overflow-auto">
           {isTimelineMode && mode === "month" ? (
-            /* Timeline month grid for project/team modes */
+            /* Month stays an aggregate timeline: one bar per project/team. */
             <TimelineMonthGridView
               entries={timelineEntries}
               viewDate={viewDate}
               weekdays={weekdays}
               onClickEntry={onTimelineEntryClick}
             />
-          ) : isTimelineMode && (mode === "week" || mode === "day") ? (
-            /* Timeline week/day fallback: show entry summary cards */
-            <TimelineSummaryView
-              entries={timelineEntries}
+          ) : isTimelineMode && mode === "week" ? (
+            /* Zoomed in, an aggregate bar says nothing — show each group's real
+               tasks as a swimlane of spanning bars. */
+            <GroupedWeekView
+              groups={taskGroups}
+              noun={groupBy === "project" ? "projects" : "teams"}
               viewDate={viewDate}
-              mode={mode}
-              onClickEntry={onTimelineEntryClick}
+              weekdays={weekdays}
+              getColor={getTaskColor}
+              onClickTask={onTaskClick}
+              members={members}
+            />
+          ) : isTimelineMode && mode === "day" ? (
+            <GroupedDayView
+              groups={taskGroups}
+              noun={groupBy === "project" ? "projects" : "teams"}
+              viewDate={viewDate}
+              getColor={getTaskColor}
+              onClickTask={onTaskClick}
+              members={members}
+            />
+          ) : mode === "month" ? (
+            <MonthGridView
+              tasks={tasks}
+              viewDate={viewDate}
+              weekdays={weekdays}
+              getColor={getTaskColor}
+              onClickTask={onTaskClick}
+              onClickDay={handleDayClick}
+            />
+          ) : mode === "week" ? (
+            <WeekGridView
+              tasks={tasks}
+              viewDate={viewDate}
+              weekdays={weekdays}
+              getColor={getTaskColor}
+              onClickTask={onTaskClick}
+              members={members}
             />
           ) : (
-            /* Normal task views */
-            grouped.map((group) => (
-              <div key={group.key}>
-                {groupBy !== "none" && (
-                  <GroupHeader label={group.label} count={group.tasks.length} />
-                )}
-
-                {mode === "month" && (
-                  <MonthGridView
-                    tasks={group.tasks}
-                    viewDate={viewDate}
-                    weekdays={weekdays}
-                    getColor={getTaskColor}
-                    onClickTask={onTaskClick}
-                    onClickDay={handleDayClick}
-                  />
-                )}
-
-                {mode === "week" && (
-                  <WeekGridView
-                    tasks={group.tasks}
-                    viewDate={viewDate}
-                    weekdays={weekdays}
-                    getColor={getTaskColor}
-                    onClickTask={onTaskClick}
-                    members={members}
-                  />
-                )}
-
-                {mode === "day" && (
-                  <DayGridView
-                    tasks={group.tasks}
-                    viewDate={viewDate}
-                    getColor={getTaskColor}
-                    onClickTask={onTaskClick}
-                    members={members}
-                  />
-                )}
-              </div>
-            ))
+            <DayGridView
+              tasks={tasks}
+              viewDate={viewDate}
+              getColor={getTaskColor}
+              onClickTask={onTaskClick}
+              members={members}
+            />
           )}
         </div>
       )}
@@ -653,100 +671,6 @@ function TimelineMonthGridView({
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-/* ── Timeline Summary View for week/day mode ── */
-function TimelineSummaryView({
-  entries,
-  viewDate,
-  mode,
-  onClickEntry,
-}: {
-  entries: TimelineEntry[];
-  viewDate: Date;
-  mode: CalendarViewMode;
-  onClickEntry?: (entry: TimelineEntry) => void;
-}) {
-  // Filter entries active during the view period
-  const range = getDateRange(viewDate, mode);
-  const rangeStart = new Date(range.from);
-  const rangeEnd = new Date(range.to);
-  rangeStart.setHours(0, 0, 0, 0);
-
-  const activeEntries = entries.filter((e) => {
-    return e.endDate >= rangeStart && e.startDate <= rangeEnd;
-  });
-
-  // Deduplicate by title (teams with broken segments)
-  const uniqueEntries = Array.from(
-    new Map(
-      activeEntries.map((e) => [
-        e.title,
-        {
-          ...e,
-          taskCount: activeEntries
-            .filter((ae) => ae.title === e.title)
-            .reduce((sum, ae) => Math.max(sum, ae.taskCount), 0),
-        },
-      ]),
-    ).values(),
-  );
-
-  const formatDate = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-  return (
-    <div className="w-full py-4 px-1">
-      {uniqueEntries.length > 0 && (
-        <div className="text-sm text-base-content/50 mb-3">
-          {uniqueEntries.length} active{" "}
-          {uniqueEntries[0]?.type === "project" ? "project" : "team"}
-          {uniqueEntries.length !== 1 ? "s" : ""}
-        </div>
-      )}
-      <div
-        className="grid gap-3 items-start"
-        style={{
-          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-        }}
-      >
-        {uniqueEntries.length === 0 ? (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 text-base-content/40">
-            <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
-            <p className="text-sm font-medium">No active timelines</p>
-          </div>
-        ) : (
-          uniqueEntries.map((entry) => {
-            const c = colorForIndex(entry.colorIndex);
-            return (
-              <button
-                key={entry.id}
-                onClick={() => onClickEntry?.(entry)}
-                className="w-full h-full text-left p-3 rounded-xl border border-base-200/60 bg-base-100/85
-                  hover:shadow-md transition-all cursor-pointer flex items-center gap-3"
-              >
-                <div
-                  className="w-2 h-10 rounded-full shrink-0"
-                  style={{ backgroundColor: c.bg }}
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">
-                    {entry.title}
-                  </div>
-                  <div className="text-xs text-base-content/50 mt-0.5">
-                    {formatDate(entry.startDate)} → {formatDate(entry.endDate)}
-                  </div>
-                </div>
-                <div className="badge badge-ghost badge-sm shrink-0">
-                  {entry.taskCount} task{entry.taskCount !== 1 ? "s" : ""}
-                </div>
-              </button>
-            );
-          })
-        )}
-      </div>
     </div>
   );
 }
@@ -990,6 +914,116 @@ function ZoneLabel({ title, count }: { title: string; count?: string }) {
   );
 }
 
+/** Column classes shared by every week zone, so the 7 columns line up exactly. */
+function weekColClass(i: number, isToday: boolean) {
+  return cn(
+    "border-r border-base-200/30 last:border-r-0",
+    i >= 5 && !isToday && "bg-base-200/15",
+  );
+}
+
+/** Today as one continuous tinted column running through every zone. */
+function TodayWash({ col }: { col: number }) {
+  return (
+    <div
+      className="pointer-events-none absolute inset-y-0 z-0 bg-primary/[0.06] ring-1 ring-inset ring-primary/25"
+      style={{ left: `${(col / 7) * 100}%`, width: `${100 / 7}%` }}
+    />
+  );
+}
+
+function WeekDayHeader({
+  days,
+  weekdays,
+}: {
+  days: CalendarDay[];
+  weekdays: string[];
+}) {
+  return (
+    <div className="relative z-10 grid grid-cols-7 border-b border-base-200/40">
+      {days.map((day, i) => (
+        <div key={i} className={cn(weekColClass(i, day.isToday), "px-3 py-2")}>
+          <div
+            className={cn(
+              "text-[10px] font-bold uppercase tracking-[0.13em]",
+              day.isToday ? "text-primary" : "text-base-content/40",
+            )}
+          >
+            {weekdays[i]}
+          </div>
+          <div
+            className={cn(
+              "mt-0.5 flex h-[30px] w-[30px] items-center justify-center rounded-full text-[17px] font-semibold tabular-nums",
+              day.isToday && "bg-primary text-primary-content",
+            )}
+          >
+            {day.date.getDate()}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A band of lane-packed strips over the 7 day columns. The whole week view is one
+ * band; the grouped week view is one band per project/team swimlane.
+ */
+function WeekBand({
+  days,
+  strips,
+  getColor,
+  members,
+  onClickTask,
+  emptyLabel,
+}: {
+  days: CalendarDay[];
+  strips: TaskStrip[];
+  getColor: (task: Task) => CalendarColor;
+  members?: ProjectMember[];
+  onClickTask?: (task: Task) => void;
+  emptyLabel: string;
+}) {
+  const laneCount = strips.reduce((max, s) => Math.max(max, s.lane + 1), 0);
+  const bandH = WEEK_BAND_PAD * 2 + laneCount * (WEEK_BAR_H + WEEK_BAR_GAP);
+
+  return (
+    <div
+      className="relative z-10"
+      style={{ height: `${Math.max(bandH, 44)}px` }}
+    >
+      <div className="absolute inset-0 z-0 grid grid-cols-7">
+        {days.map((day, i) => (
+          <div key={i} className={weekColClass(i, day.isToday)} />
+        ))}
+      </div>
+      {strips.map((strip, i) =>
+        isMilestone(strip.task) ? (
+          <WeekMilestone
+            key={`${strip.task.id}-${i}`}
+            strip={strip}
+            color={getColor(strip.task)}
+            onClick={onClickTask}
+          />
+        ) : (
+          <WeekBar
+            key={`${strip.task.id}-${i}`}
+            strip={strip}
+            color={getColor(strip.task)}
+            members={members}
+            onClick={onClickTask}
+          />
+        ),
+      )}
+      {strips.length === 0 && (
+        <div className="flex h-full items-center justify-center text-xs text-base-content/30">
+          {emptyLabel}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WeekGridView({
   tasks,
   viewDate,
@@ -1017,26 +1051,14 @@ function WeekGridView({
     [days, tasks],
   );
 
-  const laneCount = strips.reduce((max, s) => Math.max(max, s.lane + 1), 0);
-  const bandH = WEEK_BAND_PAD * 2 + laneCount * (WEEK_BAR_H + WEEK_BAR_GAP);
   const todayCol = days.findIndex((d) => d.isToday);
-
   const barStrips = strips.filter((s) => !isMilestone(s.task));
-  const dueCount = markersByDay
-    .flat()
-    .filter((m) => m.kind !== "starts").length;
-  const startCount = markersByDay
-    .flat()
-    .filter((m) => m.kind === "starts").length;
+  const markers = markersByDay.flat();
+  const dueCount = markers.filter((m) => m.kind !== "starts").length;
+  const startCount = markers.filter((m) => m.kind === "starts").length;
   const blockedCount = barStrips.filter(
     (s) => s.task.status === "blocked",
   ).length;
-
-  const dayCol = (i: number, isToday: boolean) =>
-    cn(
-      "border-r border-base-200/30 last:border-r-0",
-      i >= 5 && !isToday && "bg-base-200/15",
-    );
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-base-100/10">
@@ -1052,76 +1074,22 @@ function WeekGridView({
 
       <div className="min-h-0 flex-1 overflow-auto">
         <div className="relative">
-          {/* Today washes through every zone as one continuous column */}
-          {todayCol >= 0 && (
-            <div
-              className="pointer-events-none absolute inset-y-0 z-0 bg-primary/[0.06] ring-1 ring-inset ring-primary/25"
-              style={{
-                left: `${(todayCol / 7) * 100}%`,
-                width: `${100 / 7}%`,
-              }}
-            />
-          )}
-
-          {/* ── Day header ── */}
-          <div className="relative z-10 grid grid-cols-7 border-b border-base-200/40">
-            {days.map((day, i) => (
-              <div key={i} className={cn(dayCol(i, day.isToday), "px-3 py-2")}>
-                <div
-                  className={cn(
-                    "text-[10px] font-bold uppercase tracking-[0.13em]",
-                    day.isToday ? "text-primary" : "text-base-content/40",
-                  )}
-                >
-                  {weekdays[i]}
-                </div>
-                <div
-                  className={cn(
-                    "mt-0.5 flex h-[30px] w-[30px] items-center justify-center rounded-full text-[17px] font-semibold tabular-nums",
-                    day.isToday && "bg-primary text-primary-content",
-                  )}
-                >
-                  {day.date.getDate()}
-                </div>
-              </div>
-            ))}
-          </div>
+          {todayCol >= 0 && <TodayWash col={todayCol} />}
+          <WeekDayHeader days={days} weekdays={weekdays} />
 
           {/* ── In flight: one bar per task ── */}
           <ZoneLabel
             title="In flight"
             count={`· ${barStrips.length} task${barStrips.length !== 1 ? "s" : ""}`}
           />
-          <div className="relative z-10" style={{ height: `${bandH}px` }}>
-            <div className="absolute inset-0 z-0 grid grid-cols-7">
-              {days.map((day, i) => (
-                <div key={i} className={dayCol(i, day.isToday)} />
-              ))}
-            </div>
-            {strips.map((strip, i) =>
-              isMilestone(strip.task) ? (
-                <WeekMilestone
-                  key={`${strip.task.id}-${i}`}
-                  strip={strip}
-                  color={getColor(strip.task)}
-                  onClick={onClickTask}
-                />
-              ) : (
-                <WeekBar
-                  key={`${strip.task.id}-${i}`}
-                  strip={strip}
-                  color={getColor(strip.task)}
-                  members={members}
-                  onClick={onClickTask}
-                />
-              ),
-            )}
-            {strips.length === 0 && (
-              <div className="flex h-full items-center justify-center text-xs text-base-content/30">
-                Nothing in flight this week
-              </div>
-            )}
-          </div>
+          <WeekBand
+            days={days}
+            strips={strips}
+            getColor={getColor}
+            members={members}
+            onClickTask={onClickTask}
+            emptyLabel="Nothing in flight this week"
+          />
 
           {/* ── Starts & due: the only day-specific signal ── */}
           <ZoneLabel title="Starts & due" />
@@ -1130,7 +1098,7 @@ function WeekGridView({
               <div
                 key={i}
                 className={cn(
-                  dayCol(i, day.isToday),
+                  weekColClass(i, day.isToday),
                   "flex min-h-[150px] flex-col gap-1.5 p-2",
                 )}
               >
@@ -1152,6 +1120,195 @@ function WeekGridView({
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/** Week view grouped into one swimlane per project / team. */
+function GroupedWeekView({
+  groups,
+  noun,
+  viewDate,
+  weekdays,
+  getColor,
+  onClickTask,
+  members,
+}: {
+  groups: TaskGroup[];
+  noun: string;
+  viewDate: Date;
+  weekdays: string[];
+  getColor: (task: Task) => CalendarColor;
+  onClickTask?: (task: Task) => void;
+  members?: ProjectMember[];
+}) {
+  const days = useMemo(() => getWeekGrid(viewDate, []), [viewDate]);
+  const lanes = useMemo(
+    () =>
+      groups.map((group) => ({
+        group,
+        strips: getWeekStrips(viewDate, group.tasks),
+      })),
+    [groups, viewDate],
+  );
+
+  const todayCol = days.findIndex((d) => d.isToday);
+  const allTasks = groups.flatMap((g) => g.tasks);
+  const blockedCount = allTasks.filter((t) => t.status === "blocked").length;
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-base-100/10">
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-base-200/40 bg-base-200/20 px-4 py-2.5 text-xs text-base-content/60">
+        <Stat color="bg-secondary" n={groups.length} label={noun} />
+        <Stat color="bg-primary" n={allTasks.length} label="tasks this week" />
+        {blockedCount > 0 && (
+          <Stat color="bg-error" n={blockedCount} label="blocked" />
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="relative">
+          {todayCol >= 0 && <TodayWash col={todayCol} />}
+          <WeekDayHeader days={days} weekdays={weekdays} />
+
+          {lanes.map(({ group, strips }) => (
+            <div key={group.key}>
+              <GroupHeader
+                label={group.label}
+                count={group.tasks.length}
+                color={colorForIndex(group.colorIndex)}
+              />
+              <WeekBand
+                days={days}
+                strips={strips}
+                getColor={getColor}
+                members={members}
+                onClickTask={onClickTask}
+                emptyLabel="Nothing this week"
+              />
+            </div>
+          ))}
+
+          {groups.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+              <CalendarDays className="mb-3 h-10 w-10 opacity-50" />
+              <p className="text-sm font-medium">Nothing to show</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Day view grouped into one section per project / team. */
+function GroupedDayView({
+  groups,
+  noun,
+  viewDate,
+  getColor,
+  onClickTask,
+  members,
+}: {
+  groups: TaskGroup[];
+  noun: string;
+  viewDate: Date;
+  getColor: (task: Task) => CalendarColor;
+  onClickTask?: (task: Task) => void;
+  members?: ProjectMember[];
+}) {
+  const sections = useMemo(
+    () =>
+      groups.map((group) => {
+        const dayTasks = getDayGrid(viewDate, group.tasks)[0]?.tasks ?? [];
+        return {
+          group,
+          inFlight: sortTasksByPriority(dayTasks.filter((t) => !isMilestone(t))),
+          markers: getDayMarkers(viewDate, group.tasks),
+        };
+      }),
+    [groups, viewDate],
+  );
+
+  const inFlightTotal = sections.reduce((s, x) => s + x.inFlight.length, 0);
+  const dueTotal = sections.reduce(
+    (s, x) => s + x.markers.filter((m) => m.kind !== "starts").length,
+    0,
+  );
+  const blockedTotal = sections.reduce(
+    (s, x) => s + x.inFlight.filter((t) => t.status === "blocked").length,
+    0,
+  );
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-base-100/10">
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-base-200/40 bg-base-200/20 px-4 py-2.5 text-xs text-base-content/60">
+        <Stat color="bg-secondary" n={sections.length} label={noun} />
+        <Stat color="bg-primary" n={inFlightTotal} label="in flight" />
+        <Stat color="bg-error" n={dueTotal} label="due today" />
+        {blockedTotal > 0 && (
+          <Stat color="bg-error" n={blockedTotal} label="blocked" />
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        {sections.map(({ group, inFlight, markers }) => (
+          <div key={group.key}>
+            <GroupHeader
+              label={group.label}
+              count={group.tasks.length}
+              color={colorForIndex(group.colorIndex)}
+            />
+            {inFlight.length === 0 && markers.length === 0 ? (
+              <div className="py-4 text-center text-xs text-base-content/30">
+                Nothing today
+              </div>
+            ) : (
+              <>
+                {inFlight.length > 0 && (
+                  <div className="flex flex-col gap-1.5 p-3">
+                    {inFlight.map((task) => (
+                      <DayBar
+                        key={task.id}
+                        task={task}
+                        viewDate={viewDate}
+                        color={getColor(task)}
+                        members={members}
+                        onClick={onClickTask}
+                      />
+                    ))}
+                  </div>
+                )}
+                {markers.length > 0 && (
+                  <div
+                    className="grid items-start gap-2 px-3 pb-3"
+                    style={{
+                      gridTemplateColumns:
+                        "repeat(auto-fill, minmax(240px, 1fr))",
+                    }}
+                  >
+                    {markers.map((marker, i) => (
+                      <DayMarkerChip
+                        key={`${marker.task.id}-${marker.kind}-${i}`}
+                        marker={marker}
+                        color={getColor(marker.task)}
+                        onClick={onClickTask}
+                      />
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        ))}
+
+        {sections.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
+            <CalendarDays className="mb-3 h-10 w-10 opacity-50" />
+            <p className="text-sm font-medium">Nothing to show</p>
+          </div>
+        )}
       </div>
     </div>
   );
