@@ -1971,8 +1971,26 @@
   --cal-fill: color-mix(in srgb, var(--cal-a) 22%, transparent);
   --cal-fill-strong: color-mix(in srgb, var(--cal-a) 38%, transparent);
   background: var(--cal-fill);
-  border-left: 3px solid var(--cal-a);
   color: color-mix(in srgb, var(--cal-a) 50%, var(--cal-ink));
+}
+
+/* The project cap is a strip clipped by the bar's own radius — NOT a border-left.
+   A one-sided border under a border-radius mitres into a tapered wedge at the
+   corners, which reads as a 3-D bevel. The bars already clip their overflow, so
+   this strip gets the rounded corner cleanly with no mitre. */
+.cal-bar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--cal-a);
+  z-index: 2;
+}
+/* A bar continuing from the previous row has no start — so no cap. */
+.cal-bar.cal-clipL::before {
+  content: none;
 }
 /* Hover deepens the bar's own tint. No drop shadow and no lift — a dark shadow
    under a flat coloured bar reads as a fake 3-D bevel. */
@@ -1989,9 +2007,6 @@
 .cal-z {
   position: relative;
   z-index: 1;
-}
-.cal-bar.cal-clipL {
-  border-left-width: 0;
 }
 .cal-bar.cal-done {
   opacity: 0.6;
