@@ -194,14 +194,69 @@ export function getMonthGrid(
   return rows.flatMap((r) => r.days);
 }
 
-/* ── Week / Day grids ── */
-export function getWeekGrid(date: Date, tasks: Task[]): CalendarDay[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+/** Monday of the week containing `date`. */
+function getWeekStart(date: Date): Date {
   const day = date.getDay();
   const diff = day === 0 ? 6 : day - 1;
   const monday = new Date(date);
   monday.setDate(date.getDate() - diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+/**
+ * A week is a single 7-day row, so it uses the same strip layout as a month row:
+ * each task yields exactly ONE spanning bar. (The old week view placed a task on
+ * every day it covered, so a task spanning the week was drawn seven times.)
+ */
+export function getWeekStrips(date: Date, tasks: Task[]): TaskStrip[] {
+  const monday = getWeekStart(date);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return layoutStrips(tasks, monday, sunday);
+}
+
+export type DayMarkerKind = "starts" | "due" | "milestone";
+
+export interface DayMarker {
+  task: Task;
+  kind: DayMarkerKind;
+}
+
+/**
+ * Tasks that actually begin on, or fall due on, this exact day — the only
+ * day-specific signal worth a column. A task merely *passing through* the day is
+ * already represented by its spanning bar.
+ */
+export function getDayMarkers(date: Date, tasks: Task[]): DayMarker[] {
+  const key = toDateKey(date);
+  const markers: DayMarker[] = [];
+
+  for (const task of tasks) {
+    // A due-only task is a deadline, not a range — it gets one milestone marker.
+    const deadlineOnly = !task.start_date && !!task.due_date;
+
+    if (!deadlineOnly && task.start_date) {
+      if (toDateKey(new Date(task.start_date)) === key) {
+        markers.push({ task, kind: "starts" });
+      }
+    }
+    if (task.due_date && toDateKey(new Date(task.due_date)) === key) {
+      markers.push({ task, kind: deadlineOnly ? "milestone" : "due" });
+    }
+  }
+
+  return markers;
+}
+
+/* ── Week / Day grids ── */
+export function getWeekGrid(date: Date, tasks: Task[]): CalendarDay[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // getWeekStart normalises to midnight. Without that the generated days inherit
+  // viewDate's time-of-day and never compare equal to midnight-today, so isToday
+  // was always false and the week/day views never highlighted today.
+  const monday = getWeekStart(date);
   const tasksByDate = buildTaskDateMap(tasks);
   const days: CalendarDay[] = [];
   for (let i = 0; i < 7; i++) {
@@ -220,14 +275,15 @@ export function getWeekGrid(date: Date, tasks: Task[]): CalendarDay[] {
 export function getDayGrid(date: Date, tasks: Task[]): CalendarDay[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
   const tasksByDate = buildTaskDateMap(tasks);
-  const dateKey = toDateKey(date);
   return [
     {
-      date: new Date(date),
+      date: day,
       isCurrentMonth: true,
-      isToday: date.getTime() === today.getTime(),
-      tasks: tasksByDate.get(dateKey) || [],
+      isToday: day.getTime() === today.getTime(),
+      tasks: tasksByDate.get(toDateKey(day)) || [],
     },
   ];
 }
