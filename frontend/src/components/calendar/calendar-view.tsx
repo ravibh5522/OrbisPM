@@ -23,13 +23,16 @@ import {
   formatWeekRange,
   getDateRange,
   getDayGrid,
+  getDayMarkers,
   getMonthGridWithStrips,
   getMonthGridWithTimelineStrips,
   getWeekdayLabels,
   getWeekGrid,
+  getWeekStrips,
   navigateDate,
   sortTasksByPriority,
   type CalendarDay,
+  type DayMarker,
   type CalendarGroupBy,
   type CalendarViewMode,
   type MonthWeekRow,
@@ -648,6 +651,7 @@ export function CalendarView({
                     tasks={group.tasks}
                     viewDate={viewDate}
                     weekdays={weekdays}
+                    getColor={getTaskColor}
                     onClickTask={onTaskClick}
                     members={members}
                   />
@@ -892,73 +896,373 @@ function MonthGridView({
   );
 }
 
-/* ── Week grid sub-component ── */
+/* ── Week view ──
+   A week is one 7-day row, so tasks lay out as spanning strips exactly like a
+   month row: each task is drawn ONCE. The day columns underneath carry only the
+   day-specific signal (what starts, what's due) — a task merely passing through a
+   day is already represented by its bar. */
+const WEEK_BAR_H = 26;
+const WEEK_BAR_GAP = 5;
+const WEEK_BAND_PAD = 8;
+
+function WeekBar({
+  strip,
+  color,
+  members,
+  onClick,
+}: {
+  strip: TaskStrip;
+  color: CalendarColor;
+  members?: ProjectMember[];
+  onClick?: (task: Task) => void;
+}) {
+  const { task, startCol, span, lane, clippedStart, clippedEnd } = strip;
+  const progress =
+    typeof task.progress === "number"
+      ? Math.max(0, Math.min(100, task.progress))
+      : 0;
+  const assignee = members?.find(
+    (m) =>
+      m.user_id === task.assignee_id || task.assignee_ids?.includes(m.user_id),
+  );
+
+  return (
+    <button
+      className={cn(
+        "cal-bar absolute flex items-center gap-1.5 px-2 z-20 overflow-hidden",
+        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md",
+        clippedStart && "cal-clipL",
+        task.status === "done" && "cal-done",
+        clippedStart ? "rounded-l-none" : "rounded-l-md",
+        clippedEnd ? "rounded-r-none" : "rounded-r-md",
+      )}
+      style={
+        {
+          ["--cal-a"]: color.bg,
+          left: `${(startCol / 7) * 100}%`,
+          width: `${(span / 7) * 100}%`,
+          top: `${WEEK_BAND_PAD + lane * (WEEK_BAR_H + WEEK_BAR_GAP)}px`,
+          height: `${WEEK_BAR_H}px`,
+        } as CSSProperties
+      }
+      title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(task);
+      }}
+    >
+      {progress > 0 && (
+        <span className="cal-prog" style={{ width: `${progress}%` }} />
+      )}
+      {clippedStart && (
+        <span className="cal-z text-xs font-bold opacity-55">‹</span>
+      )}
+      {task.status === "blocked" && <span className="cal-dot-red cal-z" />}
+      <span className="cal-lbl cal-z min-w-0 truncate text-[12.5px] font-semibold">
+        {task.title}
+      </span>
+      <span className="cal-z ml-auto flex shrink-0 items-center gap-2">
+        <span className="hidden lg:inline text-[10.5px] tabular-nums text-base-content/50">
+          {formatDateRange(task.start_date, task.due_date)}
+        </span>
+        {assignee && (
+          <Avatar
+            name={assignee.display_name || assignee.email}
+            src={assignee.avatar_url}
+            size="xs"
+          />
+        )}
+        {progress > 0 && (
+          <span className="cal-pct text-[10.5px] font-bold tabular-nums">
+            {progress}%
+          </span>
+        )}
+      </span>
+      {clippedEnd && (
+        <span className="cal-z text-xs font-bold opacity-55">›</span>
+      )}
+    </button>
+  );
+}
+
+function WeekMilestone({
+  strip,
+  color,
+  onClick,
+}: {
+  strip: TaskStrip;
+  color: CalendarColor;
+  onClick?: (task: Task) => void;
+}) {
+  const { task, startCol, lane } = strip;
+  return (
+    <button
+      className="cal-ms absolute flex items-center gap-1.5 whitespace-nowrap text-[12.5px] font-bold z-30 cursor-pointer transition-all hover:brightness-110"
+      style={
+        {
+          ["--cal-a"]: color.bg,
+          left: `calc(${(startCol / 7) * 100}% + 9px)`,
+          top: `${WEEK_BAND_PAD + lane * (WEEK_BAR_H + WEEK_BAR_GAP)}px`,
+          height: `${WEEK_BAR_H}px`,
+        } as CSSProperties
+      }
+      title={`${task.title} — due ${formatDateRange(null, task.due_date)}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(task);
+      }}
+    >
+      <span className="cal-dia" />
+      <span className="truncate max-w-[160px]">{task.title}</span>
+    </button>
+  );
+}
+
+function DayMarkerChip({
+  marker,
+  color,
+  onClick,
+}: {
+  marker: DayMarker;
+  color: CalendarColor;
+  onClick?: (task: Task) => void;
+}) {
+  const { task, kind } = marker;
+  const label =
+    kind === "starts"
+      ? "▸ Starts"
+      : kind === "milestone"
+        ? "◆ Milestone"
+        : "◆ Due";
+
+  return (
+    <button
+      className={cn(
+        "flex items-start gap-2 rounded-lg border border-base-200/50 bg-base-100 p-2 text-left",
+        "shadow-sm transition-all cursor-pointer hover:-translate-y-px hover:shadow-md",
+      )}
+      style={{ ["--cal-a"]: color.bg } as CSSProperties}
+      title={task.title}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(task);
+      }}
+    >
+      <span className="cal-rail w-[3px] self-stretch rounded-sm shrink-0" />
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span
+          className={cn(
+            "text-[9.5px] font-bold uppercase tracking-[0.08em]",
+            kind === "starts" ? "cal-key" : "text-error",
+          )}
+        >
+          {label}
+        </span>
+        <span className="line-clamp-2 text-[12.5px] font-semibold leading-snug">
+          {task.title}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function ZoneLabel({ title, count }: { title: string; count?: string }) {
+  return (
+    <div className="relative z-10 flex items-center gap-2 border-b border-base-200/40 bg-base-200/20 px-4 py-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-base-content/40">
+        {title}
+      </span>
+      {count && (
+        <span className="text-[10.5px] font-semibold text-base-content/50">
+          {count}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function WeekGridView({
   tasks,
   viewDate,
   weekdays,
+  getColor,
   onClickTask,
   members,
 }: {
   tasks: Task[];
   viewDate: Date;
   weekdays: string[];
+  getColor: (task: Task) => CalendarColor;
   onClickTask?: (task: Task) => void;
   members?: ProjectMember[];
 }) {
-  const grid = useMemo(() => getWeekGrid(viewDate, tasks), [viewDate, tasks]);
+  // Empty task list — we only need each day's date and isToday flag here; the
+  // tasks are laid out as strips, not bucketed per day.
+  const days = useMemo(() => getWeekGrid(viewDate, []), [viewDate]);
+  const strips = useMemo(
+    () => getWeekStrips(viewDate, tasks),
+    [viewDate, tasks],
+  );
+  const markersByDay = useMemo(
+    () => days.map((d) => getDayMarkers(d.date, tasks)),
+    [days, tasks],
+  );
+
+  const laneCount = strips.reduce((max, s) => Math.max(max, s.lane + 1), 0);
+  const bandH = WEEK_BAND_PAD * 2 + laneCount * (WEEK_BAR_H + WEEK_BAR_GAP);
+  const todayCol = days.findIndex((d) => d.isToday);
+
+  const barStrips = strips.filter((s) => !isMilestone(s.task));
+  const dueCount = markersByDay
+    .flat()
+    .filter((m) => m.kind !== "starts").length;
+  const startCount = markersByDay
+    .flat()
+    .filter((m) => m.kind === "starts").length;
+  const blockedCount = barStrips.filter(
+    (s) => s.task.status === "blocked",
+  ).length;
+
+  const dayCol = (i: number, isToday: boolean) =>
+    cn(
+      "border-r border-base-200/30 last:border-r-0",
+      i >= 5 && !isToday && "bg-base-200/15",
+    );
 
   return (
-    <div className="grid grid-cols-7 gap-1.5 h-[calc(100vh-220px)]">
-      {grid.map((day, i) => {
-        const sorted = sortTasksByPriority(day.tasks);
-        return (
-          <div
-            key={i}
-            className="flex flex-col min-h-0 border border-base-200/60 rounded-xl overflow-hidden bg-base-100 shadow-sm"
-          >
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-base-100/10">
+      {/* ── Summary: the state of the week, before you read anything ── */}
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-base-200/40 bg-base-200/20 px-4 py-2.5 text-xs text-base-content/60">
+        <Stat color="bg-primary" n={barStrips.length} label="in flight" />
+        <Stat color="bg-error" n={dueCount} label="due this week" />
+        <Stat color="bg-success" n={startCount} label="starting" />
+        {blockedCount > 0 && (
+          <Stat color="bg-error" n={blockedCount} label="blocked" />
+        )}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="relative">
+          {/* Today washes through every zone as one continuous column */}
+          {todayCol >= 0 && (
             <div
-              className={cn(
-                "text-center py-1.5 bg-base-100 z-10 border-b border-base-200/60 shrink-0",
-                day.isToday && "text-primary font-bold",
-              )}
-            >
-              <div className="text-[10px] text-base-content/50 uppercase">
-                {weekdays[i]}
-              </div>
-              <div
-                className={cn(
-                  "text-lg font-semibold w-8 h-8 mx-auto flex items-center justify-center rounded-full",
-                  day.isToday && "bg-primary text-primary-content",
-                )}
-              >
-                {day.date.getDate()}
-              </div>
-            </div>
-            <div className="flex-1 flex flex-col gap-1 p-1 overflow-y-auto min-h-0">
-              {sorted.map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
-                  onClick={onClickTask}
-                  members={members}
-                />
-              ))}
-              {sorted.length === 0 && (
-                <div className="flex-1 flex items-center justify-center">
-                  <span className="text-[10px] text-base-content/20">—</span>
+              className="pointer-events-none absolute inset-y-0 z-0 bg-primary/[0.06] ring-1 ring-inset ring-primary/25"
+              style={{
+                left: `${(todayCol / 7) * 100}%`,
+                width: `${100 / 7}%`,
+              }}
+            />
+          )}
+
+          {/* ── Day header ── */}
+          <div className="relative z-10 grid grid-cols-7 border-b border-base-200/40">
+            {days.map((day, i) => (
+              <div key={i} className={cn(dayCol(i, day.isToday), "px-3 py-2")}>
+                <div
+                  className={cn(
+                    "text-[10px] font-bold uppercase tracking-[0.13em]",
+                    day.isToday ? "text-primary" : "text-base-content/40",
+                  )}
+                >
+                  {weekdays[i]}
                 </div>
-              )}
+                <div
+                  className={cn(
+                    "mt-0.5 flex h-[30px] w-[30px] items-center justify-center rounded-full text-[17px] font-semibold tabular-nums",
+                    day.isToday && "bg-primary text-primary-content",
+                  )}
+                >
+                  {day.date.getDate()}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* ── In flight: one bar per task ── */}
+          <ZoneLabel
+            title="In flight"
+            count={`· ${barStrips.length} task${barStrips.length !== 1 ? "s" : ""}`}
+          />
+          <div className="relative z-10" style={{ height: `${bandH}px` }}>
+            <div className="absolute inset-0 z-0 grid grid-cols-7">
+              {days.map((day, i) => (
+                <div key={i} className={dayCol(i, day.isToday)} />
+              ))}
             </div>
-            {sorted.length > 0 && (
-              <div className="text-[10px] text-center text-base-content/40 py-0.5 border-t border-base-200/60 shrink-0 bg-base-200/20">
-                {sorted.length} task{sorted.length !== 1 ? "s" : ""}
+            {strips.map((strip, i) =>
+              isMilestone(strip.task) ? (
+                <WeekMilestone
+                  key={`${strip.task.id}-${i}`}
+                  strip={strip}
+                  color={getColor(strip.task)}
+                  onClick={onClickTask}
+                />
+              ) : (
+                <WeekBar
+                  key={`${strip.task.id}-${i}`}
+                  strip={strip}
+                  color={getColor(strip.task)}
+                  members={members}
+                  onClick={onClickTask}
+                />
+              ),
+            )}
+            {strips.length === 0 && (
+              <div className="flex h-full items-center justify-center text-xs text-base-content/30">
+                Nothing in flight this week
               </div>
             )}
           </div>
-        );
-      })}
+
+          {/* ── Starts & due: the only day-specific signal ── */}
+          <ZoneLabel title="Starts & due" />
+          <div className="relative z-10 grid grid-cols-7">
+            {days.map((day, i) => (
+              <div
+                key={i}
+                className={cn(
+                  dayCol(i, day.isToday),
+                  "flex min-h-[150px] flex-col gap-1.5 p-2",
+                )}
+              >
+                {markersByDay[i].length === 0 ? (
+                  <div className="pt-3 text-center text-[11px] text-base-content/25">
+                    —
+                  </div>
+                ) : (
+                  markersByDay[i].map((marker, j) => (
+                    <DayMarkerChip
+                      key={`${marker.task.id}-${marker.kind}-${j}`}
+                      marker={marker}
+                      color={getColor(marker.task)}
+                      onClick={onClickTask}
+                    />
+                  ))
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
+  );
+}
+
+function Stat({
+  color,
+  n,
+  label,
+}: {
+  color: string;
+  n: number;
+  label: string;
+}) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("h-[7px] w-[7px] rounded-full", color)} />
+      <span className="font-bold tabular-nums text-base-content">{n}</span>
+      <span>{label}</span>
+    </span>
   );
 }
 

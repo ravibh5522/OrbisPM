@@ -2003,6 +2003,20 @@
   box-shadow: 0 0 0 2px color-mix(in srgb, #ef4444 26%, transparent);
   flex: none;
 }
+/* Progress chip on the week bar. */
+.cal-pct {
+  background: color-mix(in srgb, var(--cal-a) 22%, transparent);
+  padding: 1px 5px;
+  border-radius: 5px;
+}
+/* Starts/due chip in the week's day columns. */
+.cal-rail {
+  background: var(--cal-a);
+}
+.cal-key {
+  color: color-mix(in srgb, var(--cal-a) 55%, var(--cal-ink));
+}
+
 /* Deadline (due-only) tasks render as a diamond marker instead of a 1-day bar. */
 .cal-ms {
   color: color-mix(in srgb, var(--cal-a) 58%, var(--cal-ink));
