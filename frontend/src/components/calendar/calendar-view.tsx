@@ -1,9 +1,8 @@
 "use client";
 
-import { Avatar, Badge } from "@/components/ui/shared";
-import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
+import { Avatar } from "@/components/ui/shared";
 import { cn, statusLabel } from "@/lib/utils";
-import type { ProjectMember, Task, TaskStatus } from "@/types/domain";
+import type { ProjectMember, Task } from "@/types/domain";
 import {
   CalendarDays,
   Check,
@@ -31,6 +30,7 @@ import {
   getWeekStrips,
   navigateDate,
   sortTasksByPriority,
+  toDateKey,
   type CalendarDay,
   type DayMarker,
   type CalendarGroupBy,
@@ -54,23 +54,6 @@ const BAR_TOP_OFFSET = 28; // px below the day-number row
 // A due-only task is a deadline — render it as a diamond marker, not a 1-day bar.
 function isMilestone(task: Task): boolean {
   return !task.start_date && !!task.due_date;
-}
-
-function statusRing(status: TaskStatus): string {
-  switch (status) {
-    case "done":
-      return "border-l-success";
-    case "in_progress":
-      return "border-l-primary";
-    case "in_review":
-      return "border-l-secondary";
-    case "blocked":
-      return "border-l-error";
-    case "cancelled":
-      return "border-l-neutral";
-    default:
-      return "border-l-info";
-  }
 }
 
 /* ── Task Strip Bar for month grid ── */
@@ -147,81 +130,6 @@ function MilestoneMark({
     >
       <span className="cal-dia" />
       <span className="truncate max-w-[150px]">{task.title}</span>
-    </button>
-  );
-}
-
-/* ── Expanded task card for week/day view ── */
-function TaskCard({
-  task,
-  onClick,
-  members,
-}: {
-  task: Task;
-  onClick?: (task: Task) => void;
-  members?: ProjectMember[];
-}) {
-  const assignee = members?.find(
-    (m) =>
-      m.user_id === task.assignee_id || task.assignee_ids?.includes(m.user_id),
-  );
-
-  return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.(task);
-      }}
-      className={cn(
-        "w-full text-left p-2.5 rounded-lg border-l-3 bg-base-100 border border-base-200/80",
-        "shadow-sm hover:shadow-md transition-all cursor-pointer group",
-        statusRing(task.status),
-      )}
-    >
-      <div className="flex items-start justify-between gap-1">
-        <span className="text-sm font-medium truncate flex-1">
-          {task.title}
-        </span>
-        {task.recurrence_rule && (
-          <Repeat className="w-3 h-3 text-base-content/40 flex-shrink-0 mt-0.5" />
-        )}
-      </div>
-      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-        <Badge variant={PRIORITY_BADGE[task.priority]} className="badge-xs">
-          {statusLabel(task.priority)}
-        </Badge>
-        <Badge variant={STATUS_BADGE[task.status]} className="badge-xs">
-          {statusLabel(task.status)}
-        </Badge>
-        {task.labels?.map((l) => (
-          <span key={l} className="badge badge-xs badge-outline">
-            {l}
-          </span>
-        ))}
-      </div>
-      {task.start_date && task.due_date && (
-        <div className="text-[10px] text-base-content/50 mt-1">
-          {formatDateRange(task.start_date, task.due_date)}
-        </div>
-      )}
-      {assignee && (
-        <div className="flex items-center gap-1 mt-1.5">
-          <Avatar
-            name={assignee.display_name || assignee.email}
-            src={assignee.avatar_url}
-            size="xs"
-          />
-          <span className="text-xs text-base-content/60 truncate">
-            {assignee.display_name || assignee.email?.split("@")[0]}
-          </span>
-        </div>
-      )}
-      {task.estimated_hours && (
-        <div className="flex items-center gap-1 mt-1 text-xs text-base-content/50">
-          <Clock className="w-3 h-3" />
-          {task.estimated_hours}h
-        </div>
-      )}
     </button>
   );
 }
@@ -661,6 +569,7 @@ export function CalendarView({
                   <DayGridView
                     tasks={group.tasks}
                     viewDate={viewDate}
+                    getColor={getTaskColor}
                     onClickTask={onTaskClick}
                     members={members}
                   />
@@ -1266,58 +1175,198 @@ function Stat({
   );
 }
 
-/* ── Day view sub-component ── */
+/* ── Day view: the week's language, in a single column ── */
 function DayGridView({
   tasks,
   viewDate,
+  getColor,
   onClickTask,
   members,
 }: {
   tasks: Task[];
   viewDate: Date;
+  getColor: (task: Task) => CalendarColor;
   onClickTask?: (task: Task) => void;
   members?: ProjectMember[];
 }) {
-  const grid = useMemo(() => getDayGrid(viewDate, tasks), [viewDate, tasks]);
+  const dayTasks = useMemo(
+    () => getDayGrid(viewDate, tasks)[0]?.tasks ?? [],
+    [viewDate, tasks],
+  );
+  const markers = useMemo(
+    () => getDayMarkers(viewDate, tasks),
+    [viewDate, tasks],
+  );
+
+  // A deadline (due-only) task belongs in "starts & due" as a milestone — it has
+  // no duration to be "in flight" for.
+  const inFlight = useMemo(
+    () => sortTasksByPriority(dayTasks.filter((t) => !isMilestone(t))),
+    [dayTasks],
+  );
+
+  const dueCount = markers.filter((m) => m.kind !== "starts").length;
+  const startCount = markers.filter((m) => m.kind === "starts").length;
+  const blockedCount = inFlight.filter((t) => t.status === "blocked").length;
 
   return (
-    <div className="w-full py-2">
-      {grid[0] && (
-        <>
-          {grid[0].tasks.length > 0 && (
-            <div className="text-sm text-base-content/50 mb-3">
-              {grid[0].tasks.length} task{grid[0].tasks.length !== 1 ? "s" : ""}{" "}
-              scheduled
-            </div>
-          )}
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl bg-base-100/10">
+      {/* Same summary language as the week view */}
+      <div className="flex flex-wrap gap-x-5 gap-y-1 border-b border-base-200/40 bg-base-200/20 px-4 py-2.5 text-xs text-base-content/60">
+        <Stat color="bg-primary" n={inFlight.length} label="in flight" />
+        <Stat color="bg-error" n={dueCount} label="due today" />
+        <Stat color="bg-success" n={startCount} label="starting" />
+        {blockedCount > 0 && (
+          <Stat color="bg-error" n={blockedCount} label="blocked" />
+        )}
+      </div>
 
-          {grid[0].tasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 text-base-content/40">
-              <CalendarDays className="w-10 h-10 mb-3 opacity-50" />
-              <p className="text-sm font-medium">No tasks for this day</p>
-              <p className="text-xs mt-1 text-base-content/30">
-                Try navigating to another date
-              </p>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <ZoneLabel
+          title="In flight"
+          count={`· ${inFlight.length} task${inFlight.length !== 1 ? "s" : ""}`}
+        />
+        <div className="flex flex-col gap-1.5 p-3">
+          {inFlight.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-base-content/40">
+              <CalendarDays className="mb-3 h-9 w-9 opacity-50" />
+              <p className="text-sm font-medium">Nothing in flight today</p>
+            </div>
+          ) : (
+            inFlight.map((task) => (
+              <DayBar
+                key={task.id}
+                task={task}
+                viewDate={viewDate}
+                color={getColor(task)}
+                members={members}
+                onClick={onClickTask}
+              />
+            ))
+          )}
+        </div>
+
+        <ZoneLabel title="Starts &amp; due" />
+        <div className="p-3">
+          {markers.length === 0 ? (
+            <div className="py-6 text-center text-xs text-base-content/30">
+              Nothing starts or is due today
             </div>
           ) : (
             <div
-              className="grid gap-3 items-start max-h-[calc(100vh-260px)] overflow-y-auto pr-1"
+              className="grid items-start gap-2"
               style={{
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+                gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))",
               }}
             >
-              {sortTasksByPriority(grid[0].tasks).map((task) => (
-                <TaskCard
-                  key={task.id}
-                  task={task}
+              {markers.map((marker, i) => (
+                <DayMarkerChip
+                  key={`${marker.task.id}-${marker.kind}-${i}`}
+                  marker={marker}
+                  color={getColor(marker.task)}
                   onClick={onClickTask}
-                  members={members}
                 />
               ))}
             </div>
           )}
-        </>
-      )}
+        </div>
+      </div>
     </div>
+  );
+}
+
+/** Estimated hours come through as raw floats (13.06) — show at most one decimal. */
+function formatHours(hours?: number | null): string | null {
+  if (typeof hours !== "number" || hours <= 0) return null;
+  const rounded = Math.round(hours * 10) / 10;
+  return `${Number.isInteger(rounded) ? rounded : rounded.toFixed(1)}h`;
+}
+
+/** Full-width bar: a day is a single column, so the strip spans the whole row. */
+function DayBar({
+  task,
+  viewDate,
+  color,
+  members,
+  onClick,
+}: {
+  task: Task;
+  viewDate: Date;
+  color: CalendarColor;
+  members?: ProjectMember[];
+  onClick?: (task: Task) => void;
+}) {
+  const progress =
+    typeof task.progress === "number"
+      ? Math.max(0, Math.min(100, task.progress))
+      : 0;
+  const assignee = members?.find(
+    (m) =>
+      m.user_id === task.assignee_id || task.assignee_ids?.includes(m.user_id),
+  );
+
+  const dayKey = toDateKey(viewDate);
+  const startedBefore = task.start_date
+    ? toDateKey(new Date(task.start_date)) < dayKey
+    : false;
+  const continuesAfter = task.due_date
+    ? toDateKey(new Date(task.due_date)) > dayKey
+    : false;
+  const hours = formatHours(task.estimated_hours);
+
+  return (
+    <button
+      className={cn(
+        "cal-bar relative flex h-[34px] w-full items-center gap-2 rounded-lg px-3 overflow-hidden",
+        "cursor-pointer transition-all hover:-translate-y-px hover:shadow-md",
+        task.status === "done" && "cal-done",
+      )}
+      style={{ ["--cal-a"]: color.bg } as CSSProperties}
+      title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.(task);
+      }}
+    >
+      {progress > 0 && (
+        <span className="cal-prog" style={{ width: `${progress}%` }} />
+      )}
+      {startedBefore && (
+        <span className="cal-z text-xs font-bold opacity-55">‹</span>
+      )}
+      {task.status === "blocked" && <span className="cal-dot-red cal-z" />}
+      <span className="cal-lbl cal-z min-w-0 truncate text-[13px] font-semibold">
+        {task.title}
+      </span>
+      {task.recurrence_rule && (
+        <Repeat className="cal-z h-3 w-3 shrink-0 opacity-50" />
+      )}
+      <span className="cal-z ml-auto flex shrink-0 items-center gap-2.5">
+        {hours && (
+          <span className="hidden items-center gap-1 text-[11px] tabular-nums text-base-content/50 sm:inline-flex">
+            <Clock className="h-3 w-3" />
+            {hours}
+          </span>
+        )}
+        <span className="hidden text-[11px] tabular-nums text-base-content/50 md:inline">
+          {formatDateRange(task.start_date, task.due_date)}
+        </span>
+        {assignee && (
+          <Avatar
+            name={assignee.display_name || assignee.email}
+            src={assignee.avatar_url}
+            size="xs"
+          />
+        )}
+        {progress > 0 && (
+          <span className="cal-pct text-[10.5px] font-bold tabular-nums">
+            {progress}%
+          </span>
+        )}
+      </span>
+      {continuesAfter && (
+        <span className="cal-z text-xs font-bold opacity-55">›</span>
+      )}
+    </button>
   );
 }
