@@ -156,9 +156,10 @@ export default function TeamDashboardPage({
       const results = await Promise.all(
         projects.map((p) => {
           const params = new URLSearchParams();
-          params.set("due_date_from", calDateRange.from);
-          params.set("due_date_to", calDateRange.to);
-          params.set("limit", "200");
+          // Overlap window so tasks spanning the view edges still render.
+          params.set("range_from", calDateRange.from);
+          params.set("range_to", calDateRange.to);
+          params.set("limit", "500");
           return api.tasks
             .list(orgId, p.id, params.toString())
             .then((r) => r.data || []);

@@ -11,7 +11,6 @@ import {
   isCalendarFilterActive,
   type CalendarFilterState,
   type CalendarGroupBy,
-  type CalendarViewMode,
 } from "@/components/calendar";
 import { Button } from "@/components/ui/button";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -128,9 +127,11 @@ export default function OrgCalendarPage({
   const buildParams = useCallback(
     (projectId: string) => {
       const p = new URLSearchParams();
-      p.set("due_date_from", dateRange.from);
-      p.set("due_date_to", dateRange.to);
-      p.set("limit", "200");
+      // Overlap window, not a due-date match: a task starting inside the view but
+      // due after it must still render (and vice versa).
+      p.set("range_from", dateRange.from);
+      p.set("range_to", dateRange.to);
+      p.set("limit", "500");
 
       if (filter.statuses.length > 0) {
         p.set("statuses", filter.statuses.join(","));
@@ -175,20 +176,23 @@ export default function OrgCalendarPage({
       filter.parentTaskId,
     ],
     queryFn: async () => {
-      if (targetProjectIds.length === 0) return [] as Task[];
+      if (targetProjectIds.length === 0) return { tasks: [] as Task[], total: 0 };
       const results = await Promise.all(
-        targetProjectIds.map((pid) =>
-          api.tasks
-            .list(orgId, pid, buildParams(pid))
-            .then((r) => r.data || []),
-        ),
+        targetProjectIds.map((pid) => api.tasks.list(orgId, pid, buildParams(pid))),
       );
-      return results.flat();
+      return {
+        tasks: results.flatMap((r) => r.data || []),
+        // Server-side match count — if it exceeds what we fetched, the per-project
+        // limit clipped the result and we say so rather than silently dropping tasks.
+        total: results.reduce((sum, r) => sum + (r.total ?? 0), 0),
+      };
     },
     enabled: !!orgId && projects.length > 0,
   });
 
-  const calendarTasks = allTasksData || [];
+  const calendarTasks = allTasksData?.tasks || [];
+  const matchedTotal = allTasksData?.total ?? 0;
+  const truncated = matchedTotal > calendarTasks.length;
 
   // Map all project members for avatar display
   const allMembers = useMemo(() => {
@@ -209,16 +213,12 @@ export default function OrgCalendarPage({
     [calendarTasks],
   );
 
-  const handleRangeChange = useCallback(
-    (from: string, _to: string, _mode: CalendarViewMode) => {
-      // Always fetch the full month grid range so week/day views
-      // still have all tasks loaded (avoids blank day view bug).
-      const midDate = new Date(from);
-      const monthRange = getDateRange(midDate, "month");
-      setDateRange(monthRange);
-    },
-    [],
-  );
+  // Fetch exactly the range being viewed. The old code always widened this to the
+  // whole month to work around blank week/day views — that was a symptom of the
+  // due-date-only query, which the overlap window now fixes.
+  const handleRangeChange = useCallback((from: string, to: string) => {
+    setDateRange({ from, to });
+  }, []);
 
   const handleTaskClick = useCallback(
     (task: Task) => {
@@ -241,6 +241,14 @@ export default function OrgCalendarPage({
           {calendarTasks.length > 0 && (
             <span className="badge badge-ghost badge-sm">
               {calendarTasks.length} task{calendarTasks.length !== 1 ? "s" : ""}
+            </span>
+          )}
+          {truncated && (
+            <span
+              className="badge badge-warning badge-sm"
+              title={`${matchedTotal} tasks match this range, but only ${calendarTasks.length} were loaded. Narrow the filters to see the rest.`}
+            >
+              showing {calendarTasks.length} of {matchedTotal}
             </span>
           )}
         </div>

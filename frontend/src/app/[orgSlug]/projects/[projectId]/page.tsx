@@ -196,9 +196,10 @@ export default function ProjectDetailPage({
     ],
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set("due_date_from", calDateRange.from);
-      p.set("due_date_to", calDateRange.to);
-      p.set("limit", "200");
+      // Overlap window so tasks spanning the view edges still render.
+      p.set("range_from", calDateRange.from);
+      p.set("range_to", calDateRange.to);
+      p.set("limit", "500");
       if (globalFilter.statuses.length > 0)
         p.set("statuses", globalFilter.statuses.join(","));
       if (globalFilter.priorities.length > 0)
