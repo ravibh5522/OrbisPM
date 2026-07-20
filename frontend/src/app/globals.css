@@ -1992,6 +1992,14 @@
 .cal-bar.cal-clipL::before {
   content: none;
 }
+
+/* A capped bar gets a flat left edge. Any radius on the capped side curves the
+   cap into a lozenge, which is what still read as a bevel. Square it, and the cap
+   is a crisp rectangle: flat start, rounded finish. */
+.cal-bar:not(.cal-clipL) {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
 /* Hover deepens the bar's own tint. No drop shadow and no lift — a dark shadow
    under a flat coloured bar reads as a fake 3-D bevel. */
 .cal-bar:hover {

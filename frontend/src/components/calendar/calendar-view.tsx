@@ -11,7 +11,15 @@ import {
   Clock,
   Repeat,
 } from "lucide-react";
-import { useCallback, useMemo, useState, type CSSProperties } from "react";
+import {
+  useCallback,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   aggregateProjectTimelines,
   aggregateTeamTimelines,
@@ -58,6 +66,81 @@ function isMilestone(task: Task): boolean {
   return !task.start_date && !!task.due_date;
 }
 
+/**
+ * Hover card for calendar bars. Replaces the native `title` tooltip, which the
+ * browser renders as an opaque black box — jarring on a light, flat surface, and
+ * unstyleable. Portalled to <body> so the bars' overflow:hidden can't clip it.
+ */
+function useHoverTip(content: () => ReactNode) {
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+
+  const track = (e: MouseEvent) => setPos({ x: e.clientX, y: e.clientY });
+  const handlers = {
+    onMouseEnter: track,
+    onMouseMove: track,
+    onMouseLeave: () => setPos(null),
+  };
+
+  const node =
+    pos && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            className="pointer-events-none fixed z-[9999] w-max max-w-[300px] rounded-lg border border-base-200/70 bg-base-100 px-3 py-2"
+            style={{
+              left: Math.min(pos.x + 14, window.innerWidth - 316),
+              top: Math.min(pos.y + 18, window.innerHeight - 100),
+            }}
+          >
+            {content()}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  return { handlers, node };
+}
+
+function TaskTip({ task, color }: { task: Task; color: CalendarColor }) {
+  return (
+    <div
+      className="flex gap-2"
+      style={{ ["--cal-a"]: color.bg } as CSSProperties}
+    >
+      <span className="cal-rail w-[3px] shrink-0 self-stretch rounded-sm" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-[12.5px] font-semibold leading-snug">
+          {task.title}
+        </span>
+        <span className="text-[11px] text-base-content/60">
+          {statusLabel(task.status)} · {statusLabel(task.priority)}
+        </span>
+        {(task.start_date || task.due_date) && (
+          <span className="text-[11px] tabular-nums text-base-content/50">
+            {formatDateRange(task.start_date, task.due_date)}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function EntryTip({ entry }: { entry: TimelineEntry }) {
+  return (
+    <div
+      className="flex gap-2"
+      style={{ ["--cal-a"]: colorForIndex(entry.colorIndex).bg } as CSSProperties}
+    >
+      <span className="cal-rail w-[3px] shrink-0 self-stretch rounded-sm" />
+      <div className="flex flex-col gap-0.5">
+        <span className="text-[12.5px] font-semibold">{entry.title}</span>
+        <span className="text-[11px] text-base-content/60">
+          {entry.taskCount} task{entry.taskCount !== 1 ? "s" : ""}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* ── Task Strip Bar for month grid ── */
 function StripBar({
   strip,
@@ -77,6 +160,8 @@ function StripBar({
       ? Math.max(0, Math.min(100, task.progress))
       : 0;
 
+
+  const tip = useHoverTip(() => <TaskTip task={task} color={color} />);
   return (
     <button
       className={cn(
@@ -88,7 +173,7 @@ function StripBar({
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
       style={{ ["--cal-a"]: color.bg, left, width, top } as CSSProperties}
-      title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
@@ -99,6 +184,7 @@ function StripBar({
       )}
       {task.status === "blocked" && <span className="cal-dot-red cal-z" />}
       <span className="cal-lbl cal-z min-w-0 truncate">{task.title}</span>
+      {tip.node}
     </button>
   );
 }
@@ -117,6 +203,8 @@ function MilestoneMark({
   const left = `calc(${(startCol / 7) * 100}% + 6px)`;
   const top = `${lane * BAR_LANE_PITCH + BAR_TOP_OFFSET}px`;
 
+
+  const tip = useHoverTip(() => <TaskTip task={task} color={color} />);
   return (
     <button
       className={cn(
@@ -124,7 +212,7 @@ function MilestoneMark({
         "whitespace-nowrap cursor-pointer z-10 transition-all hover:brightness-110",
       )}
       style={{ ["--cal-a"]: color.bg, left, top } as CSSProperties}
-      title={`${task.title} — due ${formatDateRange(null, task.due_date)}`}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
@@ -132,6 +220,7 @@ function MilestoneMark({
     >
       <span className="cal-dia" />
       <span className="truncate max-w-[150px]">{task.title}</span>
+      {tip.node}
     </button>
   );
 }
@@ -243,6 +332,8 @@ function TimelineStripBar({
   const top = `${lane * 32 + 26}px`;
   const c = colorForIndex(entry.colorIndex);
 
+
+  const tip = useHoverTip(() => <EntryTip entry={entry} />);
   return (
     <button
       className={cn(
@@ -253,7 +344,7 @@ function TimelineStripBar({
         clippedEnd ? "rounded-r-none" : "rounded-r-md",
       )}
       style={{ ["--cal-a"]: c.bg, left, width, top } as CSSProperties}
-      title={`${entry.title} — ${entry.taskCount} task${entry.taskCount !== 1 ? "s" : ""}`}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(entry);
@@ -261,6 +352,7 @@ function TimelineStripBar({
     >
       <span className="cal-lbl cal-z min-w-0 truncate">{entry.title}</span>
       <span className="cal-z opacity-70 text-xs">({entry.taskCount})</span>
+      {tip.node}
     </button>
   );
 }
@@ -759,6 +851,8 @@ function WeekBar({
       m.user_id === task.assignee_id || task.assignee_ids?.includes(m.user_id),
   );
 
+
+  const tip = useHoverTip(() => <TaskTip task={task} color={color} />);
   return (
     <button
       className={cn(
@@ -778,7 +872,7 @@ function WeekBar({
           height: `${WEEK_BAR_H}px`,
         } as CSSProperties
       }
-      title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
@@ -814,6 +908,7 @@ function WeekBar({
       {clippedEnd && (
         <span className="cal-z text-xs font-bold opacity-55">›</span>
       )}
+      {tip.node}
     </button>
   );
 }
@@ -828,6 +923,8 @@ function WeekMilestone({
   onClick?: (task: Task) => void;
 }) {
   const { task, startCol, lane } = strip;
+
+  const tip = useHoverTip(() => <TaskTip task={task} color={color} />);
   return (
     <button
       className="cal-ms absolute flex items-center gap-1.5 whitespace-nowrap text-[12.5px] font-bold z-30 cursor-pointer transition-all hover:brightness-110"
@@ -839,7 +936,7 @@ function WeekMilestone({
           height: `${WEEK_BAR_H}px`,
         } as CSSProperties
       }
-      title={`${task.title} — due ${formatDateRange(null, task.due_date)}`}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
@@ -847,6 +944,7 @@ function WeekMilestone({
     >
       <span className="cal-dia" />
       <span className="truncate max-w-[160px]">{task.title}</span>
+      {tip.node}
     </button>
   );
 }
@@ -868,6 +966,8 @@ function DayMarkerChip({
         ? "◆ Milestone"
         : "◆ Due";
 
+
+  const tip = useHoverTip(() => <TaskTip task={task} color={color} />);
   return (
     <button
       className={cn(
@@ -875,7 +975,7 @@ function DayMarkerChip({
         "cal-chip transition-colors cursor-pointer",
       )}
       style={{ ["--cal-a"]: color.bg } as CSSProperties}
-      title={task.title}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
@@ -895,6 +995,7 @@ function DayMarkerChip({
           {task.title}
         </span>
       </span>
+      {tip.node}
     </button>
   );
 }
@@ -1471,6 +1572,8 @@ function DayBar({
     : false;
   const hours = formatHours(task.estimated_hours);
 
+
+  const tip = useHoverTip(() => <TaskTip task={task} color={color} />);
   return (
     <button
       className={cn(
@@ -1479,7 +1582,7 @@ function DayBar({
         task.status === "done" && "cal-done",
       )}
       style={{ ["--cal-a"]: color.bg } as CSSProperties}
-      title={`${task.title} — ${statusLabel(task.status)} (${task.priority})\n${formatDateRange(task.start_date, task.due_date)}`}
+      {...tip.handlers}
       onClick={(e) => {
         e.stopPropagation();
         onClick?.(task);
@@ -1524,6 +1627,7 @@ function DayBar({
       {continuesAfter && (
         <span className="cal-z text-xs font-bold opacity-55">›</span>
       )}
+      {tip.node}
     </button>
   );
 }
