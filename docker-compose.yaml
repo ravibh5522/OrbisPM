@@ -77,8 +77,12 @@ services:
       timeout: 5s
       retries: 5
 
+  # Decommissioned 2026-07-21 (research/orbispm-integration-plan.md in Research_g): OrbisPM now
+  # points at Research_g's centralized Zitadel instead (see ZITADEL_* vars in .env.local). Kept
+  # here, not deleted, in case of rollback — profile renamed so `--profile local up` never starts
+  # it. Manually run with `--profile legacy-local-zitadel` if you ever need it back temporarily.
   zitadel:
-    profiles: [local]
+    profiles: [legacy-local-zitadel]
     image: ghcr.io/zitadel/zitadel:v4.12.1
     restart: unless-stopped
     user: "0"
@@ -159,8 +163,12 @@ services:
       timeout: 3s
       retries: 5
 
+  # Decommissioned in favor of Research_g's centralized Mailpit
+  # (research/centralized-mail-plan.md in Research_g) — profile renamed rather
+  # than deleted so it's inert but recoverable, same treatment as the old
+  # local Zitadel below.
   mailpit:
-    profiles: [local]
+    profiles: [legacy-local-mailpit]
     image: axllent/mailpit:latest
     restart: unless-stopped
     environment:
@@ -281,7 +289,6 @@ services:
       ZITADEL_INTERNAL_URL: ${ZITADEL_INTERNAL_URL:-http://zitadel:8080}
       ZITADEL_SERVICE_TOKEN: ${ZITADEL_SERVICE_TOKEN:?ZITADEL_SERVICE_TOKEN required}
       ZITADEL_CLIENT_ID: ${ZITADEL_CLIENT_ID:?ZITADEL_CLIENT_ID required}
-      JWT_SECRET: ${JWT_SECRET:-orbispm-dev-jwt-secret-32chars!!}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-minio:9000}
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY required}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
@@ -320,6 +327,9 @@ services:
       zitadel:
         condition: service_healthy
         required: false
+    networks:
+      - default
+      - crewsity_appnet
     healthcheck:
       test: ["CMD", "curl", "-sf", "http://localhost:8080/health"]
       interval: 10s
@@ -374,6 +384,9 @@ services:
       EMAIL_REDIS_URL: ${EMAIL_REDIS_URL:?EMAIL_REDIS_URL required}
       EMAIL_API_KEY: ${EMAIL_SERVICE_API_KEY:-email-service-dev-key}
       EMAIL_FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    networks:
+      - default
+      - crewsity_appnet
     healthcheck:
       test:
         [
@@ -395,6 +408,9 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     command: ["arq", "app.services.queue.WorkerSettings"]
+    networks:
+      - default
+      - crewsity_appnet
     environment:
       EMAIL_SMTP_HOST: ${SMTP_HOST:-mailpit}
       EMAIL_SMTP_PORT: ${SMTP_PORT:-1025}
@@ -449,6 +465,9 @@ services:
       zitadel:
         condition: service_healthy
         required: false
+    networks:
+      - default
+      - crewsity_appnet
 
   frontend:
     build:
@@ -465,6 +484,14 @@ services:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
       - kong
+
+networks:
+  # Bridges to Research_g's centralized Zitadel (research/orbispm-integration-plan.md
+  # in that repo). External: created by Research_g's own docker-compose.yml,
+  # not owned by this project — don't add this network's lifecycle here.
+  crewsity_appnet:
+    external: true
+    name: sample-app_appnet
 
 volumes:
   pgdata:
