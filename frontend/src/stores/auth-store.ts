@@ -2,6 +2,7 @@ import { api } from "@/lib/api";
 import {
   clearAuth,
   getAccessToken,
+  getIDToken,
   getRefreshToken,
   getStoredUser,
   isTokenExpired,
@@ -165,6 +166,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    // Captured before clearAuth() wipes it — only ever set for the real
+    // OIDC/SSO path (see saveTokens), never the demo/native-password path.
+    const idToken = getIDToken();
+
     try {
       await api.auth.logout();
     } catch {
@@ -180,6 +185,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       isAuthenticated: false,
       mfaEnabled: false,
     });
+
+    // Real RP-initiated logout: without this, "logout" only ever meant
+    // "forget OrbisPM's own token" — the browser's shared Zitadel session
+    // (what makes SSO across every Crewsity app possible) stayed alive, so
+    // signing out here never actually signed you out anywhere else. No
+    // id_token means this was a demo/native-password sign-in, which never
+    // touched Zitadel's browser session in the first place — plain
+    // redirect is correct for that case.
+    if (idToken) {
+      try {
+        // Zitadel requires an exact match against the app's registered
+        // postLogoutRedirectUris — only the bare origin is registered
+        // (no /login path), so that's what has to be sent here.
+        const { logout_url } = await api.auth.oidcLogoutUrl(idToken, window.location.origin);
+        window.location.href = logout_url;
+        return;
+      } catch {
+        // fall through to the plain redirect below
+      }
+    }
     window.location.href = "/login";
   },
 

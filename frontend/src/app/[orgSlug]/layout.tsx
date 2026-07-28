@@ -29,6 +29,7 @@ import {
   Moon,
   Palette,
   Search,
+  ShieldCheck,
   Sun,
   UserCircle,
   Users,
@@ -503,6 +504,12 @@ function Sidebar() {
                   <UserCircle className="w-4 h-4" />
                   Profile &amp; Security
                 </Link>
+              </li>
+              <li>
+                <a href="http://login.crewsity.localhost:3002/account" target="_blank" rel="noopener noreferrer">
+                  <ShieldCheck className="w-4 h-4" />
+                  Manage your account
+                </a>
               </li>
               <li>
                 <details className="theme-selector-dropdown">

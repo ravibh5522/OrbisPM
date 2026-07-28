@@ -2,15 +2,11 @@
 
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Input, PasswordInput } from "@/components/ui/form-fields";
 import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
-import { api } from "@/lib/api";
 import { parseAuthError } from "@/lib/auth-errors";
-import { useAuthStore } from "@/stores/auth-store";
+import { startOIDCRedirect } from "@/lib/oidc-redirect";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 
 // SSO identity provider IDs configured in Zitadel
 const GOOGLE_IDP_ID =
@@ -18,63 +14,28 @@ const GOOGLE_IDP_ID =
 const GITHUB_IDP_ID =
   process.env.NEXT_PUBLIC_GITHUB_IDP_ID ?? "371633241645384194";
 
-const PKCE_STORAGE_KEY = "oidc_pkce";
-
-interface SignupForm {
-  name: string;
-  email: string;
-  password: string;
-  confirmPassword: string;
-}
-
 export default function SignupPage() {
   useRedirectIfAuth();
-  const router = useRouter();
-  const signup = useAuthStore((s) => s.signup);
   const [error, setError] = useState("");
   const [ssoLoading, setSsoLoading] = useState<string | null>(null);
-  const {
-    register,
-    handleSubmit,
-    watch,
-    formState: { isSubmitting, errors },
-  } = useForm<SignupForm>();
 
-  /**
-   * Initiates an OIDC PKCE flow with the given IDP hint.
-   * Works for both sign-up and sign-in — Zitadel creates the account
-   * automatically if the user doesn't exist. The callback page handles
-   * the lifecycle: new user → /onboarding, returning user → /<orgSlug>.
-   */
-  const handleSSOSignup = async (idpId: string) => {
+  // Account creation lives at the centralized Crewsity login UI (its
+  // /register screen), not here. With no idpId this lands on
+  // login.crewsity.localhost/login, where "Register" continues the flow;
+  // with an idpId Zitadel creates the account via that identity provider
+  // directly. The callback page (app/auth/callback) completes either flow.
+  const handleRedirect = async (idpId?: string) => {
     setError("");
-    setSsoLoading(idpId);
+    setSsoLoading(idpId ?? "crewsity");
     try {
-      const redirectUri = `${window.location.origin}/auth/callback`;
-      const state = crypto.randomUUID();
-      const result = await api.auth.oidcAuthorize(redirectUri, state, idpId);
-      sessionStorage.setItem(
-        PKCE_STORAGE_KEY,
-        JSON.stringify({
-          codeVerifier: result.code_verifier,
-          state: result.state,
-          redirectUri,
-        }),
-      );
-      window.location.href = result.auth_url;
+      // No idpId means Zitadel routes to the centralized login UI, where
+      // prompt=create is what actually lands the user on /register instead
+      // of /login — an idpId skips our login UI entirely (straight to
+      // Google/GitHub), so it doesn't need or use this.
+      await startOIDCRedirect(idpId, idpId ? undefined : "create");
     } catch (err) {
       setError(parseAuthError(err));
       setSsoLoading(null);
-    }
-  };
-
-  const onSubmit = async (data: SignupForm) => {
-    setError("");
-    try {
-      await signup(data.email, data.password, data.name);
-      router.push("/onboarding");
-    } catch (err) {
-      setError(parseAuthError(err));
     }
   };
 
@@ -96,13 +57,24 @@ export default function SignupPage() {
           </Alert>
         )}
 
-        {/* SSO Signup Buttons */}
+        <Button
+          type="button"
+          className="w-full mb-2.5"
+          onClick={() => handleRedirect()}
+          loading={ssoLoading === "crewsity"}
+          disabled={ssoLoading !== null}
+        >
+          Continue to create account
+        </Button>
+
+        <div className="divider text-xs text-base-content/40 my-4">OR</div>
+
         <div className="space-y-2.5">
           {/* Google */}
           <Button
             type="button"
             className="btn-outline w-full gap-3 border-base-300 hover:border-base-content/30"
-            onClick={() => handleSSOSignup(GOOGLE_IDP_ID)}
+            onClick={() => handleRedirect(GOOGLE_IDP_ID)}
             disabled={ssoLoading !== null}
             loading={ssoLoading === GOOGLE_IDP_ID}
           >
@@ -121,7 +93,7 @@ export default function SignupPage() {
           <Button
             type="button"
             className="btn-neutral w-full gap-3"
-            onClick={() => handleSSOSignup(GITHUB_IDP_ID)}
+            onClick={() => handleRedirect(GITHUB_IDP_ID)}
             disabled={ssoLoading !== null}
             loading={ssoLoading === GITHUB_IDP_ID}
           >
@@ -133,50 +105,6 @@ export default function SignupPage() {
             Continue with GitHub
           </Button>
         </div>
-
-        <div className="divider text-xs text-base-content/40 my-4">OR</div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          <Input
-            label="Full Name"
-            placeholder="John Doe"
-            autoComplete="name"
-            {...register("name", { required: "Name is required" })}
-            error={errors.name?.message}
-          />
-          <Input
-            label="Email"
-            type="email"
-            placeholder="you@example.com"
-            autoComplete="email"
-            {...register("email", { required: "Email is required" })}
-            error={errors.email?.message}
-          />
-          <PasswordInput
-            label="Password"
-            placeholder="••••••••"
-            autoComplete="new-password"
-            {...register("password", {
-              required: "Password is required",
-              minLength: { value: 8, message: "At least 8 characters" },
-            })}
-            error={errors.password?.message}
-          />
-          <PasswordInput
-            label="Confirm Password"
-            placeholder="••••••••"
-            autoComplete="new-password"
-            {...register("confirmPassword", {
-              required: "Please confirm your password",
-              validate: (v) =>
-                v === watch("password") || "Passwords do not match",
-            })}
-            error={errors.confirmPassword?.message}
-          />
-          <Button type="submit" loading={isSubmitting} className="w-full">
-            Create Account
-          </Button>
-        </form>
 
         <p className="text-center text-sm mt-5 text-base-content/60">
           Already have an account?{" "}

@@ -378,10 +378,13 @@ export const api = {
 
     // OIDC PKCE flow (public — called pre-auth)
     // Pass idpId to add the IDP hint scope and skip Zitadel's own login page.
+    // Pass prompt="create" from the /signup page so the centralized login UI
+    // lands on /register instead of /login.
     oidcAuthorize(
       redirectUri: string,
       state: string,
       idpId?: string,
+      prompt?: string,
     ): Promise<OIDCAuthorizeResponse> {
       return request(
         `${V1}/auth/oidc/authorize`,
@@ -391,6 +394,20 @@ export const api = {
             redirect_uri: redirectUri,
             state,
             ...(idpId ? { idp_id: idpId } : {}),
+            ...(prompt ? { prompt } : {}),
+          }),
+        },
+        true,
+      );
+    },
+    oidcLogoutUrl(idToken: string, postLogoutRedirectUri: string): Promise<{ logout_url: string }> {
+      return request(
+        `${V1}/auth/oidc/logout-url`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id_token: idToken,
+            post_logout_redirect_uri: postLogoutRedirectUri,
           }),
         },
         true,
