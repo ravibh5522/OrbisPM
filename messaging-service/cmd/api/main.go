@@ -277,7 +277,7 @@ func main() {
 	jwksURL := cfg.ZitadelInternalURL + "/oauth/v2/keys"
 	hostHeader := parsedIssuer.Host
 
-	authMiddleware := mw.Auth(jwksURL, cfg.ZitadelIssuer, hostHeader, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, rdb, cfg.JWKSCacheTTL)
+	authMiddleware := mw.Auth(jwksURL, cfg.ZitadelIssuer, hostHeader, cfg.ZitadelInternalURL, cfg.ZitadelServiceToken, rdb, pool, cfg.JWKSCacheTTL)
 
 	// REST API routes (with timeout)
 	r.Group(func(r chi.Router) {
