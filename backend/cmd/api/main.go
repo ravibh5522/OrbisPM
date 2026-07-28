@@ -504,7 +504,7 @@ func main() {
 
 	// API v1 group — requires auth
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Use(middleware.Auth(zitadelClient))
+		r.Use(middleware.Auth(zitadelClient, pool))
 
 		// Orgs
 		r.Route("/orgs", func(r chi.Router) {

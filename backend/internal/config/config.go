@@ -29,7 +29,6 @@ type Config struct {
 	ZitadelClientID     string // OIDC application client ID
 	ZitadelGRPCDisabled bool   // force REST-only mode (set true when gRPC is blocked, e.g. behind Cloudflare)
 	ZitadelGitHubIDPID  string // Zitadel IDP config ID for GitHub OAuth (used by startup action)
-	JWTSecret           string // secret for signing backend-issued JWTs
 
 	// MinIO / S3
 	MinIOEndpoint  string
@@ -88,7 +87,6 @@ func Load() (*Config, error) {
 		ZitadelClientID:     getEnv("ZITADEL_CLIENT_ID", ""),
 		ZitadelGRPCDisabled: getEnvBool("ZITADEL_GRPC_DISABLED", false),
 		ZitadelGitHubIDPID:  getEnv("ZITADEL_GITHUB_IDP_ID", "371633241645384194"),
-		JWTSecret:           getEnv("JWT_SECRET", "orbispm-dev-jwt-secret-change-in-prod"),
 		MinIOEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),

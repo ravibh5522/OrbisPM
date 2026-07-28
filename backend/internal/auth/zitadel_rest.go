@@ -770,11 +770,13 @@ func (c *ZitadelClient) restLogout(ctx context.Context, claims *TokenClaims, raw
 func (c *ZitadelClient) restRefreshSessionToken(ctx context.Context, refreshToken string) (*TokenResponse, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(refreshToken)
 	if err != nil {
-		return nil, &AuthError{Code: 401, Message: "invalid refresh token"}
+		// Real Zitadel OIDC refresh token, not our custom format — see the
+		// same fallback in RefreshSessionToken.
+		return c.RefreshOIDCToken(ctx, refreshToken)
 	}
 	parts := strings.SplitN(string(decoded), ":", 2)
 	if len(parts) != 2 {
-		return nil, &AuthError{Code: 401, Message: "invalid refresh token format"}
+		return c.RefreshOIDCToken(ctx, refreshToken)
 	}
 	sessionID := parts[0]
 	sessResp, err := c.restGetSession(ctx, sessionID)

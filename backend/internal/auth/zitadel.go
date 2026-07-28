@@ -188,6 +188,11 @@ type TokenResponse struct {
 	ExpiresAt    int64     `json:"expires_at,omitempty"`
 	User         *UserInfo `json:"user,omitempty"`
 
+	// IDToken is only ever used as the id_token_hint for real RP-initiated
+	// logout (GenerateLogoutURL) — never used for authorization, that's
+	// what AccessToken is for.
+	IDToken string `json:"id_token,omitempty"`
+
 	// MFA challenge fields — set when MFARequired is true, access_token is empty.
 	MFARequired      bool     `json:"mfa_required,omitempty"`
 	SessionID        string   `json:"session_id,omitempty"`
@@ -267,7 +272,12 @@ type IDPInfo struct {
 // GenerateAuthURL creates an OIDC authorize URL with PKCE parameters.
 // If idpID is non-empty, adds the IDP hint scope so Zitadel bypasses its own
 // login page and redirects the user directly to the specified identity provider.
-func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID ...string) (*AuthURLResponse, error) {
+// If prompt is non-empty (e.g. "create"), it's passed straight through —
+// the centralized login UI reads prompt=create off the resulting auth
+// request to land on its /register screen instead of defaulting to /login,
+// which is how OrbisPM's own /signup page (distinct from /login) gets a new
+// visitor there directly instead of showing them a sign-in form first.
+func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID string, prompt string) (*AuthURLResponse, error) {
 	verifier, err := generateCodeVerifier()
 	if err != nil {
 		return nil, fmt.Errorf("generate code verifier: %w", err)
@@ -279,8 +289,8 @@ func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID ...stri
 	// urn:zitadel:iam:org:idp:id:{id} — Zitadel reserved scope that causes the
 	// hosted login to skip its own UI and redirect directly to the named IDP.
 	// See https://zitadel.com/docs/apis/openidoauth/scopes#reserved-scopes
-	if len(idpID) > 0 && idpID[0] != "" {
-		scope += " urn:zitadel:iam:org:idp:id:" + idpID[0]
+	if idpID != "" {
+		scope += " urn:zitadel:iam:org:idp:id:" + idpID
 	}
 
 	params := url.Values{
@@ -292,6 +302,9 @@ func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID ...stri
 		"code_challenge":        {challenge},
 		"code_challenge_method": {"S256"},
 	}
+	if prompt != "" {
+		params.Set("prompt", prompt)
+	}
 
 	authURL := c.issuer + "/oauth/v2/authorize?" + params.Encode()
 
@@ -300,6 +313,26 @@ func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID ...stri
 		CodeVerifier: verifier,
 		State:        state,
 	}, nil
+}
+
+// GenerateLogoutURL builds Zitadel's real RP-initiated logout URL
+// (/oidc/v1/end_session). Without id_token_hint, Zitadel doesn't trust the
+// caller enough to honor an arbitrary post_logout_redirect_uri and instead
+// shows its own confirmation screen — the same reason revokeToken alone
+// (see ZitadelClient.Logout) leaves the browser's shared Zitadel session
+// alive: it only ever invalidated OrbisPM's own token, never signed the
+// user out of Zitadel itself, so SSO into any other Crewsity app kept
+// working silently after an OrbisPM "logout". postLogoutRedirectURI must
+// already be registered on this OIDC app (Zitadel enforces its own
+// allowlist server-side — same trust model as GenerateAuthURL's caller-
+// supplied redirectURI).
+func (c *ZitadelClient) GenerateLogoutURL(idToken, postLogoutRedirectURI string) string {
+	params := url.Values{
+		"id_token_hint":            {idToken},
+		"client_id":                {c.clientID},
+		"post_logout_redirect_uri": {postLogoutRedirectURI},
+	}
+	return c.issuer + "/oidc/v1/end_session?" + params.Encode()
 }
 
 // ExchangeCode exchanges an authorization code for tokens via the OIDC token endpoint.
@@ -376,6 +409,7 @@ func (c *ZitadelClient) ExchangeCode(ctx context.Context, code, redirectURI, cod
 		ExpiresIn:    tokenResp.ExpiresIn,
 		ExpiresAt:    expiresAt,
 		User:         userInfo,
+		IDToken:      tokenResp.IDToken,
 	}
 	if userInfo == nil || userInfo.Email == "" {
 		tokRes.NeedsEmail = true
@@ -438,6 +472,12 @@ func (c *ZitadelClient) RefreshOIDCToken(ctx context.Context, refreshToken strin
 		ExpiresIn:    tokenResp.ExpiresIn,
 		ExpiresAt:    expiresAt,
 		User:         userInfo,
+		// Was already being decoded above for the userinfo fallback and then
+		// silently dropped — without this, the FIRST refresh after login
+		// wipes id_token from storage (saveTokens treats an absent id_token
+		// as "clear it"), quietly breaking real end_session logout for any
+		// session that lived long enough to refresh even once.
+		IDToken: tokenResp.IDToken,
 	}
 	if userInfo == nil || userInfo.Email == "" {
 		refreshTokRes.NeedsEmail = true
@@ -731,11 +771,15 @@ func (c *ZitadelClient) RefreshSessionToken(ctx context.Context, refreshToken st
 	}
 	decoded, err := base64.RawURLEncoding.DecodeString(refreshToken)
 	if err != nil {
-		return nil, &AuthError{Code: 401, Message: "invalid refresh token"}
+		// Not our custom base64url(sessionID:sessionToken) format — this is a
+		// real Zitadel-issued OIDC refresh token instead (from the OIDC login
+		// flow: SSO buttons and the centralized-login redirect both issue
+		// these, and they don't look like our custom format at all).
+		return c.RefreshOIDCToken(ctx, refreshToken)
 	}
 	parts := strings.SplitN(string(decoded), ":", 2)
 	if len(parts) != 2 {
-		return nil, &AuthError{Code: 401, Message: "invalid refresh token format"}
+		return c.RefreshOIDCToken(ctx, refreshToken)
 	}
 	sessionID := parts[0]
 
@@ -764,15 +808,18 @@ func (c *ZitadelClient) RefreshSessionToken(ctx context.Context, refreshToken st
 
 const sessionTokenCacheTTL = 3 * time.Minute
 
-// ValidateToken validates a Zitadel-issued JWT (RS256) or a session token.
+// ValidateToken validates a Zitadel-issued JWT (RS256), a real Zitadel opaque
+// OIDC access token, or our own custom session token.
 func (c *ZitadelClient) ValidateToken(ctx context.Context, tokenStr string) (*TokenClaims, error) {
-	// Try RS256 JWT validation first (OIDC-issued tokens)
+	// Try RS256 JWT validation first (OIDC-issued tokens, if the app is
+	// configured for the JWT access token type).
 	claims, err := c.jwks.ValidateToken(tokenStr)
 	if err == nil {
 		return claims, nil
 	}
 
-	// Check in-memory session token cache
+	// Check in-memory session token cache (covers both of the non-JWT
+	// validators below).
 	if cached, ok := c.sessionCache.Load(tokenStr); ok {
 		entry := cached.(cachedToken)
 		if time.Now().Before(entry.expiresAt) {
@@ -781,7 +828,21 @@ func (c *ZitadelClient) ValidateToken(ctx context.Context, tokenStr string) (*To
 		c.sessionCache.Delete(tokenStr)
 	}
 
-	// Fallback: validate via Zitadel API and cache the result
+	// This app's OIDC client actually issues opaque/encrypted access tokens
+	// by default, not JWTs — the JWKS check above always misses for tokens
+	// from the OIDC login flow (Google/GitHub buttons, and now the primary
+	// "Continue to sign in" redirect). Validate those via the userinfo
+	// endpoint, the standard way to check a non-JWT bearer token.
+	if claims, err := c.validateOpaqueAccessToken(ctx, tokenStr); err == nil {
+		c.sessionCache.Store(tokenStr, cachedToken{
+			claims:    claims,
+			expiresAt: time.Now().Add(sessionTokenCacheTTL),
+		})
+		return claims, nil
+	}
+
+	// Fallback: our own custom "sessionID:sessionToken" format, issued by
+	// the password-direct login path.
 	claims, err = c.validateSessionToken(ctx, tokenStr)
 	if err != nil {
 		return nil, err
@@ -792,6 +853,48 @@ func (c *ZitadelClient) ValidateToken(ctx context.Context, tokenStr string) (*To
 		expiresAt: time.Now().Add(sessionTokenCacheTTL),
 	})
 	return claims, nil
+}
+
+// validateOpaqueAccessToken validates a real Zitadel-issued opaque/encrypted
+// OIDC access token via the userinfo endpoint (RFC 6749/OIDC standard way to
+// check a non-JWT bearer token — needs no client credentials, just the token).
+func (c *ZitadelClient) validateOpaqueAccessToken(ctx context.Context, tokenStr string) (*TokenClaims, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.internalURL+"/oidc/v1/userinfo", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	if c.externalHost != "" {
+		req.Host = c.externalHost
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, &AuthError{Code: 401, Message: "invalid token"}
+	}
+
+	var info struct {
+		Sub   string `json:"sub"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return nil, fmt.Errorf("decode userinfo response: %w", err)
+	}
+	if info.Sub == "" {
+		return nil, &AuthError{Code: 401, Message: "invalid token"}
+	}
+
+	return &TokenClaims{
+		Subject:     info.Sub,
+		Email:       info.Email,
+		DisplayName: info.Name,
+	}, nil
 }
 
 // validateSessionToken validates a session-based token by calling GetSession.
