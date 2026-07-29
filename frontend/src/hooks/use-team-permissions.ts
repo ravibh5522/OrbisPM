@@ -37,7 +37,7 @@ export function useTeamPermissions(teamId: string | undefined): TeamPermissionsA
     return {
       can,
       role,
-      isLoading: !data || isLoading,
+      isLoading,
     };
   }, [data, isLoading]);
 }

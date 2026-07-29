@@ -562,7 +562,10 @@ func main() {
 							r.With(prm("team", "teamId", "team", "update")).Patch("/", teamHandler.Update)
 							r.With(prm("team", "teamId", "team", "delete")).Delete("/", teamHandler.Delete)
 							r.With(prm("team", "teamId", "team", "read")).Get("/dashboard", teamHandler.Dashboard)
-							r.With(prm("team", "teamId", "team", "read")).Get("/my-permissions", teamHandler.GetMyPermissions)
+							// my-permissions is a self-check: requires org membership only (enforced by
+							// the outer RequireOrgMember group), never a specific team permission —
+							// otherwise a custom role missing team:read could never learn what it has.
+							r.Get("/my-permissions", teamHandler.GetMyPermissions)
 							r.With(prm("team", "teamId", "team", "read")).Mount("/analytics", analyticsHandler.TeamAnalyticsRoutes())
 							r.With(prm("team", "teamId", "team", "update")).Put("/manager", teamHandler.SetManager)
 							r.With(prm("team", "teamId", "team", "read")).Get("/members", teamHandler.ListMembers)
@@ -654,7 +657,10 @@ func main() {
 							r.With(prm("project", "projectId", "members", "manage")).Delete("/members/{userId}", projectHandler.RemoveMember)
 							r.With(prm("project", "projectId", "project", "read")).Get("/members/{userId}/preview", projectHandler.PreviewRemoveMember)
 							r.With(prm("project", "projectId", "project", "read")).Get("/dashboard", projectHandler.Dashboard)
-							r.With(prm("project", "projectId", "project", "read")).Get("/my-permissions", projectHandler.GetMyPermissions)
+							// my-permissions is a self-check: requires org membership only (enforced by
+							// the outer RequireOrgMember group), never a specific project permission —
+							// otherwise a custom role missing project:read could never learn what it has.
+							r.Get("/my-permissions", projectHandler.GetMyPermissions)
 
 							// Project analytics
 							r.With(prm("project", "projectId", "project", "read")).Mount("/analytics", analyticsHandler.ProjectAnalyticsRoutes())

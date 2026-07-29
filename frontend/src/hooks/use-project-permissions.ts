@@ -39,7 +39,7 @@ export function useProjectPermissions(
     return {
       can,
       role,
-      isLoading: !data || isLoading,
+      isLoading,
     };
   }, [data, isLoading]);
 }
