@@ -133,6 +133,38 @@ CUSTOM_ROLES = [
         "perms": [("team", "team", "read"), ("team", "comments", "create")],
         "note": "Unusual combo: can see the team and comment, nothing else",
     },
+    # The following 5 mirror scripts/rbac_permission_matrix.py's roles exactly —
+    # that script only verified their DB permission assignment via the roles
+    # listing endpoint. This closes the gap by actually hitting protected
+    # endpoints with real users assigned these exact roles.
+    {
+        "scope": "org", "slug": f"template_manager_{TS}", "name": "Template Manager",
+        "perms": [("org", "templates", "create"), ("org", "templates", "update"),
+                  ("org", "templates", "delete"), ("org", "templates", "read")],
+        "note": "Full CRUD on templates only — nothing else, not even tasks",
+    },
+    {
+        "scope": "org", "slug": f"read_only_auditor_{TS}", "name": "Read Only Auditor",
+        "perms": [("org", "org", "read"), ("org", "projects", "read"),
+                  ("org", "teams", "read"), ("org", "tasks", "read")],
+        "note": "Multi-resource read-only, hand-picked (not the seeded 'viewer' shape)",
+    },
+    {
+        "scope": "team", "slug": f"task_runner_{TS}", "name": "Task Runner",
+        "perms": [("team", "tasks", "create"), ("team", "tasks", "update"), ("team", "tasks", "read")],
+        "note": "Can work tasks, cannot see team settings or comment",
+    },
+    {
+        "scope": "team", "slug": f"silent_observer_{TS}", "name": "Silent Observer",
+        "perms": [("team", "team", "read")],
+        "note": "Can see the team exists, nothing else — not even tasks:read",
+    },
+    {
+        "scope": "project", "slug": f"qa_approver_{TS}", "name": "QA Approver",
+        "perms": [("project", "tasks", "read"), ("project", "tasks", "review"),
+                  ("project", "comments", "create"), ("project", "comments", "read")],
+        "note": "Narrower than the system 'reviewer' — no direct_update",
+    },
 ]
 
 for r in CUSTOM_ROLES:
@@ -162,6 +194,11 @@ IDENTITIES = [
     ("team_lead",              "team",    "member",        "team_lead", None),
     ("team_member",            "team",    "member",        "member",   None),
     ("team_comms_only",        "team",    "member",        CUSTOM_ROLES[2]["slug"], None),
+    ("org_template_manager",   "org",     CUSTOM_ROLES[3]["slug"], None, None),
+    ("org_read_only_auditor",  "org",     CUSTOM_ROLES[4]["slug"], None, None),
+    ("team_task_runner",       "team",    "member",        CUSTOM_ROLES[5]["slug"], None),
+    ("team_silent_observer",   "team",    "member",        CUSTOM_ROLES[6]["slug"], None),
+    ("project_qa_approver",    "project", "member",        None,       CUSTOM_ROLES[7]["slug"]),
 ]
 
 print("\n" + "=" * 70)
@@ -314,6 +351,23 @@ def call_org_webhooks_create(u):
     return req("POST", f"/orgs/{ORG}/webhooks", u["token"], {"url": "https://example.com/hook", "events": ["task.created"]})
 
 
+def call_org_projects_list(u):
+    return req("GET", f"/orgs/{ORG}/projects", u["token"])
+
+
+def call_org_teams_list(u):
+    return req("GET", f"/orgs/{ORG}/teams", u["token"])
+
+
+def call_org_templates_list(u):
+    return req("GET", f"/orgs/{ORG}/templates", u["token"])
+
+
+def call_org_template_create(u):
+    return req("POST", f"/orgs/{ORG}/templates", u["token"],
+               {"name": f"tpl-{TS}", "structure": {"tasks": []}})
+
+
 FEATURES = [
     ("GET project",           "proj_perms", "project", "read",           call_project_get),
     ("PATCH project",         "proj_perms", "project", "update",         call_project_update),
@@ -330,6 +384,10 @@ FEATURES = [
     ("POST org project create","org_perms", "projects","create",         call_org_projects_create),
     ("POST org role create",  "org_perms",  "roles",  "create",         call_org_roles_create),
     ("POST org webhook",      "org_perms",  "webhooks","manage",        call_org_webhooks_create),
+    ("GET org projects list", "org_perms",  "projects","read",          call_org_projects_list),
+    ("GET org teams list",    "org_perms",  "teams",  "read",           call_org_teams_list),
+    ("GET org templates",     "org_perms",  "templates","read",         call_org_templates_list),
+    ("POST org template",     "org_perms",  "templates","create",       call_org_template_create),
 ]
 
 print("\n" + "=" * 70)
