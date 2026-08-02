@@ -1,5 +1,6 @@
 "use client";
 
+import { PermissionGate } from "@/components/permission-gate";
 import { Alert } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
@@ -111,24 +112,36 @@ function TeamProjectRoleMapSection({ orgId }: { orgId: string }) {
                   {tr.name}
                 </span>
                 <span className="text-base-content/40 text-xs">→</span>
-                <Select
-                  className="select-xs flex-1"
-                  value={draft[tr.slug] || ""}
-                  onChange={(e) => {
-                    setDraft((prev) => ({
-                      ...prev,
-                      [tr.slug]: e.target.value,
-                    }));
-                    setHasChanges(true);
-                  }}
-                  options={[
-                    { value: "", label: "— No mapping —" },
-                    ...projectRoleList.map((pr: Role) => ({
-                      value: pr.slug,
-                      label: pr.name,
-                    })),
-                  ]}
-                />
+                <PermissionGate
+                  resource="roles"
+                  action="update"
+                  fallback={
+                    <span className="text-sm flex-1">
+                      {projectRoleList.find(
+                        (pr: Role) => pr.slug === (draft[tr.slug] || ""),
+                      )?.name || "— No mapping —"}
+                    </span>
+                  }
+                >
+                  <Select
+                    className="select-xs flex-1"
+                    value={draft[tr.slug] || ""}
+                    onChange={(e) => {
+                      setDraft((prev) => ({
+                        ...prev,
+                        [tr.slug]: e.target.value,
+                      }));
+                      setHasChanges(true);
+                    }}
+                    options={[
+                      { value: "", label: "— No mapping —" },
+                      ...projectRoleList.map((pr: Role) => ({
+                        value: pr.slug,
+                        label: pr.name,
+                      })),
+                    ]}
+                  />
+                </PermissionGate>
               </div>
             ))}
             {teamRoleList.length === 0 && (
@@ -368,16 +381,18 @@ export default function PermissionsTab() {
           variant="boxed"
           size="sm"
         />
-        <Button
-          size="sm"
-          onClick={() => {
-            setShowCreate(true);
-            setError("");
-            createForm.reset({ slug: "", name: "", description: "" });
-          }}
-        >
-          <Plus className="w-4 h-4" /> New Role
-        </Button>
+        <PermissionGate resource="roles" action="create">
+          <Button
+            size="sm"
+            onClick={() => {
+              setShowCreate(true);
+              setError("");
+              createForm.reset({ slug: "", name: "", description: "" });
+            }}
+          >
+            <Plus className="w-4 h-4" /> New Role
+          </Button>
+        </PermissionGate>
       </div>
 
       {/* Your Effective Permissions */}
@@ -487,39 +502,45 @@ export default function PermissionsTab() {
                             tabIndex={0}
                             className="dropdown-content z-[100] menu p-1 shadow-lg bg-base-100/95 backdrop-blur-[20px] rounded-box w-44 border border-base-200"
                           >
-                            <li>
-                              <button
-                                onClick={() => {
-                                  setPermTarget(role);
-                                  setError("");
-                                }}
-                                className="text-sm"
-                              >
-                                <Shield className="w-3.5 h-3.5" /> Edit
-                                Permissions
-                              </button>
-                            </li>
+                            <PermissionGate resource="roles" action="update">
+                              <li>
+                                <button
+                                  onClick={() => {
+                                    setPermTarget(role);
+                                    setError("");
+                                  }}
+                                  className="text-sm"
+                                >
+                                  <Shield className="w-3.5 h-3.5" /> Edit
+                                  Permissions
+                                </button>
+                              </li>
+                            </PermissionGate>
                             {!role.is_system && (
                               <>
-                                <li>
-                                  <button
-                                    onClick={() => {
-                                      setEditTarget(role);
-                                      setError("");
-                                    }}
-                                    className="text-sm"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" /> Edit Role
-                                  </button>
-                                </li>
-                                <li>
-                                  <button
-                                    onClick={() => setDeleteTarget(role)}
-                                    className="text-sm text-error"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                  </button>
-                                </li>
+                                <PermissionGate resource="roles" action="update">
+                                  <li>
+                                    <button
+                                      onClick={() => {
+                                        setEditTarget(role);
+                                        setError("");
+                                      }}
+                                      className="text-sm"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" /> Edit Role
+                                    </button>
+                                  </li>
+                                </PermissionGate>
+                                <PermissionGate resource="roles" action="delete">
+                                  <li>
+                                    <button
+                                      onClick={() => setDeleteTarget(role)}
+                                      className="text-sm text-error"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                                    </button>
+                                  </li>
+                                </PermissionGate>
                               </>
                             )}
                           </ul>
