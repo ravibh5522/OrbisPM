@@ -1,17 +1,19 @@
 #!/usr/bin/env python3
 """
 Dumps the FULL live permission matrix: every seeded (resource, action, scope)
-triple, cross-referenced against every SYSTEM role's actual granted
-permissions — pulled straight from the running API, not from migration
+triple, cross-referenced against every role's actual granted permissions —
+both the 12 SYSTEM roles and a set of representative CUSTOM roles created
+by this script — pulled straight from the running API, not from migration
 files (which may have drifted from what's actually deployed).
 
-Answers the question "which roles can do what, feature by feature, action
-by action" precisely, including the cases where a role has read but not
-write on a given resource.
+Answers "which roles can do what, feature by feature, action by action",
+including read-vs-write splits, AND confirms custom roles slot into the
+same matrix with exactly the permissions they were given — no more, no
+less, no bleed from the system roles they sit alongside.
 
-Self-contained: creates one throwaway owner + org via the public API to
-read the org's freshly-seeded system roles (every org gets the same system
-role set), then discards nothing destructive — no other data is touched.
+Self-contained: creates one throwaway owner + org via the public API,
+creates 6 custom roles (2 per scope) on it, then discards nothing
+destructive — no other data is touched.
 
 Run from project root:
   python3 scripts/rbac_permission_matrix.py [--base http://localhost:8000/api/v1]
@@ -65,12 +67,55 @@ ORG = org["id"]
 status, perms = req("GET", f"/orgs/{ORG}/permissions", token)
 assert status == 200, f"permissions fetch failed: {status} {perms}"
 
-# ── System roles per scope, with their populated permissions ────────────────
+perm_id = {(p["scope"], p["resource"], p["action"]): p["id"] for p in perms}
+
+
+def pid(scope, resource, action):
+    key = (scope, resource, action)
+    if key not in perm_id:
+        raise SystemExit(f"FATAL: permission {key} not seeded — can't build custom role")
+    return perm_id[key]
+
+
+# ── Create representative custom roles, 2 per scope ─────────────────────────
+CUSTOM_ROLES = [
+    {"scope": "org", "slug": f"template_manager_{TS}", "name": "Template Manager",
+     "perms": [("org", "templates", "create"), ("org", "templates", "update"),
+               ("org", "templates", "delete"), ("org", "templates", "read")],
+     "note": "Full CRUD on templates only — nothing else, not even tasks"},
+    {"scope": "org", "slug": f"read_only_auditor_{TS}", "name": "Read Only Auditor",
+     "perms": [("org", "org", "read"), ("org", "projects", "read"),
+               ("org", "teams", "read"), ("org", "tasks", "read")],
+     "note": "Multi-resource read-only, hand-picked (not the seeded 'viewer' shape)"},
+    {"scope": "team", "slug": f"task_runner_{TS}", "name": "Task Runner",
+     "perms": [("team", "tasks", "create"), ("team", "tasks", "update"), ("team", "tasks", "read")],
+     "note": "Can work tasks, cannot see team settings or comment"},
+    {"scope": "team", "slug": f"silent_observer_{TS}", "name": "Silent Observer",
+     "perms": [("team", "team", "read")],
+     "note": "Can see the team exists, nothing else — not even tasks:read"},
+    {"scope": "project", "slug": f"field_tester_{TS}", "name": "Field Tester",
+     "perms": [("project", "tasks", "create")],
+     "note": "Has create, deliberately NO read — the my-permissions self-check edge case"},
+    {"scope": "project", "slug": f"qa_approver_{TS}", "name": "QA Approver",
+     "perms": [("project", "tasks", "read"), ("project", "tasks", "review"),
+               ("project", "comments", "create"), ("project", "comments", "read")],
+     "note": "Narrower than the system 'reviewer' — no direct_update"},
+]
+
+for r in CUSTOM_ROLES:
+    permission_ids = [str(pid(*p)) for p in r["perms"]]
+    status, role = req("POST", f"/orgs/{ORG}/permissions/roles", token, {
+        "scope": r["scope"], "slug": r["slug"], "name": r["name"], "permission_ids": permission_ids,
+    })
+    assert status == 201, f"custom role create failed for {r['slug']}: {status} {role}"
+
+# ── All roles per scope (system + the custom ones just created) ─────────────
 roles_by_scope = {}
 for scope in ("org", "team", "project"):
     status, roles = req("GET", f"/orgs/{ORG}/permissions/roles?scope={scope}", token)
     assert status == 200, f"roles fetch failed for {scope}: {status} {roles}"
-    roles_by_scope[scope] = [r for r in roles if r.get("is_system")]
+    # System roles first, then custom — stable, readable column order
+    roles_by_scope[scope] = sorted(roles, key=lambda r: (not r.get("is_system"), r["name"]))
 
 # ── Build resource -> action -> scope -> {role: bool} ────────────────────────
 by_resource = {}
@@ -86,19 +131,28 @@ def role_has(role, resource, action):
 
 
 lines = []
-lines.append("# RBAC Permission Matrix — Live Seeded Data\n")
+lines.append("# RBAC Permission Matrix — Live Seeded Data + Custom Roles\n")
 lines.append(f"Generated {time.strftime('%Y-%m-%d %H:%M:%S')} against `{BASE}`. "
-              f"Every org gets this same system-role seed — this is the real baseline every custom role is layered on top of.\n")
+              f"Includes all system roles plus 6 representative custom roles created by this script "
+              f"({', '.join(r['name'] for r in CUSTOM_ROLES)}), to confirm custom roles slot into the "
+              f"exact same permission model with no special-casing.\n")
 lines.append(f"**Total canonical permissions:** {len(perms)}\n")
+
+notes_by_slug = {r["slug"]: r["note"] for r in CUSTOM_ROLES}
 
 for scope in ("org", "team", "project"):
     roles = roles_by_scope[scope]
-    role_names = [r["name"] for r in roles]
+    role_names = [r["name"] + ("" if r.get("is_system") else " *(Custom)*") for r in roles]
     lines.append(f"\n## {scope.capitalize()} scope\n")
-    lines.append("System roles: " + ", ".join(f"**{n}**" for n in role_names) + "\n")
+    custom_here = [r for r in roles if not r.get("is_system")]
+    if custom_here:
+        lines.append("Custom roles in this scope:")
+        for r in custom_here:
+            lines.append(f"- **{r['name']}** — {notes_by_slug.get(r['slug'], '')}")
+        lines.append("")
 
     resources = sorted({res for (res, sc) in by_resource if sc == scope})
-    lines.append(f"\n| Resource | Action | " + " | ".join(role_names) + " |")
+    lines.append(f"| Resource | Action | " + " | ".join(role_names) + " |")
     lines.append("|---|---|" + "---|" * len(roles))
     for resource in resources:
         actions = sorted(by_resource[(resource, scope)])
