@@ -200,7 +200,7 @@ export default function TemplatesPage() {
         description="Reusable task templates for your projects"
         actions={
           <div className="flex gap-2">
-            <PermissionGate resource="projects" action="create">
+            <PermissionGate resource="templates" action="create">
               <Button
                 variant="outline"
                 onClick={() => importRef.current?.click()}
@@ -310,9 +310,11 @@ export default function TemplatesPage() {
                 Clear filters
               </Button>
             ) : (
-              <Button onClick={() => setShowCreate(true)}>
-                <Plus className="w-4 h-4" /> Create Template
-              </Button>
+              <PermissionGate resource="templates" action="create">
+                <Button onClick={() => setShowCreate(true)}>
+                  <Plus className="w-4 h-4" /> Create Template
+                </Button>
+              </PermissionGate>
             )
           }
         />
