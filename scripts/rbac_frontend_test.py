@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 """
-Sets up 3 contrasting role identities via the real API (project lead,
-project observer, and the field_tester custom role with tasks:create but
-no read), then hands off a small JSON file for the Playwright driver
-(scripts/rbac_frontend_test.mjs) to actually load the real frontend as
-each identity and see what's rendered.
+Sets up all 7 project-scope role identities (4 system: lead, contributor,
+reviewer, observer; 3 custom: field_tester, reviewer_lite, qa_approver — the
+same shapes already enforcement-tested in rbac_conformance_test.py) via the
+real API, then hands off a JSON file for the Playwright driver
+(frontend/scripts/rbac_frontend_test.mjs) to load the real frontend AS EACH
+IDENTITY IN SEQUENCE — one account, test, log, close browser, next account —
+and report what's actually rendered for each.
 
 Run:
   python3 scripts/rbac_frontend_test.py --base http://localhost:8000/api/v1
-  node scripts/rbac_frontend_test.mjs
+  cd frontend && node scripts/rbac_frontend_test.mjs
 """
 import json
 import sys
@@ -71,16 +73,34 @@ req("POST", f"/orgs/{ORG}/projects/{PROJECT}/tasks", owner_token, {"title": "Sam
 
 status, perms = req("GET", f"/orgs/{ORG}/permissions", owner_token)
 perm_id = {(p["scope"], p["resource"], p["action"]): p["id"] for p in perms}
-status, role = req("POST", f"/orgs/{ORG}/permissions/roles", owner_token, {
-    "scope": "project", "slug": f"field_tester_{TS}", "name": "Field Tester",
-    "permission_ids": [str(perm_id[("project", "tasks", "create")])],
-})
-assert status == 201, f"custom role create failed: {status} {role}"
+
+
+def pid(resource, action):
+    return str(perm_id[("project", resource, action)])
+
+
+CUSTOM_ROLES = [
+    {"slug": f"field_tester_{TS}", "name": "Field Tester",
+     "perms": [pid("tasks", "create")]},
+    {"slug": f"reviewer_lite_{TS}", "name": "Reviewer Lite",
+     "perms": [pid("tasks", "read"), pid("tasks", "review")]},
+    {"slug": f"qa_approver_{TS}", "name": "QA Approver",
+     "perms": [pid("tasks", "read"), pid("tasks", "review"), pid("comments", "create"), pid("comments", "read")]},
+]
+for r in CUSTOM_ROLES:
+    status, role = req("POST", f"/orgs/{ORG}/permissions/roles", owner_token, {
+        "scope": "project", "slug": r["slug"], "name": r["name"], "permission_ids": r["perms"],
+    })
+    assert status == 201, f"custom role create failed for {r['slug']}: {status} {role}"
 
 IDENTITIES = [
     ("lead", "lead"),
+    ("contributor", "contributor"),
+    ("reviewer", "reviewer"),
     ("observer", "observer"),
-    ("field_tester", role["slug"]),
+    ("field_tester", CUSTOM_ROLES[0]["slug"]),
+    ("reviewer_lite", CUSTOM_ROLES[1]["slug"]),
+    ("qa_approver", CUSTOM_ROLES[2]["slug"]),
 ]
 
 sessions = []

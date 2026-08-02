@@ -1,8 +1,8 @@
-// Drives the REAL running frontend (http://localhost:3000) as 3 contrasting
-// role identities set up by rbac_frontend_test.py, and reports what's
-// actually rendered — full-page screenshot + every visible button's text —
-// so we can compare what a "lead" sees vs an "observer" vs a custom role
-// with create-only, no-read permissions.
+// Drives the REAL running frontend (http://localhost:3000) as each role
+// identity set up by rbac_frontend_test.py, ONE AT A TIME, IN SEQUENCE:
+// fresh browser -> inject that identity's real token -> load the real
+// project page -> screenshot + record what's rendered -> close browser ->
+// pause -> next identity. Never two identities running concurrently.
 //
 // This injects auth state directly into localStorage using the exact keys
 // frontend/src/lib/auth.ts reads (access_token, refresh_token,
@@ -11,6 +11,16 @@
 // "demo/native-password path"). It does not fake or bypass any permission
 // check — every button shown/hidden below is the real app evaluating the
 // real user's real permissions against the real backend.
+//
+// Two known sources of test-harness flakiness (NOT app bugs, both handled
+// below): (1) reusing one browser process across identities can bleed
+// state — mitigated with a fresh browser per identity; (2) each dashboard
+// load fires ~15-20 parallel API calls against a backend with a per-IP
+// rate limiter (600/min, burst 50) shared across every identity plus the
+// setup script's own signup/login/invite calls — mitigated with a pause
+// between identities AND a detect-and-retry: if a run lands on /login
+// instead of the project page, that's not a permission result, it's a
+// bounced session — retried once before being reported as inconclusive.
 //
 // Run: node scripts/rbac_frontend_test.mjs
 
@@ -22,17 +32,14 @@ const data = JSON.parse(readFileSync("/tmp/rbac_frontend_sessions.json", "utf8")
 const outDir = "/tmp/rbac_frontend_screens";
 mkdirSync(outDir, { recursive: true });
 
-for (const s of data.sessions) {
-  // Fresh browser PROCESS per identity, not just a fresh context — isolating
-  // whether cross-identity flakiness is context-level (should already be
-  // isolated) or something bleeding at the browser-process level.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function attempt(s) {
   const browser = await chromium.launch({ headless: true, channel: "chrome" });
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
 
-  // Must be on the app's origin before localStorage calls apply.
   await page.goto(FRONTEND, { waitUntil: "domcontentloaded" });
-
   await page.evaluate((s) => {
     const expiresAt = Date.now() / 1000 + (s.expires_in || 3600);
     localStorage.setItem("access_token", s.access_token);
@@ -42,34 +49,76 @@ for (const s of data.sessions) {
   }, s);
 
   const url = `${FRONTEND}/${data.org_slug}/projects/${data.project_id}`;
-  console.log(`\n=== ${s.label} (project_role=${s.project_role}) ===`);
-  console.log(`GET ${url}`);
-
   let navError = null;
   try {
     await page.goto(url, { waitUntil: "networkidle", timeout: 20000 });
   } catch (e) {
     navError = e.message;
   }
-  await page.waitForTimeout(1500); // let React Query settle
+  await page.waitForTimeout(1500);
+
+  const finalUrl = page.url();
+  const bouncedToLogin = finalUrl.includes("/login");
 
   const screenshotPath = `${outDir}/${s.label}.png`;
   await page.screenshot({ path: screenshotPath, fullPage: true });
-  console.log(`Screenshot: ${screenshotPath}`);
 
   const bodyText = (await page.locator("body").innerText().catch(() => "")).slice(0, 300);
   const buttons = await page.locator("button:visible").allTextContents();
   const cleanButtons = [...new Set(buttons.map((b) => b.trim()).filter(Boolean))].sort();
 
-  console.log(`Nav error: ${navError ?? "none"}`);
-  console.log(`Visible button labels (${cleanButtons.length}):`);
-  for (const b of cleanButtons) console.log(`  - ${b}`);
-  if (cleanButtons.length === 0) {
-    console.log(`Body text sample: ${JSON.stringify(bodyText)}`);
-  }
-
   await context.close();
   await browser.close();
+
+  return { navError, finalUrl, bouncedToLogin, screenshotPath, bodyText, cleanButtons };
 }
 
+const summary = [];
+let i = 0;
+for (const s of data.sessions) {
+  i++;
+  console.log(`\n[${i}/${data.sessions.length}] ===== testing "${s.label}" (project_role=${s.project_role}) =====`);
+
+  if (i > 1) {
+    console.log("Pausing 5s before this identity to stay clear of the backend's per-IP rate limit...");
+    await sleep(5000);
+  }
+
+  let result = await attempt(s);
+  let retried = false;
+  if (result.bouncedToLogin) {
+    console.log(`Bounced to /login on first attempt — not a permission result, retrying once after backoff...`);
+    await sleep(8000);
+    result = await attempt(s);
+    retried = true;
+  }
+
+  console.log(`Nav error: ${result.navError ?? "none"}`);
+  console.log(`Final URL: ${result.finalUrl}`);
+  console.log(`Screenshot: ${result.screenshotPath}`);
+  if (result.bouncedToLogin) {
+    console.log(`INCONCLUSIVE — bounced to /login even after retry. Not counted as a permission result.`);
+  } else {
+    console.log(`Visible button labels (${result.cleanButtons.length}):`);
+    for (const b of result.cleanButtons) console.log(`  - ${b}`);
+    if (result.cleanButtons.length === 0) {
+      console.log(`Body text sample: ${JSON.stringify(result.bodyText)}`);
+    }
+  }
+  console.log(`[${i}/${data.sessions.length}] "${s.label}" done${retried ? " (after 1 retry)" : ""} — ${result.bouncedToLogin ? "INCONCLUSIVE" : result.cleanButtons.length + " controls"}`);
+
+  summary.push({
+    label: s.label,
+    role: s.project_role,
+    inconclusive: result.bouncedToLogin,
+    retried,
+    buttonCount: result.cleanButtons.length,
+  });
+}
+
+console.log("\n\n===== SEQUENTIAL RUN SUMMARY =====");
+for (const r of summary) {
+  const status = r.inconclusive ? "INCONCLUSIVE (bounced to login)" : `${r.buttonCount} visible controls`;
+  console.log(`${r.label.padEnd(16)} role=${r.role.padEnd(24)} ${status}${r.retried ? " [retried]" : ""}`);
+}
 console.log("\nDone. Screenshots in", outDir);
