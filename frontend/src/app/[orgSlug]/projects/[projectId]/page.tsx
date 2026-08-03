@@ -20,7 +20,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Avatar, Card } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
@@ -156,10 +156,15 @@ export default function ProjectDetailPage({
     setTaskView("columns");
   }, []);
 
-  const { data: project, isLoading: projLoading } = useQuery({
+  const {
+    data: project,
+    isLoading: projLoading,
+    error: projError,
+  } = useQuery({
     queryKey: ["project", currentOrg?.id, projectId],
     queryFn: () => api.projects.get(currentOrg!.id, projectId),
     enabled: !!currentOrg,
+    retry: false,
   });
 
   // Join/leave project room on the org-level WebSocket
@@ -239,8 +244,34 @@ export default function ProjectDetailPage({
         <div className="card flex-1 bg-base-100/36 border border-base-200/55 backdrop-blur-xl card-glass-shadow rounded-2xl" />
       </div>
     );
-  if (!project)
-    return <div className="text-center py-12">Project not found</div>;
+  if (!project) {
+    const isForbidden =
+      projError instanceof ApiError && projError.status === 403;
+    return (
+      <div className="text-center py-12 space-y-2">
+        <p>
+          {isForbidden
+            ? "You don't have access to this project's contents."
+            : "Project not found."}
+        </p>
+        {isForbidden && (
+          <p className="text-sm text-base-content/60">
+            Ask a project lead to add you as a member to view tasks and
+            details.
+          </p>
+        )}
+        {currentOrg && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/${currentOrg.slug}/projects`)}
+          >
+            Back to Projects
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
