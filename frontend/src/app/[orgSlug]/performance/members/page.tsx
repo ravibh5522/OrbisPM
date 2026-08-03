@@ -86,16 +86,18 @@ export default function MembersPerformancePage() {
       {/* Member selector — search + scrollable list */}
       {memberList.length > 0 && (
         <div className="mb-6">
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
-            <Input
-              type="text"
-              placeholder="Search members..."
-              className="input-sm w-full max-w-xs pl-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <span className="ml-3 text-xs text-base-content/50">
+          <div className="flex flex-col gap-2 mb-2">
+            <div className="relative max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
+              <Input
+                type="text"
+                placeholder="Search members..."
+                className="input-sm w-full pl-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <span className="text-xs text-base-content/50">
               {memberList.length} members
               {activeMember && (
                 <>
