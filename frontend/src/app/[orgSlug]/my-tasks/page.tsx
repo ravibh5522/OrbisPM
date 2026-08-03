@@ -10,7 +10,12 @@ import { formatDate, formatRelative, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type { Task, TaskStatus } from "@/types/domain";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle,
@@ -90,6 +95,39 @@ export default function MyTasksPage() {
 
   const allTasks: Task[] = myTasks?.data ?? [];
   const total = myTasks?.total ?? 0;
+
+  // My Tasks spans potentially many projects, each with a possibly
+  // different role for the same user - a single page-level permission
+  // check doesn't apply. Batch-fetch each unique project's real
+  // permissions so the status-change control can be correctly disabled
+  // per task instead of always being clickable regardless of role
+  // (the backend already enforces this on the actual update call, but
+  // the button showing "editable" when it isn't is exactly the class
+  // of UX bug fixed elsewhere in this branch - see RBAC_CONFORMANCE_TEST_REPORT.md).
+  const uniqueProjectIds = useMemo(
+    () => Array.from(new Set(allTasks.map((t) => t.project_id))),
+    [allTasks],
+  );
+
+  const projectPermQueries = useQueries({
+    queries: uniqueProjectIds.map((projectId) => ({
+      queryKey: ["project-permissions", orgId, projectId],
+      queryFn: () => api.projects.myPermissions(orgId, projectId),
+      enabled: !!orgId && !!projectId,
+      staleTime: 30_000,
+    })),
+  });
+
+  const canUpdateByProject = useMemo(() => {
+    const map: Record<string, boolean> = {};
+    uniqueProjectIds.forEach((projectId, i) => {
+      const perms = projectPermQueries[i]?.data?.permissions ?? [];
+      map[projectId] = perms.some(
+        (p) => p.resource === "tasks" && p.action === "update",
+      );
+    });
+    return map;
+  }, [uniqueProjectIds, projectPermQueries]);
 
   // Server-side pagination
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -438,6 +476,7 @@ export default function MyTasksPage() {
               tasks={allTasks}
               statusIcon={statusIcon}
               scrollable
+              canUpdateByProject={canUpdateByProject}
               onNavigate={(t) =>
                 router.push(`/${orgSlug}/projects/${t.project_id}?task=${t.id}`)
               }
@@ -534,6 +573,7 @@ export default function MyTasksPage() {
                 }
                 statusIcon={statusIcon}
                 scrollable
+                canUpdateByProject={canUpdateByProject}
                 onNavigate={(t) =>
                   router.push(
                     `/${orgSlug}/projects/${t.project_id}?task=${t.id}`,
@@ -561,12 +601,14 @@ function TaskTable({
   scrollable,
   onNavigate,
   onStatusChange,
+  canUpdateByProject = {},
 }: {
   tasks: Task[];
   statusIcon: (s: TaskStatus) => React.ReactNode;
   scrollable?: boolean;
   onNavigate: (t: Task) => void;
   onStatusChange: (task: Task, status: TaskStatus) => void;
+  canUpdateByProject?: Record<string, boolean>;
 }) {
   const statusOptions: { value: TaskStatus; label: string }[] = [
     { value: "todo", label: "Todo" },
@@ -632,7 +674,9 @@ function TaskTable({
           </tr>
         </thead>
         <tbody>
-          {tasks.map((task) => (
+          {tasks.map((task) => {
+            const canUpdate = canUpdateByProject[task.project_id] === true;
+            return (
             <tr
               key={task.id}
               className="group cursor-pointer"
@@ -642,6 +686,24 @@ function TaskTable({
                 className="rounded-l-lg transition-colors group-hover:bg-base-100/24"
                 onClick={(e) => e.stopPropagation()}
               >
+                {!canUpdate ? (
+                  <div
+                    data-status={task.status}
+                    title="You don't have permission to change this task's status"
+                    className={`task-status-trigger inline-flex h-9 min-h-9 w-36 cursor-not-allowed items-center gap-2 rounded-xl border px-3 text-sm opacity-70 backdrop-blur-md ${statusTone[task.status].trigger}`}
+                  >
+                    <span
+                      data-status={task.status}
+                      className="task-status-dot h-2 w-2 rounded-full"
+                    />
+                    <span
+                      data-status={task.status}
+                      className={`task-status-label ${statusTone[task.status].text}`}
+                    >
+                      {statusLabel(task.status)}
+                    </span>
+                  </div>
+                ) : (
                 <div
                   className="dropdown dropdown-right"
                   onClick={(e) => e.stopPropagation()}
@@ -707,6 +769,7 @@ function TaskTable({
                     ))}
                   </ul>
                 </div>
+                )}
               </td>
               <td className="transition-colors group-hover:bg-base-100/24">
                 <div>
@@ -750,7 +813,8 @@ function TaskTable({
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
