@@ -3,7 +3,7 @@
 import { Input } from "@/components/ui/form-fields";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { MemberAnalytics } from "@/types/domain";
@@ -55,11 +55,18 @@ export default function MembersPerformancePage() {
     );
   }, [memberList, searchQuery]);
 
-  const { data: analytics, isLoading } = useQuery<MemberAnalytics>({
+  const {
+    data: analytics,
+    isLoading,
+    error: analyticsError,
+  } = useQuery<MemberAnalytics>({
     queryKey: ["analytics-member", currentOrg?.id, activeMemberId],
     queryFn: () => api.analytics.member(currentOrg!.id, activeMemberId!),
     enabled: !!currentOrg && !!activeMemberId,
+    retry: false,
   });
+  const analyticsForbidden =
+    analyticsError instanceof ApiError && analyticsError.status === 403;
 
   return (
     <div>
@@ -126,13 +133,21 @@ export default function MembersPerformancePage() {
         <p className="text-sm text-base-content/50 py-12 text-center">
           No members found
         </p>
-      ) : isLoading || !analytics ? (
+      ) : isLoading ? (
         <div className="animate-pulse space-y-4">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="h-24 bg-base-200 rounded-xl" />
             ))}
           </div>
+        </div>
+      ) : analyticsForbidden ? (
+        <div className="text-center py-12 space-y-1">
+          <p>You don&apos;t have access to this member&apos;s analytics.</p>
+        </div>
+      ) : !analytics ? (
+        <div className="text-center py-12 text-base-content/60">
+          No analytics available for this member yet.
         </div>
       ) : (
         <>

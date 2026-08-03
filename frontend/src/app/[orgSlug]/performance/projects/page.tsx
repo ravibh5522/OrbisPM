@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/form-fields";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { useOrgPolicies } from "@/hooks/use-policies";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { ProjectAnalytics, RiskScore } from "@/types/domain";
@@ -81,11 +81,18 @@ export default function ProjectsPerformancePage() {
     return projectList.filter((p) => p.name.toLowerCase().includes(q));
   }, [projectList, searchQuery]);
 
-  const { data: analytics, isLoading } = useQuery<ProjectAnalytics>({
+  const {
+    data: analytics,
+    isLoading,
+    error: analyticsError,
+  } = useQuery<ProjectAnalytics>({
     queryKey: ["analytics-project", currentOrg?.id, activeProjectId],
     queryFn: () => api.analytics.project(currentOrg!.id, activeProjectId!),
     enabled: !!currentOrg && !!activeProjectId,
+    retry: false,
   });
+  const analyticsForbidden =
+    analyticsError instanceof ApiError && analyticsError.status === 403;
 
   return (
     <div>
@@ -145,13 +152,25 @@ export default function ProjectsPerformancePage() {
         </div>
       )}
 
-      {isLoading || !analytics ? (
+      {isLoading ? (
         <div className="animate-pulse space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-64 bg-base-200 rounded-xl" />
             ))}
           </div>
+        </div>
+      ) : analyticsForbidden ? (
+        <div className="text-center py-12 space-y-1">
+          <p>You don&apos;t have access to this project&apos;s analytics.</p>
+          <p className="text-sm text-base-content/60">
+            Ask a project lead to add you as a member to view detailed
+            performance data.
+          </p>
+        </div>
+      ) : !analytics ? (
+        <div className="text-center py-12 text-base-content/60">
+          No analytics available for this project yet.
         </div>
       ) : (
         <>

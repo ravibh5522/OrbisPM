@@ -3,7 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useUIStore } from "@/stores/ui-store";
 import type {
@@ -84,11 +84,27 @@ export default function PerformancePage() {
     return () => setBreadcrumb(null);
   }, [orgSlug, setBreadcrumb]);
 
-  const { data, isLoading } = useQuery<OrgAnalytics>({
+  const {
+    data,
+    isLoading,
+    error: dataError,
+  } = useQuery<OrgAnalytics>({
     queryKey: ["analytics-org", currentOrg?.id, days],
     queryFn: () => api.analytics.org(currentOrg!.id, days),
     enabled: !!currentOrg,
+    retry: false,
   });
+
+  if (!isLoading && !data) {
+    const forbidden = dataError instanceof ApiError && dataError.status === 403;
+    return (
+      <div className="text-center py-12 text-base-content/60">
+        {forbidden
+          ? "You don't have access to organization analytics."
+          : "No analytics available yet."}
+      </div>
+    );
+  }
 
   if (isLoading || !data) {
     return (
