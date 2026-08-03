@@ -360,7 +360,7 @@ export default function TemplatesPage() {
                     >
                       <Download className="w-3 h-3" />
                     </Button>
-                    <PermissionGate resource="projects" action="update">
+                    <PermissionGate resource="templates" action="update">
                       <Button
                         variant="ghost"
                         size="xs"
@@ -370,7 +370,7 @@ export default function TemplatesPage() {
                         <Pencil className="w-3 h-3" />
                       </Button>
                     </PermissionGate>
-                    <PermissionGate resource="projects" action="delete">
+                    <PermissionGate resource="templates" action="delete">
                       <Button
                         variant="ghost"
                         size="xs"
