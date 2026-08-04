@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Avatar, Badge, Card, LoadingPage } from "@/components/ui/shared";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth-store";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
@@ -117,10 +117,15 @@ export default function TaskDetailPage({
   const { members } = useMemberMap(orgId);
 
   // ── Queries ──
-  const { data: task, isLoading } = useQuery({
+  const {
+    data: task,
+    isLoading,
+    error: taskError,
+  } = useQuery({
     queryKey: ["task", orgId, projectId, taskId],
     queryFn: () => api.tasks.get(orgId, projectId, taskId),
     enabled: !!orgId,
+    retry: false,
   });
 
   const { data: checklists } = useQuery({
@@ -188,6 +193,27 @@ export default function TaskDetailPage({
       updateTaskMutation.mutate({ [field]: value } as Partial<Task>),
     [updateTaskMutation],
   );
+
+  if (!isLoading && !task) {
+    const forbidden =
+      taskError instanceof ApiError && taskError.status === 403;
+    return (
+      <div className="text-center py-12 space-y-2">
+        <p>
+          {forbidden
+            ? "You don't have access to this task."
+            : "Task not found."}
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => router.push(`/${orgSlug}/projects/${projectId}`)}
+        >
+          Back to Project
+        </Button>
+      </div>
+    );
+  }
 
   if (isLoading || !task) return <LoadingPage />;
 

@@ -375,13 +375,15 @@ export default function ProjectDetailPage({
               {taskView === "columns" && (
                 <div ref={setToolbarEl} className="flex items-center gap-2" />
               )}
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => setImportOpen(true)}
-              >
-                <Upload className="w-3.5 h-3.5 mr-1" /> Import
-              </Button>
+              {projPerms.can("tasks", "create") && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setImportOpen(true)}
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1" /> Import
+                </Button>
+              )}
               <div className="dropdown dropdown-end">
                 <div
                   tabIndex={0}

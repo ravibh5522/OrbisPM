@@ -9,6 +9,7 @@
  */
 
 import { Button } from "@/components/ui/button";
+import { useProjectPermissions } from "@/hooks/use-project-permissions";
 import { api } from "@/lib/api";
 import type { ProjectCanvas } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +23,11 @@ interface ProjectCanvasPanelProps {
 
 export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps) {
   const qc = useQueryClient();
+  // Backend requires project:update for canvas create/edit/delete
+  // (main.go's /canvases routes) - the Canvas tab itself is always visible
+  // regardless of role, so this panel must gate its own actions.
+  const { can: canProject } = useProjectPermissions(projectId);
+  const canEditCanvas = canProject("project", "update");
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [titleError, setTitleError] = useState("");
@@ -69,21 +75,23 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
             <span className="badge badge-ghost badge-sm">{canvases.length}</span>
           )}
         </div>
-        <Button
-          size="sm"
-          onClick={() => {
-            setCreating(true);
-            setTitle("");
-            setTitleError("");
-          }}
-        >
-          <Plus className="w-4 h-4 mr-1" />
-          New Canvas
-        </Button>
+        {canEditCanvas && (
+          <Button
+            size="sm"
+            onClick={() => {
+              setCreating(true);
+              setTitle("");
+              setTitleError("");
+            }}
+          >
+            <Plus className="w-4 h-4 mr-1" />
+            New Canvas
+          </Button>
+        )}
       </div>
 
       {/* Create form */}
-      {creating && (
+      {creating && canEditCanvas && (
         <div className="card bg-base-100 border border-primary/30 rounded-xl p-4">
           <p className="text-sm font-medium mb-2">Canvas title</p>
           <div className="flex gap-2">
@@ -144,6 +152,7 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
             <CanvasCard
               key={canvas.id}
               canvas={canvas}
+              canDelete={canEditCanvas}
               onDelete={() => deleteMutation.mutate(canvas.id)}
               deleting={deleteMutation.isPending && deleteMutation.variables === canvas.id}
             />
@@ -156,10 +165,12 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
 
 function CanvasCard({
   canvas,
+  canDelete,
   onDelete,
   deleting,
 }: {
   canvas: ProjectCanvas;
+  canDelete: boolean;
   onDelete: () => void;
   deleting: boolean;
 }) {
@@ -185,22 +196,24 @@ function CanvasCard({
               {shapeCount} shape{shapeCount !== 1 ? "s" : ""}
             </p>
           </div>
-          <button
-            type="button"
-            className="btn btn-ghost btn-xs text-error opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-            onClick={(e) => {
-              e.stopPropagation();
-              onDelete();
-            }}
-            disabled={deleting}
-            aria-label="Delete canvas"
-          >
-            {deleting ? (
-              <span className="loading loading-spinner loading-xs" />
-            ) : (
-              <Trash2 className="w-3.5 h-3.5" />
-            )}
-          </button>
+          {canDelete && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-xs text-error opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              disabled={deleting}
+              aria-label="Delete canvas"
+            >
+              {deleting ? (
+                <span className="loading loading-spinner loading-xs" />
+              ) : (
+                <Trash2 className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
         </div>
       </div>
     </div>
