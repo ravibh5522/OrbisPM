@@ -339,7 +339,7 @@ export function TaskContextMenu({
             disabled: task.depth >= MAX_DEPTH,
           },
         )}
-      {canEdit &&
+      {canCreate &&
         menuItem("Duplicate", <Copy className="w-3.5 h-3.5" />, onDuplicate)}
       {menuItem("Copy Link", <Link className="w-3.5 h-3.5" />, onCopyLink)}
 
