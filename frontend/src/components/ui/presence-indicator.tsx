@@ -16,7 +16,7 @@ import { formatRelative } from "@/lib/utils";
 
 interface PresenceIndicatorProps {
   orgId: string;
-  resourceType: "task" | "project";
+  resourceType: "task" | "project" | "canvas";
   resourceId: string;
   currentUserId: string;
   currentUserName?: string;
@@ -149,7 +149,7 @@ export function PresenceBadge({
   currentUserId,
 }: {
   orgId: string;
-  resourceType: "task" | "project";
+  resourceType: "task" | "project" | "canvas";
   resourceId: string;
   currentUserId: string;
 }) {

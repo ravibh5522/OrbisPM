@@ -345,46 +345,29 @@ export interface StickyNoteStats {
 }
 
 // ─── Project Canvas (whiteboard) ─────────────────────────────────────────
-export type CanvasShapeType =
-  | "rect"
-  | "ellipse"
-  | "diamond"
-  | "triangle"
-  | "sticky"
-  | "text"
-  | "task";
+// Scene holds the embedded Excalidraw editor's own scene (elements/appState/
+// files) verbatim, opaque to the backend. Links is the only part the backend
+// touches — a generic binding from a scene element to a live app entity,
+// created via an inline trigger char ("@" tasks, "#" status buckets, "$"
+// members). entity_type is a plain string so further link types stay
+// additive. A single element can carry more than one link (one array entry
+// per link, sharing the same element_id).
+export type CanvasEntityType = "task" | "bucket" | "member";
 
-export interface CanvasShape {
-  id: string;
-  type: CanvasShapeType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  rotation?: number;
-  fill_color?: string;
-  stroke_color?: string;
-  stroke_width?: number;
-  text?: string;
-  linked_task_id?: string | null;
-  extra?: Record<string, unknown>;
-}
-
-export interface CanvasConnector {
-  id: string;
-  source_id: string;
-  target_id: string;
-  mode?: "straight" | "orthogonal" | "curve";
-  stroke_color?: string;
-  stroke_width?: number;
-  label?: string;
+export interface CanvasEntityLink {
+  element_id: string;
+  trigger: string;
+  entity_type: CanvasEntityType;
+  entity_id: string;
 }
 
 export interface CanvasState {
   version: number;
-  background?: string;
-  shapes: CanvasShape[];
-  connectors: CanvasConnector[];
+  scene?: {
+    elements: readonly unknown[];
+    files?: Record<string, unknown>;
+  };
+  links?: CanvasEntityLink[];
 }
 
 export interface ProjectCanvas {

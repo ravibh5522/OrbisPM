@@ -1458,7 +1458,7 @@ export const api = {
     heartbeat: (
       orgId: string,
       params: {
-        resource_type: "task" | "project";
+        resource_type: "task" | "project" | "canvas";
         resource_id: string;
         display_name?: string;
         avatar_url?: string;
@@ -1467,7 +1467,7 @@ export const api = {
 
     get: (
       orgId: string,
-      resourceType: "task" | "project",
+      resourceType: "task" | "project" | "canvas",
       resourceId: string,
     ) =>
       get<

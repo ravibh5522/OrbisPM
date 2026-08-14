@@ -4,8 +4,8 @@
  * ProjectCanvasPanel
  *
  * Lists all canvases (whiteboards) for a project and lets users create new
- * ones or open/delete existing ones. The actual free-drawing canvas editing
- * is a future enhancement (v0.3) — for now this panel is the management UI.
+ * ones or open/delete existing ones. Opening a canvas swaps this gallery for
+ * the full Excalidraw-based CanvasEditor in the same tab content area.
  */
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import type { ProjectCanvas } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LayoutDashboard, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { CanvasEditor } from "./canvas-editor";
 
 interface ProjectCanvasPanelProps {
   orgId: string;
@@ -31,6 +32,7 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
   const [creating, setCreating] = useState(false);
   const [title, setTitle] = useState("");
   const [titleError, setTitleError] = useState("");
+  const [openCanvasId, setOpenCanvasId] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ["canvases", orgId, projectId],
@@ -62,7 +64,18 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
     createMutation.mutate(title.trim());
   };
 
-  const canvases: ProjectCanvas[] = data?.items ?? [];
+  const canvases: ProjectCanvas[] = data?.data ?? [];
+
+  if (openCanvasId) {
+    return (
+      <CanvasEditor
+        orgId={orgId}
+        projectId={projectId}
+        canvasId={openCanvasId}
+        onBack={() => setOpenCanvasId(null)}
+      />
+    );
+  }
 
   return (
     <div className="flex flex-col h-full p-6 gap-6">
@@ -153,6 +166,7 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
               key={canvas.id}
               canvas={canvas}
               canDelete={canEditCanvas}
+              onOpen={() => setOpenCanvasId(canvas.id)}
               onDelete={() => deleteMutation.mutate(canvas.id)}
               deleting={deleteMutation.isPending && deleteMutation.variables === canvas.id}
             />
@@ -166,18 +180,26 @@ export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps
 function CanvasCard({
   canvas,
   canDelete,
+  onOpen,
   onDelete,
   deleting,
 }: {
   canvas: ProjectCanvas;
   canDelete: boolean;
+  onOpen: () => void;
   onDelete: () => void;
   deleting: boolean;
 }) {
-  const shapeCount = canvas.state?.shapes?.length ?? 0;
+  const shapeCount = canvas.state?.scene?.elements?.length ?? 0;
 
   return (
-    <div className="card bg-base-100 border border-base-200 rounded-xl hover:border-primary/40 hover:shadow-md transition-all group">
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      className="card bg-base-100 border border-base-200 rounded-xl hover:border-primary/40 hover:shadow-md transition-all group cursor-pointer text-left"
+    >
       <div className="card-body p-4 gap-2">
         {/* Preview placeholder */}
         <div className="w-full h-28 rounded-lg bg-base-200/60 flex items-center justify-center mb-1">

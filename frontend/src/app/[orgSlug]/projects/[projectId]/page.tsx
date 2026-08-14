@@ -584,12 +584,17 @@ export default function ProjectDetailPage({
           </div>
         )}
 
-        {/* Canvas tab */}
-        {activeTab === "canvas" && (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <ProjectCanvasPanel orgId={currentOrg!.id} projectId={projectId} />
-          </div>
-        )}
+        {/* Canvas tab — kept mounted (not unmounted) when hidden so an
+            in-progress drawing's pending autosave keeps running in the
+            background across tab switches, instead of racing an unmount. */}
+        <div
+          className={cn(
+            "flex-1 overflow-hidden flex flex-col",
+            activeTab !== "canvas" && "hidden",
+          )}
+        >
+          <ProjectCanvasPanel orgId={currentOrg!.id} projectId={projectId} />
+        </div>
 
         {/* Settings tab */}
         {activeTab === "settings" && (
