@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -178,6 +179,12 @@ func (h *ProjectCanvasHandler) UpdateMeta(w http.ResponseWriter, r *http.Request
 // @Param canvasId path string true "Canvas ID"
 // @Success 200 {object} domain.ProjectCanvas
 // @Router /orgs/{orgId}/projects/{projectId}/canvases/{canvasId}/state [put]
+// maxCanvasStateBytes caps a single canvas save — generous for a whiteboard
+// scene plus a handful of small embedded images, without leaving the save
+// endpoint open to an unbounded payload (the scene JSON is otherwise fully
+// opaque to the backend, so this is the one guard against a runaway client).
+const maxCanvasStateBytes = 8 << 20 // 8 MiB
+
 func (h *ProjectCanvasHandler) SaveState(w http.ResponseWriter, r *http.Request) {
 	canvasID, err := uuid.Parse(chi.URLParam(r, "canvasId"))
 	if err != nil {
@@ -185,11 +192,18 @@ func (h *ProjectCanvasHandler) SaveState(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxCanvasStateBytes)
+
 	var body struct {
 		State           domain.CanvasState `json:"state"`
 		ExpectedVersion int                `json:"expected_version"`
 	}
 	if err := parseBody(r, &body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			JSON(w, http.StatusRequestEntityTooLarge, ErrorResponse{Message: "canvas is too large to save"})
+			return
+		}
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request body", Detail: err.Error()})
 		return
 	}

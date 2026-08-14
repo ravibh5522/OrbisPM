@@ -56,7 +56,7 @@ func (h *PresenceHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
 
 	var req struct {
-		ResourceType string `json:"resource_type" validate:"required,oneof=task project"`
+		ResourceType string `json:"resource_type" validate:"required,oneof=task project canvas"`
 		ResourceID   string `json:"resource_id" validate:"required,uuid"`
 		DisplayName  string `json:"display_name,omitempty"`
 		AvatarURL    string `json:"avatar_url,omitempty"`
@@ -102,7 +102,7 @@ func (h *PresenceHandler) Heartbeat(w http.ResponseWriter, r *http.Request) {
 }
 
 type heartbeatRequest struct {
-	ResourceType string `json:"resource_type" validate:"required,oneof=task project"`
+	ResourceType string `json:"resource_type" validate:"required,oneof=task project canvas"`
 	ResourceID   string `json:"resource_id" validate:"required,uuid"`
 	DisplayName  string `json:"display_name,omitempty"`
 	AvatarURL    string `json:"avatar_url,omitempty"`

@@ -55,9 +55,8 @@ func (r *projectCanvasRepo) Create(ctx context.Context, tx pgx.Tx, c *domain.Pro
 	q := conn(r.pool, tx)
 
 	initState := domain.CanvasState{
-		Version:    1,
-		Shapes:     []domain.CanvasShape{},
-		Connectors: []domain.CanvasConnector{},
+		Version: 1,
+		Scene:   json.RawMessage(`{"elements":[],"appState":{},"files":{}}`),
 	}
 	stateJSON, err := json.Marshal(initState)
 	if err != nil {
