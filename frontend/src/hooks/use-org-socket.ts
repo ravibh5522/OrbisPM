@@ -204,6 +204,20 @@ function handleOrgEvent(
       qc.invalidateQueries({
         queryKey: ["project-dashboard", orgId, event.payload.project_id],
       });
+      // A canvas may have a bucket (#status) or member ($assignee) link
+      // whose live count/workload this task just changed — same live-update
+      // gap as the linked-task case below, same fix: invalidate on any task
+      // event in this project rather than wait for the 15s poll. Broad
+      // (not keyed to the specific status/assignee) since the event doesn't
+      // carry the task's previous status/assignee to narrow it further.
+      qc.invalidateQueries({
+        queryKey: ["canvas-bucket-counts", orgId, event.payload.project_id],
+        exact: false,
+      });
+      qc.invalidateQueries({
+        queryKey: ["canvas-member-workload", orgId, event.payload.project_id],
+        exact: false,
+      });
       // Invalidate task detail if we have the entity_id (task_id)
       if (event.entity_id) {
         qc.invalidateQueries({
@@ -211,6 +225,16 @@ function handleOrgEvent(
         });
         qc.invalidateQueries({
           queryKey: ["tasks", orgId, event.payload.project_id],
+        });
+        // A canvas may have this task linked (@-mention) — without this its
+        // status/progress color and text suffix would only catch up on the
+        // canvas's own 15s poll instead of updating live like everything
+        // else in the app.
+        qc.invalidateQueries({
+          predicate: (q) =>
+            q.queryKey[0] === "canvas-linked-tasks" &&
+            Array.isArray(q.queryKey[3]) &&
+            (q.queryKey[3] as string[]).includes(event.entity_id),
         });
       }
     }
@@ -260,6 +284,17 @@ function handleOrgEvent(
         queryKey: ["dependencies", orgId, projectId, taskId].filter(Boolean),
       });
     }
+  }
+
+  // Canvases — another viewer saved changes; refetch so they show up live.
+  // Payload carries no project_id, so match on canvas id (entity_id) via a
+  // predicate instead of a full query key.
+  if (type.startsWith("canvas.") && event.entity_id) {
+    qc.invalidateQueries({
+      predicate: (q) =>
+        q.queryKey[0] === "canvas" && q.queryKey[3] === event.entity_id,
+    });
+    qc.invalidateQueries({ queryKey: ["canvases", orgId], exact: false });
   }
 
   // Projects

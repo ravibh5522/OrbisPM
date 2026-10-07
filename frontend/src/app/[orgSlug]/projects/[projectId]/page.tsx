@@ -20,7 +20,7 @@ import { Pagination } from "@/components/ui/pagination";
 import { Avatar, Card } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
 import { useProjectPermissions } from "@/hooks/use-project-permissions";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { cn, formatDate } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
@@ -156,10 +156,15 @@ export default function ProjectDetailPage({
     setTaskView("columns");
   }, []);
 
-  const { data: project, isLoading: projLoading } = useQuery({
+  const {
+    data: project,
+    isLoading: projLoading,
+    error: projError,
+  } = useQuery({
     queryKey: ["project", currentOrg?.id, projectId],
     queryFn: () => api.projects.get(currentOrg!.id, projectId),
     enabled: !!currentOrg,
+    retry: false,
   });
 
   // Join/leave project room on the org-level WebSocket
@@ -196,9 +201,10 @@ export default function ProjectDetailPage({
     ],
     queryFn: () => {
       const p = new URLSearchParams();
-      p.set("due_date_from", calDateRange.from);
-      p.set("due_date_to", calDateRange.to);
-      p.set("limit", "200");
+      // Overlap window so tasks spanning the view edges still render.
+      p.set("range_from", calDateRange.from);
+      p.set("range_to", calDateRange.to);
+      p.set("limit", "500");
       if (globalFilter.statuses.length > 0)
         p.set("statuses", globalFilter.statuses.join(","));
       if (globalFilter.priorities.length > 0)
@@ -238,8 +244,34 @@ export default function ProjectDetailPage({
         <div className="card flex-1 bg-base-100/36 border border-base-200/55 backdrop-blur-xl card-glass-shadow rounded-2xl" />
       </div>
     );
-  if (!project)
-    return <div className="text-center py-12">Project not found</div>;
+  if (!project) {
+    const isForbidden =
+      projError instanceof ApiError && projError.status === 403;
+    return (
+      <div className="text-center py-12 space-y-2">
+        <p>
+          {isForbidden
+            ? "You don't have access to this project's contents."
+            : "Project not found."}
+        </p>
+        {isForbidden && (
+          <p className="text-sm text-base-content/60">
+            Ask a project lead to add you as a member to view tasks and
+            details.
+          </p>
+        )}
+        {currentOrg && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.push(`/${currentOrg.slug}/projects`)}
+          >
+            Back to Projects
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -343,13 +375,15 @@ export default function ProjectDetailPage({
               {taskView === "columns" && (
                 <div ref={setToolbarEl} className="flex items-center gap-2" />
               )}
-              <Button
-                variant="outline"
-                size="xs"
-                onClick={() => setImportOpen(true)}
-              >
-                <Upload className="w-3.5 h-3.5 mr-1" /> Import
-              </Button>
+              {projPerms.can("tasks", "create") && (
+                <Button
+                  variant="outline"
+                  size="xs"
+                  onClick={() => setImportOpen(true)}
+                >
+                  <Upload className="w-3.5 h-3.5 mr-1" /> Import
+                </Button>
+              )}
               <div className="dropdown dropdown-end">
                 <div
                   tabIndex={0}
@@ -550,12 +584,17 @@ export default function ProjectDetailPage({
           </div>
         )}
 
-        {/* Canvas tab */}
-        {activeTab === "canvas" && (
-          <div className="flex-1 overflow-hidden flex flex-col">
-            <ProjectCanvasPanel orgId={currentOrg!.id} projectId={projectId} />
-          </div>
-        )}
+        {/* Canvas tab — kept mounted (not unmounted) when hidden so an
+            in-progress drawing's pending autosave keeps running in the
+            background across tab switches, instead of racing an unmount. */}
+        <div
+          className={cn(
+            "flex-1 overflow-hidden flex flex-col",
+            activeTab !== "canvas" && "hidden",
+          )}
+        >
+          <ProjectCanvasPanel orgId={currentOrg!.id} projectId={projectId} />
+        </div>
 
         {/* Settings tab */}
         {activeTab === "settings" && (

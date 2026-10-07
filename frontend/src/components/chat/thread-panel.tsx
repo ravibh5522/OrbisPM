@@ -2,6 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { useAuthStore } from "@/stores/auth-store";
 import { useChatStore } from "@/stores/chat-store";
 import type { ChatMessage } from "@/types/domain";
@@ -58,7 +59,7 @@ export function ThreadPanel() {
         50,
       );
     } catch {
-      // send failed
+      toast.error("Couldn't send reply. Please try again.");
     } finally {
       setSending(false);
     }
@@ -124,7 +125,7 @@ export function ThreadPanel() {
               <ThreadMessage
                 key={msg.id}
                 message={msg}
-                isOwn={msg.user_id === user?.id}
+                isOwn={msg.user_id === user?.internal_id}
               />
             ))}
             <div ref={bottomRef} />

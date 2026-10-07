@@ -6,7 +6,7 @@ import { Badge, Card, PageHeader } from "@/components/ui/shared";
 import { StatCard } from "@/components/ui/stat-card";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { useOrgPolicies } from "@/hooks/use-policies";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { PRIORITY_BADGE, PRIORITY_HEX, STATUS_HEX } from "@/lib/task-colors";
 import { cn, formatRelative, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -79,10 +79,15 @@ export default function DashboardPage() {
   const policies = useOrgPolicies();
   const [days, setDays] = useState<7 | 30 | 90>(30);
 
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
+  const {
+    data: stats,
+    isLoading,
+    error: statsError,
+  } = useQuery<DashboardStats>({
     queryKey: ["dashboard-stats", currentOrg?.id],
     queryFn: () => api.dashboard.stats(currentOrg!.id),
     enabled: !!currentOrg,
+    retry: false,
   });
 
   const { data: projects } = useQuery({
@@ -98,6 +103,18 @@ export default function DashboardPage() {
       queryFn: () => api.analytics.dashboard(currentOrg!.id, days),
       enabled: !!currentOrg,
     });
+
+  if (!isLoading && !stats) {
+    const forbidden =
+      statsError instanceof ApiError && statsError.status === 403;
+    return (
+      <div className="text-center py-12 text-base-content/60">
+        {forbidden
+          ? "You don't have access to this organization's dashboard."
+          : "No dashboard data available yet."}
+      </div>
+    );
+  }
 
   if (isLoading || !stats)
     return (

@@ -217,14 +217,30 @@ func (r *taskRepo) List(ctx context.Context, projectID uuid.UUID, filter TaskFil
 		args = append(args, filter.Labels)
 		argIdx++
 	}
+	// due_date is timestamptz, so compare on the date part: a bare "due_date <=
+	// '2026-07-31'" resolves to midnight and would drop a task due later that day.
 	if filter.DueDateFrom != nil && *filter.DueDateFrom != "" {
-		where = append(where, fmt.Sprintf("due_date >= $%d", argIdx))
+		where = append(where, fmt.Sprintf("due_date::date >= $%d::date", argIdx))
 		args = append(args, *filter.DueDateFrom)
 		argIdx++
 	}
 	if filter.DueDateTo != nil && *filter.DueDateTo != "" {
-		where = append(where, fmt.Sprintf("due_date <= $%d", argIdx))
+		where = append(where, fmt.Sprintf("due_date::date <= $%d::date", argIdx))
 		args = append(args, *filter.DueDateTo)
+		argIdx++
+	}
+
+	// Calendar window — keep any task whose interval overlaps [from, to]. A task
+	// with only one of the two dates is treated as a single-day interval; a task
+	// with neither is excluded (both COALESCEs are NULL, so the comparisons fail).
+	if filter.RangeFrom != nil && *filter.RangeFrom != "" {
+		where = append(where, fmt.Sprintf("COALESCE(due_date, start_date)::date >= $%d::date", argIdx))
+		args = append(args, *filter.RangeFrom)
+		argIdx++
+	}
+	if filter.RangeTo != nil && *filter.RangeTo != "" {
+		where = append(where, fmt.Sprintf("COALESCE(start_date, due_date)::date <= $%d::date", argIdx))
+		args = append(args, *filter.RangeTo)
 		argIdx++
 	}
 

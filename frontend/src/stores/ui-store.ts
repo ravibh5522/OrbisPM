@@ -14,6 +14,7 @@ type ProjectTab =
   | "reviews"
   | "announcements"
   | "dashboard"
+  | "canvas"
   | "settings";
 type TaskViewMode = "columns" | "list" | "tree" | "calendar";
 

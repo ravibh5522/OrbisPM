@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
@@ -17,7 +18,9 @@ func UserIDFromCtx(ctx context.Context) uuid.UUID {
 }
 
 // Auth middleware validates Zitadel-issued JWTs (RS256) or session tokens and sets user context.
-func Auth(zitadelClient *auth.ZitadelClient) func(http.Handler) http.Handler {
+// pool resolves the Zitadel identity to OrbisPM's stable internal user ID —
+// see auth.ResolveUserID for why this can no longer be a pure derivation.
+func Auth(zitadelClient *auth.ZitadelClient, pool *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			// First check Authorization header
@@ -48,11 +51,10 @@ func Auth(zitadelClient *auth.ZitadelClient) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Zitadel uses "sub" for user ID
-			userID, err := uuid.Parse(claims.Subject)
+			userID, err := auth.ResolveUserID(r.Context(), pool, claims.Subject, claims.Email)
 			if err != nil {
-				// Zitadel sub may be numeric — use deterministic UUID
-				userID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(claims.Subject))
+				http.Error(w, `{"message":"could not resolve user"}`, http.StatusInternalServerError)
+				return
 			}
 
 			ctx := tenant.SetUserID(r.Context(), userID)

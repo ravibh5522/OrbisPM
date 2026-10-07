@@ -8,7 +8,6 @@ export {
   type CalendarFilterState,
 } from "./calendar-filters";
 export {
-  TIMELINE_COLORS,
   aggregateProjectTimelines,
   aggregateTeamTimelines,
   extractFilterOptions,
@@ -18,4 +17,10 @@ export {
   type CalendarViewMode,
   type TimelineEntry,
 } from "./calendar-utils";
+export {
+  CALENDAR_PALETTE,
+  colorForIndex,
+  colorForKey,
+  type CalendarColor,
+} from "./calendar-colors";
 export { CalendarView, type CalendarViewProps } from "./calendar-view";

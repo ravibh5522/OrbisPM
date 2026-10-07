@@ -9,6 +9,7 @@ import { Tabs } from "@/components/ui/tabs";
 import { useProjectPolicies } from "@/hooks/use-policies";
 import { api } from "@/lib/api"; // kept for CR attachment binary ops
 import { cn, formatRelative } from "@/lib/utils";
+import { useAuthStore } from "@/stores/auth-store";
 import { useProjectTaskStore } from "@/stores/project-task-store";
 import type {
   Attachment,
@@ -89,6 +90,34 @@ interface TaskChangeRequestsProps {
   members: OrgMember[];
 }
 
+// Designated approvers (project.settings.approver_ids) are enforced by the
+// backend on every approve/reject call - this mirrors that check on the
+// frontend so the buttons aren't shown to a reviewer who'd just get a 403.
+// Empty/missing approver_ids means no restriction (any reviewer qualifies),
+// matching the backend's behavior in change_request_service.go.
+function useApproverIds(orgId: string, projectId: string): string[] {
+  const [approverIds, setApproverIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.projects
+      .get(orgId, projectId)
+      .then((project) => {
+        if (cancelled) return;
+        const raw = project?.settings?.approver_ids;
+        setApproverIds(Array.isArray(raw) ? raw.filter((id): id is string => typeof id === "string") : []);
+      })
+      .catch(() => {
+        if (!cancelled) setApproverIds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [orgId, projectId]);
+
+  return approverIds;
+}
+
 export function TaskChangeRequests({
   orgId,
   projectId,
@@ -97,6 +126,12 @@ export function TaskChangeRequests({
 }: TaskChangeRequestsProps) {
   const send = useProjectTaskStore((s) => s.send);
   const policies = useProjectPolicies(projectId);
+  const approverIds = useApproverIds(orgId, projectId);
+  const currentUserId = useAuthStore((s) => s.user?.internal_id || s.user?.id);
+  const canReview =
+    policies.canReview &&
+    (approverIds.length === 0 ||
+      (!!currentUserId && approverIds.includes(currentUserId)));
   const [items, setItems] = useState<TaskChangeRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -146,7 +181,7 @@ export function TaskChangeRequests({
             orgId={orgId}
             projectId={projectId}
             members={members}
-            canReview={policies.canReview}
+            canReview={canReview}
             onRefresh={fetchCRs}
             onItemUpdate={handleItemUpdate}
           />
@@ -162,7 +197,7 @@ export function TaskChangeRequests({
             orgId={orgId}
             projectId={projectId}
             members={members}
-            canReview={policies.canReview}
+            canReview={canReview}
             onRefresh={fetchCRs}
             onItemUpdate={handleItemUpdate}
           />
@@ -275,6 +310,12 @@ export function ProjectChangeRequests({
   members,
 }: ProjectChangeRequestsProps) {
   const policies = useProjectPolicies(projectId);
+  const approverIds = useApproverIds(orgId, projectId);
+  const currentUserId = useAuthStore((s) => s.user?.internal_id || s.user?.id);
+  const canReview =
+    policies.canReview &&
+    (approverIds.length === 0 ||
+      (!!currentUserId && approverIds.includes(currentUserId)));
 
   // Filter / search state
   const [statusFilter, setStatusFilter] = useState<ChangeRequestStatus | "all">(
@@ -437,7 +478,7 @@ export function ProjectChangeRequests({
             projectId={projectId}
             members={members}
             showTask
-            canReview={policies.canReview}
+            canReview={canReview}
             onRefresh={fetchCRs}
             onItemUpdate={handleItemUpdate}
           />

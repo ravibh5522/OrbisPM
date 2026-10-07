@@ -7,7 +7,7 @@
  *
  * Usage:
  *   const policies = useOrgPolicies();
- *   policies.canViewAllTeams      → true for owner/admin
+ *   policies.canViewAllTeams      → true for owner/admin, or anyone with teams:read
  *   policies.canViewOwnTeams      → true for everyone (non-admin sees only theirs)
  *   policies.viewTeamsScope       → 'all' | 'own'
  *   policies.teamListParams()     → { mine?: string }   (ready for API)
@@ -115,12 +115,14 @@ export function computeOrgPolicies(
   const isOwner = role === "owner";
   const isAdmin = isOwner || role === "admin";
 
-  // View scope: admin/owner sees all; everyone else sees only their own
-  const canViewAllTeams = isAdmin;
+  // View scope: admin/owner sees all; anyone else with the org-level read
+  // permission also sees all (that permission exists precisely to grant
+  // this); everyone else sees only their own.
+  const canViewAllTeams = isAdmin || can("teams", "read");
   const canViewOwnTeams = !!role; // any org member can view own teams
   const viewTeamsScope: "all" | "own" = canViewAllTeams ? "all" : "own";
 
-  const canViewAllProjects = isAdmin;
+  const canViewAllProjects = isAdmin || can("projects", "read");
   const canViewOwnProjects = !!role; // any org member can view own projects
   const viewProjectsScope: "all" | "own" = canViewAllProjects ? "all" : "own";
 

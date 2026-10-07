@@ -4,12 +4,16 @@ import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useChatStore } from "@/stores/chat-store";
+import { toast } from "sonner";
 import type { ChatChannelMember } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { Eye, Paperclip, Send, Smile, X } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-const EMOJI_QUICK = ["👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏"];
+const EMOJI_QUICK = [
+  "👍", "❤️", "😂", "🎉", "🔥", "👀", "✅", "🙏",
+  "💯", "🚀", "👏", "😍", "🤔", "😅", "🙌", "💡",
+];
 const EMPTY_MEMBERS: ChatChannelMember[] = [];
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50MB
 const ALLOWED_TYPES = [
@@ -39,6 +43,7 @@ interface FilePreview {
 export function MessageInput() {
   const activeChannelId = useChatStore((s) => s.activeChannelId);
   const ws = useChatStore((s) => s.ws);
+  const appendMessage = useChatStore((s) => s.appendMessage);
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
@@ -48,6 +53,18 @@ export function MessageInput() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const mentionDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Persist an unsent draft per channel and restore it when switching back.
+  useEffect(() => {
+    if (!activeChannelId) return;
+    setBody(localStorage.getItem(`chat-draft-${activeChannelId}`) || "");
+  }, [activeChannelId]);
+
+  useEffect(() => {
+    if (!activeChannelId) return;
+    if (body) localStorage.setItem(`chat-draft-${activeChannelId}`, body);
+    else localStorage.removeItem(`chat-draft-${activeChannelId}`);
+  }, [body, activeChannelId]);
 
   // @mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
@@ -200,7 +217,7 @@ export function MessageInput() {
 
       // Send text message if any (files already include body in upload)
       if (body.trim() && files.length === 0) {
-        await api.chat.messages.send(activeChannelId, {
+        const sent = await api.chat.messages.send(activeChannelId, {
           body: body.trim(),
           body_format: "text",
           mentions:
@@ -208,6 +225,8 @@ export function MessageInput() {
               ? [...new Set(mentionedUserIds)]
               : undefined,
         });
+        // Optimistically show it immediately; the WS echo dedupes by id.
+        if (sent) appendMessage(activeChannelId, sent);
       }
 
       setBody("");
@@ -218,10 +237,11 @@ export function MessageInput() {
       }
     } catch (err) {
       console.error("[Chat] Failed to send message:", err);
+      toast.error("Couldn't send message. Please try again.");
     } finally {
       setSending(false);
     }
-  }, [body, activeChannelId, files, mentionedUserIds]);
+  }, [body, activeChannelId, files, mentionedUserIds, appendMessage]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     // Handle @mention navigation
@@ -293,6 +313,33 @@ export function MessageInput() {
       setMentionIndex(0);
     } else {
       setMentionQuery(null);
+    }
+  };
+
+  // Paste an image or screenshot straight into the composer (Ctrl/Cmd+V).
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    const images: File[] = [];
+    for (const item of items) {
+      if (item.kind === "file" && item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          // Screenshots often paste as a generic/blank name — give it a clean one.
+          const ext = (file.type.split("/")[1] || "png").replace("jpeg", "jpg");
+          const named =
+            file.name && file.name !== "image.png"
+              ? file
+              : new File([file], `Screenshot.${ext}`, {
+                  type: file.type || "image/png",
+                });
+          images.push(named);
+        }
+      }
+    }
+    if (images.length > 0) {
+      e.preventDefault();
+      addFiles(images);
     }
   };
 
@@ -498,6 +545,7 @@ export function MessageInput() {
           value={body}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder="Type a message..."
           className="flex-1 bg-transparent resize-none outline-none text-sm text-base-content placeholder:text-base-content/40 max-h-40 min-h-[2rem] py-1"
           rows={1}

@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
 import { useTeamPolicies } from "@/hooks/use-policies";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { PRIORITY_BADGE, STATUS_BADGE } from "@/lib/task-colors";
 import { cn, formatDate, formatRelative, statusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -119,19 +119,27 @@ export default function TeamDashboardPage({
   const calInitRange = useMemo(() => getDateRange(new Date(), "month"), []);
   const [calDateRange, setCalDateRange] = useState(calInitRange);
 
-  const { data: team, isLoading: teamLoading } = useQuery<Team>({
+  const {
+    data: team,
+    isLoading: teamLoading,
+    error: teamError,
+  } = useQuery<Team>({
     queryKey: ["team", orgId, teamId],
     queryFn: () => api.teams.get(orgId, teamId),
     enabled: !!orgId,
+    retry: false,
   });
 
-  const { data: stats, isLoading: statsLoading } = useQuery<TeamDashboardStats>(
-    {
-      queryKey: ["team-dashboard", orgId, teamId],
-      queryFn: () => api.teams.dashboard(orgId, teamId),
-      enabled: !!orgId,
-    },
-  );
+  const {
+    data: stats,
+    isLoading: statsLoading,
+    error: statsError,
+  } = useQuery<TeamDashboardStats>({
+    queryKey: ["team-dashboard", orgId, teamId],
+    queryFn: () => api.teams.dashboard(orgId, teamId),
+    enabled: !!orgId,
+    retry: false,
+  });
 
   // Fetch team's projects for calendar
   const { data: teamProjects } = useQuery({
@@ -156,9 +164,10 @@ export default function TeamDashboardPage({
       const results = await Promise.all(
         projects.map((p) => {
           const params = new URLSearchParams();
-          params.set("due_date_from", calDateRange.from);
-          params.set("due_date_to", calDateRange.to);
-          params.set("limit", "200");
+          // Overlap window so tasks spanning the view edges still render.
+          params.set("range_from", calDateRange.from);
+          params.set("range_to", calDateRange.to);
+          params.set("limit", "500");
           return api.tasks
             .list(orgId, p.id, params.toString())
             .then((r) => r.data || []);
@@ -196,7 +205,30 @@ export default function TeamDashboardPage({
     setCalDateRange({ from, to });
   }, []);
 
-  if (teamLoading || statsLoading || !stats) return <LoadingPage />;
+  if (teamLoading || statsLoading) return <LoadingPage />;
+
+  if (!stats) {
+    const isForbidden =
+      (teamError instanceof ApiError && teamError.status === 403) ||
+      (statsError instanceof ApiError && statsError.status === 403);
+    return (
+      <div className="text-center py-12 space-y-2">
+        <p>
+          {isForbidden
+            ? "You don't have access to this team's contents."
+            : "Team not found."}
+        </p>
+        {isForbidden && (
+          <p className="text-sm text-base-content/60">
+            Ask a team lead to add you as a member to view its dashboard.
+          </p>
+        )}
+        <Link href={`/${orgSlug}/teams`} className="btn btn-ghost btn-sm">
+          Back to Teams
+        </Link>
+      </div>
+    );
+  }
 
   const statusEntries = Object.entries(stats.tasks_by_status || {});
   const priorityEntries = Object.entries(stats.tasks_by_priority || {});

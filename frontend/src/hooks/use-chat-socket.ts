@@ -1,10 +1,15 @@
 "use client";
 
 import { useChatStore } from "@/stores/chat-store";
-import type { ChatMessage } from "@/types/domain";
+import type { ChatChannel, ChatMessage } from "@/types/domain";
+import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
 
 import { API_BASE } from "@/lib/api-base";
+
+// Shared so the module-level handleMessage() can invalidate react-query caches
+// (pins, sidebar, members) for live propagation of events from other users.
+let sharedQueryClient: QueryClient | null = null;
 
 /**
  * Connects to the messaging-service WebSocket via Kong at /ws/chat.
@@ -30,6 +35,7 @@ export function useChatSocket(orgId: string | undefined) {
   const unmountedRef = useRef(false);
   const connGenRef = useRef(0);
   const store = useChatStore;
+  sharedQueryClient = useQueryClient();
 
   const send = useCallback(
     (action: string, payload?: Record<string, unknown>): Promise<unknown> => {
@@ -173,23 +179,35 @@ function handleMessage(
     case "event:message.created": {
       const m = payload as unknown as ChatMessage;
       if (m.channel_id) {
-        store.appendMessage(m.channel_id, m);
-        // If this message is a thread reply, append to thread too
-        if (
-          m.parent_message_id &&
-          m.parent_message_id === store.threadParentId
-        ) {
-          store.appendThreadMessage(m);
-        }
-        // Update channel last_message and bump it
-        store.updateChannel({
-          id: m.channel_id,
-          last_message: m.body,
-          last_activity: m.created_at,
-        } as never);
-        // Increment unread if not the active channel
-        if (store.activeChannelId !== m.channel_id) {
-          store.incrementUnread(m.channel_id);
+        if (m.parent_message_id) {
+          // Thread reply — belongs in the thread, NOT the main channel list.
+          if (m.parent_message_id === store.threadParentId) {
+            store.appendThreadMessage(m);
+          }
+          // Bump the parent's reply count in the main list.
+          const msgs = store.messages.get(m.channel_id);
+          const parent = msgs?.find((x) => x.id === m.parent_message_id);
+          if (parent) {
+            store.updateMessage(m.channel_id, {
+              ...parent,
+              thread_count: (parent.thread_count || 0) + 1,
+            });
+          }
+        } else {
+          store.appendMessage(m.channel_id, m);
+          // Update channel last_message and bump it
+          store.updateChannel({
+            id: m.channel_id,
+            last_message: m.body,
+            last_activity: m.created_at,
+          } as never);
+          // Increment unread if not the active channel
+          if (store.activeChannelId !== m.channel_id) {
+            store.incrementUnread(m.channel_id);
+          }
+          // The sidebar renders unread/last-message/order from the sidebar query,
+          // not the store — refresh it so the unread badge/preview update live.
+          sharedQueryClient?.invalidateQueries({ queryKey: ["chat-sidebar"] });
         }
       }
       break;
@@ -285,6 +303,66 @@ function handleMessage(
           p.user_id,
           p.last_seen || new Date().toISOString(),
         );
+      }
+      break;
+    }
+    // ── Live propagation: another user pinned / unpinned a message ──
+    case "event:message.pinned":
+    case "event:message.unpinned": {
+      const p = payload as { channel_id?: string };
+      if (p.channel_id) {
+        sharedQueryClient?.invalidateQueries({
+          queryKey: ["chat-pins", p.channel_id],
+        });
+      }
+      break;
+    }
+    // ── Live propagation: channel created / renamed ──
+    case "event:channel.created":
+    case "event:channel.updated": {
+      const ch = payload as unknown as ChatChannel;
+      if (ch.id) {
+        if (
+          msg.action === "event:channel.created" &&
+          !store.channels.some((c) => c.id === ch.id)
+        ) {
+          store.addChannel(ch);
+        } else if (msg.action === "event:channel.updated") {
+          store.updateChannel(ch);
+        }
+      }
+      sharedQueryClient?.invalidateQueries({ queryKey: ["chat-sidebar"] });
+      break;
+    }
+    // ── Live propagation: channel archived / deleted ──
+    case "event:channel.archived":
+    case "event:channel.deleted": {
+      const p = payload as { channel_id?: string; entity_id?: string };
+      const cid = p.channel_id || p.entity_id;
+      if (cid) {
+        store.removeChannel(cid);
+        if (store.activeChannelId === cid) store.setActiveChannel(null);
+      }
+      sharedQueryClient?.invalidateQueries({ queryKey: ["chat-sidebar"] });
+      break;
+    }
+    // ── Read receipts: mark a member's read position (drives seen-by) ──
+    case "event:read_receipt.updated": {
+      const p = payload as { channel_id?: string; user_id?: string };
+      if (p.channel_id && p.user_id) {
+        const members = store.channelMembers.get(p.channel_id);
+        if (members) {
+          const now = new Date().toISOString();
+          store.setChannelMembers(
+            p.channel_id,
+            members.map((m) =>
+              m.user_id === p.user_id ? { ...m, last_read_at: now } : m,
+            ),
+          );
+        }
+        sharedQueryClient?.invalidateQueries({
+          queryKey: ["chat-channel-members", p.channel_id],
+        });
       }
       break;
     }

@@ -88,13 +88,18 @@ func (h *AuthHandler) sendPasswordResetEmail(ctx context.Context, toEmail, code 
 	return nil
 }
 
-// zitadelIDToUUID converts a Zitadel user ID string to the UUID stored in the DB.
-// Mirrors the same logic as middleware/auth.go so IDs match everywhere.
-func zitadelIDToUUID(id string) uuid.UUID {
-	if u, err := uuid.Parse(id); err == nil {
-		return u
+// resolveUUID looks up (or provisions) the stable internal user ID for a
+// Zitadel identity — see auth.ResolveUserID. email may be empty when it's
+// genuinely unavailable at the call site; that only matters for the very
+// first authenticated request an existing (pre-migration) user makes, so an
+// empty email here is a rare, self-correcting edge case, not silent data loss.
+func (h *AuthHandler) resolveUUID(ctx context.Context, zitadelID, email string) uuid.UUID {
+	id, err := auth.ResolveUserID(ctx, h.pool, zitadelID, email)
+	if err != nil {
+		log.Error().Err(err).Str("zitadel_id", zitadelID).Msg("resolve user id failed")
+		return uuid.Nil
 	}
-	return uuid.NewSHA1(uuid.NameSpaceURL, []byte(id))
+	return id
 }
 
 // upsertUserProfile caches user info in public.users so joined queries work.
@@ -104,7 +109,7 @@ func (h *AuthHandler) upsertUserProfile(ctx context.Context, u *auth.UserInfo) {
 	if h.pool == nil || u == nil {
 		return
 	}
-	userUUID := zitadelIDToUUID(u.ID)
+	userUUID := h.resolveUUID(ctx, u.ID, u.Email)
 	displayName := stringFromMeta(u.UserMetadata, "name")
 	avatarURL := stringFromMeta(u.UserMetadata, "avatar_url")
 	bio := stringFromMeta(u.UserMetadata, "bio")
@@ -138,7 +143,7 @@ func (h *AuthHandler) upsertUserProfilePartial(ctx context.Context, u *auth.User
 	if h.pool == nil || u == nil {
 		return
 	}
-	userUUID := zitadelIDToUUID(u.ID)
+	userUUID := h.resolveUUID(ctx, u.ID, u.Email)
 	displayName := stringFromMeta(u.UserMetadata, "name")
 	avatarURL := stringFromMetaFallback(data, "avatar_url", stringFromMeta(u.UserMetadata, "avatar_url"))
 	bio := stringFromMetaFallback(data, "bio", "")
@@ -183,7 +188,7 @@ func (h *AuthHandler) enrichUserFromDB(ctx context.Context, u *auth.UserInfo) {
 	if h.pool == nil || u == nil {
 		return
 	}
-	userUUID := zitadelIDToUUID(u.ID)
+	userUUID := h.resolveUUID(ctx, u.ID, u.Email)
 	var avatarURL, bio, jobTitle, department, timezone, language, theme string
 	var themeCustomisation []byte
 	err := h.pool.QueryRow(ctx,
@@ -274,6 +279,7 @@ func (h *AuthHandler) Routes() chi.Router {
 	// OIDC PKCE flow
 	r.Post("/oidc/authorize", h.OIDCAuthorize)
 	r.Post("/oidc/callback", h.OIDCCallback)
+	r.Post("/oidc/logout-url", h.OIDCLogoutURL)
 	r.Post("/oidc/refresh", h.OIDCRefresh)
 	// Called after SSO when the IDP (e.g. GitHub with private email) did not
 	// supply an email address. The user provides it here and we update Zitadel.
@@ -383,7 +389,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	if result.User != nil {
 		// Set internal UUID that matches what messaging service uses
-		result.User.InternalID = zitadelIDToUUID(result.User.ID).String()
+		result.User.InternalID = h.resolveUUID(r.Context(), result.User.ID, result.User.Email).String()
 		h.upsertUserProfile(r.Context(), result.User)
 	}
 	JSON(w, http.StatusOK, result)
@@ -481,7 +487,7 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Set internal UUID that matches what messaging service uses
-	user.InternalID = zitadelIDToUUID(user.ID).String()
+	user.InternalID = h.resolveUUID(r.Context(), user.ID, user.Email).String()
 	// Merge extended profile fields (avatar_url, bio, etc.) from our DB.
 	h.enrichUserFromDB(r.Context(), user)
 	h.upsertUserProfile(r.Context(), user)
@@ -521,7 +527,7 @@ func (h *AuthHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Set internal UUID that matches what messaging service uses
-	user.InternalID = zitadelIDToUUID(user.ID).String()
+	user.InternalID = h.resolveUUID(r.Context(), user.ID, user.Email).String()
 	// Save extended profile fields (avatar_url, bio, job_title, etc.) to our DB.
 	h.upsertUserProfilePartial(r.Context(), user, req.Data)
 	// Re-enrich so the returned user includes the fields we just saved.
@@ -538,6 +544,10 @@ type oidcAuthorizeRequest struct {
 	// (urn:zitadel:iam:org:idp:id:{id}) to bypass its own login page and
 	// redirect directly to the named identity provider (e.g. Google, GitHub).
 	IDPID string `json:"idp_id"`
+	// Prompt is optional. "create" tells the centralized login UI this is a
+	// signup (OrbisPM's /signup page), not a sign-in — it lands on /register
+	// instead of /login. See GenerateAuthURL.
+	Prompt string `json:"prompt"`
 }
 
 func (h *AuthHandler) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -547,7 +557,7 @@ func (h *AuthHandler) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.zitadel.GenerateAuthURL(req.RedirectURI, req.State, req.IDPID)
+	result, err := h.zitadel.GenerateAuthURL(req.RedirectURI, req.State, req.IDPID, req.Prompt)
 	if err != nil {
 		handleAuthError(w, err)
 		return
@@ -574,6 +584,29 @@ func (h *AuthHandler) OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	JSON(w, http.StatusOK, result)
+}
+
+type oidcLogoutURLRequest struct {
+	IDToken               string `json:"id_token" validate:"required"`
+	PostLogoutRedirectURI string `json:"post_logout_redirect_uri" validate:"required,url"`
+}
+
+type oidcLogoutURLResponse struct {
+	LogoutURL string `json:"logout_url"`
+}
+
+// OIDCLogoutURL hands back Zitadel's real end_session URL for the frontend
+// to navigate to — same reason OIDCAuthorize hands back auth_url instead of
+// redirecting itself: this is a JSON API for an SPA, not a browser-facing
+// redirect endpoint like sample-app's BFF.
+func (h *AuthHandler) OIDCLogoutURL(w http.ResponseWriter, r *http.Request) {
+	var req oidcLogoutURLRequest
+	if err := parseBody(r, &req); err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid request", Detail: err.Error()})
+		return
+	}
+	logoutURL := h.zitadel.GenerateLogoutURL(req.IDToken, req.PostLogoutRedirectURI)
+	JSON(w, http.StatusOK, oidcLogoutURLResponse{LogoutURL: logoutURL})
 }
 
 type oidcRefreshRequest struct {
@@ -634,7 +667,7 @@ func (h *AuthHandler) OIDCCompleteProfile(w http.ResponseWriter, r *http.Request
 		handleAuthError(w, err)
 		return
 	}
-	user.InternalID = zitadelIDToUUID(user.ID).String()
+	user.InternalID = h.resolveUUID(r.Context(), user.ID, user.Email).String()
 	h.upsertUserProfile(r.Context(), user)
 	h.enrichUserFromDB(r.Context(), user)
 	JSON(w, http.StatusOK, user)
@@ -805,7 +838,7 @@ func (h *AuthHandler) VerifyLoginMFA(w http.ResponseWriter, r *http.Request) {
 			handleAuthError(w, err)
 			return
 		}
-		ok, err := h.verifyAndConsumeBackupCode(r.Context(), userID, req.Code)
+		ok, err := h.verifyAndConsumeBackupCode(r.Context(), userID, loginName, req.Code)
 		if err != nil || !ok {
 			JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "invalid or already-used backup code"})
 			return
@@ -869,7 +902,7 @@ func (h *AuthHandler) GenerateRecoveryCodes(w http.ResponseWriter, r *http.Reque
 		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "invalid token"})
 		return
 	}
-	codes, err := h.generateBackupCodes(r.Context(), claims.Subject)
+	codes, err := h.generateBackupCodes(r.Context(), claims.Subject, claims.Email)
 	if err != nil {
 		JSON(w, http.StatusInternalServerError, ErrorResponse{Message: "failed to generate backup codes"})
 		return
@@ -889,7 +922,7 @@ func (h *AuthHandler) RemoveRecoveryCodes(w http.ResponseWriter, r *http.Request
 		JSON(w, http.StatusUnauthorized, ErrorResponse{Message: "invalid token"})
 		return
 	}
-	userUUID := zitadelIDToUUID(claims.Subject)
+	userUUID := h.resolveUUID(r.Context(), claims.Subject, claims.Email)
 	if h.pool != nil {
 		_, _ = h.pool.Exec(r.Context(),
 			`DELETE FROM user_backup_codes WHERE user_id = $1`, userUUID)
@@ -899,11 +932,11 @@ func (h *AuthHandler) RemoveRecoveryCodes(w http.ResponseWriter, r *http.Request
 
 // generateBackupCodes creates 10 random backup codes, hashes them, stores in DB,
 // and returns the plaintext codes (shown once only).
-func (h *AuthHandler) generateBackupCodes(ctx context.Context, zitadelUserID string) ([]string, error) {
+func (h *AuthHandler) generateBackupCodes(ctx context.Context, zitadelUserID, email string) ([]string, error) {
 	if h.pool == nil {
 		return nil, fmt.Errorf("no database connection")
 	}
-	userUUID := zitadelIDToUUID(zitadelUserID)
+	userUUID := h.resolveUUID(ctx, zitadelUserID, email)
 
 	// Ensure user row exists (backup_codes references users.id).
 	_, _ = h.pool.Exec(ctx,
@@ -942,11 +975,11 @@ func (h *AuthHandler) generateBackupCodes(ctx context.Context, zitadelUserID str
 
 // verifyAndConsumeBackupCode checks the submitted code against stored hashes
 // and deletes the matching row (one-time use). Returns true when valid.
-func (h *AuthHandler) verifyAndConsumeBackupCode(ctx context.Context, zitadelUserID, code string) (bool, error) {
+func (h *AuthHandler) verifyAndConsumeBackupCode(ctx context.Context, zitadelUserID, email, code string) (bool, error) {
 	if h.pool == nil {
 		return false, fmt.Errorf("no database connection")
 	}
-	userUUID := zitadelIDToUUID(zitadelUserID)
+	userUUID := h.resolveUUID(ctx, zitadelUserID, email)
 
 	rows, err := h.pool.Query(ctx,
 		`SELECT id, code_hash FROM user_backup_codes WHERE user_id = $1`, userUUID)

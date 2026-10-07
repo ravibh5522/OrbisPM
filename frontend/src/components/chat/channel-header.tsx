@@ -9,19 +9,29 @@ import { useChatStore } from "@/stores/chat-store";
 import type { ChatChannelMember, OrgMemberInfo } from "@/types/domain";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Archive,
+  Bookmark,
   Hash,
   Info,
   MessageCircle,
+  Pencil,
   Pin,
   Search,
   Shield,
+  Trash2,
   UserMinus,
   UserPlus,
   Users,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
+import { useChannelPermissions } from "@/hooks/use-channel-permissions";
 import { useEffect, useRef, useState } from "react";
+import { Palette } from "lucide-react";
 import { toast } from "sonner";
+import { SavedMessagesModal } from "@/components/chat/saved-messages-modal";
+import { CHAT_BACKGROUNDS } from "@/components/chat/chat-backgrounds";
 
 const EMPTY_MEMBERS: ChatChannelMember[] = [];
 
@@ -30,6 +40,20 @@ export function ChannelHeader() {
   const channels = useChatStore((s) => s.channels);
   const detailsOpen = useChatStore((s) => s.detailsOpen);
   const toggleDetails = useChatStore((s) => s.toggleDetails);
+  const chatBackground = useChatStore((s) => s.chatBackground);
+  const setChatBackground = useChatStore((s) => s.setChatBackground);
+  const [savedOpen, setSavedOpen] = useState(false);
+  const [bgOpen, setBgOpen] = useState(false);
+  const bgRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!bgOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (bgRef.current && !bgRef.current.contains(e.target as Node))
+        setBgOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [bgOpen]);
   const searchOpen = useChatStore((s) => s.searchOpen);
   const setSearchOpen = useChatStore((s) => s.setSearchOpen);
   const searchQuery = useChatStore((s) => s.searchQuery);
@@ -130,6 +154,62 @@ export function ChannelHeader() {
           </Button>
         )}
 
+        {/* Chat background theme */}
+        <div className="relative" ref={bgRef}>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="btn-square"
+            title="Chat background"
+            onClick={() => setBgOpen((o) => !o)}
+          >
+            <Palette className="w-4 h-4" />
+          </Button>
+          {bgOpen && (
+            <div className="absolute right-0 top-full mt-1 w-56 bg-base-100 border border-base-200 rounded-xl shadow-lg p-2 z-30">
+              <div className="px-1 pb-1.5 text-[10px] uppercase tracking-wide text-base-content/40">
+                Chat background
+              </div>
+              <div className="grid grid-cols-3 gap-1.5">
+                {CHAT_BACKGROUNDS.map((b) => (
+                  <button
+                    key={b.id}
+                    className={cn(
+                      "h-12 rounded-lg border-2 bg-base-200 flex items-end justify-center pb-0.5 text-[9px] text-base-content/60 transition-colors",
+                      chatBackground === b.id
+                        ? "border-primary"
+                        : "border-base-200 hover:border-base-content/30",
+                    )}
+                    style={
+                      b.image
+                        ? { backgroundImage: b.image, backgroundSize: b.size }
+                        : undefined
+                    }
+                    title={b.label}
+                    onClick={() => {
+                      setChatBackground(b.id);
+                      setBgOpen(false);
+                    }}
+                  >
+                    {b.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Saved messages */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="btn-square"
+          title="Saved messages"
+          onClick={() => setSavedOpen(true)}
+        >
+          <Bookmark className="w-4 h-4" />
+        </Button>
+
         {/* Members / Info */}
         {isChannel && (
           <Button
@@ -153,6 +233,8 @@ export function ChannelHeader() {
           <Info className="w-4 h-4" />
         </Button>
       </div>
+
+      <SavedMessagesModal open={savedOpen} onClose={() => setSavedOpen(false)} />
     </div>
   );
 }
@@ -163,13 +245,117 @@ export function ChannelDetails() {
   const detailsOpen = useChatStore((s) => s.detailsOpen);
   const setDetailsOpen = useChatStore((s) => s.setDetailsOpen);
   const setChannelMembers = useChatStore((s) => s.setChannelMembers);
+  const updateChannelInStore = useChatStore((s) => s.updateChannel);
+  const removeChannelFromStore = useChatStore((s) => s.removeChannel);
+  const setActiveChannel = useChatStore((s) => s.setActiveChannel);
   const channelMembers = useChatStore(
     (s) => s.channelMembers.get(activeChannelId || "") ?? EMPTY_MEMBERS,
   );
   const [showAddMember, setShowAddMember] = useState(false);
+  const [renaming, setRenaming] = useState(false);
+  const [nameValue, setNameValue] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const channel = channels.find((c) => c.id === activeChannelId);
   const qc = useQueryClient();
+  const { can } = useChannelPermissions(activeChannelId || undefined);
+
+  const refreshChannelViews = () =>
+    qc.invalidateQueries({ queryKey: ["chat-sidebar"] });
+
+  const toggleMute = async () => {
+    if (!channel) return;
+    const nextMuted = !channel.is_muted;
+    setBusy(true);
+    try {
+      await api.chat.channels.updateSettings(channel.id, { is_muted: nextMuted });
+      updateChannelInStore({ ...channel, is_muted: nextMuted });
+      toast.success(nextMuted ? "Channel muted" : "Channel unmuted");
+    } catch {
+      toast.error("Couldn't update channel. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const togglePinChannel = async () => {
+    if (!channel) return;
+    const nextPinned = !channel.is_pinned;
+    setBusy(true);
+    try {
+      await api.chat.channels.updateSettings(channel.id, {
+        is_pinned: nextPinned,
+      });
+      updateChannelInStore({ ...channel, is_pinned: nextPinned });
+      refreshChannelViews();
+      toast.success(nextPinned ? "Pinned to top" : "Unpinned");
+    } catch {
+      toast.error("Couldn't update channel. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!channel || !nameValue.trim() || nameValue.trim() === channel.name) {
+      setRenaming(false);
+      return;
+    }
+    setBusy(true);
+    try {
+      const updated = await api.chat.channels.update(channel.id, {
+        name: nameValue.trim(),
+      });
+      updateChannelInStore(updated);
+      refreshChannelViews();
+      setRenaming(false);
+      toast.success("Channel renamed");
+    } catch {
+      toast.error("Couldn't rename the channel. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!channel) return;
+    setBusy(true);
+    try {
+      await api.chat.channels.archive(channel.id);
+      removeChannelFromStore(channel.id);
+      setActiveChannel(null);
+      setDetailsOpen(false);
+      refreshChannelViews();
+      toast.success("Channel archived");
+    } catch {
+      toast.error("Couldn't archive the channel. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!channel) return;
+    if (
+      !window.confirm(
+        `Delete "${channel.name}"? This removes the channel and its messages for everyone.`,
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      await api.chat.channels.delete(channel.id);
+      removeChannelFromStore(channel.id);
+      setActiveChannel(null);
+      setDetailsOpen(false);
+      refreshChannelViews();
+      toast.success("Channel deleted");
+    } catch {
+      toast.error("Couldn't delete the channel. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const { isLoading } = useQuery({
     queryKey: ["chat-channel-members", activeChannelId],
@@ -247,6 +433,86 @@ export function ChannelDetails() {
             )}
           </div>
         </div>
+
+        {/* Channel settings & management */}
+        {isChannel && (
+          <div className="px-3 py-2 border-b border-base-200 flex flex-col gap-0.5">
+            {renaming && (
+              <div className="flex items-center gap-1.5 mb-1 px-1">
+                <Input
+                  value={nameValue}
+                  onChange={(e) => setNameValue(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleRename()}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button size="xs" onClick={handleRename} loading={busy}>
+                  {!busy && "Save"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setRenaming(false)}
+                >
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+            <button
+              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm hover:bg-base-200 transition-colors disabled:opacity-50"
+              onClick={toggleMute}
+              disabled={busy}
+            >
+              {channel.is_muted ? (
+                <VolumeX className="w-4 h-4" />
+              ) : (
+                <Volume2 className="w-4 h-4" />
+              )}
+              {channel.is_muted ? "Unmute channel" : "Mute channel"}
+            </button>
+            <button
+              className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm hover:bg-base-200 transition-colors disabled:opacity-50"
+              onClick={togglePinChannel}
+              disabled={busy}
+            >
+              <Pin className="w-4 h-4" />
+              {channel.is_pinned ? "Unpin from top" : "Pin to top"}
+            </button>
+            {can("channel", "update") && !renaming && (
+              <button
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm hover:bg-base-200 transition-colors disabled:opacity-50"
+                onClick={() => {
+                  setNameValue(channel.name);
+                  setRenaming(true);
+                }}
+                disabled={busy}
+              >
+                <Pencil className="w-4 h-4" />
+                Rename channel
+              </button>
+            )}
+            {can("channel", "archive") && (
+              <button
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm hover:bg-base-200 transition-colors disabled:opacity-50"
+                onClick={handleArchive}
+                disabled={busy}
+              >
+                <Archive className="w-4 h-4" />
+                Archive channel
+              </button>
+            )}
+            {can("channel", "delete") && (
+              <button
+                className="flex items-center gap-2 w-full px-2 py-1.5 rounded-lg text-sm text-error hover:bg-error/10 transition-colors disabled:opacity-50"
+                onClick={handleDelete}
+                disabled={busy}
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete channel
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Pinned Messages */}
         {pins && pins.length > 0 && (

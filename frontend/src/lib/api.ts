@@ -287,6 +287,7 @@ import type {
   Permission,
   ProcessExcelResult,
   Project,
+  ProjectAffineDoc,
   ProjectAnalytics,
   ProjectCanvas,
   ProjectDashboardStats,
@@ -378,10 +379,13 @@ export const api = {
 
     // OIDC PKCE flow (public — called pre-auth)
     // Pass idpId to add the IDP hint scope and skip Zitadel's own login page.
+    // Pass prompt="create" from the /signup page so the centralized login UI
+    // lands on /register instead of /login.
     oidcAuthorize(
       redirectUri: string,
       state: string,
       idpId?: string,
+      prompt?: string,
     ): Promise<OIDCAuthorizeResponse> {
       return request(
         `${V1}/auth/oidc/authorize`,
@@ -391,6 +395,20 @@ export const api = {
             redirect_uri: redirectUri,
             state,
             ...(idpId ? { idp_id: idpId } : {}),
+            ...(prompt ? { prompt } : {}),
+          }),
+        },
+        true,
+      );
+    },
+    oidcLogoutUrl(idToken: string, postLogoutRedirectUri: string): Promise<{ logout_url: string }> {
+      return request(
+        `${V1}/auth/oidc/logout-url`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            id_token: idToken,
+            post_logout_redirect_uri: postLogoutRedirectUri,
           }),
         },
         true,
@@ -1046,6 +1064,12 @@ export const api = {
       del(`${V1}/orgs/${orgId}/projects/${projId}/canvases/${canvasId}`),
   },
 
+  // AFFiNE doc (unified document+canvas) — provisioned lazily on first fetch.
+  affineDoc: {
+    get: (orgId: string, projId: string) =>
+      get<ProjectAffineDoc>(`${V1}/orgs/${orgId}/projects/${projId}/affine-doc`),
+  },
+
   // Notifications (user-scoped, no org prefix)
   notifications: {
     list: (_orgId: string, params?: string) =>
@@ -1441,7 +1465,7 @@ export const api = {
     heartbeat: (
       orgId: string,
       params: {
-        resource_type: "task" | "project";
+        resource_type: "task" | "project" | "canvas";
         resource_id: string;
         display_name?: string;
         avatar_url?: string;
@@ -1450,7 +1474,7 @@ export const api = {
 
     get: (
       orgId: string,
-      resourceType: "task" | "project",
+      resourceType: "task" | "project" | "canvas",
       resourceId: string,
     ) =>
       get<
@@ -1884,6 +1908,10 @@ export const api = {
           `${V1}/chat/users?q=${encodeURIComponent(query)}&limit=${limit}`,
         ),
     },
+    unfurl: (url: string) =>
+      get<import("@/types/domain").ChatLinkPreview>(
+        `${V1}/chat/unfurl?url=${encodeURIComponent(url)}`,
+      ),
     // Presence
     presence: {
       get: () =>

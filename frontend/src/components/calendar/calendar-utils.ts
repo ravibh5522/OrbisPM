@@ -65,6 +65,9 @@ export function getMonthGridWithStrips(
     });
   }
 
+  // Built once — this map is the same for every week row.
+  const tasksByDate = buildTaskDateMap(tasks);
+
   const rows: MonthWeekRow[] = [];
   for (let r = 0; r < 6; r++) {
     const days = allDays.slice(r * 7, r * 7 + 7);
@@ -73,7 +76,6 @@ export function getMonthGridWithStrips(
     const strips = layoutStrips(tasks, rowStart, rowEnd);
 
     // Also populate day.tasks for point-in-time tasks
-    const tasksByDate = buildTaskDateMap(tasks);
     for (const day of days) {
       day.tasks = tasksByDate.get(toDateKey(day.date)) || [];
     }
@@ -192,14 +194,69 @@ export function getMonthGrid(
   return rows.flatMap((r) => r.days);
 }
 
-/* ── Week / Day grids ── */
-export function getWeekGrid(date: Date, tasks: Task[]): CalendarDay[] {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+/** Monday of the week containing `date`. */
+function getWeekStart(date: Date): Date {
   const day = date.getDay();
   const diff = day === 0 ? 6 : day - 1;
   const monday = new Date(date);
   monday.setDate(date.getDate() - diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+/**
+ * A week is a single 7-day row, so it uses the same strip layout as a month row:
+ * each task yields exactly ONE spanning bar. (The old week view placed a task on
+ * every day it covered, so a task spanning the week was drawn seven times.)
+ */
+export function getWeekStrips(date: Date, tasks: Task[]): TaskStrip[] {
+  const monday = getWeekStart(date);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  return layoutStrips(tasks, monday, sunday);
+}
+
+export type DayMarkerKind = "starts" | "due" | "milestone";
+
+export interface DayMarker {
+  task: Task;
+  kind: DayMarkerKind;
+}
+
+/**
+ * Tasks that actually begin on, or fall due on, this exact day — the only
+ * day-specific signal worth a column. A task merely *passing through* the day is
+ * already represented by its spanning bar.
+ */
+export function getDayMarkers(date: Date, tasks: Task[]): DayMarker[] {
+  const key = toDateKey(date);
+  const markers: DayMarker[] = [];
+
+  for (const task of tasks) {
+    // A due-only task is a deadline, not a range — it gets one milestone marker.
+    const deadlineOnly = !task.start_date && !!task.due_date;
+
+    if (!deadlineOnly && task.start_date) {
+      if (toDateKey(new Date(task.start_date)) === key) {
+        markers.push({ task, kind: "starts" });
+      }
+    }
+    if (task.due_date && toDateKey(new Date(task.due_date)) === key) {
+      markers.push({ task, kind: deadlineOnly ? "milestone" : "due" });
+    }
+  }
+
+  return markers;
+}
+
+/* ── Week / Day grids ── */
+export function getWeekGrid(date: Date, tasks: Task[]): CalendarDay[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  // getWeekStart normalises to midnight. Without that the generated days inherit
+  // viewDate's time-of-day and never compare equal to midnight-today, so isToday
+  // was always false and the week/day views never highlighted today.
+  const monday = getWeekStart(date);
   const tasksByDate = buildTaskDateMap(tasks);
   const days: CalendarDay[] = [];
   for (let i = 0; i < 7; i++) {
@@ -218,14 +275,15 @@ export function getWeekGrid(date: Date, tasks: Task[]): CalendarDay[] {
 export function getDayGrid(date: Date, tasks: Task[]): CalendarDay[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+  const day = new Date(date);
+  day.setHours(0, 0, 0, 0);
   const tasksByDate = buildTaskDateMap(tasks);
-  const dateKey = toDateKey(date);
   return [
     {
-      date: new Date(date),
+      date: day,
       isCurrentMonth: true,
-      isToday: date.getTime() === today.getTime(),
-      tasks: tasksByDate.get(dateKey) || [],
+      isToday: day.getTime() === today.getTime(),
+      tasks: tasksByDate.get(toDateKey(day)) || [],
     },
   ];
 }
@@ -370,20 +428,63 @@ export interface TimelineStrip {
   clippedEnd: boolean;
 }
 
-export const TIMELINE_COLORS = [
-  "bg-primary text-primary-content",
-  "bg-secondary text-secondary-content",
-  "bg-accent text-accent-content",
-  "bg-info text-info-content",
-  "bg-success text-success-content",
-  "bg-warning text-warning-content",
-  "bg-error text-error-content",
-  "bg-[#6366f1] text-white",
-  "bg-[#8b5cf6] text-white",
-  "bg-[#ec4899] text-white",
-  "bg-[#14b8a6] text-white",
-  "bg-[#f97316] text-white",
-];
+/**
+ * A group of tasks (one project, or one team) for the swimlane week/day views.
+ * colorIndex is assigned by first appearance, exactly like the month timelines,
+ * so a project keeps the same colour across month / week / day.
+ */
+export interface TaskGroup {
+  key: string;
+  label: string;
+  colorIndex: number;
+  tasks: Task[];
+}
+
+function toGroups(nameTaskMap: Map<string, Task[]>, prefix: string): TaskGroup[] {
+  let colorIndex = 0;
+  return Array.from(nameTaskMap, ([label, tasks]) => ({
+    key: `${prefix}-${label}`,
+    label,
+    colorIndex: colorIndex++,
+    tasks,
+  }));
+}
+
+/** Group tasks by project name (merging duplicate names, as the timelines do). */
+export function groupTasksByProject(
+  tasks: Task[],
+  projectNames: Map<string, string>,
+): TaskGroup[] {
+  const byName = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const name =
+      projectNames.get(t.project_id) || `Project ${t.project_id.slice(0, 8)}`;
+    const arr = byName.get(name);
+    if (arr) arr.push(t);
+    else byName.set(name, [t]);
+  }
+  return toGroups(byName, "project");
+}
+
+/** Group tasks by the team owning their project. */
+export function groupTasksByTeam(
+  tasks: Task[],
+  projectTeamMap: Map<string, string>,
+  teamNames: Map<string, string>,
+): TaskGroup[] {
+  const byName = new Map<string, Task[]>();
+  for (const t of tasks) {
+    const teamId = projectTeamMap.get(t.project_id) || "unassigned";
+    const name =
+      teamId === "unassigned"
+        ? "No Team"
+        : teamNames.get(teamId) || `Team ${teamId.slice(0, 8)}`;
+    const arr = byName.get(name);
+    if (arr) arr.push(t);
+    else byName.set(name, [t]);
+  }
+  return toGroups(byName, "team");
+}
 
 /** Aggregate tasks into project timeline entries (merges duplicate project names) */
 export function aggregateProjectTimelines(

@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { api } from "@/lib/api";
 import { Card, LoadingPage } from "@/components/ui/shared";
 import { Button } from "@/components/ui/button";
+import { PermissionGate } from "@/components/permission-gate";
 import { CreditCard, Check } from "lucide-react";
 import type { BillingPlan } from "@/types/domain";
 
@@ -53,14 +54,16 @@ export default function BillingTab() {
               <h3 className="font-semibold">Current Subscription</h3>
               <p className="text-sm text-base-content/60">Status: {subscription.status}</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => cancelMutation.mutate()}
-              loading={cancelMutation.isPending}
-            >
-              Manage Subscription
-            </Button>
+            <PermissionGate resource="billing" action="manage">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => cancelMutation.mutate()}
+                loading={cancelMutation.isPending}
+              >
+                Manage Subscription
+              </Button>
+            </PermissionGate>
           </div>
         </Card>
       )}
@@ -86,15 +89,17 @@ export default function BillingTab() {
               {currentPlanId === plan.id ? (
                 <span className="badge badge-primary">Current Plan</span>
               ) : (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => subscribeMutation.mutate(plan)}
-                  disabled={!plan.stripe_price_id}
-                  loading={subscribeMutation.isPending}
-                >
-                  {plan.stripe_price_id ? "Select Plan" : "Contact Us"}
-                </Button>
+                <PermissionGate resource="billing" action="manage">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => subscribeMutation.mutate(plan)}
+                    disabled={!plan.stripe_price_id}
+                    loading={subscribeMutation.isPending}
+                  >
+                    {plan.stripe_price_id ? "Select Plan" : "Contact Us"}
+                  </Button>
+                </PermissionGate>
               )}
             </div>
           </Card>

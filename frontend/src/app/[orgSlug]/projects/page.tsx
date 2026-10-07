@@ -539,9 +539,11 @@ export default function ProjectsPage() {
                 Clear filters
               </Button>
             ) : (
-              <Button onClick={() => setShowCreate(true)}>
-                <Plus className="w-4 h-4" /> Create Project
-              </Button>
+              <PermissionGate resource="projects" action="create">
+                <Button onClick={() => setShowCreate(true)}>
+                  <Plus className="w-4 h-4" /> Create Project
+                </Button>
+              </PermissionGate>
             )
           }
         />

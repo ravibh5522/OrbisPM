@@ -79,7 +79,20 @@ func (c *Consumer) Start(ctx context.Context) error {
 			continue
 		}
 
-		c.handler(event)
+		// Isolate handler panics: a single malformed event must never crash the
+		// consumer goroutine (which would take down the whole service).
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					log.Error().
+						Interface("panic", r).
+						Str("type", event.Type).
+						Str("org_id", event.OrgID).
+						Msg("recovered from panic in NATS event handler")
+				}
+			}()
+			c.handler(event)
+		}()
 
 		log.Debug().
 			Str("type", event.Type).

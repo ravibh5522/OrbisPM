@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/form-fields";
 import { Card, PageHeader } from "@/components/ui/shared";
 import { VirtualScrollList } from "@/components/ui/virtual-scroll-list";
 import { useOrgPolicies } from "@/hooks/use-policies";
-import { api } from "@/lib/api";
+import { api, ApiError } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import type { ProjectHealthSummary, TeamAnalytics } from "@/types/domain";
@@ -62,11 +62,18 @@ export default function TeamsPerformancePage() {
     return teamList.filter((t) => t.name.toLowerCase().includes(q));
   }, [teamList, searchQuery]);
 
-  const { data: analytics, isLoading } = useQuery<TeamAnalytics>({
+  const {
+    data: analytics,
+    isLoading,
+    error: analyticsError,
+  } = useQuery<TeamAnalytics>({
     queryKey: ["analytics-team", currentOrg?.id, activeTeamId],
     queryFn: () => api.analytics.team(currentOrg!.id, activeTeamId!),
     enabled: !!currentOrg && !!activeTeamId,
+    retry: false,
   });
+  const analyticsForbidden =
+    analyticsError instanceof ApiError && analyticsError.status === 403;
 
   return (
     <div>
@@ -86,16 +93,18 @@ export default function TeamsPerformancePage() {
       {/* Team selector */}
       {teamList.length > 0 && (
         <div className="mb-6">
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
-            <Input
-              type="text"
-              placeholder="Search teams..."
-              className="input-sm w-full max-w-xs pl-9"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-            <span className="ml-3 text-xs text-base-content/50">
+          <div className="flex flex-col gap-2 mb-2">
+            <div className="relative max-w-xs">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-base-content/40" />
+              <Input
+                type="text"
+                placeholder="Search teams..."
+                className="input-sm w-full pl-9"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+            <span className="text-xs text-base-content/50">
               {teamList.length} teams
               {activeTeam && (
                 <>
@@ -130,13 +139,25 @@ export default function TeamsPerformancePage() {
         <p className="text-sm text-base-content/50 py-12 text-center">
           No teams found
         </p>
-      ) : isLoading || !analytics ? (
+      ) : isLoading ? (
         <div className="animate-pulse space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="h-64 bg-base-200 rounded-xl" />
             ))}
           </div>
+        </div>
+      ) : analyticsForbidden ? (
+        <div className="text-center py-12 space-y-1">
+          <p>You don&apos;t have access to this team&apos;s analytics.</p>
+          <p className="text-sm text-base-content/60">
+            Ask a team lead to add you as a member to view detailed
+            performance data.
+          </p>
+        </div>
+      ) : !analytics ? (
+        <div className="text-center py-12 text-base-content/60">
+          No analytics available for this team yet.
         </div>
       ) : (
         <>

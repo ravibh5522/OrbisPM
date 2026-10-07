@@ -9,6 +9,8 @@ interface ChatState {
   // Channels
   channels: ChatChannel[];
   activeChannelId: string | null;
+  chatBackground: string;
+  setChatBackground: (id: string) => void;
   channelMembers: Map<string, ChatChannelMember[]>;
 
   // Messages
@@ -87,6 +89,7 @@ interface ChatState {
 const initialState = {
   channels: [],
   activeChannelId: null,
+  chatBackground: "default",
   channelMembers: new Map<string, ChatChannelMember[]>(),
   messages: new Map<string, ChatMessage[]>(),
   hasMore: new Map<string, boolean>(),
@@ -134,6 +137,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ activeChannelId: channelId });
   },
 
+  setChatBackground: (id) => {
+    try {
+      if (typeof window !== "undefined" && window.localStorage) {
+        window.localStorage.setItem("chat:background", id);
+      }
+    } catch {}
+    set({ chatBackground: id });
+  },
+
   initFromStorage: () => {
     try {
       const id =
@@ -141,6 +153,11 @@ export const useChatStore = create<ChatState>((set, get) => ({
           ? window.localStorage.getItem("chat:activeChannelId")
           : null;
       if (id) set({ activeChannelId: id });
+      const bg =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem("chat:background")
+          : null;
+      if (bg) set({ chatBackground: bg });
     } catch {}
   },
 

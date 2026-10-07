@@ -15,6 +15,7 @@ import (
 
 	jwtgo "github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
@@ -134,7 +135,9 @@ type sessionCacheEntry struct {
 }
 
 // Auth middleware validates Zitadel-issued JWTs or session tokens and sets user context.
-func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, rdb *redis.Client, jwksTTL time.Duration) func(http.Handler) http.Handler {
+// pool resolves the Zitadel identity to OrbisPM's stable internal user ID —
+// see resolveUserID for why this can no longer be a pure derivation.
+func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, rdb *redis.Client, pool *pgxpool.Pool, jwksTTL time.Duration) func(http.Handler) http.Handler {
 	cache := NewJWKSCache(jwksURL, &http.Client{Timeout: 10 * time.Second}, hostHeader, jwksTTL)
 	sessionClient := &http.Client{Timeout: 10 * time.Second}
 
@@ -178,11 +181,13 @@ func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, 
 				}
 
 				sub, _ := claims["sub"].(string)
-				userID, err := uuid.Parse(sub)
-				if err != nil {
-					userID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(sub))
-				}
 				email, _ := claims["email"].(string)
+				userID, err := resolveUserID(r.Context(), pool, sub, email)
+				if err != nil {
+					log.Error().Err(err).Msg("resolve user id failed")
+					http.Error(w, `{"message":"could not resolve user"}`, http.StatusInternalServerError)
+					return
+				}
 
 				ctx := tenant.SetUserID(r.Context(), userID)
 				ctx = tenant.SetEmail(ctx, email)
@@ -209,11 +214,23 @@ func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, 
 				}
 			}
 
-			userID, email, displayName, err := validateSessionToken(r.Context(), sessionClient, zitadelInternalURL, hostHeader, serviceToken, tokenStr)
-			if err != nil {
-				log.Debug().Err(jwtErr).Str("session_err", err.Error()).Msg("token validation failed")
-				http.Error(w, `{"message":"invalid token"}`, http.StatusUnauthorized)
-				return
+			// This app's OIDC client issues opaque (non-JWT) access tokens by
+			// default, so the JWT attempt above misses essentially every real
+			// token from the normal login flow — validate those the OIDC-
+			// standard way, via the userinfo endpoint, which needs no client
+			// credentials, just the token itself. Mirrors the main backend's
+			// ValidateToken (backend/internal/auth/zitadel.go) — this
+			// service's auth is a deliberate duplicate of that logic and had
+			// fallen out of sync missing this exact fallback.
+			userID, email, displayName, opaqueErr := validateOpaqueAccessToken(r.Context(), sessionClient, pool, zitadelInternalURL, hostHeader, tokenStr)
+			if opaqueErr != nil {
+				var sessionErr error
+				userID, email, displayName, sessionErr = validateSessionToken(r.Context(), sessionClient, pool, zitadelInternalURL, hostHeader, serviceToken, tokenStr)
+				if sessionErr != nil {
+					log.Debug().Err(jwtErr).Str("opaque_err", opaqueErr.Error()).Str("session_err", sessionErr.Error()).Msg("token validation failed")
+					http.Error(w, `{"message":"invalid token"}`, http.StatusUnauthorized)
+					return
+				}
 			}
 
 			// Cache the validated session in Redis for 30s
@@ -233,8 +250,54 @@ func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, 
 	}
 }
 
+// validateOpaqueAccessToken validates a real Zitadel-issued opaque/encrypted
+// OIDC access token via the userinfo endpoint (RFC 6749/OIDC standard way to
+// check a non-JWT bearer token — needs no client credentials, just the
+// token). This is the actual token type the app's OIDC client issues by
+// default, so this is the fallback that matters most in practice, not an
+// edge case.
+func validateOpaqueAccessToken(ctx context.Context, client *http.Client, pool *pgxpool.Pool, zitadelURL, hostHeader, tokenStr string) (uuid.UUID, string, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, zitadelURL+"/oidc/v1/userinfo", nil)
+	if err != nil {
+		return uuid.Nil, "", "", fmt.Errorf("build userinfo request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+tokenStr)
+	if hostHeader != "" {
+		req.Host = hostHeader
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return uuid.Nil, "", "", fmt.Errorf("fetch userinfo: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return uuid.Nil, "", "", fmt.Errorf("userinfo returned status %d", resp.StatusCode)
+	}
+
+	var info struct {
+		Sub   string `json:"sub"`
+		Email string `json:"email"`
+		Name  string `json:"name"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return uuid.Nil, "", "", fmt.Errorf("decode userinfo response: %w", err)
+	}
+	if info.Sub == "" {
+		return uuid.Nil, "", "", fmt.Errorf("userinfo response missing sub")
+	}
+
+	userID, err := resolveUserID(ctx, pool, info.Sub, info.Email)
+	if err != nil {
+		return uuid.Nil, "", "", fmt.Errorf("resolve user id: %w", err)
+	}
+
+	return userID, info.Email, info.Name, nil
+}
+
 // validateSessionToken validates a base64-encoded session token by calling Zitadel's session API.
-func validateSessionToken(ctx context.Context, client *http.Client, zitadelURL, hostHeader, serviceToken, tokenStr string) (uuid.UUID, string, string, error) {
+func validateSessionToken(ctx context.Context, client *http.Client, pool *pgxpool.Pool, zitadelURL, hostHeader, serviceToken, tokenStr string) (uuid.UUID, string, string, error) {
 	decoded, err := base64.RawURLEncoding.DecodeString(tokenStr)
 	if err != nil {
 		return uuid.Nil, "", "", fmt.Errorf("decode session token: %w", err)
@@ -288,12 +351,12 @@ func validateSessionToken(ctx context.Context, client *http.Client, zitadelURL, 
 		return uuid.Nil, "", "", fmt.Errorf("no user in session")
 	}
 
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		userID = uuid.NewSHA1(uuid.NameSpaceURL, []byte(userIDStr))
-	}
 	email := result.Session.Factors.User.LoginName
 	displayName := result.Session.Factors.User.DisplayName
+	userID, err := resolveUserID(ctx, pool, userIDStr, email)
+	if err != nil {
+		return uuid.Nil, "", "", fmt.Errorf("resolve user id: %w", err)
+	}
 
 	return userID, email, displayName, nil
 }
