@@ -30,6 +30,15 @@ type Config struct {
 	ZitadelGRPCDisabled bool   // force REST-only mode (set true when gRPC is blocked, e.g. behind Cloudflare)
 	ZitadelGitHubIDPID  string // Zitadel IDP config ID for GitHub OAuth (used by startup action)
 
+	// AFFiNE — self-hosted doc+canvas app embedded in the project Canvas tab.
+	// No standing API-key mechanism: AffineClient logs in with these
+	// credentials (see backend/internal/affine/client.go) and caches the
+	// resulting session cookie, re-authenticating when it expires.
+	AffineInternalURL   string // e.g. "http://affine:3010"
+	AffinePublicURL     string // browser-accessible base URL, for iframe src
+	AffineAdminEmail    string
+	AffineAdminPassword string
+
 	// MinIO / S3
 	MinIOEndpoint  string
 	MinIOAccessKey string
@@ -87,6 +96,10 @@ func Load() (*Config, error) {
 		ZitadelClientID:     getEnv("ZITADEL_CLIENT_ID", ""),
 		ZitadelGRPCDisabled: getEnvBool("ZITADEL_GRPC_DISABLED", false),
 		ZitadelGitHubIDPID:  getEnv("ZITADEL_GITHUB_IDP_ID", "371633241645384194"),
+		AffineInternalURL:   getEnv("AFFINE_INTERNAL_URL", "http://affine:3010"),
+		AffinePublicURL:     getEnv("AFFINE_PUBLIC_URL", "http://localhost:3010"),
+		AffineAdminEmail:    getEnv("AFFINE_ADMIN_EMAIL", ""),
+		AffineAdminPassword: getEnv("AFFINE_ADMIN_PASSWORD", ""),
 		MinIOEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),

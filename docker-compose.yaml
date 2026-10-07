@@ -81,6 +81,46 @@ services:
       timeout: 5s
       retries: 5
 
+  # AFFiNE's own dedicated Postgres — not the shared orbispmdev instance.
+  # AFFiNE hard-requires the pgvector extension (vector(1024) columns) that
+  # the shared postgres:16-alpine image doesn't have; isolating it here is
+  # a smaller blast radius than upgrading the image everything else depends on.
+  affine-postgres:
+    profiles: [local]
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${AFFINE_DB_USERNAME:-affine}
+      POSTGRES_PASSWORD: ${AFFINE_DB_PASSWORD:?AFFINE_DB_PASSWORD required}
+      POSTGRES_DB: ${AFFINE_DB_DATABASE:-affine}
+      POSTGRES_INITDB_ARGS: "--data-checksums"
+    volumes:
+      - affinedata:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${AFFINE_DB_USERNAME:-affine} -d ${AFFINE_DB_DATABASE:-affine}",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # AFFiNE's own Redis — a dedicated container, not the shared one. Unlike
+  # our own Go services, AFFiNE's config surface only exposes
+  # REDIS_SERVER_HOST (no DB-index selection), so pointing it at the shared
+  # redis would risk its cache keys colliding with api/messaging-service's
+  # existing /0 usage. One more small container is cheaper than that risk.
+  affine-redis:
+    profiles: [local]
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   # Decommissioned 2026-07-21 (research/orbispm-integration-plan.md in Research_g): OrbisPM now
   # points at Research_g's centralized Zitadel instead (see ZITADEL_* vars in .env.local). Kept
   # here, not deleted, in case of rollback — profile renamed so `--profile local up` never starts
@@ -301,6 +341,10 @@ services:
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL required}
       MEILI_URL: "http://meilisearch:7700"
       MEILI_MASTER_KEY: ${MEILI_MASTER_KEY:-masterkey-for-dev-only}
+      AFFINE_INTERNAL_URL: ${AFFINE_INTERNAL_URL:-http://affine:3010}
+      AFFINE_PUBLIC_URL: ${AFFINE_PUBLIC_URL:-http://localhost:3010}
+      AFFINE_ADMIN_EMAIL: ${AFFINE_ADMIN_EMAIL:-}
+      AFFINE_ADMIN_PASSWORD: ${AFFINE_ADMIN_PASSWORD:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       BASE_URL: ${BASE_URL:-http://localhost:8000}
@@ -473,6 +517,67 @@ services:
       - default
       - crewsity_appnet
 
+  # AFFiNE — self-hosted doc+canvas app, embedded in the project Canvas tab.
+  # See research/reactive-crunching-noodle plan: full app (not just the
+  # BlockSuite editor library), integrated at the edges — SSO via the same
+  # Zitadel instance, own Postgres/Redis, routed through Kong.
+  affine-migrate:
+    profiles: [local]
+    image: ghcr.io/toeverything/affine:${AFFINE_REVISION:-stable}
+    command: ["sh", "-c", "node ./scripts/self-host-predeploy.js"]
+    environment:
+      REDIS_SERVER_HOST: affine-redis
+      DATABASE_URL: postgresql://${AFFINE_DB_USERNAME:-affine}:${AFFINE_DB_PASSWORD}@affine-postgres:5432/${AFFINE_DB_DATABASE:-affine}
+      AFFINE_INDEXER_ENABLED: "false"
+    volumes:
+      - affineuploads:/root/.affine/storage
+      - affineconfig:/root/.affine/config
+    depends_on:
+      affine-postgres:
+        condition: service_healthy
+      affine-redis:
+        condition: service_healthy
+
+  affine:
+    profiles: [local]
+    image: ghcr.io/toeverything/affine:${AFFINE_REVISION:-stable}
+    restart: unless-stopped
+    ports:
+      # Published directly, same pattern as zitadel (its own port, not
+      # routed through Kong) — simpler than making AFFiNE aware of a Kong
+      # sub-path prefix, and confirmed it sends no X-Frame-Options/CSP
+      # header by default, so direct iframing from the frontend just works.
+      - "3010:3010"
+    environment:
+      REDIS_SERVER_HOST: affine-redis
+      DATABASE_URL: postgresql://${AFFINE_DB_USERNAME:-affine}:${AFFINE_DB_PASSWORD}@affine-postgres:5432/${AFFINE_DB_DATABASE:-affine}
+      AFFINE_INDEXER_ENABLED: "false"
+      # External-URL / sub-path config (needed to route AFFiNE through Kong
+      # on OrbisPM's own origin) is deliberately NOT set yet — get the base
+      # deployment running and confirmed working first, then research the
+      # real config keys for that as its own step, instead of guessing here.
+    volumes:
+      - affineuploads:/root/.affine/storage
+      - affineconfig:/root/.affine/config
+    depends_on:
+      affine-postgres:
+        condition: service_healthy
+      affine-redis:
+        condition: service_healthy
+      affine-migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # No documented HTTP health endpoint — a plain TCP-reachability check
+      # is the community-standard approach for this image.
+      test: ["CMD-SHELL", "timeout 10s bash -c ':> /dev/tcp/127.0.0.1/3010' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - default
+      - crewsity_appnet
+
   frontend:
     build:
       context: ./frontend
@@ -503,3 +608,6 @@ volumes:
   miniodata:
   meilidata:
   natsdata:
+  affinedata:
+  affineuploads:
+  affineconfig:

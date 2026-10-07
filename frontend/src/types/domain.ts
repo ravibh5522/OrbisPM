@@ -383,6 +383,13 @@ export interface ProjectCanvas {
   updated_at: string;
 }
 
+// AFFiNE (unified document+canvas) doc, lazily provisioned per project.
+export interface ProjectAffineDoc {
+  workspace_id: string;
+  doc_id: string;
+  embed_url: string;
+}
+
 export interface ActivityLog {
   id: string;
   org_id: string;

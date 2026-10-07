@@ -287,6 +287,7 @@ import type {
   Permission,
   ProcessExcelResult,
   Project,
+  ProjectAffineDoc,
   ProjectAnalytics,
   ProjectCanvas,
   ProjectDashboardStats,
@@ -1061,6 +1062,12 @@ export const api = {
       ),
     delete: (orgId: string, projId: string, canvasId: string) =>
       del(`${V1}/orgs/${orgId}/projects/${projId}/canvases/${canvasId}`),
+  },
+
+  // AFFiNE doc (unified document+canvas) — provisioned lazily on first fetch.
+  affineDoc: {
+    get: (orgId: string, projId: string) =>
+      get<ProjectAffineDoc>(`${V1}/orgs/${orgId}/projects/${projId}/affine-doc`),
   },
 
   // Notifications (user-scoped, no org prefix)

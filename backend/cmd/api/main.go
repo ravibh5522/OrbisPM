@@ -87,6 +87,7 @@ import (
 
 	_ "github.com/orbispm/orbispm/docs"
 
+	"github.com/orbispm/orbispm/internal/affine"
 	"github.com/orbispm/orbispm/internal/auth"
 	"github.com/orbispm/orbispm/internal/cache"
 	"github.com/orbispm/orbispm/internal/config"
@@ -271,6 +272,7 @@ func main() {
 	notifRepo := repository.NewNotificationRepo(pool)
 	stickyNoteRepo := repository.NewStickyNoteRepo(pool)
 	projectCanvasRepo := repository.NewProjectCanvasRepo(pool)
+	affineRepo := repository.NewAffineRepo(pool)
 
 	// --- Repositories (new) ---
 	attachmentRepo := repository.NewAttachmentRepo(pool)
@@ -312,6 +314,8 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo, txm)
 	stickyNoteSvc := service.NewStickyNoteService(stickyNoteRepo, txm)
 	projectCanvasSvc := service.NewProjectCanvasService(projectCanvasRepo, txm, publisher)
+	affineClient := affine.NewClient(cfg.AffineInternalURL, cfg.AffineAdminEmail, cfg.AffineAdminPassword)
+	affineSvc := service.NewAffineService(affineRepo, affineClient, cfg.AffinePublicURL)
 
 	// --- Services (new) ---
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, storageClient, txm)
@@ -374,6 +378,7 @@ func main() {
 	activityHandler := handler.NewActivityHandler(activitySvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
 	projectCanvasHandler := handler.NewProjectCanvasHandler(projectCanvasSvc)
+	affineHandler := handler.NewAffineHandler(affineSvc)
 	stickyNoteHandler := handler.NewStickyNoteHandler(stickyNoteSvc)
 	healthHandler := handler.NewHealthHandler(pool, rdb)
 
@@ -695,6 +700,9 @@ func main() {
 									r.With(prm("project", "projectId", "project", "update")).Delete("/", projectCanvasHandler.Delete)
 								})
 							})
+
+							// AFFiNE doc (unified document+canvas, provisioned lazily)
+							r.With(prm("project", "projectId", "project", "read")).Get("/affine-doc", affineHandler.GetProjectDoc)
 
 							// Tasks
 							r.Route("/tasks", func(r chi.Router) {
