@@ -3,6 +3,7 @@ package websocket
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -99,6 +100,10 @@ func (h *OrgHub) Start(ctx context.Context) error {
 		if err != nil {
 			return
 		}
+		if strings.HasPrefix(event.Type, "drive.") {
+			h.deliverDrive(orgID, event)
+			return
+		}
 		data, err := json.Marshal(event)
 		if err != nil {
 			return
@@ -109,6 +114,35 @@ func (h *OrgHub) Start(ctx context.Context) error {
 		}
 		h.BroadcastOrg(orgID, msg, nil)
 	})
+}
+
+// deliverDrive sends a drive event only to payload.audience, with IDs only:
+// a broadcast would leak file activity in team, project and personal spaces.
+// No audience means nobody, never the whole org.
+func (h *OrgHub) deliverDrive(orgID uuid.UUID, event domain.DomainEvent) {
+	raw, _ := event.Payload["audience"].([]any)
+	userIDs := make([]uuid.UUID, 0, len(raw))
+	for _, v := range raw {
+		s, _ := v.(string)
+		if id, err := uuid.Parse(s); err == nil {
+			userIDs = append(userIDs, id)
+		}
+	}
+	if len(userIDs) == 0 {
+		return
+	}
+	data, err := json.Marshal(map[string]any{
+		"type":      event.Type,
+		"org_id":    event.OrgID,
+		"item_id":   event.Payload["item_id"],
+		"parent_id": event.Payload["parent_id"],
+		"scope":     event.Payload["scope"],
+		"scope_id":  event.Payload["scope_id"],
+	})
+	if err != nil {
+		return
+	}
+	h.SendToUsers(orgID, userIDs, WSMessage{Action: "event:" + event.Type, Payload: data})
 }
 
 // Join adds a connection to an org room.
@@ -212,6 +246,31 @@ func (h *OrgHub) BroadcastOrg(orgID uuid.UUID, msg WSMessage, exclude *OrgConn) 
 		if conn == exclude {
 			continue
 		}
+		h.trySend(conn, data, msg.Action)
+	}
+}
+
+// SendToUsers sends a message to every org connection owned by one of userIDs.
+func (h *OrgHub) SendToUsers(orgID uuid.UUID, userIDs []uuid.UUID, msg WSMessage) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
+	want := make(map[uuid.UUID]struct{}, len(userIDs))
+	for _, id := range userIDs {
+		want[id] = struct{}{}
+	}
+
+	var targets []*OrgConn
+	h.mu.RLock()
+	for conn := range h.orgs[orgID] {
+		if _, ok := want[conn.UserID]; ok {
+			targets = append(targets, conn)
+		}
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range targets {
 		h.trySend(conn, data, msg.Action)
 	}
 }

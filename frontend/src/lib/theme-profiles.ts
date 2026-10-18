@@ -47,6 +47,34 @@ const DARK_CONTENT = "oklch(20% 0.03 260)";  // near-black
    ───────────────────────────────────────────────────────────────────────────── */
 export const ORBIS_LIGHT_PROFILES: ThemeColorProfile[] = [
   {
+    id: "orbis-light:ds-red",
+    name: "Design Red",
+    description: "Red · Slate · Purple",
+    vars: {
+      "--color-primary": "#d92d39",
+      "--color-primary-content": "#ffffff",
+      "--color-secondary": "#3e4b51",
+      "--color-secondary-content": "#ffffff",
+      "--color-accent": "#9333ea",
+      "--color-accent-content": "#ffffff",
+    },
+    preview: { primary: "#d92d39", secondary: "#3e4b51", accent: "#9333ea" },
+  },
+  {
+    id: "orbis-light:ds-blue",
+    name: "Design Blue",
+    description: "Blue · Slate · Purple",
+    vars: {
+      "--color-primary": "#4285f6",
+      "--color-primary-content": "#ffffff",
+      "--color-secondary": "#3e4b51",
+      "--color-secondary-content": "#ffffff",
+      "--color-accent": "#9333ea",
+      "--color-accent-content": "#ffffff",
+    },
+    preview: { primary: "#4285f6", secondary: "#3e4b51", accent: "#9333ea" },
+  },
+  {
     id: "orbis-light:ocean",
     name: "Ocean",
     description: "Blue · Sky · Emerald",
@@ -123,6 +151,34 @@ export const ORBIS_LIGHT_PROFILES: ThemeColorProfile[] = [
    dark surface.
    ───────────────────────────────────────────────────────────────────────────── */
 export const ORBIS_DARK_PROFILES: ThemeColorProfile[] = [
+  {
+    id: "orbis-dark:ds-red",
+    name: "Design Red",
+    description: "Red · Grey · Purple",
+    vars: {
+      "--color-primary": "#d92d39",
+      "--color-primary-content": "#ffffff",
+      "--color-secondary": "#84878c",
+      "--color-secondary-content": "#0c171d",
+      "--color-accent": "#9333ea",
+      "--color-accent-content": "#ffffff",
+    },
+    preview: { primary: "#d92d39", secondary: "#84878c", accent: "#9333ea" },
+  },
+  {
+    id: "orbis-dark:ds-blue",
+    name: "Design Blue",
+    description: "Blue · Grey · Purple",
+    vars: {
+      "--color-primary": "#4285f6",
+      "--color-primary-content": "#ffffff",
+      "--color-secondary": "#84878c",
+      "--color-secondary-content": "#0c171d",
+      "--color-accent": "#9333ea",
+      "--color-accent-content": "#ffffff",
+    },
+    preview: { primary: "#4285f6", secondary: "#84878c", accent: "#9333ea" },
+  },
   {
     id: "orbis-dark:cosmos",
     name: "Cosmos",
@@ -361,8 +417,8 @@ export const PROFILES_BY_THEME: Record<string, ThemeColorProfile[]> = {
 
 /** Default profile id per theme (the first in each list). */
 export const DEFAULT_PROFILE_ID: Record<string, string> = {
-  "orbis-light": "orbis-light:ocean",
-  "orbis-dark": "orbis-dark:cosmos",
+  "orbis-light": "orbis-light:ds-red",
+  "orbis-dark": "orbis-dark:ds-red",
   "glass-light": "glass-light:iris",
   "glass-dark": "glass-dark:nebula",
 };

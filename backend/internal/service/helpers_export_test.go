@@ -24,3 +24,22 @@ func ExportApplyParamsToTask(task *domain.Task, changes map[string]any) {
 func ExportApplyChangesToTask(task *domain.Task, changes map[string]any) {
 	applyChangesToTask(task, changes)
 }
+
+// --- Drive helpers ---
+
+var (
+	ExportValidateDriveName     = validateDriveName
+	ExportUniqueDriveName       = uniqueDriveName
+	ExportDriveNameBase         = driveNameBase
+	ExportDriveInlineType       = driveInlineType
+	ExportDriveDownloadParams   = driveDownloadParams
+	ExportValidateDriveMove     = validateDriveMove
+	ExportContentDisposition    = contentDisposition
+	ExportVisibleDriveAncestors = visibleDriveAncestors
+	ExportCapDriveAudience      = capDriveAudience
+	ExportWithinDriveCap        = withinDriveCap
+	ExportCanTrashDrive         = canTrashDrive
+	ExportCheckDriveRole        = checkDriveRole
+	ExportDriveChildAncestors   = driveChildAncestors
+	ExportMaxDriveAudience      = maxDriveAudience
+)

@@ -50,7 +50,12 @@ type ZitadelClient struct {
 	internalURL  string // docker-internal Zitadel URL (e.g. http://zitadel:8080)
 	clientID     string // OIDC application client ID
 	externalHost string // Host header value derived from issuer
-	httpClient   *http.Client
+	// issuerHost is the issuer URL's own host[:port]. Zitadel builds a token's
+	// "iss" claim from the request's Host header, so the token-endpoint calls
+	// must send exactly this (externalHost is a bare hostname and would drop
+	// the port, minting tokens whose iss no longer matches the issuer).
+	issuerHost string
+	httpClient *http.Client
 
 	// gRPC client (via zitadel-go SDK)
 	grpc *zclient.Client
@@ -84,11 +89,17 @@ func NewZitadelClient(ctx context.Context, domain, issuer, internalURL, serviceT
 		}
 	}
 
+	issuerHost := externalHost
+	if parsed, err := url.Parse(issuer); err == nil && parsed.Host != "" {
+		issuerHost = parsed.Host
+	}
+
 	c := &ZitadelClient{
 		issuer:       issuer,
 		internalURL:  internalURL,
 		clientID:     clientID,
 		externalHost: externalHost,
+		issuerHost:   issuerHost,
 		httpClient:   &http.Client{Timeout: 10 * time.Second},
 	}
 
@@ -277,7 +288,9 @@ type IDPInfo struct {
 // request to land on its /register screen instead of defaulting to /login,
 // which is how OrbisPM's own /signup page (distinct from /login) gets a new
 // visitor there directly instead of showing them a sign-in form first.
-func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID string, prompt string) (*AuthURLResponse, error) {
+// If loginHint is non-empty it's passed as OIDC login_hint so the login UI
+// knows which account the caller wants (the demo-persona buttons use this).
+func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID string, prompt string, loginHint string) (*AuthURLResponse, error) {
 	verifier, err := generateCodeVerifier()
 	if err != nil {
 		return nil, fmt.Errorf("generate code verifier: %w", err)
@@ -304,6 +317,9 @@ func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID string,
 	}
 	if prompt != "" {
 		params.Set("prompt", prompt)
+	}
+	if loginHint != "" {
+		params.Set("login_hint", loginHint)
 	}
 
 	authURL := c.issuer + "/oauth/v2/authorize?" + params.Encode()
@@ -352,8 +368,8 @@ func (c *ZitadelClient) ExchangeCode(ctx context.Context, code, redirectURI, cod
 		return nil, fmt.Errorf("create token request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if c.externalHost != "" {
-		req.Host = c.externalHost
+	if c.issuerHost != "" {
+		req.Host = c.issuerHost
 	}
 
 	resp, err := c.httpClient.Do(req)
@@ -433,8 +449,8 @@ func (c *ZitadelClient) RefreshOIDCToken(ctx context.Context, refreshToken strin
 		return nil, fmt.Errorf("create refresh request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if c.externalHost != "" {
-		req.Host = c.externalHost
+	if c.issuerHost != "" {
+		req.Host = c.issuerHost
 	}
 
 	resp, err := c.httpClient.Do(req)

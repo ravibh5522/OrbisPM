@@ -40,7 +40,10 @@ func (r *taskDependencyRepo) Remove(ctx context.Context, tx pgx.Tx, taskID, depe
 
 func (r *taskDependencyRepo) ListByTask(ctx context.Context, taskID uuid.UUID) ([]*domain.TaskDependency, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT task_id, depends_on_id, type FROM task_dependencies WHERE task_id = $1`, taskID)
+		`SELECT d.task_id, d.depends_on_id, d.type, COALESCE(t.title, '')
+		 FROM task_dependencies d
+		 LEFT JOIN tasks t ON t.id = d.depends_on_id
+		 WHERE d.task_id = $1`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +52,7 @@ func (r *taskDependencyRepo) ListByTask(ctx context.Context, taskID uuid.UUID) (
 	var deps []*domain.TaskDependency
 	for rows.Next() {
 		var d domain.TaskDependency
-		if err := rows.Scan(&d.TaskID, &d.DependsOnID, &d.Type); err != nil {
+		if err := rows.Scan(&d.TaskID, &d.DependsOnID, &d.Type, &d.DependsOnTitle); err != nil {
 			return nil, err
 		}
 		deps = append(deps, &d)

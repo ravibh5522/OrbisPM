@@ -21,6 +21,68 @@ func NewChangeRequestRepo(pool *pgxpool.Pool) TaskChangeRequestRepository {
 	return &changeRequestRepo{pool: pool}
 }
 
+// withNames fills in the proposer/reviewer names and the task title for the
+// given requests with one query per table. Best effort: these are display
+// fields, so a failed lookup leaves them empty instead of failing the call.
+func (r *changeRequestRepo) withNames(ctx context.Context, crs ...*domain.TaskChangeRequest) {
+	if len(crs) == 0 {
+		return
+	}
+	var userIDs, taskIDs []uuid.UUID
+	seenUser, seenTask := map[uuid.UUID]bool{}, map[uuid.UUID]bool{}
+	addUser := func(id uuid.UUID) {
+		if !seenUser[id] {
+			seenUser[id] = true
+			userIDs = append(userIDs, id)
+		}
+	}
+	for _, cr := range crs {
+		addUser(cr.ProposerID)
+		if cr.ReviewerID != nil {
+			addUser(*cr.ReviewerID)
+		}
+		if !seenTask[cr.TaskID] {
+			seenTask[cr.TaskID] = true
+			taskIDs = append(taskIDs, cr.TaskID)
+		}
+	}
+
+	type person struct{ name, email string }
+	people := make(map[uuid.UUID]person, len(userIDs))
+	if rows, err := r.pool.Query(ctx,
+		`SELECT id, COALESCE(display_name, ''), COALESCE(email, '') FROM users WHERE id = ANY($1)`, userIDs); err == nil {
+		for rows.Next() {
+			var id uuid.UUID
+			var p person
+			if rows.Scan(&id, &p.name, &p.email) == nil {
+				people[id] = p
+			}
+		}
+		rows.Close()
+	}
+	titles := make(map[uuid.UUID]string, len(taskIDs))
+	if rows, err := r.pool.Query(ctx, `SELECT id, title FROM tasks WHERE id = ANY($1)`, taskIDs); err == nil {
+		for rows.Next() {
+			var id uuid.UUID
+			var title string
+			if rows.Scan(&id, &title) == nil {
+				titles[id] = title
+			}
+		}
+		rows.Close()
+	}
+
+	for _, cr := range crs {
+		p := people[cr.ProposerID]
+		cr.ProposerName, cr.ProposerEmail = p.name, p.email
+		if cr.ReviewerID != nil {
+			rv := people[*cr.ReviewerID]
+			cr.ReviewerName, cr.ReviewerEmail = rv.name, rv.email
+		}
+		cr.TaskTitle = titles[cr.TaskID]
+	}
+}
+
 func (r *changeRequestRepo) Create(ctx context.Context, tx pgx.Tx, cr *domain.TaskChangeRequest) (*domain.TaskChangeRequest, error) {
 	q := conn(r.pool, tx)
 	var created domain.TaskChangeRequest
@@ -42,6 +104,7 @@ func (r *changeRequestRepo) Create(ctx context.Context, tx pgx.Tx, cr *domain.Ta
 	if reviewNote != nil {
 		created.ReviewNote = *reviewNote
 	}
+	r.withNames(ctx, &created)
 	return &created, nil
 }
 
@@ -66,6 +129,7 @@ func (r *changeRequestRepo) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	if reviewNote != nil {
 		cr.ReviewNote = *reviewNote
 	}
+	r.withNames(ctx, &cr)
 	return &cr, nil
 }
 
@@ -94,6 +158,7 @@ func (r *changeRequestRepo) Update(ctx context.Context, tx pgx.Tx, cr *domain.Ta
 	if reviewNote != nil {
 		updated.ReviewNote = *reviewNote
 	}
+	r.withNames(ctx, &updated)
 	return &updated, nil
 }
 
@@ -115,7 +180,12 @@ func (r *changeRequestRepo) ListByTask(ctx context.Context, taskID uuid.UUID, st
 		return nil, fmt.Errorf("list change requests by task: %w", err)
 	}
 	defer rows.Close()
-	return scanChangeRequests(rows)
+	crs, err := scanChangeRequests(rows)
+	if err != nil {
+		return nil, err
+	}
+	r.withNames(ctx, crs...)
+	return crs, nil
 }
 
 func (r *changeRequestRepo) ListByProject(ctx context.Context, projectID uuid.UUID, status *string, search *string, proposerID *uuid.UUID, limit, offset int) ([]*domain.TaskChangeRequest, int, error) {
@@ -168,6 +238,7 @@ func (r *changeRequestRepo) ListByProject(ctx context.Context, projectID uuid.UU
 	if err != nil {
 		return nil, 0, err
 	}
+	r.withNames(ctx, crs...)
 	return crs, total, nil
 }
 

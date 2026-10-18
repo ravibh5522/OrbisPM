@@ -38,6 +38,8 @@ type Config struct {
 	AffinePublicURL     string // browser-accessible base URL, for iframe src
 	AffineAdminEmail    string
 	AffineAdminPassword string
+	AffineBridgeURL     string // affine-bridge sidecar, e.g. "http://affine-bridge:8085"
+	AffineUserSecret    string // HMAC key deriving each user's AFFiNE password; never rotate casually
 
 	// MinIO / S3
 	MinIOEndpoint  string
@@ -46,6 +48,10 @@ type Config struct {
 	MinioBucket    string
 	MinIOUseSSL    bool
 	MinIOPublicURL string // browser-accessible base URL for uploaded objects
+
+	// Orbis Drive — private bucket, served only via presigned URLs.
+	MinIODriveBucket string
+	DriveMaxFileMB   int
 
 	// Meilisearch
 	MeiliURL       string
@@ -100,12 +106,16 @@ func Load() (*Config, error) {
 		AffinePublicURL:     getEnv("AFFINE_PUBLIC_URL", "http://localhost:3010"),
 		AffineAdminEmail:    getEnv("AFFINE_ADMIN_EMAIL", ""),
 		AffineAdminPassword: getEnv("AFFINE_ADMIN_PASSWORD", ""),
+		AffineBridgeURL:     getEnv("AFFINE_BRIDGE_URL", "http://affine-bridge:8085"),
+		AffineUserSecret:    getEnv("AFFINE_USER_SECRET", ""),
 		MinIOEndpoint:       getEnv("MINIO_ENDPOINT", "localhost:9000"),
 		MinIOAccessKey:      getEnv("MINIO_ACCESS_KEY", "minioadmin"),
 		MinIOSecretKey:      getEnv("MINIO_SECRET_KEY", "minioadmin"),
 		MinioBucket:         getEnv("MINIO_BUCKET", "orbispm"),
 		MinIOUseSSL:         getEnvBool("MINIO_USE_SSL", false),
 		MinIOPublicURL:      getEnv("MINIO_PUBLIC_URL", "http://localhost:8000/storage/orbispm"),
+		MinIODriveBucket:    getEnv("MINIO_DRIVE_BUCKET", "orbispm-drive"),
+		DriveMaxFileMB:      getEnvInt("DRIVE_MAX_FILE_MB", 100),
 		MeiliURL:            getEnv("MEILI_URL", "http://localhost:7700"),
 		MeiliMasterKey:      getEnv("MEILI_MASTER_KEY", "masterkey-for-dev-only"),
 		FrontendURL:         getEnv("FRONTEND_URL", "http://localhost:3000"),

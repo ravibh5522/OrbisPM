@@ -7,6 +7,7 @@ import { Modal } from "@/components/ui/modal";
 import { Avatar, Badge } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
 import { useProjectPolicies } from "@/hooks/use-policies";
+import { toast } from "sonner";
 import { api } from "@/lib/api"; // kept for CR attachment binary ops
 import { cn, formatRelative } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
@@ -49,9 +50,14 @@ const FIELD_LABELS: Record<string, string> = {
   recurrence_rule: "Recurrence",
 };
 
+// A person is shown by name, then email — never by ID.
+function personLabel(name?: string, email?: string): string {
+  return name || email || "Unknown user";
+}
+
 function resolveMember(id: string, members: OrgMember[]): string {
   const m = members.find((x) => x.user_id === id);
-  return m ? m.display_name || m.email || id.slice(0, 8) : id.slice(0, 8) + "…";
+  return m ? personLabel(m.display_name, m.email) : "Unknown user";
 }
 
 function formatFieldValue(
@@ -633,9 +639,22 @@ function ChangeRequestRow({
   };
 
   const proposer = members.find((m) => m.user_id === cr.proposer_id);
-  const reviewer = cr.reviewer_id
-    ? members.find((m) => m.user_id === cr.reviewer_id)
+  // Server-resolved names cover people who aren't in the members list
+  // (e.g. someone no longer on the project); the list is the fallback.
+  const proposerName = personLabel(
+    cr.proposer_name || proposer?.display_name,
+    cr.proposer_email || proposer?.email,
+  );
+  const proposerEmail = cr.proposer_email || proposer?.email;
+  const reviewerName = cr.reviewer_id
+    ? personLabel(
+        cr.reviewer_name ||
+          members.find((m) => m.user_id === cr.reviewer_id)?.display_name,
+        cr.reviewer_email ||
+          members.find((m) => m.user_id === cr.reviewer_id)?.email,
+      )
     : null;
+  const taskTitle = cr.task_title || "Untitled task";
 
   const statusBadge = {
     pending: <Badge variant="warning">Pending</Badge>,
@@ -654,16 +673,17 @@ function ChangeRequestRow({
       >
         <td className="py-2 pl-3">
           <div className="flex items-center gap-1.5 min-w-0">
-            <Avatar
-              name={proposer?.display_name || "?"}
-              src={proposer?.avatar_url}
-              size="xs"
-            />
-            <span className="text-xs font-medium truncate max-w-[90px]">
-              {proposer?.display_name ||
-                proposer?.email ||
-                cr.proposer_id.slice(0, 8)}
-            </span>
+            <Avatar name={proposerName} src={proposer?.avatar_url} size="xs" />
+            <div className="min-w-0" title={proposerEmail || undefined}>
+              <span className="block text-xs font-medium truncate max-w-[140px]">
+                {proposerName}
+              </span>
+              {proposerEmail && proposerEmail !== proposerName && (
+                <span className="block text-[10px] text-base-content/45 truncate max-w-[140px]">
+                  {proposerEmail}
+                </span>
+              )}
+            </div>
           </div>
         </td>
         <td className="py-2">
@@ -679,8 +699,10 @@ function ChangeRequestRow({
           </div>
         </td>
         {showTask && (
-          <td className="py-2 text-xs text-base-content/60">
-            {cr.task_id ? cr.task_id.slice(0, 8) : "—"}
+          <td className="py-2 text-xs text-base-content/60 max-w-[220px]">
+            <span className="block truncate" title={taskTitle}>
+              {cr.task_id ? taskTitle : "—"}
+            </span>
           </td>
         )}
         <td className="py-2 max-w-[120px]">
@@ -705,22 +727,15 @@ function ChangeRequestRow({
         <div className="space-y-5">
           {/* Header meta */}
           <div className="flex items-center gap-3">
-            <Avatar
-              name={proposer?.display_name || "?"}
-              src={proposer?.avatar_url}
-              size="sm"
-            />
+            <Avatar name={proposerName} src={proposer?.avatar_url} size="sm" />
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold">
-                {proposer?.display_name ||
-                  proposer?.email ||
-                  cr.proposer_id.slice(0, 8)}
-              </p>
+              <p className="text-sm font-semibold">{proposerName}</p>
+              {proposerEmail && proposerEmail !== proposerName && (
+                <p className="text-xs text-base-content/50">{proposerEmail}</p>
+              )}
               <p className="text-xs text-base-content/50">
                 {formatRelative(cr.created_at)}
-                {showTask && cr.task_id && (
-                  <span> · Task {cr.task_id.slice(0, 8)}</span>
-                )}
+                {showTask && cr.task_id && <span> · Task: {taskTitle}</span>}
               </p>
             </div>
             {statusBadge[cr.status]}
@@ -770,9 +785,9 @@ function ChangeRequestRow({
             <div>
               <p className="text-xs font-semibold text-base-content/50 uppercase tracking-wide mb-1">
                 Review Note
-                {reviewer && (
+                {reviewerName && (
                   <span className="normal-case font-normal ml-1">
-                    — {reviewer.display_name || reviewer.email}
+                    — {reviewerName}
                   </span>
                 )}
               </p>
@@ -986,7 +1001,10 @@ function CRDetailAttachments({ orgId, crId }: { orgId: string; crId: string }) {
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      // Revoking straight away can cancel the download before it starts.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    } catch {
+      toast.error(`Couldn't download ${att.filename} — the file may be missing. Try attaching it again.`);
     } finally {
       setLoadingId(null);
     }
@@ -1001,6 +1019,8 @@ function CRDetailAttachments({ orgId, crId }: { orgId: string; crId: string }) {
         att.id,
       );
       setLightbox({ url: blobUrl, name: att.filename, mime: att.mime_type });
+    } catch {
+      toast.error(`Couldn't preview ${att.filename} — the file may be missing. Try attaching it again.`);
     } finally {
       setLoadingId(null);
     }

@@ -1650,8 +1650,24 @@ function DependenciesSection({
 }) {
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
-  const [depId, setDepId] = useState("");
+  // Pick the task by searching its title — nobody should have to paste an ID.
+  const [query, setQuery] = useState("");
+  const [picked, setPicked] = useState<Task | null>(null);
   const [depType, setDepType] = useState("blocked_by");
+
+  const { data: matches } = useQuery({
+    queryKey: ["dependency-search", orgId, projectId, query.trim()],
+    queryFn: () =>
+      api.tasks.list(
+        orgId,
+        projectId,
+        `search=${encodeURIComponent(query.trim())}&limit=8`,
+      ),
+    enabled: adding && !picked && query.trim().length >= 2,
+  });
+  const candidates = (matches?.data ?? []).filter(
+    (t) => t.id !== taskId && !items.some((d) => d.depends_on_id === t.id),
+  );
 
   const addMutation = useMutation({
     mutationFn: (data: { depends_on_id: string; type: string }) =>
@@ -1660,7 +1676,8 @@ function DependenciesSection({
       qc.invalidateQueries({
         queryKey: ["dependencies", orgId, projectId, taskId],
       });
-      setDepId("");
+      setQuery("");
+      setPicked(null);
       setAdding(false);
       toast.success("Dependency added");
     },
@@ -1689,8 +1706,11 @@ function DependenciesSection({
             className="flex items-center gap-2 text-sm group"
           >
             <Link2 className="w-3 h-3" />
-            <span className="font-mono text-xs">
-              {dep.depends_on_id.slice(0, 8)}
+            <span
+              className="text-xs truncate"
+              title={dep.depends_on_title || undefined}
+            >
+              {dep.depends_on_title || "Unknown task"}
             </span>
             <Badge variant="badge-ghost">{dep.type.replace("_", " ")}</Badge>
             <button
@@ -1707,20 +1727,40 @@ function DependenciesSection({
           className="space-y-2"
           onSubmit={(e) => {
             e.preventDefault();
-            if (depId.trim())
+            if (picked)
               addMutation.mutate({
-                depends_on_id: depId.trim(),
+                depends_on_id: picked.id,
                 type: depType,
               });
           }}
         >
           <input
             className="input input-bordered input-xs w-full"
-            placeholder="Task ID to depend on…"
-            value={depId}
-            onChange={(e) => setDepId(e.target.value)}
+            placeholder="Search tasks by title…"
+            value={picked ? picked.title : query}
+            onChange={(e) => {
+              setPicked(null);
+              setQuery(e.target.value);
+            }}
             autoFocus
           />
+          {!picked && query.trim().length >= 2 && (
+            <ul className="menu menu-xs bg-base-200 rounded-box max-h-40 overflow-y-auto">
+              {candidates.length === 0 ? (
+                <li className="px-2 py-1 text-xs text-base-content/50">
+                  No matching tasks
+                </li>
+              ) : (
+                candidates.map((t) => (
+                  <li key={t.id}>
+                    <button type="button" onClick={() => setPicked(t)}>
+                      <span className="truncate">{t.title}</span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
           <select
             className="select select-bordered select-xs w-full"
             value={depType}
@@ -1734,7 +1774,7 @@ function DependenciesSection({
             <button
               type="submit"
               className="btn btn-xs btn-primary"
-              disabled={!depId.trim()}
+              disabled={!picked}
             >
               Add
             </button>

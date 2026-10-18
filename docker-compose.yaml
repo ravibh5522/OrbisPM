@@ -337,6 +337,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY required}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-minioadmin123}
       MINIO_BUCKET: ${MINIO_BUCKET:-orbispm}
+      MINIO_DRIVE_BUCKET: ${MINIO_DRIVE_BUCKET:-orbispm-drive}
+      DRIVE_MAX_FILE_MB: ${DRIVE_MAX_FILE_MB:-100}
       MINIO_USE_SSL: ${MINIO_USE_SSL:-false}
       MINIO_PUBLIC_URL: ${MINIO_PUBLIC_URL:?MINIO_PUBLIC_URL required}
       MEILI_URL: "http://meilisearch:7700"
@@ -345,6 +347,8 @@ services:
       AFFINE_PUBLIC_URL: ${AFFINE_PUBLIC_URL:-http://localhost:3010}
       AFFINE_ADMIN_EMAIL: ${AFFINE_ADMIN_EMAIL:-}
       AFFINE_ADMIN_PASSWORD: ${AFFINE_ADMIN_PASSWORD:-}
+      AFFINE_BRIDGE_URL: ${AFFINE_BRIDGE_URL:-http://affine-bridge:8085}
+      AFFINE_USER_SECRET: ${AFFINE_USER_SECRET:-}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
       BASE_URL: ${BASE_URL:-http://localhost:8000}
@@ -577,6 +581,31 @@ services:
     networks:
       - default
       - crewsity_appnet
+
+  # Creates AFFiNE docs for the API. AFFiNE has no createDoc GraphQL mutation;
+  # docs only exist once pushed over its socket.io sync protocol, which this
+  # sidecar speaks (see affine-bridge/server.mjs). Holds the AFFiNE admin
+  # session, so it is deliberately on the default network only — no published
+  # port and not on the shared crewsity_appnet.
+  affine-bridge:
+    profiles: [local]
+    build: ./affine-bridge
+    restart: unless-stopped
+    environment:
+      AFFINE_INTERNAL_URL: http://affine:3010
+      AFFINE_ADMIN_EMAIL: ${AFFINE_ADMIN_EMAIL:-}
+      AFFINE_ADMIN_PASSWORD: ${AFFINE_ADMIN_PASSWORD:-}
+    depends_on:
+      affine:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8085/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - default
 
   frontend:
     build:

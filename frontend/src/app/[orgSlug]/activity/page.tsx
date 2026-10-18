@@ -131,17 +131,19 @@ export default function ActivityPage() {
   const logs: ActivityLog[] = activity?.data || [];
   const members: OrgMember[] = membersData?.data || [];
 
+  // Rows written by automation have the all-zero UUID as their actor.
+  const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
+
   function memberName(id: string): string {
+    if (id === SYSTEM_ACTOR) return "System";
     const m = members.find((x) => x.user_id === id);
-    return m
-      ? m.display_name || m.email || id.slice(0, 8) + "…"
-      : id.slice(0, 8) + "…";
+    return m ? m.display_name || m.email || "Unknown user" : "Unknown user";
   }
 
   function memberAvatar(id: string): { name: string; src?: string } {
     const m = members.find((x) => x.user_id === id);
     return {
-      name: m ? m.display_name || m.email || "?" : "?",
+      name: id === SYSTEM_ACTOR ? "System" : m ? m.display_name || m.email || "?" : "?",
       src: m?.avatar_url || undefined,
     };
   }
@@ -330,15 +332,17 @@ export default function ActivityPage() {
                         {href ? (
                           <Link
                             href={href}
-                            className="font-mono text-xs text-primary/70 hover:text-primary hover:underline"
+                            className="text-sm font-medium text-primary/80 hover:text-primary hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            {log.entity_id.slice(0, 8)}…
+                            {log.entity_name || "Open"}
                           </Link>
                         ) : (
-                          <span className="font-mono text-xs text-base-content/30">
-                            {log.entity_id.slice(0, 8)}…
-                          </span>
+                          log.entity_name && (
+                            <span className="text-sm font-medium text-base-content/60">
+                              {log.entity_name}
+                            </span>
+                          )
                         )}
                       </div>
                       {log.changes && Object.keys(log.changes).length > 0 && (

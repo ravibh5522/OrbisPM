@@ -122,7 +122,12 @@ func (s *TaskService) validateAssignees(ctx context.Context, projectID uuid.UUID
 	}
 	for _, aid := range assigneeIDs {
 		if !memberSet[aid] {
-			return domain.ErrBadRequest.WithDetail(fmt.Sprintf("user %s is not a member of this project", aid))
+			// Name the person, not the UUID — this text is shown to users.
+			who, nameErr := s.projectMemberRepo.UserDisplayName(ctx, aid)
+			if nameErr != nil || who == "" {
+				who = "A selected assignee"
+			}
+			return domain.ErrBadRequest.WithDetail(fmt.Sprintf("%s is not a member of this project", who))
 		}
 	}
 	return nil

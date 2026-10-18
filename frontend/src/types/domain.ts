@@ -180,6 +180,12 @@ export interface TaskChangeRequest {
   review_note?: string;
   created_at: string;
   reviewed_at?: string | null;
+  // Display fields from the API — show these, never the IDs above.
+  proposer_name?: string;
+  proposer_email?: string;
+  reviewer_name?: string;
+  reviewer_email?: string;
+  task_title?: string;
 }
 
 export interface TaskUpdateResult {
@@ -262,6 +268,7 @@ export interface TaskDependency {
   task_id: string;
   depends_on_id: string;
   type: string;
+  depends_on_title?: string;
 }
 
 export interface Checklist {
@@ -388,6 +395,8 @@ export interface ProjectAffineDoc {
   workspace_id: string;
   doc_id: string;
   embed_url: string;
+  // Sign the viewer into AFFiNE; set before mounting the iframe.
+  cookies: { name: string; value: string; expires?: number }[];
 }
 
 export interface ActivityLog {
@@ -400,6 +409,8 @@ export interface ActivityLog {
   changes?: Record<string, unknown>;
   metadata?: Record<string, unknown>;
   created_at: string;
+  // Task/project/team title from the API — show this, never entity_id.
+  entity_name?: string;
 }
 
 export interface TaskTemplate {
@@ -449,6 +460,71 @@ export interface Attachment {
   mime_type: string;
   upload_url?: string;
   created_at: string;
+}
+
+// ─── Drive ───
+
+export type DriveScope = "org" | "team" | "project" | "user";
+export type DriveRole = "viewer" | "editor" | "manager";
+
+export interface DriveItem {
+  id: string;
+  org_id: string;
+  scope: DriveScope;
+  scope_id: string;
+  parent_id: string | null;
+  kind: "folder" | "file";
+  name: string;
+  mime_type: string | null;
+  size_bytes: number | null;
+  created_by: string;
+  creator: {
+    id: string;
+    display_name: string;
+    avatar_url: string | null;
+  } | null;
+  created_at: string;
+  updated_at: string;
+  trashed_at: string | null;
+  my_role: DriveRole;
+  shared: boolean;
+  /** Only set in shared-with-me / recent / search / trash lists */
+  space_name: string | null;
+}
+
+export interface DriveShare {
+  id: string;
+  item_id: string;
+  grantee_type: "user" | "team" | "project" | "org";
+  grantee_id: string;
+  grantee_name: string;
+  grantee_avatar_url: string | null;
+  role: DriveRole;
+  created_by: string;
+  created_at: string;
+  expires_at: string | null;
+  inherited: boolean;
+  source_item_id: string;
+  source_item_name: string;
+}
+
+export interface DriveSpace {
+  scope: DriveScope;
+  scope_id: string;
+  name: string;
+  my_role: DriveRole;
+}
+
+export interface DriveBreadcrumb {
+  id: string;
+  name: string;
+}
+
+export interface DriveListResponse {
+  items: DriveItem[];
+  next_cursor: string | null;
+  my_role: DriveRole;
+  breadcrumbs: DriveBreadcrumb[];
 }
 
 export interface TaskWatcher {

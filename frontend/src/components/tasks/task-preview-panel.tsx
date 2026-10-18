@@ -10,6 +10,7 @@ import {
   RecurrenceSelector,
 } from "@/components/tasks/recurrence-selector";
 import { TimeTracker } from "@/components/tasks/time-tracker";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/form-fields";
 import { Avatar, ConfirmDialog } from "@/components/ui/shared";
@@ -1651,7 +1652,10 @@ function AttachmentsTab({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
+      // Revoking straight away can cancel the download before it starts.
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 10_000);
+    } catch {
+      toast.error(`Couldn't download ${att.filename} — the file may be missing. Try attaching it again.`);
     } finally {
       setLoadingId(null);
     }
@@ -1671,6 +1675,8 @@ function AttachmentsTab({
         mime: att.mime_type,
         name: att.filename,
       });
+    } catch {
+      toast.error(`Couldn't preview ${att.filename} — the file may be missing. Try attaching it again.`);
     } finally {
       setLoadingId(null);
     }

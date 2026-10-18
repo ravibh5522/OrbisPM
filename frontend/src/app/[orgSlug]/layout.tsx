@@ -20,6 +20,7 @@ import {
   ChevronRight,
   FileText,
   FolderKanban,
+  HardDrive,
   LayoutDashboard,
   ListTodo,
   Lock,
@@ -40,6 +41,8 @@ import { useEffect } from "react";
 
 import { CommandPalette } from "@/components/command-palette";
 import { DataPrefetcher } from "@/components/data-prefetcher";
+import { DrivePanel } from "@/components/drive/drive-panel";
+import { UploadQueue } from "@/components/drive/upload-queue";
 import { NotificationBell } from "@/components/notification-bell";
 import { StickyNotesPanel } from "@/components/sticky-notes/sticky-notes-panel";
 import { useOrgPolicies } from "@/hooks/use-policies";
@@ -83,6 +86,11 @@ function getSidebarItems(orgSlug: string): NavItem[] {
       href: `/${orgSlug}/teams`,
       label: "Teams",
       icon: <Users className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/drive`,
+      label: "Drive",
+      icon: <HardDrive className="w-5 h-5" />,
     },
     {
       href: `/${orgSlug}/templates`,
@@ -558,6 +566,8 @@ function TopBar() {
     setCommandPaletteOpen,
     commandPaletteQuery,
     setCommandPaletteQuery,
+    drivePanelOpen,
+    toggleDrivePanel,
   } = useUIStore();
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const connected = useProjectTaskStore((s) => s.connected);
@@ -655,7 +665,17 @@ function TopBar() {
         </kbd>
       </div>
 
-      {/* Sticky Notes & Notifications */}
+      {/* Drive, Sticky Notes & Notifications */}
+      <Button
+        variant="ghost"
+        size="sm"
+        className={cn("btn-square", drivePanelOpen && "btn-active")}
+        onClick={toggleDrivePanel}
+        aria-label="Drive"
+        aria-expanded={drivePanelOpen}
+      >
+        <HardDrive className="w-5 h-5" />
+      </Button>
       <StickyNotesPanel />
       <NotificationBell />
     </header>
@@ -709,6 +729,11 @@ function MobileSidebar() {
       href: `/${orgSlug}/teams`,
       label: "Teams",
       icon: <Users className="w-5 h-5" />,
+    },
+    {
+      href: `/${orgSlug}/drive`,
+      label: "Drive",
+      icon: <HardDrive className="w-5 h-5" />,
     },
     {
       href: `/${orgSlug}/activity`,
@@ -1107,6 +1132,8 @@ export default function OrgLayout({ children }: { children: React.ReactNode }) {
       >
         {children}
       </main>
+      <DrivePanel />
+      <UploadQueue />
     </div>
   );
 }

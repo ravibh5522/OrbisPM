@@ -2806,9 +2806,11 @@ function CreateTaskModal({
     defaultValues: {
       status: "todo",
       priority: parentTask?.priority || "medium",
-      assignee_ids: parentTask?.assignee_ids?.length
-        ? [...parentTask.assignee_ids]
-        : [],
+      // A subtask inherits its parent's assignees, but only the ones who are
+      // members of this project — the API rejects anyone else.
+      assignee_ids: (parentTask?.assignee_ids ?? []).filter((id) =>
+        members.some((m) => m.user_id === id),
+      ),
       due_date: parentTask?.due_date ? parentTask.due_date.slice(0, 10) : "",
       start_date: parentTask?.start_date
         ? parentTask.start_date.slice(0, 10)

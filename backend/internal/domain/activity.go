@@ -17,4 +17,8 @@ type ActivityLog struct {
 	Changes    map[string]any `json:"changes,omitempty"`
 	Metadata   map[string]any `json:"metadata,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`
+
+	// EntityName is the task/project/team title, filled in when listing so
+	// clients show it instead of EntityID. Not stored.
+	EntityName string `json:"entity_name,omitempty"`
 }

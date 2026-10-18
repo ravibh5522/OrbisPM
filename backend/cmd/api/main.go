@@ -204,12 +204,22 @@ func main() {
 
 	// --- MinIO Storage Client (best-effort) ---
 	var storageClient *storage.Client
-	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL)
+	sc, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinioBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL, true)
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to init MinIO storage (continuing without file storage)")
 	} else {
 		storageClient = sc
 		log.Info().Str("endpoint", cfg.MinIOEndpoint).Msg("connected to MinIO")
+	}
+
+	// --- MinIO Drive bucket (private: objects reachable only via presigned URLs) ---
+	var driveStorage *storage.Client
+	ds, err := storage.NewClient(cfg.MinIOEndpoint, cfg.MinIOAccessKey, cfg.MinIOSecretKey, cfg.MinIODriveBucket, cfg.MinIOPublicURL, cfg.MinIOUseSSL, false)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to init MinIO drive bucket (continuing without Drive)")
+	} else {
+		driveStorage = ds
+		log.Info().Str("bucket", cfg.MinIODriveBucket).Msg("Drive storage ready")
 	}
 
 	// --- Meilisearch Client (best-effort) ---
@@ -235,12 +245,13 @@ func main() {
 	}()
 	log.Info().Msg("Org WebSocket hub started")
 	// --- Background Worker (Asynq) ---
-	workerSrv := worker.NewServer(asynq.RedisClientOpt{
+	asynqRedis := asynq.RedisClientOpt{
 		Addr:     redisOpts.Addr,
 		Password: redisOpts.Password,
 		Username: redisOpts.Username,
 		DB:       redisOpts.DB,
-	})
+	}
+	workerSrv := worker.NewServer(asynqRedis)
 	defer workerSrv.Stop()
 	log.Info().Msg("Asynq worker configured")
 
@@ -302,6 +313,9 @@ func main() {
 	// --- Repositories (Theme) ---
 	orgThemeRepo := repository.NewOrgThemeRepo(pool)
 
+	// --- Repositories (Drive) ---
+	driveRepo := repository.NewDriveRepo(pool)
+
 	// --- Services (existing) ---
 	orgSvc := service.NewOrgService(orgRepo, orgMemberRepo, txm)
 	teamSvc := service.NewTeamService(teamRepo, teamMemberRepo, txm, publisher)
@@ -314,8 +328,8 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo, txm)
 	stickyNoteSvc := service.NewStickyNoteService(stickyNoteRepo, txm)
 	projectCanvasSvc := service.NewProjectCanvasService(projectCanvasRepo, txm, publisher)
-	affineClient := affine.NewClient(cfg.AffineInternalURL, cfg.AffineAdminEmail, cfg.AffineAdminPassword)
-	affineSvc := service.NewAffineService(affineRepo, affineClient, cfg.AffinePublicURL)
+	affineClient := affine.NewClient(cfg.AffineInternalURL, cfg.AffineBridgeURL, cfg.AffineAdminEmail, cfg.AffineAdminPassword)
+	affineSvc := service.NewAffineService(affineRepo, affineClient, projectRepo, orgRepo, cfg.AffinePublicURL, cfg.AffineUserSecret)
 
 	// --- Services (new) ---
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, storageClient, txm)
@@ -345,6 +359,10 @@ func main() {
 	permResolver := service.NewPermissionResolver(orgMemberRepo, teamMemberRepo, projectMemberRepo, projectTeamRepo, roleRepo, orgRepo)
 	projectTeamSvc := service.NewProjectTeamService(projectTeamRepo, projectRepo, teamRepo, projectMemberRepo, teamMemberRepo, taskRepo, txm, workerSrv, publisher)
 	changeReqSvc := service.NewTaskChangeRequestService(changeReqRepo, taskRepo, projectRepo, txm, workerSrv, publisher)
+
+	// --- Services (Drive) ---
+	driveAccess := service.NewDriveAccess(permResolver, driveRepo)
+	driveSvc := service.NewDriveService(driveRepo, driveAccess, orgMemberRepo, projectMemberRepo, driveStorage, txm, workerSrv, publisher, int64(cfg.DriveMaxFileMB)<<20)
 
 	// Inject review deps into task service + project service
 	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
@@ -404,6 +422,12 @@ func main() {
 	go authHandler.BackfillUserProfiles(ctx)
 
 	attachmentHandler := handler.NewAttachmentHandler(attachmentSvc)
+
+	// Drive handler — only when its private bucket is reachable
+	var driveHandler *handler.DriveHandler
+	if driveStorage != nil {
+		driveHandler = handler.NewDriveHandler(driveSvc)
+	}
 
 	// Upload handler (avatar, logos, etc.) — public URL for MinIO objects
 	var uploadHandler *handler.UploadHandler
@@ -647,6 +671,11 @@ func main() {
 						r.Mount("/uploads", uploadHandler.Routes())
 					}
 
+					// Orbis Drive — authorization lives in DriveAccess (item scope is known only after load)
+					if driveHandler != nil {
+						r.Mount("/drive", driveHandler.Routes())
+					}
+
 					// Projects
 					r.Route("/projects", func(r chi.Router) {
 						r.With(prm("org", "", "projects", "create")).Post("/", projectHandler.Create)
@@ -807,6 +836,7 @@ func main() {
 		EmailServiceURL:    emailServiceURL,
 		EmailServiceAPIKey: emailServiceAPIKey,
 		OrgRepo:            orgRepo,
+		DriveStorage:       driveStorage,
 	}
 	workerMux := asynq.NewServeMux()
 	workerHandlers.RegisterAll(workerMux)
@@ -816,6 +846,17 @@ func main() {
 		}
 	}()
 	log.Info().Msg("Asynq worker started")
+
+	// Periodic tasks (drive:purge) — only useful when the Drive bucket is reachable.
+	if driveStorage != nil {
+		scheduler, err := worker.StartScheduler(asynqRedis)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to start asynq scheduler (drive purge disabled)")
+		} else {
+			defer scheduler.Shutdown()
+			log.Info().Msg("Asynq scheduler started")
+		}
+	}
 
 	// --- DB Pool Metrics (background goroutine) ---
 	go func() {

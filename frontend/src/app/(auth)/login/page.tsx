@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { useRedirectIfAuth } from "@/hooks/use-auth-guard";
 import { parseAuthError } from "@/lib/auth-errors";
 import { startOIDCRedirect } from "@/lib/oidc-redirect";
-import { useAuthStore } from "@/stores/auth-store";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -83,11 +82,8 @@ const DEMO_USERS: DemoUser[] = [
   },
 ];
 
-const DEMO_PASSWORD = "Demo@Acme2026!";
-
 export default function LoginPage() {
   useRedirectIfAuth();
-  const { login } = useAuthStore();
   const [error, setError] = useState("");
   const [ssoLoading, setSsoLoading] = useState<string | null>(null);
   const [demoLoading, setDemoLoading] = useState<string | null>(null);
@@ -111,7 +107,10 @@ export default function LoginPage() {
     setError("");
     setDemoLoading(user.email);
     try {
-      await login(user.email, DEMO_PASSWORD);
+      // Goes through the centralized login UI (login_hint = the persona's
+      // email) so the browser also gets a core session; the login UI fills in
+      // the demo password and signs in on its own.
+      await startOIDCRedirect(undefined, undefined, user.email);
     } catch (err) {
       setError(parseAuthError(err));
       setDemoLoading(null);

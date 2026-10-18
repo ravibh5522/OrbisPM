@@ -7,7 +7,11 @@ import { ApiError } from "@/lib/api";
 import { createIDBPersister } from "@/lib/offline/persister";
 import { useAuthStore } from "@/stores/auth-store";
 import { applyThemeCustomisation, useUIStore } from "@/stores/ui-store";
-import { MutationCache, QueryClient } from "@tanstack/react-query";
+import {
+  defaultShouldDehydrateQuery,
+  MutationCache,
+  QueryClient,
+} from "@tanstack/react-query";
 import { PersistQueryClientProvider } from "@tanstack/react-query-persist-client";
 import { useEffect, useState, type ReactNode } from "react";
 import { toast, Toaster } from "sonner";
@@ -89,6 +93,13 @@ export function Providers({ children }: { children: ReactNode }) {
         maxAge: 24 * 60 * 60 * 1000,
         // Bust cache on new deployments to avoid stale data shapes
         buster: process.env.NEXT_PUBLIC_BUILD_ID || "",
+        // Drive listings are private and access can be revoked at any time;
+        // logout never clears IndexedDB, so keep them in memory only.
+        dehydrateOptions: {
+          shouldDehydrateQuery: (query) =>
+            query.queryKey[0] !== "drive" &&
+            defaultShouldDehydrateQuery(query),
+        },
       }}
     >
       <ThemeInitializer>

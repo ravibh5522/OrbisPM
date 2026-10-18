@@ -16,10 +16,10 @@ const PKCE_STORAGE_KEY = "oidc_pkce";
  * once Zitadel redirects there, since Zitadel itself only ever forwards to
  * one configured login URI and leaves routing to the custom UI.
  */
-export async function startOIDCRedirect(idpId?: string, prompt?: string) {
+export async function startOIDCRedirect(idpId?: string, prompt?: string, loginHint?: string) {
   const redirectUri = `${window.location.origin}/auth/callback`;
   const state = crypto.randomUUID();
-  const result = await api.auth.oidcAuthorize(redirectUri, state, idpId, prompt);
+  const result = await api.auth.oidcAuthorize(redirectUri, state, idpId, prompt, loginHint);
   sessionStorage.setItem(
     PKCE_STORAGE_KEY,
     JSON.stringify({

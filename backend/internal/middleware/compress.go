@@ -22,10 +22,10 @@ var gzipWriterPool = sync.Pool{
 // enough and eligible.
 type gzipResponseWriter struct {
 	http.ResponseWriter
-	gzWriter    *gzip.Writer
-	buf         []byte
-	code        int
-	headerSent  bool
+	gzWriter     *gzip.Writer
+	buf          []byte
+	code         int
+	headerSent   bool
 	skipCompress bool
 }
 
@@ -64,6 +64,12 @@ func (g *gzipResponseWriter) Write(b []byte) (int, error) {
 	// Threshold reached – enable compression and flush buffer.
 	g.enableGzip()
 	return len(b), nil
+}
+
+// Unwrap lets http.ResponseController reach the connection (e.g. Drive
+// uploads extending their read deadline past the server-wide timeout).
+func (g *gzipResponseWriter) Unwrap() http.ResponseWriter {
+	return g.ResponseWriter
 }
 
 func (g *gzipResponseWriter) enableGzip() {

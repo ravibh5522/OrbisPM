@@ -2,7 +2,9 @@
 @plugin "daisyui";
 
 @theme {
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-heading: var(--font-jakarta), var(--font-geist), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, SFMono-Regular, monospace;
 
   /* ─── Semantic blur scale ──────────────────────────────────────
      4 tiers drive every backdrop-filter in the design system.
@@ -27,29 +29,32 @@
 :root,
 [data-theme="orbis-light"] {
   color-scheme: light;
-  --color-base-100: oklch(99% 0 0);
-  --color-base-200: oklch(93% 0.008 250);
-  --color-base-300: oklch(86% 0.013 250);
-  --color-base-content: oklch(20% 0.02 260);
-  --color-primary: oklch(50% 0.2 260);
-  --color-primary-content: oklch(97% 0.02 260);
-  --color-secondary: oklch(55% 0.15 200);
-  --color-secondary-content: oklch(97% 0.02 200);
-  --color-accent: oklch(65% 0.18 155);
-  --color-accent-content: oklch(20% 0.06 155);
-  --color-neutral: oklch(30% 0.02 260);
-  --color-neutral-content: oklch(93% 0.005 260);
-  --color-info: oklch(68% 0.15 235);
-  --color-info-content: oklch(20% 0.05 235);
-  --color-success: oklch(72% 0.18 155);
-  --color-success-content: oklch(20% 0.06 155);
-  --color-warning: oklch(80% 0.18 85);
-  --color-warning-content: oklch(30% 0.08 85);
-  --color-error: oklch(65% 0.22 20);
-  --color-error-content: oklch(97% 0.02 20);
+  /* Design-system tokens (design.md): surface/default, background/subtle,
+     border/default, text/primary, status/*. Brand colours come from the
+     active theme profile (theme-profiles.ts). */
+  --color-base-100: #ffffff;
+  --color-base-200: #f7f7f7;
+  --color-base-300: #dedede;
+  --color-base-content: #0c171d;
+  --color-primary: #d92d39;
+  --color-primary-content: #ffffff;
+  --color-secondary: #3e4b51;
+  --color-secondary-content: #ffffff;
+  --color-accent: #9333ea;
+  --color-accent-content: #ffffff;
+  --color-neutral: #222c31;
+  --color-neutral-content: #f7f7f7;
+  --color-info: #4285f6;
+  --color-info-content: #ffffff;
+  --color-success: #10b981;
+  --color-success-content: #053828;
+  --color-warning: #ffb341;
+  --color-warning-content: #6a3013;
+  --color-error: #d92d39;
+  --color-error-content: #ffffff;
   --radius-selector: 0.5rem;
-  --radius-field: 0.375rem;
-  --radius-box: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -60,13 +65,13 @@
      Reference these throughout component rules so a single
      change here updates every usage site.
      ─────────────────────────────────────────────────────────── */
-  --ol-content: oklch(20% 0.02 260);
-  --ol-content-60: oklch(20% 0.02 260 / 0.6);
-  --ol-content-40: oklch(20% 0.02 260 / 0.4);
-  --ol-surface: oklch(99% 0 0);
-  --ol-border: oklch(87% 0.012 250);
-  --ol-border-mid: oklch(82% 0.013 250);
-  --ol-primary: oklch(50% 0.2 260);
+  --ol-content: #0c171d;
+  --ol-content-60: color-mix(in oklab, #0c171d 60%, transparent);
+  --ol-content-40: color-mix(in oklab, #0c171d 40%, transparent);
+  --ol-surface: #ffffff;
+  --ol-border: #dedede;
+  --ol-border-mid: #bdbebf;
+  --ol-primary: var(--color-primary);
 }
 /* ═══════════════════════════════════════════════════════════════
    Theme 3 — Glass Light
@@ -277,29 +282,32 @@
    ═══════════════════════════════════════════════════════════════ */
 [data-theme="orbis-dark"] {
   color-scheme: dark;
-  --color-base-100: oklch(20% 0.015 260);
-  --color-base-200: oklch(26% 0.02 260);
-  --color-base-300: oklch(32% 0.025 262);
-  --color-base-content: oklch(92% 0.01 260);
-  --color-primary: oklch(65% 0.2 265);
-  --color-primary-content: oklch(97% 0.02 265);
-  --color-secondary: oklch(68% 0.16 185);
-  --color-secondary-content: oklch(15% 0.05 185);
-  --color-accent: oklch(78% 0.15 80);
-  --color-accent-content: oklch(20% 0.06 80);
-  --color-neutral: oklch(25% 0.02 260);
-  --color-neutral-content: oklch(90% 0.01 260);
-  --color-info: oklch(72% 0.14 235);
-  --color-info-content: oklch(20% 0.05 235);
-  --color-success: oklch(74% 0.17 160);
-  --color-success-content: oklch(18% 0.05 160);
-  --color-warning: oklch(82% 0.17 85);
-  --color-warning-content: oklch(25% 0.06 85);
-  --color-error: oklch(70% 0.2 18);
-  --color-error-content: oklch(97% 0.02 18);
+  /* Design-system tokens (design.md): surface/default, surface/lowered,
+     surface/overlay, text/primary, status/*. Page bg (#0c171d) is set on
+     body below. Brand colours come from the active theme profile. */
+  --color-base-100: #111c22;
+  --color-base-200: #222c31;
+  --color-base-300: #3e4b51;
+  --color-base-content: #ffffff;
+  --color-primary: #d92d39;
+  --color-primary-content: #ffffff;
+  --color-secondary: #84878c;
+  --color-secondary-content: #0c171d;
+  --color-accent: #9333ea;
+  --color-accent-content: #ffffff;
+  --color-neutral: #222c31;
+  --color-neutral-content: #ffffff;
+  --color-info: #4285f6;
+  --color-info-content: #ffffff;
+  --color-success: #10b981;
+  --color-success-content: #053828;
+  --color-warning: #ffb341;
+  --color-warning-content: #6a3013;
+  --color-error: #d92d39;
+  --color-error-content: #ffffff;
   --radius-selector: 0.5rem;
-  --radius-field: 0.375rem;
-  --radius-box: 0.5rem;
+  --radius-field: 0.5rem;
+  --radius-box: 0.75rem;
   --size-selector: 0.25rem;
   --size-field: 0.25rem;
   --border: 1px;
@@ -307,13 +315,27 @@
   --noise: 0;
 
   /* ─── Orbis-dark alias vars ──────────────────────────────────── */
-  --od-content: oklch(92% 0.01 260);
-  --od-content-70: oklch(92% 0.01 260 / 0.7);
-  --od-content-50: oklch(92% 0.01 260 / 0.5);
-  --od-surface: oklch(20% 0.015 260);
-  --od-border: oklch(28% 0.02 260);
-  --od-border-mid: oklch(32% 0.024 264);
-  --od-primary: oklch(65% 0.2 265);
+  --od-content: #ffffff;
+  --od-content-70: color-mix(in oklab, #ffffff 70%, transparent);
+  --od-content-50: color-mix(in oklab, #ffffff 50%, transparent);
+  --od-surface: #111c22;
+  --od-border: #222c31;
+  --od-border-mid: #3e4b51;
+  --od-primary: var(--color-primary);
+}
+
+[data-theme="orbis-dark"] body {
+  background-color: #0c171d;
+}
+
+/* Headings use the display face; utilities (font-sans/font-mono) still win. */
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-heading);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════

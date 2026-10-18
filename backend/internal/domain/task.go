@@ -90,6 +90,9 @@ type TaskDependency struct {
 	TaskID      uuid.UUID `json:"task_id"`
 	DependsOnID uuid.UUID `json:"depends_on_id"`
 	Type        string    `json:"type"`
+	// DependsOnTitle is filled in when listing, so clients show the task by
+	// name rather than by ID. Not stored.
+	DependsOnTitle string `json:"depends_on_title,omitempty"`
 }
 
 // TaskWatcher represents a user watching a task.

@@ -27,6 +27,16 @@ export function Modal({
     setMounted(true);
   }, []);
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      // Inner widgets (comboboxes, search inputs) claim Escape via preventDefault.
+      if (e.key === "Escape" && !e.defaultPrevented) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open || !mounted) return null;
 
   return createPortal(

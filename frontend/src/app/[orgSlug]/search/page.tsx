@@ -268,8 +268,7 @@ export default function SearchPage() {
                                 </Badge>
                               </td>
                               <td className="text-sm text-base-content/60">
-                                {projectNameMap.get(task.project_id) ||
-                                  task.project_id.slice(0, 8)}
+                                {projectNameMap.get(task.project_id) || "—"}
                               </td>
                               <td className="text-sm text-base-content/60">
                                 {formatRelative(task.created_at)}

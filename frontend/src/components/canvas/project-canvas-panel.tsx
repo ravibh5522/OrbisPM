@@ -5,17 +5,38 @@
  *
  * The project's Canvas tab: a single unified document+canvas surface backed
  * by a self-hosted AFFiNE instance. Fetches (provisioning on first access)
- * this project's AFFiNE doc and embeds it in an iframe. SSO carries over via
- * the shared Zitadel login, so there's no separate auth step inside the
- * iframe once AFFiNE's own OIDC client is configured.
+ * this project's AFFiNE doc and embeds it in an iframe. The backend returns
+ * an AFFiNE session for the current user, which is set as cookies before the
+ * iframe mounts — Zitadel's login pages can't be framed, so a login inside
+ * the iframe would never render.
  *
  * The previous Excalidraw-based gallery/editor (canvas-editor.tsx and
  * friends) is left in the codebase, just no longer rendered from this tab.
  */
 
 import { api } from "@/lib/api";
+import type { ProjectAffineDoc } from "@/types/domain";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+
+// Cookies are shared across ports, so on localhost a host-only cookie reaches
+// AFFiNE. On split subdomains (app.x.com / affine.x.com) they need the common
+// parent domain.
+function setAffineCookies(doc: ProjectAffineDoc) {
+  const app = window.location.hostname.split(".");
+  const affine = new URL(doc.embed_url).hostname.split(".");
+  const shared: string[] = [];
+  while (app.length && affine.length && app[app.length - 1] === affine[affine.length - 1]) {
+    shared.unshift(app.pop()!);
+    affine.pop();
+  }
+  const domain = shared.length >= 2 ? `; domain=.${shared.join(".")}` : "";
+  const secure = window.location.protocol === "https:" ? "; secure" : "";
+  for (const c of doc.cookies) {
+    const expires = c.expires ? `; expires=${new Date(c.expires * 1000).toUTCString()}` : "";
+    document.cookie = `${c.name}=${c.value}; path=/; samesite=lax${domain}${expires}${secure}`;
+  }
+}
 
 interface ProjectCanvasPanelProps {
   orgId: string;
@@ -25,7 +46,11 @@ interface ProjectCanvasPanelProps {
 export function ProjectCanvasPanel({ orgId, projectId }: ProjectCanvasPanelProps) {
   const { data, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: ["affine-doc", orgId, projectId],
-    queryFn: () => api.affineDoc.get(orgId, projectId),
+    queryFn: async () => {
+      const doc = await api.affineDoc.get(orgId, projectId);
+      setAffineCookies(doc);
+      return doc;
+    },
     retry: 1,
   });
 

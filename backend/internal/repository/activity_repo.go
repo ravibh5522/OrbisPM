@@ -32,6 +32,44 @@ func (r *activityRepo) Create(ctx context.Context, tx pgx.Tx, log *domain.Activi
 	return nil
 }
 
+// withEntityNames fills EntityName for the entity types that have a human
+// name, one query per type. Best effort: it's a display field, so a failed
+// lookup leaves it empty rather than failing the list.
+func (r *activityRepo) withEntityNames(ctx context.Context, logs []*domain.ActivityLog) {
+	byType := map[string][]uuid.UUID{}
+	for _, l := range logs {
+		byType[l.EntityType] = append(byType[l.EntityType], l.EntityID)
+	}
+	queries := map[string]string{
+		"task":           `SELECT id, title FROM tasks WHERE id = ANY($1)`,
+		"project":        `SELECT id, name FROM projects WHERE id = ANY($1)`,
+		"team":           `SELECT id, name FROM teams WHERE id = ANY($1)`,
+		"change_request": `SELECT cr.id, t.title FROM task_change_requests cr JOIN tasks t ON t.id = cr.task_id WHERE cr.id = ANY($1)`,
+	}
+	names := map[uuid.UUID]string{} // entity IDs are UUIDs, so one map serves every type
+	for typ, query := range queries {
+		ids := byType[typ]
+		if len(ids) == 0 {
+			continue
+		}
+		rows, err := r.pool.Query(ctx, query, ids)
+		if err != nil {
+			continue
+		}
+		for rows.Next() {
+			var id uuid.UUID
+			var name string
+			if rows.Scan(&id, &name) == nil {
+				names[id] = name
+			}
+		}
+		rows.Close()
+	}
+	for _, l := range logs {
+		l.EntityName = names[l.EntityID]
+	}
+}
+
 func (r *activityRepo) ListByEntity(ctx context.Context, entityType string, entityID uuid.UUID, filter ListFilter) ([]*domain.ActivityLog, error) {
 	limit := filter.Limit
 	if limit <= 0 {
@@ -60,7 +98,11 @@ func (r *activityRepo) ListByEntity(ctx context.Context, entityType string, enti
 		}
 		logs = append(logs, &a)
 	}
-	return logs, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	r.withEntityNames(ctx, logs)
+	return logs, nil
 }
 
 func (r *activityRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter ActivityFilter) ([]*domain.ActivityLog, int, error) {
@@ -122,5 +164,9 @@ func (r *activityRepo) ListByOrg(ctx context.Context, orgID uuid.UUID, filter Ac
 		}
 		logs = append(logs, &a)
 	}
-	return logs, total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	r.withEntityNames(ctx, logs)
+	return logs, total, nil
 }

@@ -2,6 +2,7 @@
 
 import { CalendarView, getDateRange } from "@/components/calendar";
 import { ProjectCanvasPanel } from "@/components/canvas/project-canvas-panel";
+import { DriveBrowser } from "@/components/drive/drive-browser";
 import { ProjectAnnouncements } from "@/components/projects/project-announcements";
 import { ProjectDashboard } from "@/components/projects/project-dashboard";
 import { ProjectChangeRequests } from "@/components/tasks/change-requests";
@@ -34,6 +35,7 @@ import {
     Filter,
     GitFork,
     GitPullRequest,
+    HardDrive,
     Link2,
     List,
     ListTodo,
@@ -107,6 +109,7 @@ export default function ProjectDetailPage({
     | "announcements"
     | "dashboard"
     | "canvas"
+    | "drive"
     | "settings"
   >(
     getProjectTab(projectId) as
@@ -117,6 +120,7 @@ export default function ProjectDetailPage({
       | "announcements"
       | "dashboard"
       | "canvas"
+      | "drive"
       | "settings",
   );
   const [taskView, setTaskViewLocal] = useState<
@@ -319,6 +323,15 @@ export default function ProjectDetailPage({
               label: "Canvas",
               icon: <Palette className="w-3.5 h-3.5" />,
             },
+            ...(projPerms.can("drive", "read")
+              ? [
+                  {
+                    id: "drive",
+                    label: "Drive",
+                    icon: <HardDrive className="w-3.5 h-3.5" />,
+                  },
+                ]
+              : []),
             ...(projPerms.can("project", "update")
               ? [
                   {
@@ -595,6 +608,18 @@ export default function ProjectDetailPage({
         >
           <ProjectCanvasPanel orgId={currentOrg!.id} projectId={projectId} />
         </div>
+
+        {/* Drive tab */}
+        {activeTab === "drive" && projPerms.can("drive", "read") && (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <DriveBrowser
+              scope="project"
+              scopeId={projectId}
+              lockScope
+              density="page"
+            />
+          </div>
+        )}
 
         {/* Settings tab */}
         {activeTab === "settings" && (

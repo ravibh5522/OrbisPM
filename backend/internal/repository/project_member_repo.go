@@ -165,6 +165,16 @@ func (r *projectMemberRepo) ListEffectiveMembers(ctx context.Context, projectID 
 	return members, rows.Err()
 }
 
+func (r *projectMemberRepo) UserDisplayName(ctx context.Context, userID uuid.UUID) (string, error) {
+	var name string
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(NULLIF(display_name, ''), email, '') FROM users WHERE id = $1`, userID).Scan(&name)
+	if err != nil {
+		return "", fmt.Errorf("user display name: %w", err)
+	}
+	return name, nil
+}
+
 func (r *projectMemberRepo) RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID uuid.UUID) error {
 	q := conn(r.pool, tx)
 	_, err := q.Exec(ctx,

@@ -19,6 +19,7 @@ import (
 	"github.com/orbispm/orbispm/internal/email"
 	"github.com/orbispm/orbispm/internal/pkg/tenant"
 	"github.com/orbispm/orbispm/internal/repository"
+	"github.com/orbispm/orbispm/internal/storage"
 )
 
 // Handlers holds dependencies for task handler functions.
@@ -33,6 +34,7 @@ type Handlers struct {
 	EmailServiceURL    string
 	EmailServiceAPIKey string
 	OrgRepo            repository.OrgRepository
+	DriveStorage       *storage.Client // private Drive bucket; nil disables drive:purge
 }
 
 // sendViaEmailService attempts to send an email through the email-service microservice.
@@ -112,6 +114,9 @@ func (h *Handlers) RegisterAll(mux *asynq.ServeMux) {
 	mux.HandleFunc(TypeAnalyticsSnapshot, h.HandleAnalyticsSnapshot)
 	mux.HandleFunc(TypeAnalyticsTransition, h.HandleAnalyticsTransition)
 	mux.HandleFunc(TypeGenerateReport, h.HandleGenerateReport)
+	if h.DriveStorage != nil {
+		mux.HandleFunc(TypeDrivePurge, h.HandleDrivePurge)
+	}
 	if h.Cache != nil {
 		mux.HandleFunc(TypeDBFlushTask, h.HandleDBFlushTask)
 		mux.HandleFunc(TypeDBFlushProject, h.HandleDBFlushProject)

@@ -58,6 +58,14 @@ const (
 	// Org member events.
 	EventOrgMemberRoleUpdated = "member.role_updated"
 	EventOrgMemberRemoved     = "member.removed"
+
+	// Drive events. Delivered over WS only to payload.audience (see OrgHub.Start).
+	EventDriveItemCreated  = "drive.item.created"
+	EventDriveItemUpdated  = "drive.item.updated"
+	EventDriveItemTrashed  = "drive.item.trashed"
+	EventDriveItemRestored = "drive.item.restored"
+	EventDriveItemShared   = "drive.item.shared"
+	EventDriveShareRevoked = "drive.share.revoked"
 )
 
 // DomainEvent carries event data for pub/sub and notifications.

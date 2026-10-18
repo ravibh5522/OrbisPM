@@ -548,6 +548,9 @@ type oidcAuthorizeRequest struct {
 	// signup (OrbisPM's /signup page), not a sign-in — it lands on /register
 	// instead of /login. See GenerateAuthURL.
 	Prompt string `json:"prompt"`
+	// LoginHint is optional. Forwarded as OIDC login_hint so the centralized
+	// login UI can pre-select the account (used by the demo-persona buttons).
+	LoginHint string `json:"login_hint"`
 }
 
 func (h *AuthHandler) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
@@ -557,7 +560,7 @@ func (h *AuthHandler) OIDCAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.zitadel.GenerateAuthURL(req.RedirectURI, req.State, req.IDPID, req.Prompt)
+	result, err := h.zitadel.GenerateAuthURL(req.RedirectURI, req.State, req.IDPID, req.Prompt, req.LoginHint)
 	if err != nil {
 		handleAuthError(w, err)
 		return

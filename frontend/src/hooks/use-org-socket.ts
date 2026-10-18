@@ -383,6 +383,12 @@ function handleOrgEvent(
     qc.invalidateQueries({ queryKey: ["announcements"] });
   }
 
+  // Drive — events carry IDs only; any change can affect the folder list,
+  // shared-with-me, recent and usage, so refresh the whole drive cache.
+  if (type.startsWith("drive.")) {
+    qc.invalidateQueries({ queryKey: ["drive", orgId] });
+  }
+
   // Change requests — invalidate dashboard + my-tasks on approval
   if (type.startsWith("change_request.")) {
     qc.invalidateQueries({ queryKey: ["dashboard-stats", orgId] });

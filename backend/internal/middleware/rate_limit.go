@@ -156,12 +156,21 @@ func (rl *RateLimiter) getLimiter(ip string) *rate.Limiter {
 	return limiter
 }
 
-// Handler returns an HTTP middleware that enforces rate limiting.
+// Handler returns an HTTP middleware that enforces rate limiting per client IP.
 func (rl *RateLimiter) Handler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := getRealIP(r)
+	return rl.HandlerBy(getRealIP)(next)
+}
 
-		limiter := rl.getLimiter(ip)
+// HandlerBy enforces rate limiting per key (e.g. the authenticated user).
+func (rl *RateLimiter) HandlerBy(key func(*http.Request) string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return rl.limit(key, next)
+	}
+}
+
+func (rl *RateLimiter) limit(key func(*http.Request) string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		limiter := rl.getLimiter(key(r))
 		if !limiter.Allow() {
 			w.Header().Set("Content-Type", "application/json")
 			w.Header().Set("Retry-After", "60")

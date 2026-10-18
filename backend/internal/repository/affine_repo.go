@@ -19,6 +19,9 @@ type AffineRepository interface {
 	CreateOrgWorkspace(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, workspaceID string) (*domain.OrgAffineWorkspace, error)
 	GetProjectDoc(ctx context.Context, tx pgx.Tx, projectID uuid.UUID) (*domain.ProjectAffineDoc, error)
 	CreateProjectDoc(ctx context.Context, tx pgx.Tx, orgID, projectID uuid.UUID, docID string) (*domain.ProjectAffineDoc, error)
+	// GetUserIdentity returns the email and display name the user's AFFiNE
+	// account is created under.
+	GetUserIdentity(ctx context.Context, userID uuid.UUID) (email, name string, err error)
 }
 
 type affineRepo struct {
@@ -99,4 +102,16 @@ func (r *affineRepo) CreateProjectDoc(ctx context.Context, tx pgx.Tx, orgID, pro
 		return nil, err
 	}
 	return &d, nil
+}
+
+func (r *affineRepo) GetUserIdentity(ctx context.Context, userID uuid.UUID) (string, string, error) {
+	var email, name string
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(email, ''), COALESCE(NULLIF(display_name, ''), email, '') FROM users WHERE id = $1`,
+		userID,
+	).Scan(&email, &name)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", domain.ErrNotFound
+	}
+	return email, name, err
 }

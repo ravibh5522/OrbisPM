@@ -95,6 +95,7 @@ export interface TeamPolicies {
   canManageMembers: boolean;
   canEditTeam: boolean;
   canDeleteTeam: boolean;
+  canViewDrive: boolean;
   role: string | null;
   isLoading: boolean;
 }
@@ -196,6 +197,7 @@ export function computeTeamPolicies(
     canManageMembers: can("members", "manage") || can("team", "manage_members"),
     canEditTeam: can("team", "update"),
     canDeleteTeam: can("team", "delete"),
+    canViewDrive: can("drive", "read"),
     role,
     isLoading,
   };

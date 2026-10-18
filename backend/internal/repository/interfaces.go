@@ -158,6 +158,8 @@ type ProjectMemberRepository interface {
 	ListEffectiveMembers(ctx context.Context, projectID uuid.UUID) ([]*domain.EffectiveMember, error)
 	RemoveBySourceTeam(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID uuid.UUID) error
 	RemoveBySourceTeamAndUser(ctx context.Context, tx pgx.Tx, projectID, sourceTeamID, userID uuid.UUID) error
+	// UserDisplayName is for error messages: a person's name (or email), never a bare ID.
+	UserDisplayName(ctx context.Context, userID uuid.UUID) (string, error)
 }
 
 // --- Task ---
@@ -455,4 +457,46 @@ type AnalyticsRepository interface {
 	GetWorkloadByProject(ctx context.Context, projectID uuid.UUID) ([]*domain.WorkloadDistribution, error)
 	GetVelocityTrend(ctx context.Context, projectID uuid.UUID, days int) ([]*domain.VelocityPoint, error)
 	GetOrgVelocityTrend(ctx context.Context, orgID uuid.UUID, days int) ([]*domain.VelocityPoint, error)
+}
+
+// --- Drive ---
+
+// DriveRepository persists Orbis Drive items, shares and usage. Every method
+// takes orgID and filters on it: RLS is not enforced on pool reads.
+type DriveRepository interface {
+	// Items
+	GetItem(ctx context.Context, orgID, id uuid.UUID) (*domain.DriveItem, error)
+	ListChildren(ctx context.Context, orgID uuid.UUID, scope domain.DriveScope, scopeID uuid.UUID, parentID *uuid.UUID, limit, offset int) ([]*domain.DriveItem, error)
+	ItemNames(ctx context.Context, orgID uuid.UUID, ids []uuid.UUID) (map[uuid.UUID]string, error)
+	LiveNamesWithPrefix(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, scope domain.DriveScope, scopeID uuid.UUID, parentID *uuid.UUID, prefix string) ([]string, error)
+	CreateItem(ctx context.Context, tx pgx.Tx, item *domain.DriveItem) error
+	RenameItem(ctx context.Context, tx pgx.Tx, orgID, id uuid.UUID, name string) error
+	SubtreeStats(ctx context.Context, orgID, id uuid.UUID) (count, maxDepth int, err error)
+	MoveItem(ctx context.Context, tx pgx.Tx, item *domain.DriveItem, parentID *uuid.UUID, ancestors []uuid.UUID) error
+	TrashSubtree(ctx context.Context, tx pgx.Tx, orgID, id, userID uuid.UUID) error
+	RestoreSubtree(ctx context.Context, tx pgx.Tx, orgID, id uuid.UUID, trashedAt time.Time, name string) error
+	ReserveQuota(ctx context.Context, tx pgx.Tx, orgID uuid.UUID, size int64) error
+	Usage(ctx context.Context, orgID uuid.UUID) (used, limit int64, err error)
+	ListSharedWithMe(ctx context.Context, orgID, userID uuid.UUID, limit, offset int) ([]*domain.DriveItem, error)
+	ListRecent(ctx context.Context, orgID uuid.UUID, f DriveAccessFilter, limit int) ([]*domain.DriveItem, error)
+	Search(ctx context.Context, orgID uuid.UUID, f DriveAccessFilter, query string, scope *domain.DriveScope, scopeID *uuid.UUID, limit int) ([]*domain.DriveItem, error)
+	ListTrash(ctx context.Context, orgID uuid.UUID, f DriveAccessFilter, limit int) ([]*domain.DriveItem, error)
+
+	// Shares
+	ShareRoles(ctx context.Context, orgID, userID uuid.UUID, itemIDs []uuid.UUID) (map[uuid.UUID]domain.DriveRole, error)
+	SharedItemIDs(ctx context.Context, orgID, userID uuid.UUID, itemIDs []uuid.UUID) (map[uuid.UUID]bool, error)
+	ListShares(ctx context.Context, orgID uuid.UUID, itemIDs []uuid.UUID, includeExpired bool) ([]*domain.DriveShare, error)
+	GetShare(ctx context.Context, orgID, id uuid.UUID) (*domain.DriveShare, error)
+	UpsertShare(ctx context.Context, tx pgx.Tx, share *domain.DriveShare) (uuid.UUID, error)
+	UpdateShareRole(ctx context.Context, tx pgx.Tx, orgID, id uuid.UUID, role domain.DriveRole) error
+	DeleteShare(ctx context.Context, tx pgx.Tx, orgID, id uuid.UUID) error
+	GranteeExists(ctx context.Context, orgID uuid.UUID, granteeType string, granteeID uuid.UUID) (bool, error)
+
+	// Spaces & audience
+	SpaceName(ctx context.Context, orgID uuid.UUID, scope domain.DriveScope, scopeID uuid.UUID) (string, error)
+	ListSpaceCandidates(ctx context.Context, orgID, userID uuid.UUID, all bool) ([]domain.DriveSpace, error)
+	TeamMemberIDs(ctx context.Context, orgID, teamID uuid.UUID, limit int) ([]uuid.UUID, error)
+	ItemGranteeUserIDs(ctx context.Context, orgID uuid.UUID, itemIDs []uuid.UUID, limit int) ([]uuid.UUID, error)
+	ShareGranteeUserIDs(ctx context.Context, orgID uuid.UUID, shareIDs []uuid.UUID, types []string, limit int) ([]uuid.UUID, error)
+	UserDisplayName(ctx context.Context, userID uuid.UUID) (string, error)
 }

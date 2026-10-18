@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/hibiken/asynq"
 	"github.com/rs/zerolog/log"
@@ -24,6 +25,7 @@ const (
 	TypeAnalyticsSnapshot   = "analytics:snapshot"
 	TypeAnalyticsTransition = "analytics:transition"
 	TypeGenerateReport      = "analytics:generate-report"
+	TypeDrivePurge          = "drive:purge"
 )
 
 // ActivityLogPayload holds data for creating an activity log entry.
@@ -208,6 +210,20 @@ func NewGenerateReportTask(p GenerateReportPayload) (*asynq.Task, error) {
 		return nil, err
 	}
 	return asynq.NewTask(TypeGenerateReport, data), nil
+}
+
+// StartScheduler starts the periodic task scheduler. Unique() makes the
+// schedule safe with several API replicas: each enqueues, only one task runs.
+func StartScheduler(redisOpt asynq.RedisClientOpt) (*asynq.Scheduler, error) {
+	sched := asynq.NewScheduler(redisOpt, nil)
+	if _, err := sched.Register("@every 1h", asynq.NewTask(TypeDrivePurge, nil),
+		asynq.Queue("low"), asynq.Unique(55*time.Minute)); err != nil {
+		return nil, fmt.Errorf("register %s: %w", TypeDrivePurge, err)
+	}
+	if err := sched.Start(); err != nil {
+		return nil, fmt.Errorf("start scheduler: %w", err)
+	}
+	return sched, nil
 }
 
 // Server wraps asynq server and client for background job processing.

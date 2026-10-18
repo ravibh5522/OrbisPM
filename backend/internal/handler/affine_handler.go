@@ -20,7 +20,7 @@ func NewAffineHandler(svc *service.AffineService) *AffineHandler {
 }
 
 // GetProjectDoc godoc
-// @Summary Get (provisioning on first access) this project's AFFiNE doc
+// @Summary Get (provisioning on first access) this project's AFFiNE doc and a signed-in AFFiNE session for the caller
 // @Tags AFFiNE
 // @Produce json
 // @Security BearerAuth
@@ -30,6 +30,7 @@ func NewAffineHandler(svc *service.AffineService) *AffineHandler {
 // @Router /orgs/{orgId}/projects/{projectId}/affine-doc [get]
 func (h *AffineHandler) GetProjectDoc(w http.ResponseWriter, r *http.Request) {
 	orgID := middleware.OrgIDFromCtx(r.Context())
+	userID := middleware.UserIDFromCtx(r.Context())
 
 	projectID, err := uuid.Parse(chi.URLParam(r, "projectId"))
 	if err != nil {
@@ -37,7 +38,7 @@ func (h *AffineHandler) GetProjectDoc(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.svc.EnsureProjectDoc(r.Context(), orgID, projectID)
+	result, err := h.svc.EnsureProjectDoc(r.Context(), orgID, projectID, userID)
 	if err != nil {
 		Error(w, r, err)
 		return

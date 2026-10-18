@@ -15,6 +15,7 @@ type ProjectTab =
   | "announcements"
   | "dashboard"
   | "canvas"
+  | "drive"
   | "settings";
 type TaskViewMode = "columns" | "list" | "tree" | "calendar";
 
@@ -42,6 +43,9 @@ interface UIState {
   commandPaletteQuery: string;
   mobileMenuOpen: boolean;
   breadcrumb: { label: string; backHref?: string } | null;
+  drivePanelOpen: boolean;
+  /** Last space opened in the Drive panel, as a DriveBrowser location key. */
+  driveLastSpace: string | null;
 
   // Per-project view persistence
   projectTabs: Record<string, ProjectTab>;
@@ -68,6 +72,9 @@ interface UIState {
   setCommandPaletteQuery: (q: string) => void;
   setMobileMenuOpen: (v: boolean) => void;
   setBreadcrumb: (b: { label: string; backHref?: string } | null) => void;
+  setDrivePanelOpen: (v: boolean) => void;
+  toggleDrivePanel: () => void;
+  setDriveLastSpace: (key: string) => void;
   setProjectTab: (projectId: string, tab: ProjectTab) => void;
   getProjectTab: (projectId: string) => ProjectTab;
   setProjectTaskView: (projectId: string, view: TaskViewMode) => void;
@@ -202,6 +209,11 @@ export const useUIStore = create<UIState>((set, get) => {
     commandPaletteQuery: "",
     mobileMenuOpen: false,
     breadcrumb: null,
+    drivePanelOpen: false,
+    driveLastSpace:
+      typeof window !== "undefined"
+        ? localStorage.getItem("drive_last_space")
+        : null,
     projectTabs: stored.tabs,
     projectTaskViews: stored.views,
 
@@ -283,6 +295,13 @@ export const useUIStore = create<UIState>((set, get) => {
     setCommandPaletteQuery: (q) => set({ commandPaletteQuery: q }),
     setMobileMenuOpen: (v) => set({ mobileMenuOpen: v }),
     setBreadcrumb: (b) => set({ breadcrumb: b }),
+    setDrivePanelOpen: (v) => set({ drivePanelOpen: v }),
+    toggleDrivePanel: () => set((s) => ({ drivePanelOpen: !s.drivePanelOpen })),
+    setDriveLastSpace: (key) => {
+      if (typeof window !== "undefined")
+        localStorage.setItem("drive_last_space", key);
+      set({ driveLastSpace: key });
+    },
 
     setProjectTab: (projectId, tab) => {
       set((s) => {

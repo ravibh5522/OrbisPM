@@ -26,6 +26,14 @@ type TaskChangeRequest struct {
 	ReviewNote string         `json:"review_note,omitempty"`
 	CreatedAt  time.Time      `json:"created_at"`
 	ReviewedAt *time.Time     `json:"reviewed_at,omitempty"`
+
+	// Display fields filled in by the repository so clients show people and
+	// tasks by name rather than by ID. Not stored on the row.
+	ProposerName  string `json:"proposer_name,omitempty"`
+	ProposerEmail string `json:"proposer_email,omitempty"`
+	ReviewerName  string `json:"reviewer_name,omitempty"`
+	ReviewerEmail string `json:"reviewer_email,omitempty"`
+	TaskTitle     string `json:"task_title,omitempty"`
 }
 
 // TaskUpdateResult is returned from task update when review pipeline is involved.

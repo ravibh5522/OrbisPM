@@ -1,6 +1,7 @@
 "use client";
 
 import { CalendarView, getDateRange } from "@/components/calendar";
+import { DriveBrowser } from "@/components/drive/drive-browser";
 import { Button } from "@/components/ui/button";
 import {
   Avatar,
@@ -31,6 +32,7 @@ import {
   ChevronDown,
   Clock,
   FolderKanban,
+  HardDrive,
   ListTodo,
   Plus,
   Search,
@@ -112,8 +114,9 @@ export default function TeamDashboardPage({
   const orgId = currentOrg?.id || "";
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<
-    "overview" | "calendar" | "members"
+    "overview" | "calendar" | "members" | "drive"
   >("overview");
+  const teamPolicies = useTeamPolicies(teamId);
 
   // Calendar state
   const calInitRange = useMemo(() => getDateRange(new Date(), "month"), []);
@@ -267,6 +270,15 @@ export default function TeamDashboardPage({
             label: "Calendar",
             icon: <CalendarDays className="w-3.5 h-3.5" />,
           },
+          ...(teamPolicies.canViewDrive
+            ? [
+                {
+                  id: "drive",
+                  label: "Drive",
+                  icon: <HardDrive className="w-3.5 h-3.5" />,
+                },
+              ]
+            : []),
         ]}
         activeTab={activeTab}
         onChange={setActiveTab}
@@ -293,6 +305,18 @@ export default function TeamDashboardPage({
               );
             }}
             onRangeChange={handleCalRangeChange}
+          />
+        </div>
+      )}
+
+      {/* Drive Tab */}
+      {activeTab === "drive" && teamPolicies.canViewDrive && (
+        <div className="card h-[calc(100vh-260px)] min-h-[420px] bg-base-100/36 border border-base-200/55 backdrop-blur-xl card-glass-shadow rounded-2xl overflow-hidden">
+          <DriveBrowser
+            scope="team"
+            scopeId={teamId}
+            lockScope
+            density="page"
           />
         </div>
       )}

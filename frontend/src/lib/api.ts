@@ -248,6 +248,74 @@ async function downloadBlob(path: string, filename: string): Promise<void> {
   URL.revokeObjectURL(url);
 }
 
+function queryString(
+  params: Record<string, string | number | null | undefined>,
+): string {
+  const qs = new URLSearchParams(
+    Object.entries(params)
+      .filter(([, v]) => v != null && v !== "")
+      .map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return qs ? `?${qs}` : "";
+}
+
+function sendXhr(
+  path: string,
+  body: FormData,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Upload cancelled", "AbortError"));
+      return;
+    }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}${path}`);
+    for (const [k, v] of Object.entries(getAuthHeaders())) {
+      xhr.setRequestHeader(k, v);
+    }
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) onProgress?.(e.loaded / e.total);
+    };
+    xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText });
+    xhr.onerror = () => reject(new ApiError(0, "Network error"));
+    xhr.onabort = () =>
+      reject(new DOMException("Upload cancelled", "AbortError"));
+    signal?.addEventListener("abort", () => xhr.abort(), { once: true });
+    xhr.send(body);
+  });
+}
+
+// fetch() has no upload progress events, so multipart uploads that need a
+// progress bar go through XHR with the same auth/org headers and refresh
+// handling as request().
+async function uploadWithProgress<T>(
+  path: string,
+  body: FormData,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<T> {
+  await ensureValidToken();
+  let res = await sendXhr(path, body, onProgress, signal);
+  if (res.status === 401 && (await tryRefreshToken())) {
+    res = await sendXhr(path, body, onProgress, signal);
+  }
+  if (res.status < 200 || res.status >= 300) {
+    let msg = "Upload failed";
+    let detail: string | undefined;
+    try {
+      const parsed: ErrorResponse = JSON.parse(res.text);
+      msg = parsed.message || msg;
+      detail = parsed.detail;
+    } catch {
+      // ignore parse error
+    }
+    throw new ApiError(res.status, msg, detail);
+  }
+  return JSON.parse(res.text) as T;
+}
+
 // API namespaces
 import type {
   ActivityLog,
@@ -268,6 +336,13 @@ import type {
   CustomRole,
   DashboardAnalytics,
   DashboardStats,
+  DriveBreadcrumb,
+  DriveItem,
+  DriveListResponse,
+  DriveRole,
+  DriveScope,
+  DriveShare,
+  DriveSpace,
   EffectiveMember,
   IDPInfo,
   IDPStartResponse,
@@ -386,6 +461,7 @@ export const api = {
       state: string,
       idpId?: string,
       prompt?: string,
+      loginHint?: string,
     ): Promise<OIDCAuthorizeResponse> {
       return request(
         `${V1}/auth/oidc/authorize`,
@@ -396,6 +472,7 @@ export const api = {
             state,
             ...(idpId ? { idp_id: idpId } : {}),
             ...(prompt ? { prompt } : {}),
+            ...(loginHint ? { login_hint: loginHint } : {}),
           }),
         },
         true,
@@ -1981,5 +2058,119 @@ export const api = {
         locked: boolean;
       },
     ) => put<OrgThemeConfig>(`${V1}/orgs/${orgId}/theme`, data),
+  },
+
+  // Drive
+  drive: {
+    spaces: (orgId: string) =>
+      get<{ spaces: DriveSpace[] }>(`${V1}/orgs/${orgId}/drive/spaces`),
+    items: (
+      orgId: string,
+      params: {
+        scope: DriveScope;
+        scope_id: string;
+        parent_id?: string | null;
+        limit?: number;
+        cursor?: string | null;
+      },
+    ) =>
+      get<DriveListResponse>(
+        `${V1}/orgs/${orgId}/drive/items${queryString(params)}`,
+      ),
+    item: (orgId: string, id: string) =>
+      get<{
+        item: DriveItem;
+        breadcrumbs: DriveBreadcrumb[];
+        space: { scope: DriveScope; scope_id: string; name: string };
+      }>(`${V1}/orgs/${orgId}/drive/items/${id}`),
+    createFolder: (
+      orgId: string,
+      data: {
+        scope: DriveScope;
+        scope_id: string;
+        parent_id?: string | null;
+        name: string;
+      },
+    ) => post<DriveItem>(`${V1}/orgs/${orgId}/drive/folders`, data),
+    uploadFile: (
+      orgId: string,
+      target: { scope: DriveScope; scope_id: string; parent_id?: string | null },
+      file: File,
+      opts?: { onProgress?: (fraction: number) => void; signal?: AbortSignal },
+    ) => {
+      const fd = new FormData();
+      fd.append("scope", target.scope);
+      fd.append("scope_id", target.scope_id);
+      if (target.parent_id) fd.append("parent_id", target.parent_id);
+      // The backend streams the body, so the file part must come last.
+      fd.append("file", file);
+      return uploadWithProgress<DriveItem>(
+        `${V1}/orgs/${orgId}/drive/files`,
+        fd,
+        opts?.onProgress,
+        opts?.signal,
+      );
+    },
+    rename: (orgId: string, id: string, name: string) =>
+      patch<DriveItem>(`${V1}/orgs/${orgId}/drive/items/${id}`, { name }),
+    move: (orgId: string, id: string, parentId: string | null) =>
+      post<DriveItem>(`${V1}/orgs/${orgId}/drive/items/${id}/move`, {
+        parent_id: parentId,
+      }),
+    trash: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/drive/items/${id}`),
+    restore: (orgId: string, id: string) =>
+      post<DriveItem>(`${V1}/orgs/${orgId}/drive/items/${id}/restore`),
+    url: (orgId: string, id: string, disposition: "inline" | "attachment") =>
+      get<{ url: string; expires_at: string; inline: boolean }>(
+        `${V1}/orgs/${orgId}/drive/items/${id}/url${queryString({ disposition })}`,
+      ),
+    shares: (orgId: string, id: string) =>
+      get<{ shares: DriveShare[] }>(
+        `${V1}/orgs/${orgId}/drive/items/${id}/shares`,
+      ),
+    share: (
+      orgId: string,
+      id: string,
+      data: {
+        grantees: { type: DriveShare["grantee_type"]; id: string }[];
+        role: DriveRole;
+        expires_at?: string;
+      },
+    ) =>
+      post<{ shares: DriveShare[] }>(
+        `${V1}/orgs/${orgId}/drive/items/${id}/shares`,
+        data,
+      ),
+    updateShare: (orgId: string, shareId: string, role: DriveRole) =>
+      patch<DriveShare>(`${V1}/orgs/${orgId}/drive/shares/${shareId}`, {
+        role,
+      }),
+    revokeShare: (orgId: string, shareId: string) =>
+      del(`${V1}/orgs/${orgId}/drive/shares/${shareId}`),
+    sharedWithMe: (
+      orgId: string,
+      params?: { limit?: number; cursor?: string | null },
+    ) =>
+      get<{ items: DriveItem[]; next_cursor: string | null }>(
+        `${V1}/orgs/${orgId}/drive/shared-with-me${queryString(params ?? {})}`,
+      ),
+    recent: (orgId: string, limit?: number) =>
+      get<{ items: DriveItem[] }>(
+        `${V1}/orgs/${orgId}/drive/recent${queryString({ limit })}`,
+      ),
+    search: (
+      orgId: string,
+      params: { q: string; scope?: DriveScope; scope_id?: string },
+    ) =>
+      get<{ items: DriveItem[] }>(
+        `${V1}/orgs/${orgId}/drive/search${queryString(params)}`,
+      ),
+    trashList: (orgId: string) =>
+      get<{ items: DriveItem[] }>(`${V1}/orgs/${orgId}/drive/trash`),
+    usage: (orgId: string) =>
+      get<{ bytes_used: number; bytes_limit: number }>(
+        `${V1}/orgs/${orgId}/drive/usage`,
+      ),
   },
 };

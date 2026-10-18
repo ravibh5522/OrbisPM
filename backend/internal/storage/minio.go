@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -15,16 +16,18 @@ import (
 
 // Client wraps the MinIO SDK to provide object storage operations.
 type Client struct {
-	mc           *minio.Client // internal — used for uploads, downloads, bucket ops
-	presignMC    *minio.Client // public  — used for presigned URLs (browser-reachable host)
-	bucket       string
-	presignBase  string // public base URL, e.g. "https://minioapi.orbispm.in"
+	mc          *minio.Client // internal — used for uploads, downloads, bucket ops
+	presignMC   *minio.Client // public  — used for presigned URLs (browser-reachable host)
+	bucket      string
+	presignBase string // public base URL, e.g. "https://minioapi.orbispm.in"
 }
 
 // NewClient creates a new MinIO storage client and ensures the bucket exists.
 // publicURL is the browser-reachable base URL (e.g. "https://minioapi.orbispm.in");
 // it is used when generating presigned URLs so the browser can reach them.
-func NewClient(endpoint, accessKey, secretKey, bucket, publicURL string, useSSL bool) (*Client, error) {
+// public sets an anonymous public-read policy on the bucket; private buckets
+// (Drive) are only reachable through presigned URLs.
+func NewClient(endpoint, accessKey, secretKey, bucket, publicURL string, useSSL, public bool) (*Client, error) {
 	mc, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: useSSL,
@@ -40,9 +43,13 @@ func NewClient(endpoint, accessKey, secretKey, bucket, publicURL string, useSSL 
 	parsedPublic, parseErr := url.Parse(publicURL)
 	if parseErr == nil && parsedPublic.Host != "" {
 		publicSecure := parsedPublic.Scheme == "https"
+		// Region is fixed so presigning never asks MinIO for the bucket
+		// location: that request goes to the public host, which from inside
+		// Docker (e.g. localhost:9020) isn't MinIO and fails with a 500.
 		presignMC, _ = minio.New(parsedPublic.Host, &minio.Options{
 			Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 			Secure: publicSecure,
+			Region: "us-east-1",
 		})
 	}
 	if presignMC == nil {
@@ -66,6 +73,14 @@ func NewClient(endpoint, accessKey, secretKey, bucket, publicURL string, useSSL 
 		log.Info().Str("bucket", bucket).Msg("created MinIO bucket")
 	}
 
+	if !public {
+		// A leftover policy would silently expose every object in a private bucket.
+		if policy, err := mc.GetBucketPolicy(ctx, bucket); err == nil && policy != "" {
+			log.Error().Str("bucket", bucket).Msg("private MinIO bucket has a bucket policy; objects may be publicly readable")
+		}
+		return c, nil
+	}
+
 	// Set public-read policy so browser can load avatars/logos directly.
 	publicPolicy := fmt.Sprintf(`{
 	"Version":"2012-10-17",
@@ -87,19 +102,36 @@ func NewClient(endpoint, accessKey, secretKey, bucket, publicURL string, useSSL 
 
 // Upload stores an object in the bucket and returns the storage path.
 func (c *Client) Upload(ctx context.Context, objectName string, reader io.Reader, size int64, contentType string) (string, error) {
-	_, err := c.mc.PutObject(ctx, c.bucket, objectName, reader, size, minio.PutObjectOptions{
-		ContentType: contentType,
-	})
+	opts := minio.PutObjectOptions{ContentType: contentType}
+	if size < 0 {
+		// Unknown size: minio-go would otherwise size parts for a 5 TiB object
+		// and buffer ~560 MB per upload.
+		opts.PartSize = 8 << 20
+	}
+	_, err := c.mc.PutObject(ctx, c.bucket, objectName, reader, size, opts)
 	if err != nil {
 		return "", fmt.Errorf("upload %s: %w", objectName, err)
 	}
 	return objectName, nil
 }
 
+// ErrObjectNotFound is returned by Download when the object doesn't exist,
+// e.g. a database record whose upload never completed.
+var ErrObjectNotFound = errors.New("object not found in storage")
+
 // Download retrieves an object from the bucket.
 func (c *Client) Download(ctx context.Context, objectName string) (io.ReadCloser, error) {
 	obj, err := c.mc.GetObject(ctx, c.bucket, objectName, minio.GetObjectOptions{})
 	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", objectName, err)
+	}
+	// GetObject is lazy: a missing object only shows up on first read, after a
+	// caller may already have sent response headers. Check now.
+	if _, err := obj.Stat(); err != nil {
+		obj.Close()
+		if minio.ToErrorResponse(err).Code == "NoSuchKey" {
+			return nil, ErrObjectNotFound
+		}
 		return nil, fmt.Errorf("download %s: %w", objectName, err)
 	}
 	return obj, nil
@@ -108,7 +140,12 @@ func (c *Client) Download(ctx context.Context, objectName string) (io.ReadCloser
 // PresignedGetURL generates a pre-signed download URL using the public-facing
 // MinIO host so the URL is accessible from the browser.
 func (c *Client) PresignedGetURL(ctx context.Context, objectName string, expires time.Duration) (string, error) {
-	reqParams := make(url.Values)
+	return c.PresignedGetURLWithParams(ctx, objectName, expires, make(url.Values))
+}
+
+// PresignedGetURLWithParams is PresignedGetURL with S3 response overrides
+// (e.g. response-content-type, response-content-disposition).
+func (c *Client) PresignedGetURLWithParams(ctx context.Context, objectName string, expires time.Duration, reqParams url.Values) (string, error) {
 	u, err := c.presignMC.PresignedGetObject(ctx, c.bucket, objectName, expires, reqParams)
 	if err != nil {
 		return "", fmt.Errorf("presign get %s: %w", objectName, err)

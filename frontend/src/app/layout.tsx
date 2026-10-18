@@ -1,13 +1,24 @@
 import { Providers } from "@/components/providers";
 import { getBaseUrl } from "@/lib/base-url";
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Geist, JetBrains_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const geist = Geist({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-inter",
+  variable: "--font-geist",
+});
+const jakarta = Plus_Jakarta_Sans({
+  subsets: ["latin"],
+  display: "swap",
+  weight: ["700", "800"],
+  variable: "--font-jakarta",
+});
+const jetbrains = JetBrains_Mono({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-jetbrains",
 });
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -114,7 +125,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" data-theme="orbis-light" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans min-h-screen bg-base-200`}>
+      <body className={`${geist.variable} ${jakarta.variable} ${jetbrains.variable} font-sans min-h-screen bg-base-200`}>
         {/* Inline script runs synchronously before first paint, preventing
             the glass-theme FOUC where data-theme="orbis-light" briefly
             shows before React's ThemeInitializer useEffect fires. */}

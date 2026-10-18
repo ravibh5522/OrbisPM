@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -63,20 +64,21 @@ func (s *AttachmentService) Create(ctx context.Context, params CreateAttachmentP
 		MimeType:        params.MimeType,
 	}
 
+	// Presign before saving the row: if presigning fails, no attachment record
+	// is left behind pointing at a file that was never uploaded.
+	uploadURL, err := s.storageClient.PresignedPutURL(ctx, storagePath, 15*time.Minute)
+	if err != nil {
+		return nil, "", fmt.Errorf("generate upload url: %w", err)
+	}
+
 	var created *domain.Attachment
-	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+	err = s.txm.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		created, err = s.attachmentRepo.Create(ctx, tx, att)
 		return err
 	})
 	if err != nil {
 		return nil, "", err
-	}
-
-	// Generate pre-signed upload URL
-	uploadURL, err := s.storageClient.PresignedPutURL(ctx, storagePath, 15*time.Minute)
-	if err != nil {
-		return nil, "", fmt.Errorf("generate upload url: %w", err)
 	}
 
 	return created, uploadURL, nil
@@ -129,6 +131,9 @@ func (s *AttachmentService) StreamContent(ctx context.Context, id uuid.UUID) (*d
 
 	reader, err := s.storageClient.Download(ctx, att.StoragePath)
 	if err != nil {
+		if errors.Is(err, storage.ErrObjectNotFound) {
+			return nil, nil, domain.ErrNotFound.WithDetail("the file is missing from storage — its upload may not have completed")
+		}
 		return nil, nil, fmt.Errorf("download from storage: %w", err)
 	}
 
