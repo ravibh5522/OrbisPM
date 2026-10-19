@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// ResolveUserID maps a Zitadel identity to OrbisPM's stable internal user ID.
+// ResolveUserID maps a Zitadel identity to Simplify Projects's stable internal user ID.
 //
 // This used to be computed live on every request via
 // uuid.NewSHA1(uuid.NameSpaceURL, zitadelID) and never stored. That formula

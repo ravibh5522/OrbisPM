@@ -1,5 +1,5 @@
 /**
- * OrbisPM — Theme preview tile data
+ * Simplify Projects — Theme preview tile data
  *
  * Single source of truth for the mini-tile previews shown in the
  * theme picker (settings → Theme tab AND profile → Appearance tab).

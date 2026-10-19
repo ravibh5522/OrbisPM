@@ -1,10 +1,10 @@
-# OrbisPM — Demo Credentials
+# Simplify Projects — Demo Credentials
 
 ## Quick Access
 
-**Demo App URL:** https://orbispm.live  
+**Demo App URL:** https://simplifyai.id  
 **Demo Org:** Acme Corp (`/acme-corp`)  
-**Direct URL:** https://orbispm.live/acme-corp
+**Direct URL:** https://simplifyai.id/acme-corp
 
 ---
 
@@ -145,9 +145,9 @@ Org Plan:  enterprise
 
 DB:        orbispmdev (PostgreSQL 16)
 Backend:   http://10.0.6.12:8080 (internal Docker)
-API:       https://api.orbispm.in
-Frontend:  https://orbispm.live
-Zitadel:   https://zitadel.orbispm.in
+API:       https://api.simplifyai.id
+Frontend:  https://simplifyai.id
+Zitadel:   https://zitadel.simplifyai.id
 ```
 
 ---

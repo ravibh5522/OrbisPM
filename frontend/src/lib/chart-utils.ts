@@ -1,5 +1,5 @@
 /**
- * OrbisPM — Shared Recharts chart configuration
+ * Simplify Projects — Shared Recharts chart configuration
  *
  * Import these constants in every chart component instead of
  * defining tooltip styles, cursor styles, and axis props inline.

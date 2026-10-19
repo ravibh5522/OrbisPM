@@ -9,7 +9,7 @@ import { PricingFAQ } from "./pricing-faq";
 export const metadata: Metadata = {
   title: "Pricing – Transparent Plans for Teams of Every Size",
   description:
-    "OrbisPM pricing: Free starter plan for small teams, Professional at $12/user/mo with AI features and unlimited projects, Enterprise with custom pricing, SSO, and on-premise deployment. No hidden fees. Start free today.",
+    "Simplify Projects pricing: Free starter plan for small teams, Professional at $12/user/mo with AI features and unlimited projects, Enterprise with custom pricing, SSO, and on-premise deployment. No hidden fees. Start free today.",
   alternates: { canonical: "/pricing" },
   keywords: [
     "project management pricing",
@@ -22,7 +22,7 @@ export const metadata: Metadata = {
     "project management free tier",
   ],
   openGraph: {
-    title: "OrbisPM Pricing – Start Free, Scale as You Grow",
+    title: "Simplify Projects Pricing – Start Free, Scale as You Grow",
     description:
       "Free starter plan with core features. Professional at $12/user/mo with AI sprint planning and unlimited projects. Enterprise with SSO and on-premise deployment.",
     url: "/pricing",
@@ -31,13 +31,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM Pricing – Start Free, Scale as You Grow",
+        alt: "Simplify Projects Pricing – Start Free, Scale as You Grow",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM Pricing – Start Free, Scale as You Grow",
+    title: "Simplify Projects Pricing – Start Free, Scale as You Grow",
     description:
       "Free starter plan, Professional at $12/user/mo with AI features, Enterprise with SSO and on-premise.",
     images: ["/og-image.png"],
@@ -258,20 +258,20 @@ export default function PricingPage() {
         data={{
           "@context": "https://schema.org",
           "@type": "WebPage",
-          name: "OrbisPM Pricing",
+          name: "Simplify Projects Pricing",
           description: "AI-powered project management platform pricing plans",
-          url: "https://orbisom.live/pricing",
+          url: "https://simplifyai.id/pricing",
         }}
       />
       <JsonLd
         data={{
           "@context": "https://schema.org",
           "@type": "Product",
-          name: "OrbisPM",
+          name: "Simplify Projects",
           description:
             "AI-powered project management platform for engineering teams",
-          url: "https://orbisom.live",
-          brand: { "@type": "Brand", name: "OrbisPM" },
+          url: "https://simplifyai.id",
+          brand: { "@type": "Brand", name: "Simplify Projects" },
           offers: [
             {
               "@type": "Offer",
@@ -431,7 +431,7 @@ export default function PricingPage() {
               <span className="font-semibold">Need On-Premise Deployment?</span>
             </div>
             <p className="text-base-content/60 text-sm leading-relaxed">
-              Enterprise customers can deploy OrbisPM on their own
+              Enterprise customers can deploy Simplify Projects on their own
               infrastructure with Docker Compose. The entire stack runs in
               containers for maximum control and data sovereignty. Contact our
               sales team for pricing and deployment support.

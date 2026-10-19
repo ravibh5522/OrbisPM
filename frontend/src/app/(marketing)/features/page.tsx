@@ -40,7 +40,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Features – AI-Powered Project Management Tools for Engineering Teams",
   description:
-    "Explore 30+ OrbisPM features: AI sprint planning, smart task estimation, real-time collaboration, kanban boards, enterprise RBAC, change request workflows, automated retrospectives, dependency intelligence, burndown predictions, time tracking, and more. The most complete project management platform for developers in 2026.",
+    "Explore 30+ Simplify Projects features: AI sprint planning, smart task estimation, real-time collaboration, kanban boards, enterprise RBAC, change request workflows, automated retrospectives, dependency intelligence, burndown predictions, time tracking, and more. The most complete project management platform for developers in 2026.",
   alternates: { canonical: "/features" },
   keywords: [
     "AI project management features",
@@ -60,7 +60,7 @@ export const metadata: Metadata = {
     "intelligent backlog grooming",
   ],
   openGraph: {
-    title: "OrbisPM Features – 30+ AI-Powered Tools to Ship Faster",
+    title: "Simplify Projects Features – 30+ AI-Powered Tools to Ship Faster",
     description:
       "AI sprint planning, smart estimation, real-time collaboration, enterprise RBAC, change requests, webhooks & API. The most feature-rich project management platform for engineering teams.",
     url: "/features",
@@ -69,13 +69,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM Features – 30+ AI-Powered Tools",
+        alt: "Simplify Projects Features – 30+ AI-Powered Tools",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM Features – 30+ AI-Powered Tools to Ship Faster",
+    title: "Simplify Projects Features – 30+ AI-Powered Tools to Ship Faster",
     description:
       "AI sprint planning, smart estimation, real-time collaboration, enterprise RBAC, and change request workflows.",
     images: ["/og-image.png"],
@@ -129,14 +129,14 @@ const features = [
     icon: Sparkles,
     title: "Natural Language Task Creation",
     description:
-      "Create tasks by describing them in plain English. AI automatically extracts title, description, priority, labels, assignee suggestions, and estimated effort. Paste a Slack message or email and OrbisPM converts it into a structured, actionable task.",
+      "Create tasks by describing them in plain English. AI automatically extracts title, description, priority, labels, assignee suggestions, and estimated effort. Paste a Slack message or email and Simplify Projects converts it into a structured, actionable task.",
     badge: "AI-Powered",
   },
   {
     icon: LineChart,
     title: "Predictive Burndown Charts",
     description:
-      "Go beyond static burndown charts. OrbisPM uses ML models trained on your team's history to forecast sprint completion probability, predict delays before they occur, and suggest scope adjustments to hit deadlines.",
+      "Go beyond static burndown charts. Simplify Projects uses ML models trained on your team's history to forecast sprint completion probability, predict delays before they occur, and suggest scope adjustments to hit deadlines.",
     badge: "AI-Powered",
   },
   {
@@ -220,7 +220,7 @@ const features = [
     icon: Webhook,
     title: "Webhooks & REST API",
     description:
-      "Connect OrbisPM to your existing toolchain. Full REST API with Swagger/OpenAPI documentation, webhook event notifications for 20+ event types, secure API key management with SHA-256 hashing, and rate-limited endpoints.",
+      "Connect Simplify Projects to your existing toolchain. Full REST API with Swagger/OpenAPI documentation, webhook event notifications for 20+ event types, secure API key management with SHA-256 hashing, and rate-limited endpoints.",
     badge: null,
   },
   {
@@ -276,14 +276,14 @@ const features = [
     icon: Globe,
     title: "On-Premise Deployment",
     description:
-      "Deploy OrbisPM on your own infrastructure with Docker Compose. The entire stack — PostgreSQL, Redis, MinIO, Meilisearch — runs in containers. Enterprise customers get dedicated deployment support and custom SLAs.",
+      "Deploy Simplify Projects on your own infrastructure with Docker Compose. The entire stack — PostgreSQL, Redis, MinIO, Meilisearch — runs in containers. Enterprise customers get dedicated deployment support and custom SLAs.",
     badge: "Enterprise",
   },
   {
     icon: Eye,
     title: "Progressive Web App",
     description:
-      "Install OrbisPM as a native-like app on any device. Offline-ready with intelligent caching — continue working when your connection drops and sync automatically when connectivity returns.",
+      "Install Simplify Projects as a native-like app on any device. Offline-ready with intelligent caching — continue working when your connection drops and sync automatically when connectivity returns.",
     badge: null,
   },
   {
@@ -302,10 +302,10 @@ export default function FeaturesPage() {
         data={{
           "@context": "https://schema.org",
           "@type": "WebPage",
-          name: "OrbisPM Features – 30+ AI-Powered Project Management Tools",
+          name: "Simplify Projects Features – 30+ AI-Powered Project Management Tools",
           description:
-            "Complete feature overview of OrbisPM project management platform with AI sprint planning, smart estimation, and 30+ tools for engineering teams",
-          url: "https://orbisom.live/features",
+            "Complete feature overview of Simplify Projects project management platform with AI sprint planning, smart estimation, and 30+ tools for engineering teams",
+          url: "https://simplifyai.id/features",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
@@ -313,13 +313,13 @@ export default function FeaturesPage() {
                 "@type": "ListItem",
                 position: 1,
                 name: "Home",
-                item: "https://orbisom.live",
+                item: "https://simplifyai.id",
               },
               {
                 "@type": "ListItem",
                 position: 2,
                 name: "Features",
-                item: "https://orbisom.live/features",
+                item: "https://simplifyai.id/features",
               },
             ],
           },
@@ -341,7 +341,7 @@ export default function FeaturesPage() {
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
-            OrbisPM combines enterprise-grade project management with AI-powered
+            Simplify Projects combines enterprise-grade project management with AI-powered
             intelligence. From AI sprint planning to predictive analytics —
             features no other platform offers.
           </p>
@@ -439,7 +439,7 @@ export default function FeaturesPage() {
               8 AI Features No Other PM Tool Has
             </h2>
             <p className="text-base-content/50 mt-3 text-lg max-w-2xl mx-auto">
-              OrbisPM doesn&apos;t just bolt on AI as a chatbot. Intelligence is
+              Simplify Projects doesn&apos;t just bolt on AI as a chatbot. Intelligence is
               woven into every workflow — from planning to retrospectives.
             </p>
           </div>
@@ -548,7 +548,7 @@ export default function FeaturesPage() {
             Ready to supercharge your workflow?
           </h2>
           <p className="mt-6 text-lg text-base-content/60 max-w-2xl mx-auto">
-            Join thousands of engineering teams shipping faster with OrbisPM.
+            Join thousands of engineering teams shipping faster with Simplify Projects.
             Start free — no credit card required.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">

@@ -86,7 +86,7 @@ const TABS: TabDef[] = [
   {
     key: "webhooks",
     label: "Webhooks",
-    description: "Connect OrbisPM events to your downstream systems.",
+    description: "Connect Simplify Projects events to your downstream systems.",
     icon: <Webhook className="w-4 h-4" />,
     check: (can) => can("webhooks", "manage"),
     component: WebhooksTab,

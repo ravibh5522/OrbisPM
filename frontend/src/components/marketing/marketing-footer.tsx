@@ -1,4 +1,3 @@
-import { Layers } from "lucide-react";
 import Link from "next/link";
 
 export function MarketingFooter() {
@@ -8,10 +7,9 @@ export function MarketingFooter() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Layers className="w-4 h-4 text-primary-content" />
-              </div>
-              <span className="text-lg font-bold">OrbisPM</span>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo-mark.png" alt="Simplify Projects" className="h-8 w-auto" />
+              <span className="text-lg font-bold">Simplify Projects</span>
             </Link>
             <p className="text-sm text-base-content/50 leading-relaxed">
               AI-native project management platform for modern engineering teams. Enterprise-ready with real-time collaboration.
@@ -42,17 +40,17 @@ export function MarketingFooter() {
             <ul className="space-y-2 text-sm text-base-content/50">
               <li>
                 <Link href="/alternatives/jira" className="hover:text-primary transition-colors">
-                  OrbisPM vs Jira
+                  Simplify Projects vs Jira
                 </Link>
               </li>
               <li>
                 <Link href="/alternatives/asana" className="hover:text-primary transition-colors">
-                  OrbisPM vs Asana
+                  Simplify Projects vs Asana
                 </Link>
               </li>
               <li>
                 <Link href="/alternatives/trello" className="hover:text-primary transition-colors">
-                  OrbisPM vs Trello
+                  Simplify Projects vs Trello
                 </Link>
               </li>
             </ul>
@@ -95,7 +93,7 @@ export function MarketingFooter() {
         </div>
         <div className="border-t border-base-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-sm text-base-content/40">
-            &copy; {new Date().getFullYear()} OrbisPM. All rights reserved.
+            &copy; {new Date().getFullYear()} SimplifyAI. All rights reserved.
           </p>
           <div className="flex items-center gap-4">
             <a

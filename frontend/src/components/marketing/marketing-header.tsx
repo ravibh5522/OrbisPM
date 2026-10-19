@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowRight, ChevronDown, Layers, Menu, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -11,9 +11,9 @@ const navLinks = [
     label: "Alternatives",
     href: "/alternatives/jira",
     children: [
-      { label: "OrbisPM vs Jira", href: "/alternatives/jira" },
-      { label: "OrbisPM vs Asana", href: "/alternatives/asana" },
-      { label: "OrbisPM vs Trello", href: "/alternatives/trello" },
+      { label: "Simplify Projects vs Jira", href: "/alternatives/jira" },
+      { label: "Simplify Projects vs Asana", href: "/alternatives/asana" },
+      { label: "Simplify Projects vs Trello", href: "/alternatives/trello" },
     ],
   },
   { label: "Blog", href: "/blog" },
@@ -29,11 +29,10 @@ export function MarketingHeader() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
           <Link href="/" className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center">
-              <Layers className="w-5 h-5 text-primary-content" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt="Simplify Projects" className="h-9 w-auto" />
             <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-              OrbisPM
+              Simplify Projects
             </span>
           </Link>
 

@@ -9,19 +9,15 @@ import {
   Bell,
   CheckSquare,
   ChevronDown,
-  Clock,
   Eye,
   FileText,
   FolderKanban,
   GitBranch,
   Globe,
-  Layers,
   Lock,
   Mail,
-  MapPin,
   Menu,
   MessageSquare,
-  Phone,
   Search,
   Send,
   Shield,
@@ -100,7 +96,7 @@ const testimonials = [
     role: "VP Engineering, TechScale Inc.",
     avatar: "SC",
     color: "bg-primary",
-    text: "OrbisPM transformed how our 200+ engineering team collaborates. The real-time features and granular permissions are game-changers.",
+    text: "Simplify Projects transformed how our 200+ engineering team collaborates. The real-time features and granular permissions are game-changers.",
     rating: 5,
   },
   {
@@ -180,24 +176,24 @@ const plans = [
 /* ─────────────────── FAQ ─────────────────── */
 const faqs = [
   {
-    q: "How does OrbisPM differ from other project management tools?",
-    a: "OrbisPM is built as an AI-native platform from the ground up. Unlike legacy tools, it features real-time WebSocket collaboration, granular RBAC with custom roles, change request workflows for regulated environments, AI-powered sprint planning, smart task estimation, and a modern DaisyUI interface.",
+    q: "How does Simplify Projects differ from other project management tools?",
+    a: "Simplify Projects is built as an AI-native platform from the ground up. Unlike legacy tools, it features real-time WebSocket collaboration, granular RBAC with custom roles, change request workflows for regulated environments, AI-powered sprint planning, smart task estimation, and a modern DaisyUI interface.",
   },
   {
     q: "Can I migrate from Jira, Asana, or Trello?",
-    a: "Yes! OrbisPM supports CSV/XLSX import for tasks, making migration straightforward. Our import system handles bulk data with progress tracking and error reporting.",
+    a: "Yes! Simplify Projects supports CSV/XLSX import for tasks, making migration straightforward. Our import system handles bulk data with progress tracking and error reporting.",
   },
   {
     q: "Is my data secure?",
-    a: "Absolutely. OrbisPM uses Zitadel for enterprise-grade authentication with MFA support, row-level security in PostgreSQL, encrypted API keys, and granular permission controls. Enterprise plans support on-premise deployment.",
+    a: "Absolutely. Simplify Projects uses Zitadel for enterprise-grade authentication with MFA support, row-level security in PostgreSQL, encrypted API keys, and granular permission controls. Enterprise plans support on-premise deployment.",
   },
   {
-    q: "Does OrbisPM support on-premise deployment?",
-    a: "Yes! OrbisPM Enterprise offers on-premise deployment with Docker Compose. The entire stack (PostgreSQL, Redis, MinIO, Meilisearch) runs in containers, giving your team full control over infrastructure.",
+    q: "Does Simplify Projects support on-premise deployment?",
+    a: "Yes! Simplify Projects Enterprise offers on-premise deployment with Docker Compose. The entire stack (PostgreSQL, Redis, MinIO, Meilisearch) runs in containers, giving your team full control over infrastructure.",
   },
   {
     q: "What integrations are available?",
-    a: "OrbisPM offers webhooks for real-time event notifications, a REST API with full Swagger documentation, API key management, and Stripe integration for billing. Custom integrations are supported via the API.",
+    a: "Simplify Projects offers webhooks for real-time event notifications, a REST API with full Swagger documentation, API key management, and Stripe integration for billing. Custom integrations are supported via the API.",
   },
   {
     q: "Is there a free plan?",
@@ -311,11 +307,10 @@ export default function LandingPage() {
           <div className="flex items-center justify-between h-16 md:h-20">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2">
-              <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center">
-                <Layers className="w-5 h-5 text-primary-content" />
-              </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-mark.png" alt="Simplify Projects" className="h-9 w-auto" />
               <span className="text-xl font-bold bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-                OrbisPM
+                Simplify Projects
               </span>
             </Link>
 
@@ -427,7 +422,7 @@ export default function LandingPage() {
               </h1>
 
               <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-2xl mx-auto leading-relaxed">
-                OrbisPM brings real-time collaboration, granular permissions,
+                Simplify Projects brings real-time collaboration, granular permissions,
                 change request workflows, and powerful automation to modern
                 engineering teams. AI-powered & enterprise-ready.
               </p>
@@ -475,7 +470,7 @@ export default function LandingPage() {
                   </div>
                   <div className="flex-1 flex justify-center">
                     <div className="bg-base-200 rounded-lg px-4 py-1 text-xs text-base-content/40 min-w-[200px] text-center">
-                      app.orbisom.live
+                      app.simplifyai.id
                     </div>
                   </div>
                 </div>
@@ -612,7 +607,7 @@ export default function LandingPage() {
                 Everything you need to manage projects at scale
               </h2>
               <p className="mt-4 text-base-content/60 text-lg">
-                From task management to team governance — OrbisPM has every
+                From task management to team governance — Simplify Projects has every
                 feature your team needs, built into one unified platform.
               </p>
             </div>
@@ -682,7 +677,7 @@ export default function LandingPage() {
                 delay={1000}
                 icon={Webhook}
                 title="Webhooks & API"
-                description="Connect OrbisPM to your existing tools. Full REST API with Swagger docs, webhook event notifications, and API key management."
+                description="Connect Simplify Projects to your existing tools. Full REST API with Swagger docs, webhook event notifications, and API key management."
               />
               <FeatureCard
                 delay={1100}
@@ -712,7 +707,7 @@ export default function LandingPage() {
                 Up and running in minutes
               </h2>
               <p className="mt-4 text-base-content/60 text-lg">
-                OrbisPM is designed to get out of your way. Set up your
+                Simplify Projects is designed to get out of your way. Set up your
                 organization, invite your team, and start shipping.
               </p>
             </div>
@@ -1330,40 +1325,18 @@ export default function LandingPage() {
                     <div>
                       <div className="font-medium text-sm">Email</div>
                       <div className="text-base-content/60 text-sm">
-                        hello@orbispm.in
+                        contact@simplifyai.id
                       </div>
                     </div>
                   </div>
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <MapPin className="w-5 h-5 text-primary" />
+                      <Globe className="w-5 h-5 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium text-sm">Office</div>
+                      <div className="font-medium text-sm">Website</div>
                       <div className="text-base-content/60 text-sm">
-                        San Francisco, CA & Bangalore, India
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Phone className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-medium text-sm">Phone</div>
-                      <div className="text-base-content/60 text-sm">
-                        +1 (555) 123-4567
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex items-start gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                      <Clock className="w-5 h-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-medium text-sm">Business Hours</div>
-                      <div className="text-base-content/60 text-sm">
-                        Mon–Fri, 9:00 AM – 6:00 PM PST
+                        simplifyai.id
                       </div>
                     </div>
                   </div>
@@ -1502,7 +1475,7 @@ export default function LandingPage() {
               Ready to transform your workflow?
             </h2>
             <p className="mt-6 text-lg text-base-content/60 max-w-2xl mx-auto">
-              Join thousands of teams already shipping faster with OrbisPM. Get
+              Join thousands of teams already shipping faster with Simplify Projects. Get
               started in minutes — no credit card required.
             </p>
             <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -1529,10 +1502,9 @@ export default function LandingPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
             <div className="col-span-2 md:col-span-1">
               <Link href="/" className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                  <Layers className="w-4 h-4 text-primary-content" />
-                </div>
-                <span className="text-lg font-bold">OrbisPM</span>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/logo-mark.png" alt="Simplify Projects" className="h-8 w-auto" />
+                <span className="text-lg font-bold">Simplify Projects</span>
               </Link>
               <p className="text-sm text-base-content/50 leading-relaxed">
                 AI-native project management for modern engineering teams.
@@ -1576,7 +1548,7 @@ export default function LandingPage() {
                     href="/alternatives/jira"
                     className="hover:text-primary transition-colors"
                   >
-                    OrbisPM vs Jira
+                    Simplify Projects vs Jira
                   </Link>
                 </li>
                 <li>
@@ -1584,7 +1556,7 @@ export default function LandingPage() {
                     href="/alternatives/asana"
                     className="hover:text-primary transition-colors"
                   >
-                    OrbisPM vs Asana
+                    Simplify Projects vs Asana
                   </Link>
                 </li>
                 <li>
@@ -1592,7 +1564,7 @@ export default function LandingPage() {
                     href="/alternatives/trello"
                     className="hover:text-primary transition-colors"
                   >
-                    OrbisPM vs Trello
+                    Simplify Projects vs Trello
                   </Link>
                 </li>
               </ul>
@@ -1650,7 +1622,7 @@ export default function LandingPage() {
           </div>
           <div className="border-t border-base-200 pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
             <p className="text-sm text-base-content/40">
-              &copy; {new Date().getFullYear()} OrbisPM. All rights reserved.
+              &copy; {new Date().getFullYear()} SimplifyAI. All rights reserved.
             </p>
             <div className="flex items-center gap-4">
               <a

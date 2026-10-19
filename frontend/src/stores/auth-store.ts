@@ -187,7 +187,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     });
 
     // Real RP-initiated logout: without this, "logout" only ever meant
-    // "forget OrbisPM's own token" — the browser's shared Zitadel session
+    // "forget Simplify Projects's own token" — the browser's shared Zitadel session
     // (what makes SSO across every Crewsity app possible) stayed alive, so
     // signing out here never actually signed you out anywhere else. No
     // id_token means this was a demo/native-password sign-in, which never

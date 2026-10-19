@@ -1,4 +1,4 @@
-# OrbisPM Quick Start
+# Simplify Projects Quick Start
 
 Small guide to build and start the stack locally.
 

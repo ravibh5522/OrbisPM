@@ -14,20 +14,20 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "About OrbisPM – Our Mission to Reinvent Project Management with AI",
+  title: "About Simplify Projects – Our Mission to Reinvent Project Management with AI",
   description:
-    "Learn about OrbisPM: our mission to build the most intelligent project management platform for engineering teams. Founded by engineers, powered by AI, trusted by thousands of teams worldwide.",
+    "Learn about Simplify Projects: our mission to build the most intelligent project management platform for engineering teams. Founded by engineers, powered by AI, trusted by thousands of teams worldwide.",
   alternates: { canonical: "/about" },
   keywords: [
-    "about OrbisPM",
+    "about Simplify Projects",
     "AI project management company",
     "project management for engineers",
-    "OrbisPM team",
+    "Simplify Projects team",
     "project management mission",
     "engineering productivity company",
   ],
   openGraph: {
-    title: "About OrbisPM – Reinventing Project Management with AI",
+    title: "About Simplify Projects – Reinventing Project Management with AI",
     description:
       "Building the most intelligent project management platform for modern engineering teams. Enterprise-ready with AI-powered features.",
     url: "/about",
@@ -36,13 +36,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "About OrbisPM – Our Mission",
+        alt: "About Simplify Projects – Our Mission",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "About OrbisPM – Reinventing Project Management with AI",
+    title: "About Simplify Projects – Reinventing Project Management with AI",
     description:
       "Building the most intelligent project management platform for modern engineering teams. Enterprise-ready with AI-powered features.",
     images: ["/og-image.png"],
@@ -95,9 +95,9 @@ export default function AboutPage() {
         data={{
           "@context": "https://schema.org",
           "@type": "Organization",
-          name: "OrbisPM",
-          url: "https://orbisom.live",
-          logo: "https://orbisom.live/logo.svg",
+          name: "Simplify Projects",
+          url: "https://simplifyai.id",
+          logo: "https://simplifyai.id/logo-mark.png",
           description:
             "AI-powered project management platform for modern engineering teams",
           foundingDate: "2024",
@@ -120,7 +120,7 @@ export default function AboutPage() {
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
-            OrbisPM was born from frustration with tools that slow teams down.
+            Simplify Projects was born from frustration with tools that slow teams down.
             We believe project management should be real-time, intelligent,
             secure, and designed specifically for engineering teams.
           </p>
@@ -177,14 +177,14 @@ export default function AboutPage() {
             <h2 className="text-3xl font-bold mb-8 text-center">Our Story</h2>
             <div className="prose prose-lg max-w-none text-base-content/70">
               <p>
-                We started OrbisPM because every project management tool we
+                We started Simplify Projects because every project management tool we
                 tried fell short for engineering teams. Jira was bloated and
                 slow. Asana lacked the permissions and compliance features
                 enterprises need. Trello was too simple for complex software
                 projects. And none of them had meaningful AI capabilities.
               </p>
               <p>
-                So we built OrbisPM from scratch with a clear thesis:{" "}
+                So we built Simplify Projects from scratch with a clear thesis:{" "}
                 <strong>
                   project management should be intelligent, real-time, and built
                   for how engineers actually work
@@ -208,7 +208,7 @@ export default function AboutPage() {
                 (S3-compatible), making deployment flexible and cloud-agnostic.
               </p>
               <p>
-                Today, OrbisPM serves hundreds of engineering teams worldwide —
+                Today, Simplify Projects serves hundreds of engineering teams worldwide —
                 from 5-person startups to 500+ enterprise organizations.
                 We&apos;re just getting started.
               </p>
@@ -223,7 +223,7 @@ export default function AboutPage() {
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold">What We Believe</h2>
             <p className="text-base-content/50 mt-3 text-lg">
-              The principles that guide every product decision at OrbisPM
+              The principles that guide every product decision at Simplify Projects
             </p>
           </div>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">

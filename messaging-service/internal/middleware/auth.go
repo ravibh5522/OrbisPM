@@ -135,7 +135,7 @@ type sessionCacheEntry struct {
 }
 
 // Auth middleware validates Zitadel-issued JWTs or session tokens and sets user context.
-// pool resolves the Zitadel identity to OrbisPM's stable internal user ID —
+// pool resolves the Zitadel identity to Simplify Projects's stable internal user ID —
 // see resolveUserID for why this can no longer be a pure derivation.
 func Auth(jwksURL, issuer, hostHeader, zitadelInternalURL, serviceToken string, rdb *redis.Client, pool *pgxpool.Pool, jwksTTL time.Duration) func(http.Handler) http.Handler {
 	cache := NewJWKSCache(jwksURL, &http.Client{Timeout: 10 * time.Second}, hostHeader, jwksTTL)

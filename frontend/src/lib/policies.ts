@@ -1,5 +1,5 @@
 /**
- * Centralized Policy Handler for OrbisPM
+ * Centralized Policy Handler for Simplify Projects
  *
  * Single source of truth for all UI access-control decisions.
  * Computes policies from the user's org role + DB-driven permissions

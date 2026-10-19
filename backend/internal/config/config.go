@@ -124,7 +124,7 @@ func Load() (*Config, error) {
 		SMTPPort:            getEnvInt("SMTP_PORT", 1025),
 		SMTPUser:            getEnv("SMTP_USER", ""),
 		SMTPPassword:        getEnv("SMTP_PASSWORD", ""),
-		SMTPFrom:            getEnv("SMTP_FROM", "noreply@orbispm.local"),
+		SMTPFrom:            getEnv("SMTP_FROM", "noreply@simplifyai.id"),
 		SMTPEnabled:         getEnvBool("SMTP_ENABLED", true),
 		RateLimitPerMinute:  getEnvInt("RATE_LIMIT_PER_MINUTE", 600),
 		RateLimitBurst:      getEnvInt("RATE_LIMIT_BURST", 50),
@@ -146,12 +146,12 @@ func Load() (*Config, error) {
 
 func parseOrigins(origins, frontendURL string) []string {
 	defaultOrigins := []string{
-		"https://orbispm.live",
-		"https://www.orbispm.live",
-		"https://app.orbispm.live",
-		"https://orbispm.in",
-		"https://www.orbispm.in",
-		"https://app.orbispm.in",
+		"https://simplifyai.id",
+		"https://simplifyai.id",
+		"https://simplifyai.id",
+		"https://simplifyai.id",
+		"https://simplifyai.id",
+		"https://simplifyai.id",
 	}
 	result := make(map[string]struct{})
 	result[frontendURL] = struct{}{}

@@ -220,7 +220,7 @@ func (h *Handlers) HandleNotification(ctx context.Context, t *asynq.Task) error 
 				log.Warn().Err(err).Str("user_id", p.UserID).Msg("could not find user email")
 			} else {
 				// Fetch org branding (name + logo) to personalise email templates.
-				orgName := "OrbisPM"
+				orgName := "Simplify Projects"
 				orgIcon := ""
 				if h.OrgRepo != nil {
 					if org, orgErr := h.OrgRepo.GetByID(ctx, orgID); orgErr == nil {

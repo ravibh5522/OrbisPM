@@ -19,11 +19,11 @@ type Client struct {
 	mc          *minio.Client // internal — used for uploads, downloads, bucket ops
 	presignMC   *minio.Client // public  — used for presigned URLs (browser-reachable host)
 	bucket      string
-	presignBase string // public base URL, e.g. "https://minioapi.orbispm.in"
+	presignBase string // public base URL, e.g. "https://minioapi.simplifyai.id"
 }
 
 // NewClient creates a new MinIO storage client and ensures the bucket exists.
-// publicURL is the browser-reachable base URL (e.g. "https://minioapi.orbispm.in");
+// publicURL is the browser-reachable base URL (e.g. "https://minioapi.simplifyai.id");
 // it is used when generating presigned URLs so the browser can reach them.
 // public sets an anonymous public-read policy on the bucket; private buckets
 // (Drive) are only reachable through presigned URLs.

@@ -53,12 +53,12 @@ func (h *AuthHandler) sendPasswordResetEmail(ctx context.Context, toEmail, code 
 	resetURL := frontendURL + "/reset-password?email=" + toEmail + "&code=" + code
 	payload := map[string]any{
 		"to":       toEmail,
-		"subject":  "Reset your OrbisPM password",
+		"subject":  "Reset your Simplify Projects password",
 		"template": "password_reset",
 		"context": map[string]string{
 			"reset_code":     code,
 			"reset_url":      resetURL,
-			"app_name":       "OrbisPM",
+			"app_name":       "Simplify Projects",
 			"frontend_url":   frontendURL,
 			"expiry_minutes": "60",
 		},
@@ -545,7 +545,7 @@ type oidcAuthorizeRequest struct {
 	// redirect directly to the named identity provider (e.g. Google, GitHub).
 	IDPID string `json:"idp_id"`
 	// Prompt is optional. "create" tells the centralized login UI this is a
-	// signup (OrbisPM's /signup page), not a sign-in — it lands on /register
+	// signup (Simplify Projects's /signup page), not a sign-in — it lands on /register
 	// instead of /login. See GenerateAuthURL.
 	Prompt string `json:"prompt"`
 	// LoginHint is optional. Forwarded as OIDC login_hint so the centralized

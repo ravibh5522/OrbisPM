@@ -587,7 +587,7 @@ func (h *TaskHandler) CalendarExport(w http.ResponseWriter, r *http.Request) {
 
 	fmt.Fprintln(w, "BEGIN:VCALENDAR")
 	fmt.Fprintln(w, "VERSION:2.0")
-	fmt.Fprintln(w, "PRODID:-//OrbisPM//Tasks//EN")
+	fmt.Fprintln(w, "PRODID:-//Simplify Projects//Tasks//EN")
 	fmt.Fprintln(w, "CALSCALE:GREGORIAN")
 	fmt.Fprintln(w, "METHOD:PUBLISH")
 

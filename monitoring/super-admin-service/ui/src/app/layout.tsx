@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'OrbisPM - Super Admin Console',
-  description: 'Monitoring and administration dashboard for OrbisPM platform',
+  title: 'Simplify Projects - Super Admin Console',
+  description: 'Monitoring and administration dashboard for Simplify Projects platform',
 }
 
 export default function RootLayout({

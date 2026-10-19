@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     smtp_port: int = 1025
     smtp_user: str = ""
     smtp_password: str = ""
-    smtp_from: str = "noreply@orbispm.local"
+    smtp_from: str = "noreply@simplifyai.id"
     smtp_use_tls: bool = False
     smtp_start_tls: bool = False
 

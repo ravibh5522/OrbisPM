@@ -56,27 +56,27 @@ export default function RealTimeCollabArticle() {
             "Real-Time Collaboration: Why WebSocket-Based Project Management Changes Everything",
           description:
             "How WebSocket-based real-time collaboration keeps distributed engineering teams in sync",
-          url: "https://orbisom.live/blog/real-time-collaboration-engineering-teams",
+          url: "https://simplifyai.id/blog/real-time-collaboration-engineering-teams",
           datePublished: "2026-02-28",
           dateModified: "2026-02-28",
           image: {
             "@type": "ImageObject",
-            url: "https://orbisom.live/og-image.png",
+            url: "https://simplifyai.id/og-image.png",
             width: 1200,
             height: 630,
           },
           author: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
           publisher: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
           mainEntityOfPage:
-            "https://orbisom.live/blog/real-time-collaboration-engineering-teams",
+            "https://simplifyai.id/blog/real-time-collaboration-engineering-teams",
         }}
       />
       <MarketingHeader />
@@ -113,7 +113,7 @@ export default function RealTimeCollabArticle() {
                 OP
               </div>
               <div>
-                <div className="text-sm font-semibold">OrbisPM Team</div>
+                <div className="text-sm font-semibold">Simplify Projects Team</div>
                 <div className="text-xs text-base-content/50">
                   Engineering &amp; Product
                 </div>
@@ -168,7 +168,7 @@ export default function RealTimeCollabArticle() {
                 to you the instant they happen.
               </p>
               <p>
-                In OrbisPM, this architecture powers several features that would
+                In Simplify Projects, this architecture powers several features that would
                 be impossible with polling:
               </p>
 
@@ -186,7 +186,7 @@ export default function RealTimeCollabArticle() {
                 Presence Indicators
               </h3>
               <p>
-                OrbisPM shows who is currently online and viewing the same
+                Simplify Projects shows who is currently online and viewing the same
                 project. This context is invaluable for distributed teams — you
                 know who is available for quick discussions and can avoid
                 stepping on each other&apos;s work.
@@ -203,10 +203,10 @@ export default function RealTimeCollabArticle() {
               </p>
 
               <h2 className="text-2xl font-bold text-base-content mt-12">
-                The Architecture Behind OrbisPM&apos;s Real-Time Engine
+                The Architecture Behind Simplify Projects&apos;s Real-Time Engine
               </h2>
               <p>
-                OrbisPM uses a Go backend with the nhooyr.io/websocket library,
+                Simplify Projects uses a Go backend with the nhooyr.io/websocket library,
                 backed by Redis Pub/Sub for horizontal scaling. When a mutation
                 occurs (task update, comment, status change):
               </p>
@@ -230,7 +230,7 @@ export default function RealTimeCollabArticle() {
                 </li>
               </ol>
               <p>
-                This architecture means OrbisPM can scale to thousands of
+                This architecture means Simplify Projects can scale to thousands of
                 concurrent connections per server, with horizontal scaling
                 across multiple server instances via Redis.
               </p>
@@ -268,7 +268,7 @@ export default function RealTimeCollabArticle() {
                   Experience real-time collaboration
                 </h3>
                 <p className="text-sm text-base-content/60 mb-4">
-                  Try OrbisPM free and see the difference WebSocket-based
+                  Try Simplify Projects free and see the difference WebSocket-based
                   real-time sync makes for your team.
                 </p>
                 <Link href="/signup" className="btn btn-primary btn-sm gap-1">

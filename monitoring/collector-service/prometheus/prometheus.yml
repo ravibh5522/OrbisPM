@@ -1,7 +1,7 @@
 # =======================================================
 # Prometheus Configuration
 # =======================================================
-# Scrapes metrics from OrbisPM services and exporters
+# Scrapes metrics from Simplify Projects services and exporters
 
 global:
   scrape_interval: 15s
@@ -16,7 +16,7 @@ rule_files:
 
 # Scrape configurations
 scrape_configs:
-  # OrbisPM API Server
+  # Simplify Projects API Server
   - job_name: "orbispm-api"
     static_configs:
       - targets: ["api:8080"]

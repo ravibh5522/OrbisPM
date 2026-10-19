@@ -123,7 +123,7 @@ export default function LoginPage() {
         <div className="text-center mb-7">
           <h1 className="text-2xl font-bold text-base-content">Welcome back</h1>
           <p className="text-base-content/55 mt-1.5 text-sm">
-            Sign in to your OrbisPM account
+            Sign in to your Simplify Projects account
           </p>
         </div>
 

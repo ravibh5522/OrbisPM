@@ -1,7 +1,7 @@
 # =======================================================
 # OpenTelemetry Collector Configuration
 # =======================================================
-# Receives metrics, traces, logs from OrbisPM services
+# Receives metrics, traces, logs from Simplify Projects services
 # Exports to Prometheus, Tempo, Loki
 
 receivers:

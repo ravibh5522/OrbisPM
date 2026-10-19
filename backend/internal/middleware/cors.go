@@ -9,8 +9,8 @@ import (
 
 // allowedOriginDomains lists base domains whose subdomains are permitted.
 var allowedOriginDomains = []string{
-	".orbispm.in",
-	".orbispm.live",
+	".simplifyai.id",
+	".simplifyai.id",
 }
 
 // isAllowedOrigin returns true if origin matches an exact allowed origin or
@@ -36,7 +36,7 @@ func isAllowedOrigin(allowedOrigins []string, origin string) bool {
 
 // NewCORSHandler creates a cors.Handler for use in chi middleware chain.
 // It allows all exact origins in allowedOrigins plus any subdomain of
-// orbispm.in and orbispm.live.
+// simplifyai.id and simplifyai.id.
 func NewCORSHandler(allowedOrigins []string) *cors.Cors {
 	return cors.New(cors.Options{
 		AllowOriginFunc:  func(r *http.Request, origin string) bool { return isAllowedOrigin(allowedOrigins, origin) },

@@ -1,4 +1,4 @@
-"""OrbisPM Email Service — FastAPI application."""
+"""Simplify Projects Email Service — FastAPI application."""
 
 import logging
 from contextlib import asynccontextmanager
@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="OrbisPM Email Service",
+    title="Simplify Projects Email Service",
     version="1.0.0",
     lifespan=lifespan,
 )

@@ -44,7 +44,7 @@ def render_template(template_name: str, context: dict, org_id: str | None = None
       2. Built-in template from templates/ directory
       3. Fallback to defaults/notification.html
     """
-    ctx = {**context, "frontend_url": settings.frontend_url, "app_name": "OrbisPM"}
+    ctx = {**context, "frontend_url": settings.frontend_url, "app_name": "Simplify Projects"}
 
     # Check custom org template first
     if org_id:

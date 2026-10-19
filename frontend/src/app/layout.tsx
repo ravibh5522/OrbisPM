@@ -26,11 +26,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL(siteUrl),
     title: {
-      default: "OrbisPM – AI-Powered Project Management for Engineering Teams",
-      template: "%s | OrbisPM",
+      default: "Simplify Projects – AI-Powered Project Management for Engineering Teams",
+      template: "%s | Simplify Projects",
     },
     description:
-      "OrbisPM is the AI-native project management platform built for modern engineering teams. Real-time collaboration, enterprise RBAC, change request workflows, AI sprint planning, smart task estimation, and powerful automation. The best Jira alternative in 2026.",
+      "Simplify Projects is the AI-native project management platform built for modern engineering teams. Real-time collaboration, enterprise RBAC, change request workflows, AI sprint planning, smart task estimation, and powerful automation. The best Jira alternative in 2026.",
     keywords: [
       "project management software",
       "AI project management",
@@ -58,16 +58,16 @@ export async function generateMetadata(): Promise<Metadata> {
       "project analytics dashboard",
       "free project management software",
     ],
-    authors: [{ name: "OrbisPM Team", url: siteUrl }],
-    creator: "OrbisPM",
-    publisher: "OrbisPM",
+    authors: [{ name: "Simplify Projects Team", url: siteUrl }],
+    creator: "Simplify Projects",
+    publisher: "Simplify Projects",
     formatDetection: { email: false, telephone: false, address: false },
     openGraph: {
       type: "website",
       locale: "en_US",
       url: siteUrl,
-      siteName: "OrbisPM",
-      title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+      siteName: "Simplify Projects",
+      title: "Simplify Projects – AI-Powered Project Management for Engineering Teams",
       description:
         "AI-native project management with real-time collaboration, enterprise RBAC, change request workflows, AI sprint planning, and powerful automation. The #1 Jira alternative for modern teams.",
       images: [
@@ -75,13 +75,13 @@ export async function generateMetadata(): Promise<Metadata> {
           url: "/og-image.png",
           width: 1200,
           height: 630,
-          alt: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+          alt: "Simplify Projects – AI-Powered Project Management for Engineering Teams",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "OrbisPM – AI-Powered Project Management",
+      title: "Simplify Projects – AI-Powered Project Management",
       description:
         "AI-native project management with real-time collaboration, enterprise RBAC, AI sprint planning, and workflow automation. Built for engineering teams.",
       creator: "@orbispm",
@@ -103,8 +103,8 @@ export async function generateMetadata(): Promise<Metadata> {
     },
     icons: {
       icon: [
-        { url: "/favicon.ico", sizes: "any" },
-        { url: "/icon.svg", type: "image/svg+xml" },
+        { url: "/favicon.ico", sizes: "32x32" },
+        { url: "/icon.png", type: "image/png" },
         { url: "/icon.png", type: "image/png", sizes: "32x32" },
       ],
       apple: [{ url: "/apple-icon.png", sizes: "180x180", type: "image/png" }],
@@ -113,7 +113,7 @@ export async function generateMetadata(): Promise<Metadata> {
     category: "technology",
     classification: "Business Software",
     other: {
-      "application-name": "OrbisPM",
+      "application-name": "Simplify Projects",
     },
   };
 }

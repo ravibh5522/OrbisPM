@@ -680,7 +680,7 @@ export default function MembersTab() {
               {...inviteForm.register("role")}
             />
             <p className="text-xs text-base-content/50">
-              The user must already have an OrbisPM account.
+              The user must already have a Simplify Projects account.
             </p>
             <div className="modal-action">
               <Button
@@ -743,7 +743,7 @@ export default function MembersTab() {
               {...createForm.register("role")}
             />
             <p className="text-xs text-base-content/50">
-              This creates a new OrbisPM account and adds them to the
+              This creates a new Simplify Projects account and adds them to the
               organization.
             </p>
             <div className="modal-action">

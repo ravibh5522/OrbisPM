@@ -345,13 +345,13 @@ export const THEMES: {
     colorScheme: "dark",
   },
   {
-    label: "Orbis Light",
+    label: "Simplify Light",
     value: "orbis-light",
     description: "Clean minimal light",
     colorScheme: "light",
   },
   {
-    label: "Orbis Dark",
+    label: "Simplify Dark",
     value: "orbis-dark",
     description: "Clean minimal dark",
     colorScheme: "dark",

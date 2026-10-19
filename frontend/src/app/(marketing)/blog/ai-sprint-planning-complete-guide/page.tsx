@@ -57,27 +57,27 @@ export default function AISprintPlanningGuide() {
             "AI Sprint Planning: The Complete Guide for Engineering Teams in 2026",
           description:
             "How AI is revolutionizing sprint planning for engineering teams",
-          url: "https://orbisom.live/blog/ai-sprint-planning-complete-guide",
+          url: "https://simplifyai.id/blog/ai-sprint-planning-complete-guide",
           datePublished: "2026-03-10",
           dateModified: "2026-03-10",
           image: {
             "@type": "ImageObject",
-            url: "https://orbisom.live/og-image.png",
+            url: "https://simplifyai.id/og-image.png",
             width: 1200,
             height: 630,
           },
           author: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
           publisher: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
           mainEntityOfPage:
-            "https://orbisom.live/blog/ai-sprint-planning-complete-guide",
+            "https://simplifyai.id/blog/ai-sprint-planning-complete-guide",
         }}
       />
       <MarketingHeader />
@@ -114,7 +114,7 @@ export default function AISprintPlanningGuide() {
                 OP
               </div>
               <div>
-                <div className="text-sm font-semibold">OrbisPM Team</div>
+                <div className="text-sm font-semibold">Simplify Projects Team</div>
                 <div className="text-xs text-base-content/50">
                   Engineering &amp; Product
                 </div>
@@ -173,7 +173,7 @@ export default function AISprintPlanningGuide() {
               <p>
                 AI-powered sprint planning addresses each of these problems with
                 data-driven intelligence. Here&apos;s how modern AI PM tools
-                like OrbisPM are transforming the process:
+                like Simplify Projects are transforming the process:
               </p>
 
               <h3 className="text-xl font-bold text-base-content mt-8">
@@ -189,7 +189,7 @@ export default function AISprintPlanningGuide() {
                 data from your team.
               </p>
               <p>
-                OrbisPM&apos;s AI estimation goes further by learning your
+                Simplify Projects&apos;s AI estimation goes further by learning your
                 team&apos;s specific patterns. A &quot;frontend UI task&quot;
                 might take your team 3 points on average, while similar tasks at
                 other organizations average 5. The AI adapts to your velocity,
@@ -320,11 +320,11 @@ export default function AISprintPlanningGuide() {
               </ol>
 
               <h2 className="text-2xl font-bold text-base-content mt-12">
-                How OrbisPM Implements AI Sprint Planning
+                How Simplify Projects Implements AI Sprint Planning
               </h2>
               <p>
                 <Link href="/features" className="text-primary hover:underline">
-                  OrbisPM
+                  Simplify Projects
                 </Link>{" "}
                 is building the most comprehensive AI sprint planning suite for
                 engineering teams. Our approach combines:
@@ -357,7 +357,7 @@ export default function AISprintPlanningGuide() {
                   Experience AI-powered sprint planning
                 </h3>
                 <p className="text-sm text-base-content/60 mb-4">
-                  Start free with OrbisPM and see how AI transforms your sprint
+                  Start free with Simplify Projects and see how AI transforms your sprint
                   planning process. No credit card required.
                 </p>
                 <Link href="/signup" className="btn btn-primary btn-sm gap-1">

@@ -7,12 +7,12 @@ import LandingPage from "./(marketing)/landing/page";
 export async function generateMetadata(): Promise<Metadata> {
   const siteUrl = await getBaseUrl();
   return {
-    title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+    title: "Simplify Projects – AI-Powered Project Management for Engineering Teams",
     description:
-      "OrbisPM is the AI-native project management platform built for modern engineering teams. Real-time collaboration, enterprise RBAC, AI sprint planning, smart task estimation, change request workflows, and powerful automation. The best Jira alternative in 2026.",
+      "Simplify Projects is the AI-native project management platform built for modern engineering teams. Real-time collaboration, enterprise RBAC, AI sprint planning, smart task estimation, change request workflows, and powerful automation. The best Jira alternative in 2026.",
     alternates: { canonical: siteUrl },
     openGraph: {
-      title: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+      title: "Simplify Projects – AI-Powered Project Management for Engineering Teams",
       description:
         "Ship faster with AI-native project management. Real-time collaboration, enterprise RBAC, AI sprint planning, smart estimation, and workflow automation. The #1 Jira alternative.",
       url: siteUrl,
@@ -22,13 +22,13 @@ export async function generateMetadata(): Promise<Metadata> {
           url: `${siteUrl}/og-image.png`,
           width: 1200,
           height: 630,
-          alt: "OrbisPM – AI-Powered Project Management for Engineering Teams",
+          alt: "Simplify Projects – AI-Powered Project Management for Engineering Teams",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "OrbisPM – AI-Powered Project Management",
+      title: "Simplify Projects – AI-Powered Project Management",
       description:
         "Ship faster with AI-native project management. Real-time collaboration, enterprise RBAC, AI sprint planning, and workflow automation.",
       images: [`${siteUrl}/og-image.png`],
@@ -41,7 +41,7 @@ export default async function Home() {
   const websiteSchema = {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    name: "OrbisPM",
+    name: "Simplify Projects",
     url: siteUrl,
     description:
       "AI-native project management platform for modern engineering teams.",
@@ -55,22 +55,18 @@ export default async function Home() {
   const organizationSchema = {
     "@context": "https://schema.org",
     "@type": "Organization",
-    name: "OrbisPM",
+    name: "Simplify Projects",
     url: siteUrl,
-    logo: `${siteUrl}/logo.svg`,
+    logo: `${siteUrl}/logo-mark.png`,
     description:
       "AI-native project management platform built for modern engineering teams.",
-    sameAs: [
-      "https://github.com/orbispm",
-      "https://twitter.com/orbispm",
-      "https://linkedin.com/company/orbispm",
-    ],
+    sameAs: ["https://simplifyai.id"],
   };
 
   const softwareSchema = {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
-    name: "OrbisPM",
+    name: "Simplify Projects",
     applicationCategory: "BusinessApplication",
     operatingSystem: "Web, Docker",
     url: siteUrl,
@@ -89,7 +85,7 @@ export default async function Home() {
         author: { "@type": "Person", name: "Sarah Chen" },
         reviewRating: { "@type": "Rating", ratingValue: "5", bestRating: "5" },
         reviewBody:
-          "OrbisPM transformed how our 200+ engineering team collaborates. The real-time features and granular permissions are game-changers.",
+          "Simplify Projects transformed how our 200+ engineering team collaborates. The real-time features and granular permissions are game-changers.",
         datePublished: "2026-01-15",
       },
       {
@@ -156,10 +152,10 @@ export default async function Home() {
     mainEntity: [
       {
         "@type": "Question",
-        name: "How does OrbisPM differ from other project management tools?",
+        name: "How does Simplify Projects differ from other project management tools?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "OrbisPM is built as an AI-native platform from the ground up. Unlike legacy tools, it features real-time WebSocket collaboration, granular RBAC with custom roles, change request workflows for teams that need approval control, AI-powered sprint planning, smart task estimation, and a modern interface.",
+          text: "Simplify Projects is built as an AI-native platform from the ground up. Unlike legacy tools, it features real-time WebSocket collaboration, granular RBAC with custom roles, change request workflows for teams that need approval control, AI-powered sprint planning, smart task estimation, and a modern interface.",
         },
       },
       {
@@ -167,23 +163,23 @@ export default async function Home() {
         name: "Can I migrate from Jira, Asana, or Trello?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Yes! OrbisPM supports CSV/XLSX import for tasks, making migration straightforward. Our import system handles bulk data with progress tracking and error reporting.",
+          text: "Yes! Simplify Projects supports CSV/XLSX import for tasks, making migration straightforward. Our import system handles bulk data with progress tracking and error reporting.",
         },
       },
       {
         "@type": "Question",
-        name: "Is my data secure with OrbisPM?",
+        name: "Is my data secure with Simplify Projects?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Absolutely. OrbisPM uses Zitadel for enterprise-grade authentication with MFA support, row-level security in PostgreSQL for tenant isolation, encrypted API keys, and granular permission controls. Enterprise plans support on-premise deployment.",
+          text: "Absolutely. Simplify Projects uses Zitadel for enterprise-grade authentication with MFA support, row-level security in PostgreSQL for tenant isolation, encrypted API keys, and granular permission controls. Enterprise plans support on-premise deployment.",
         },
       },
       {
         "@type": "Question",
-        name: "Does OrbisPM support on-premise deployment?",
+        name: "Does Simplify Projects support on-premise deployment?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "Yes! OrbisPM Enterprise offers on-premise deployment with Docker Compose. The entire stack (PostgreSQL, Redis, MinIO, Meilisearch) runs in containers for easy infrastructure management.",
+          text: "Yes! Simplify Projects Enterprise offers on-premise deployment with Docker Compose. The entire stack (PostgreSQL, Redis, MinIO, Meilisearch) runs in containers for easy infrastructure management.",
         },
       },
       {
@@ -199,7 +195,7 @@ export default async function Home() {
         name: "What integrations are available?",
         acceptedAnswer: {
           "@type": "Answer",
-          text: "OrbisPM offers webhooks for real-time event notifications, a REST API with full Swagger documentation, API key management, and Stripe integration for billing. Custom integrations are supported via the API.",
+          text: "Simplify Projects offers webhooks for real-time event notifications, a REST API with full Swagger documentation, API key management, and Stripe integration for billing. Custom integrations are supported via the API.",
         },
       },
     ],

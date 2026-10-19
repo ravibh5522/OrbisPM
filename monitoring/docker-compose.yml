@@ -1,5 +1,5 @@
 # =======================================================
-# OrbisPM Monitoring Stack — Master Docker Compose
+# Simplify Projects Monitoring Stack — Master Docker Compose
 # =======================================================
 # Includes all monitoring microservices
 # Local:      docker compose --env-file ../.env.local -f monitoring/docker-compose.yml up -d
@@ -22,7 +22,7 @@ networks:
   monitoring:
     driver: bridge
 
-  # Connect to main OrbisPM network (external)
+  # Connect to main Simplify Projects network (external)
   orbispm_default:
     external: true
     name: orbispm_default

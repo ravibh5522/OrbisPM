@@ -181,8 +181,8 @@ const PREVIEW_CONTEXT: Record<string, Record<string, string>> = {
 
 /** Subject lines shown in the preview email-client chrome */
 const PREVIEW_SUBJECT: Record<string, string> = {
-  notification: "New task assigned to you — OrbisPM",
-  password_reset: "Reset your OrbisPM password",
+  notification: "New task assigned to you — Simplify Projects",
+  password_reset: "Reset your Simplify Projects password",
   otp: "Your verification code: 529 384",
   announcement: "Team All-Hands Meeting — Q2 2026",
   welcome: "Welcome to Orbi Solutions — you're in!",
@@ -273,7 +273,7 @@ function buildPreviewCtx(
 ): Record<string, string> {
   return {
     ...(PREVIEW_CONTEXT[name] ?? {}),
-    app_name: "OrbisPM",
+    app_name: "Simplify Projects",
     frontend_url: "#",
     ...(org ? { org_name: org.name, org_icon: org.logo_url ?? "" } : {}),
   };
@@ -379,7 +379,7 @@ function EmailPreviewModal({
           <div className="bg-base-100 border-b border-base-200 px-5 py-2 text-xs text-base-content/50 flex gap-6">
             <span>
               <strong className="text-base-content/70">From:</strong>{" "}
-              {meta?.label ?? "OrbisPM"} &lt;{fromAddr}&gt;
+              {meta?.label ?? "Simplify Projects"} &lt;{fromAddr}&gt;
             </span>
             <span>
               <strong className="text-base-content/70">To:</strong>{" "}
@@ -945,7 +945,7 @@ function getStarterTemplate(name: string): string {
             We received a request to reset the password for your account. Click the button below to choose a new password.
           </p>
           <div style="text-align:center;margin-bottom:20px;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Reset Password</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Reset Password</a>
           </div>
           <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:10px;padding:14px 18px;text-align:center;">
             <p style="margin:0 0 4px;font-size:11px;color:#7c3aed;font-weight:600;text-transform:uppercase;letter-spacing:.8px;">Or use this code</p>
@@ -979,15 +979,15 @@ function getStarterTemplate(name: string): string {
             Welcome to <strong>${ctx.org_name ?? "Orbi Solutions"}</strong>! Your account is ready. Explore projects, collaborate with your team, and manage tasks — all in one place.
           </p>
           <div style="display:grid;gap:10px;margin-bottom:20px;">
-            <div style="padding:12px 16px;background:#f5f3ff;border-radius:10px;border-left:3px solid #6366f1;">
-              <p style="margin:0;font-size:13px;font-weight:600;color:#4338ca;">✓ Create your first project</p>
+            <div style="padding:12px 16px;background:#f5f3ff;border-radius:10px;border-left:3px solid #d82638;">
+              <p style="margin:0;font-size:13px;font-weight:600;color:#b91c2c;">✓ Create your first project</p>
             </div>
             <div style="padding:12px 16px;background:#f0fdf4;border-radius:10px;border-left:3px solid #22c55e;">
               <p style="margin:0;font-size:13px;font-weight:600;color:#15803d;">✓ Invite team members</p>
             </div>
           </div>
           <div style="text-align:center;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Get Started</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Get Started</a>
           </div>`;
       case "mention":
         return `
@@ -1003,7 +1003,7 @@ function getStarterTemplate(name: string): string {
             </div>
           </div>
           <div style="text-align:center;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">View Mention</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">View Mention</a>
           </div>`;
       case "change_request_review":
         return `
@@ -1014,7 +1014,7 @@ function getStarterTemplate(name: string): string {
           <p style="font-size:13px;color:#6b7280;margin:0 0 6px;">Requested by <strong style="color:#374151;">${ctx.requester_name ?? "Jamie Chen"}</strong></p>
           <p style="font-size:14px;color:#4b5563;margin:0 0 20px;line-height:1.6;font-style:italic;">"${ctx.reason ?? "The current design needs a refresh before the Q4 launch."}"</p>
           <div style="text-align:center;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Review Change Request</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">Review Change Request</a>
           </div>`;
       case "change_request_approved":
         return `
@@ -1030,7 +1030,7 @@ function getStarterTemplate(name: string): string {
             <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${ctx.note ?? "Great work! Approved for implementation."}</p>
           </div>
           <div style="text-align:center;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">View Task</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">View Task</a>
           </div>`;
       case "change_request_rejected":
         return `
@@ -1046,13 +1046,13 @@ function getStarterTemplate(name: string): string {
             <p style="margin:0;font-size:14px;color:#374151;line-height:1.6;">${ctx.note ?? "The proposed changes conflict with brand guidelines. Please revise and resubmit."}</p>
           </div>
           <div style="text-align:center;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">View Task</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">View Task</a>
           </div>`;
       default: // notification
         return `
           <p style="font-size:15px;color:#4b5563;margin:0 0 20px;line-height:1.7;">${ctx.body ?? "You have been assigned a new task. Click below to view the details."}</p>
           <div style="text-align:center;">
-            <a href="#" style="display:inline-block;padding:13px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">${ctx.cta_text ?? "Open OrbisPM"}</a>
+            <a href="#" style="display:inline-block;padding:13px 32px;background:#d82638;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600;">${ctx.cta_text ?? "Open Simplify Projects"}</a>
           </div>`;
     }
   })();
@@ -1066,10 +1066,10 @@ function getStarterTemplate(name: string): string {
           ? "#dc2626"
           : ctx.priority === "high"
             ? "#ea580c"
-            : "#6366f1",
-      welcome: "#6366f1",
+            : "#d82638",
+      welcome: "#d82638",
       mention: "#0ea5e9",
-      change_request_review: "#6366f1",
+      change_request_review: "#d82638",
       change_request_approved: "#16a34a",
       change_request_rejected: "#dc2626",
     };
@@ -1085,15 +1085,15 @@ function getStarterTemplate(name: string): string {
     };
     const subtitleMap: Record<string, string> = {
       password_reset: "Choose a new secure password for your account",
-      otp: `Enter this code in ${ctx.org_name ?? "OrbisPM"} to verify your identity`,
+      otp: `Enter this code in ${ctx.org_name ?? "Simplify Projects"} to verify your identity`,
       announcement: `From ${ctx.author_name ?? "your team"}`,
-      welcome: `Your ${ctx.org_name ?? "OrbisPM"} account is ready`,
+      welcome: `Your ${ctx.org_name ?? "Simplify Projects"} account is ready`,
       mention: `${ctx.sender_name ?? "Someone"} mentioned you`,
       change_request_review: `Requested by ${ctx.requester_name ?? "a team member"}`,
       change_request_approved: `Your request has been approved`,
       change_request_rejected: `Your request requires revision`,
     };
-    const bg = colorMap[name] ?? "#6366f1";
+    const bg = colorMap[name] ?? "#d82638";
     const title = titleMap[name] ?? ctx.title ?? "Notification";
     const subtitle = subtitleMap[name] ?? "";
     return `<td style="background-color:${bg};padding:36px 40px 30px;text-align:center;">
@@ -1116,7 +1116,7 @@ function getStarterTemplate(name: string): string {
         <!-- Org branding -->
         <tr>
           <td style="padding-bottom:20px;text-align:center;">
-            <span style="font-size:15px;font-weight:700;color:#4b5563;letter-spacing:-0.2px;">${ctx.org_name ?? "OrbisPM"}</span>
+            <span style="font-size:15px;font-weight:700;color:#4b5563;letter-spacing:-0.2px;">${ctx.org_name ?? "Simplify Projects"}</span>
           </td>
         </tr>
         <!-- Card -->
@@ -1139,8 +1139,8 @@ function getStarterTemplate(name: string): string {
         <!-- Footer -->
         <tr>
           <td style="padding-top:24px;text-align:center;">
-            <p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;">${ctx.org_name ?? "OrbisPM"}</p>
-            <p style="margin:0;font-size:11px;color:#9ca3af;">© ${new Date().getFullYear()} ${ctx.org_name ?? "OrbisPM"} · <a href="#" style="color:#9ca3af;text-decoration:none;">Unsubscribe</a></p>
+            <p style="margin:0 0 4px;font-size:12px;color:#6b7280;font-weight:600;">${ctx.org_name ?? "Simplify Projects"}</p>
+            <p style="margin:0;font-size:11px;color:#9ca3af;">© ${new Date().getFullYear()} ${ctx.org_name ?? "Simplify Projects"} · <a href="#" style="color:#9ca3af;text-decoration:none;">Unsubscribe</a></p>
           </td>
         </tr>
       </table>

@@ -104,92 +104,10 @@ export default function AuthLayout({
         {/* ── Navigation ── */}
         <nav className="relative z-10 flex items-center justify-between px-6 py-4">
           <Link href="/" className="flex items-center gap-2.5">
-            {/* Inline Orbis mark — no external img dep needed */}
-            <svg
-              width="32"
-              height="32"
-              viewBox="0 0 100 100"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              aria-hidden="true"
-            >
-              <defs>
-                <linearGradient
-                  id="al-bg"
-                  x1="0"
-                  y1="0"
-                  x2="100"
-                  y2="100"
-                  gradientUnits="userSpaceOnUse"
-                >
-                  <stop offset="0%" stopColor="#5a4ff0" />
-                  <stop offset="100%" stopColor="#1e1b4b" />
-                </linearGradient>
-                <linearGradient
-                  id="al-ring"
-                  x1="50"
-                  y1="18"
-                  x2="50"
-                  y2="82"
-                  gradientUnits="userSpaceOnUse"
-                >
-                  <stop offset="0%" stopColor="#ffffff" />
-                  <stop offset="100%" stopColor="#c7d2fe" stopOpacity="0.85" />
-                </linearGradient>
-                <linearGradient
-                  id="al-orbit"
-                  x1="86"
-                  y1="29"
-                  x2="14"
-                  y2="71"
-                  gradientUnits="userSpaceOnUse"
-                >
-                  <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-                  <stop offset="55%" stopColor="#a5b4fc" stopOpacity="0.55" />
-                  <stop offset="100%" stopColor="#818cf8" stopOpacity="0.25" />
-                </linearGradient>
-                <clipPath id="al-clip">
-                  <path
-                    clipRule="evenodd"
-                    d="M-5-5H105V105H-5Z M50 50m-33 0a33 33 0 1 0 66 0a33 33 0 1 0-66 0"
-                  />
-                </clipPath>
-              </defs>
-              <rect width="100" height="100" rx="22" fill="url(#al-bg)" />
-              <ellipse
-                cx="50"
-                cy="50"
-                rx="42"
-                ry="17"
-                transform="rotate(-30 50 50)"
-                stroke="white"
-                strokeWidth="2.2"
-                strokeOpacity="0.22"
-              />
-              <circle
-                cx="50"
-                cy="50"
-                r="28"
-                stroke="url(#al-ring)"
-                strokeWidth="9"
-              />
-              <ellipse
-                cx="50"
-                cy="50"
-                rx="42"
-                ry="17"
-                transform="rotate(-30 50 50)"
-                stroke="url(#al-orbit)"
-                strokeWidth="2.6"
-                strokeLinecap="round"
-                clipPath="url(#al-clip)"
-              />
-              <circle cx="86" cy="29" r="5.5" fill="white" fillOpacity="0.18" />
-              <circle cx="86" cy="29" r="4.2" fill="white" fillOpacity="0.95" />
-              <circle cx="86" cy="29" r="2.0" fill="#c7d2fe" />
-            </svg>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/logo-mark.png" alt="Simplify Projects" width={28} height={28} className="h-7 w-auto" />
             <span className="font-semibold text-lg tracking-tight text-base-content">
-              Orbis<span className="text-primary font-bold">PM</span>
+              Simplify <span className="text-primary font-bold">Projects</span>
             </span>
           </Link>
           <div className="flex items-center gap-5 text-sm text-base-content/60">

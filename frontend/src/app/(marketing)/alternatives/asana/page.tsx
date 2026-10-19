@@ -15,12 +15,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "OrbisPM vs Asana – Best AI-Powered Asana Alternative in 2026",
+  title: "Simplify Projects vs Asana – Best AI-Powered Asana Alternative in 2026",
   description:
-    "Compare OrbisPM vs Asana for project management. AI-powered automation, real-time collaboration, enterprise RBAC, and change request workflows. The best Asana alternative for engineering teams.",
+    "Compare Simplify Projects vs Asana for project management. AI-powered automation, real-time collaboration, enterprise RBAC, and change request workflows. The best Asana alternative for engineering teams.",
   alternates: { canonical: "/alternatives/asana" },
   openGraph: {
-    title: "OrbisPM vs Asana – The AI-Powered Asana Alternative",
+    title: "Simplify Projects vs Asana – The AI-Powered Asana Alternative",
     description:
       "AI-powered project management with real-time collaboration and enterprise RBAC. The best Asana alternative for engineering teams.",
     url: "/alternatives/asana",
@@ -29,13 +29,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM vs Asana Comparison",
+        alt: "Simplify Projects vs Asana Comparison",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM vs Asana – Best AI-Powered Asana Alternative in 2026",
+    title: "Simplify Projects vs Asana – Best AI-Powered Asana Alternative in 2026",
     description:
       "AI-powered project management with real-time collaboration and enterprise RBAC. The best Asana alternative for engineering teams.",
     images: ["/og-image.png"],
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     "Asana replacement",
     "AI Asana alternative",
     "best Asana alternative 2026",
-    "OrbisPM vs Asana",
+    "Simplify Projects vs Asana",
     "Asana alternative for developers",
   ],
 };
@@ -80,10 +80,10 @@ export default function AsanaAlternativePage() {
         data={{
           "@context": "https://schema.org",
           "@type": "WebPage",
-          name: "OrbisPM vs Asana – Best AI-Powered Asana Alternative",
+          name: "Simplify Projects vs Asana – Best AI-Powered Asana Alternative",
           description:
-            "Feature comparison of OrbisPM and Asana project management platforms",
-          url: "https://orbisom.live/alternatives/asana",
+            "Feature comparison of Simplify Projects and Asana project management platforms",
+          url: "https://simplifyai.id/alternatives/asana",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
@@ -91,19 +91,19 @@ export default function AsanaAlternativePage() {
                 "@type": "ListItem",
                 position: 1,
                 name: "Home",
-                item: "https://orbisom.live",
+                item: "https://simplifyai.id",
               },
               {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives",
+                item: "https://simplifyai.id/alternatives",
               },
               {
                 "@type": "ListItem",
                 position: 3,
-                name: "OrbisPM vs Asana",
-                item: "https://orbisom.live/alternatives/asana",
+                name: "Simplify Projects vs Asana",
+                item: "https://simplifyai.id/alternatives/asana",
               },
             ],
           },
@@ -119,7 +119,7 @@ export default function AsanaAlternativePage() {
             Asana Alternative
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-            OrbisPM vs Asana:{" "}
+            Simplify Projects vs Asana:{" "}
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               Built for Engineers
             </span>
@@ -127,14 +127,14 @@ export default function AsanaAlternativePage() {
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
             Asana is great for marketing and operations teams, but engineering
             teams need more: AI-powered sprint planning, real-time sync,
-            granular RBAC, and change request workflows. That&apos;s OrbisPM.
+            granular RBAC, and change request workflows. That&apos;s Simplify Projects.
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link
               href="/signup"
               className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
             >
-              Try OrbisPM Free <ArrowRight className="w-5 h-5" />
+              Try Simplify Projects Free <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/features" className="btn btn-ghost btn-lg">
               See All Features
@@ -147,14 +147,14 @@ export default function AsanaAlternativePage() {
       <section className="py-16 bg-base-100 border-y border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">
-            Why Engineering Teams Prefer OrbisPM Over Asana
+            Why Engineering Teams Prefer Simplify Projects Over Asana
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             {[
               {
                 icon: Code,
                 title: "Built for Engineering",
-                desc: "OrbisPM understands developer workflows — subtask hierarchies, dependency chains, sprint velocity, and code-friendly interfaces. Not adapted from a marketing tool.",
+                desc: "Simplify Projects understands developer workflows — subtask hierarchies, dependency chains, sprint velocity, and code-friendly interfaces. Not adapted from a marketing tool.",
               },
               {
                 icon: Sparkles,
@@ -169,7 +169,7 @@ export default function AsanaAlternativePage() {
               {
                 icon: DollarSign,
                 title: "Better Value",
-                desc: "Asana's Business plan ($24.99/user/mo) costs twice as much as OrbisPM Professional ($12/user/mo), with fewer engineering-specific features.",
+                desc: "Asana's Business plan ($24.99/user/mo) costs twice as much as Simplify Projects Professional ($12/user/mo), with fewer engineering-specific features.",
               },
             ].map((item) => (
               <article key={item.title} className="text-center">
@@ -194,7 +194,7 @@ export default function AsanaAlternativePage() {
               Feature-by-Feature Comparison
             </h2>
             <p className="text-center text-base-content/60 mb-12">
-              OrbisPM vs Asana — see exactly how they compare for engineering
+              Simplify Projects vs Asana — see exactly how they compare for engineering
               teams.
             </p>
             <div className="overflow-x-auto">
@@ -203,7 +203,7 @@ export default function AsanaAlternativePage() {
                   <tr className="border-b-2 border-base-200">
                     <th className="text-left py-3 w-1/2">Feature</th>
                     <th className="text-center py-3 text-primary font-bold">
-                      OrbisPM
+                      Simplify Projects
                     </th>
                     <th className="text-center py-3">Asana</th>
                   </tr>

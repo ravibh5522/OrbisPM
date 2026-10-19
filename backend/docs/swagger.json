@@ -1,13 +1,13 @@
 {
     "swagger": "2.0",
     "info": {
-        "description": "OrbisPM — AI-native project management platform API.",
-        "title": "OrbisPM API",
-        "termsOfService": "https://orbisom.live/terms",
+        "description": "Simplify Projects — AI-native project management platform API.",
+        "title": "Simplify Projects API",
+        "termsOfService": "https://simplifyai.id/terms",
         "contact": {
-            "name": "OrbisPM Support",
-            "url": "https://orbisom.live/support",
-            "email": "support@orbispm.in"
+            "name": "Simplify Projects Support",
+            "url": "https://simplifyai.id/support",
+            "email": "contact@simplifyai.id"
         },
         "license": {
             "name": "MIT",

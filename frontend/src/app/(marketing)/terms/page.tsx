@@ -3,30 +3,30 @@ import { MarketingHeader } from "@/components/marketing/marketing-header";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Terms of Service – OrbisPM",
+  title: "Terms of Service – Simplify Projects",
   description:
-    "OrbisPM terms of service. Read the terms and conditions governing the use of OrbisPM project management platform.",
+    "Simplify Projects terms of service. Read the terms and conditions governing the use of Simplify Projects project management platform.",
   alternates: { canonical: "/terms" },
   robots: { index: true, follow: false },
   openGraph: {
-    title: "Terms of Service – OrbisPM",
+    title: "Terms of Service – Simplify Projects",
     description:
-      "OrbisPM terms of service. Read the terms and conditions governing the use of the OrbisPM platform.",
+      "Simplify Projects terms of service. Read the terms and conditions governing the use of the Simplify Projects platform.",
     url: "/terms",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM Terms of Service",
+        alt: "Simplify Projects Terms of Service",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "Terms of Service – OrbisPM",
+    title: "Terms of Service – Simplify Projects",
     description:
-      "OrbisPM terms of service. Read the terms and conditions governing the use of the OrbisPM platform.",
+      "Simplify Projects terms of service. Read the terms and conditions governing the use of the Simplify Projects platform.",
   },
 };
 
@@ -41,15 +41,15 @@ export default function TermsPage() {
 
           <h2>1. Acceptance of Terms</h2>
           <p>
-            By accessing or using OrbisPM (&quot;the Service&quot;), operated by
-            OrbisPM (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;), you agree
+            By accessing or using Simplify Projects (&quot;the Service&quot;), operated by
+            SimplifyAI (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;), you agree
             to be bound by these Terms of Service. If you do not agree, do not
             use the Service.
           </p>
 
           <h2>2. Description of Service</h2>
           <p>
-            OrbisPM is an AI-powered project management platform designed for
+            Simplify Projects is an AI-powered project management platform designed for
             engineering teams. The Service includes task management, sprint
             planning, real-time collaboration, AI-powered automation, reporting,
             and related features available through our web application and API.
@@ -77,7 +77,7 @@ export default function TermsPage() {
           <h2>4. Subscription Plans & Billing</h2>
           <h3>4.1 Plans</h3>
           <p>
-            OrbisPM offers Free, Professional, and Enterprise plans. Features
+            Simplify Projects offers Free, Professional, and Enterprise plans. Features
             and limits vary by plan as described on our{" "}
             <a href="/pricing">Pricing page</a>.
           </p>
@@ -108,7 +108,7 @@ export default function TermsPage() {
           <h3>5.1 Ownership</h3>
           <p>
             You retain all rights to the data you upload to or create within
-            OrbisPM. We do not claim ownership of your content.
+            Simplify Projects. We do not claim ownership of your content.
           </p>
           <h3>5.2 License to Us</h3>
           <p>
@@ -129,7 +129,7 @@ export default function TermsPage() {
 
           <h2>6. AI Features</h2>
           <p>
-            OrbisPM includes AI-powered features such as task estimation, sprint
+            Simplify Projects includes AI-powered features such as task estimation, sprint
             planning suggestions, and natural language task creation. By using
             these features:
           </p>
@@ -176,7 +176,7 @@ export default function TermsPage() {
           <h2>8. Intellectual Property</h2>
           <p>
             The Service, including its design, code, features, documentation,
-            and branding, is the proprietary property of OrbisPM and is
+            and branding, is the proprietary property of Simplify Projects and is
             protected by intellectual property laws. You may not copy, modify,
             distribute, or create derivative works of the Service without our
             written permission.
@@ -213,7 +213,7 @@ export default function TermsPage() {
 
           <h2>12. Limitation of Liability</h2>
           <p>
-            TO THE MAXIMUM EXTENT PERMITTED BY LAW, ORBISPM SHALL NOT BE LIABLE
+            TO THE MAXIMUM EXTENT PERMITTED BY LAW, SIMPLIFY PROJECTS SHALL NOT BE LIABLE
             FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE
             DAMAGES, OR ANY LOSS OF PROFITS OR REVENUES, WHETHER INCURRED
             DIRECTLY OR INDIRECTLY, OR ANY LOSS OF DATA, USE, GOODWILL, OR OTHER
@@ -222,7 +222,7 @@ export default function TermsPage() {
 
           <h2>13. Indemnification</h2>
           <p>
-            You agree to indemnify and hold harmless OrbisPM from any claims,
+            You agree to indemnify and hold harmless Simplify Projects from any claims,
             damages, losses, or expenses arising from your use of the Service or
             your violation of these Terms.
           </p>
@@ -253,7 +253,7 @@ export default function TermsPage() {
           <h2>17. Contact</h2>
           <p>
             For questions about these Terms, contact us at:{" "}
-            <a href="mailto:legal@orbispm.in">legal@orbispm.in</a>
+            <a href="mailto:contact@simplifyai.id">contact@simplifyai.id</a>
           </p>
         </div>
       </div>

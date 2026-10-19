@@ -860,7 +860,7 @@ export default function ProfilePage() {
   const handleDownload = () => {
     if (!backupCodes) return;
     const content = [
-      "OrbisPM - Account Backup Codes",
+      "Simplify Projects - Account Backup Codes",
       "================================",
       "Keep these codes in a safe place. Each code can only be used once.",
       "",
@@ -872,7 +872,7 @@ export default function ProfilePage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "orbispm-backup-codes.txt";
+    a.download = "simplify-projects-backup-codes.txt";
     a.click();
     URL.revokeObjectURL(url);
   };

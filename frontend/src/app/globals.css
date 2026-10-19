@@ -23,7 +23,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Theme 1 — Orbis Light (DEFAULT — must come first as :root)
+   Theme 1 — Simplify Light (DEFAULT — must come first as :root)
    Clean minimal light, blue · slate · emerald palette
    ═══════════════════════════════════════════════════════════════ */
 :root,
@@ -277,7 +277,7 @@
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   Theme 4 — Orbis Dark
+   Theme 4 — Simplify Dark
    Clean minimal dark, indigo · teal · amber palette
    ═══════════════════════════════════════════════════════════════ */
 [data-theme="orbis-dark"] {
@@ -1506,7 +1506,7 @@
    Works in Chrome/Edge/Safari (webkit) + Firefox (scrollbar-*)
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Orbis Light ── */
+/* ── Simplify Light ── */
 [data-theme="orbis-light"] ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -1529,7 +1529,7 @@
   scrollbar-color: oklch(50% 0.2 260 / 0.25) transparent;
 }
 
-/* ── Orbis Dark ── */
+/* ── Simplify Dark ── */
 [data-theme="orbis-dark"] ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -1569,7 +1569,7 @@
    Original /30, /40, /50 values fail WCAG AA for small text
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Orbis Light — boost muted text contrast ── */
+/* ── Simplify Light — boost muted text contrast ── */
 [data-theme="orbis-light"] .text-base-content\/10 {
   color: oklch(20% 0.02 260 / 0.25) !important;
 }
@@ -1609,7 +1609,7 @@
   color: oklch(18% 0.02 270 / 0.8) !important;
 }
 
-/* ── Orbis Dark — mild boost for the darkest muted levels ── */
+/* ── Simplify Dark — mild boost for the darkest muted levels ── */
 [data-theme="orbis-dark"] .text-base-content\/10 {
   color: oklch(92% 0.01 260 / 0.35) !important;
 }
@@ -1689,7 +1689,7 @@
    instead of DaisyUI semantic tokens.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Orbis Dark — text overrides ── */
+/* ── Simplify Dark — text overrides ── */
 [data-theme="orbis-dark"] .text-gray-400,
 [data-theme="orbis-dark"] .text-gray-500,
 [data-theme="orbis-dark"] .text-gray-600,
@@ -1710,7 +1710,7 @@
   color: oklch(92% 0.01 260) !important;
 }
 
-/* ── Orbis Dark — bg overrides ── */
+/* ── Simplify Dark — bg overrides ── */
 [data-theme="orbis-dark"] .bg-white,
 [data-theme="orbis-dark"] .bg-gray-50,
 [data-theme="orbis-dark"] .bg-gray-100,
@@ -1723,7 +1723,7 @@
   background-color: oklch(25% 0.018 260) !important;
 }
 
-/* ── Orbis Dark — border overrides ── */
+/* ── Simplify Dark — border overrides ── */
 [data-theme="orbis-dark"] .border-gray-200,
 [data-theme="orbis-dark"] .border-gray-300,
 [data-theme="orbis-dark"] .border-slate-200,
@@ -1731,7 +1731,7 @@
   border-color: oklch(28% 0.02 260) !important;
 }
 
-/* ── Orbis Dark — semantic colour-50 tints (hover states, etc.) ── */
+/* ── Simplify Dark — semantic colour-50 tints (hover states, etc.) ── */
 [data-theme="orbis-dark"] .bg-pink-50,
 [data-theme="orbis-dark"] .hover\:bg-pink-50:hover {
   background-color: oklch(25% 0.04 350) !important;
@@ -1759,7 +1759,7 @@
   background-color: oklch(24% 0.04 280) !important;
 }
 
-/* ── Orbis Dark — hover state overrides ── */
+/* ── Simplify Dark — hover state overrides ── */
 [data-theme="orbis-dark"] .hover\:bg-base-200:hover,
 [data-theme="orbis-dark"] .hover\:bg-base-200\/20:hover,
 [data-theme="orbis-dark"] .hover\:bg-base-200\/40:hover,
@@ -2487,7 +2487,7 @@
    theme without touching DaisyUI internals.
    ═══════════════════════════════════════════════════════════════ */
 
-/* ── Orbis Light — alert variants ── */
+/* ── Simplify Light — alert variants ── */
 [data-theme="orbis-light"] .alert-error {
   background-color: var(--color-error) !important;
   color: var(--color-error-content) !important;
@@ -2509,7 +2509,7 @@
   border-color: var(--color-success) !important;
 }
 
-/* ── Orbis Dark — alert variants ── */
+/* ── Simplify Dark — alert variants ── */
 [data-theme="orbis-dark"] .alert-error {
   background-color: var(--color-error) !important;
   color: var(--color-error-content) !important;

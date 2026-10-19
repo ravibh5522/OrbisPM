@@ -29,7 +29,7 @@ func NewPublisher(nc *nats.Conn) (*Publisher, error) {
 
 	streamCfg := jetstream.StreamConfig{
 		Name:        domain.NatsStreamName,
-		Description: "OrbisPM chat events",
+		Description: "Simplify Projects chat events",
 		Subjects:    []string{domain.NatsSubjectChat + ".>"},
 		Retention:   jetstream.WorkQueuePolicy,
 		MaxAge:      24 * time.Hour,

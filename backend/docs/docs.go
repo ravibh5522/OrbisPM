@@ -9,11 +9,11 @@ const docTemplate = `{
     "info": {
         "description": "{{escape .Description}}",
         "title": "{{.Title}}",
-        "termsOfService": "https://orbisom.live/terms",
+        "termsOfService": "https://simplifyai.id/terms",
         "contact": {
-            "name": "OrbisPM Support",
-            "url": "https://orbisom.live/support",
-            "email": "support@orbispm.in"
+            "name": "Simplify Projects Support",
+            "url": "https://simplifyai.id/support",
+            "email": "contact@simplifyai.id"
         },
         "license": {
             "name": "MIT",
@@ -6203,8 +6203,8 @@ var SwaggerInfo = &swag.Spec{
 	Host:             "localhost:8080",
 	BasePath:         "/api/v1",
 	Schemes:          []string{},
-	Title:            "OrbisPM API",
-	Description:      "OrbisPM — AI-native project management platform API.",
+	Title:            "Simplify Projects API",
+	Description:      "Simplify Projects — AI-native project management platform API.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

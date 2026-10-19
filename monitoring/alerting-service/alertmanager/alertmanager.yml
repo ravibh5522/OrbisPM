@@ -1,5 +1,5 @@
 # =======================================================
-# Alertmanager Configuration — OrbisPM Monitoring
+# Alertmanager Configuration — Simplify Projects Monitoring
 # =======================================================
 
 global:
@@ -81,7 +81,7 @@ receivers:
       - to: '${ALERT_EMAIL:-admin@orbispm.local}'
         send_resolved: true
         headers:
-          Subject: '[CRITICAL] OrbisPM Alert: {{ .GroupLabels.alertname }}'
+          Subject: '[CRITICAL] Simplify Projects Alert: {{ .GroupLabels.alertname }}'
 
   # Warning alerts
   - name: 'warning'

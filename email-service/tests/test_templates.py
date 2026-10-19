@@ -7,7 +7,7 @@ def test_default_notification_template():
     html = render_template("defaults/notification", {"title": "Test", "body": "Hello"})
     assert "Test" in html
     assert "Hello" in html
-    assert "OrbisPM" in html
+    assert "Simplify Projects" in html
 
 
 def test_password_reset_template():

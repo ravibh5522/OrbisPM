@@ -47,7 +47,7 @@ export default function SignupPage() {
             Create account
           </h1>
           <p className="text-base-content/55 mt-1.5 text-sm">
-            Get started with OrbisPM for free
+            Get started with Simplify Projects for free
           </p>
         </div>
 

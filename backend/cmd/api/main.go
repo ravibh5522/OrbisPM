@@ -1,11 +1,11 @@
-// @title OrbisPM API
+// @title Simplify Projects API
 // @version 1.0
-// @description OrbisPM — AI-native project management platform API.
-// @termsOfService https://orbisom.live/terms
+// @description Simplify Projects — AI-native project management platform API.
+// @termsOfService https://simplifyai.id/terms
 //
-// @contact.name OrbisPM Support
-// @contact.url https://orbisom.live/support
-// @contact.email support@orbispm.in
+// @contact.name Simplify Projects Support
+// @contact.url https://simplifyai.id/support
+// @contact.email contact@simplifyai.id
 //
 // @license.name MIT
 // @license.url https://opensource.org/licenses/MIT
@@ -115,7 +115,7 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to load config")
 	}
 
-	log.Info().Str("env", cfg.Env).Str("port", cfg.Port).Msg("starting OrbisPM API")
+	log.Info().Str("env", cfg.Env).Str("port", cfg.Port).Msg("starting Simplify Projects API")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

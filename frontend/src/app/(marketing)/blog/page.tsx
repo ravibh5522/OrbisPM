@@ -8,7 +8,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Blog – Project Management Insights for Engineering Teams",
   description:
-    "Expert articles on AI-powered project management, agile best practices, team collaboration strategies, sprint planning optimization, and engineering productivity. Learn how top teams ship faster with OrbisPM.",
+    "Expert articles on AI-powered project management, agile best practices, team collaboration strategies, sprint planning optimization, and engineering productivity. Learn how top teams ship faster with Simplify Projects.",
   alternates: { canonical: "/blog" },
   keywords: [
     "project management blog",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     "software development management",
   ],
   openGraph: {
-    title: "OrbisPM Blog – Project Management Insights",
+    title: "Simplify Projects Blog – Project Management Insights",
     description:
       "Expert articles on AI-powered project management, agile practices, team collaboration, and engineering productivity.",
     url: "/blog",
@@ -29,13 +29,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM Blog – Project Management Insights",
+        alt: "Simplify Projects Blog – Project Management Insights",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM Blog – Project Management Insights",
+    title: "Simplify Projects Blog – Project Management Insights",
     description:
       "Expert articles on AI-powered project management, agile practices, team collaboration, and engineering productivity.",
     images: ["/og-image.png"],
@@ -81,14 +81,14 @@ export default function BlogPage() {
         data={{
           "@context": "https://schema.org",
           "@type": "Blog",
-          name: "OrbisPM Blog",
+          name: "Simplify Projects Blog",
           description:
             "Expert articles on AI-powered project management, agile practices, and engineering productivity",
-          url: "https://orbisom.live/blog",
+          url: "https://simplifyai.id/blog",
           publisher: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
         }}
       />

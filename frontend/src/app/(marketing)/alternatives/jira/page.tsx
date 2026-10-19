@@ -14,27 +14,27 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "OrbisPM vs Jira – Best AI-Powered Jira Alternative in 2026",
+  title: "Simplify Projects vs Jira – Best AI-Powered Jira Alternative in 2026",
   description:
-    "Detailed comparison of OrbisPM vs Jira. See why engineering teams switch to OrbisPM: AI-powered sprint planning, real-time collaboration, better RBAC, simpler pricing. The best Jira alternative for modern teams.",
+    "Detailed comparison of Simplify Projects vs Jira. See why engineering teams switch to Simplify Projects: AI-powered sprint planning, real-time collaboration, better RBAC, simpler pricing. The best Jira alternative for modern teams.",
   alternates: { canonical: "/alternatives/jira" },
   openGraph: {
-    title: "OrbisPM vs Jira – The Best AI-Powered Jira Alternative",
+    title: "Simplify Projects vs Jira – The Best AI-Powered Jira Alternative",
     description:
-      "AI-powered sprint planning, real-time collaboration, granular RBAC. See why teams are switching from Jira to OrbisPM.",
+      "AI-powered sprint planning, real-time collaboration, granular RBAC. See why teams are switching from Jira to Simplify Projects.",
     url: "/alternatives/jira",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM vs Jira Comparison",
+        alt: "Simplify Projects vs Jira Comparison",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM vs Jira – Best AI-Powered Jira Alternative in 2026",
+    title: "Simplify Projects vs Jira – Best AI-Powered Jira Alternative in 2026",
     description:
       "AI-powered sprint planning, real-time collaboration, granular RBAC. See why engineering teams are switching from Jira.",
     images: ["/og-image.png"],
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
     "Jira replacement",
     "AI Jira alternative",
     "best Jira alternative 2026",
-    "OrbisPM vs Jira",
+    "Simplify Projects vs Jira",
     "free Jira alternative",
     "Jira alternative for developers",
   ],
@@ -82,9 +82,9 @@ export default function JiraAlternativePage() {
         data={{
           "@context": "https://schema.org",
           "@type": "WebPage",
-          name: "OrbisPM vs Jira – Best AI-Powered Jira Alternative",
-          description: "Detailed feature comparison of OrbisPM and Jira",
-          url: "https://orbisom.live/alternatives/jira",
+          name: "Simplify Projects vs Jira – Best AI-Powered Jira Alternative",
+          description: "Detailed feature comparison of Simplify Projects and Jira",
+          url: "https://simplifyai.id/alternatives/jira",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
@@ -92,19 +92,19 @@ export default function JiraAlternativePage() {
                 "@type": "ListItem",
                 position: 1,
                 name: "Home",
-                item: "https://orbisom.live",
+                item: "https://simplifyai.id",
               },
               {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives",
+                item: "https://simplifyai.id/alternatives",
               },
               {
                 "@type": "ListItem",
                 position: 3,
-                name: "OrbisPM vs Jira",
-                item: "https://orbisom.live/alternatives/jira",
+                name: "Simplify Projects vs Jira",
+                item: "https://simplifyai.id/alternatives/jira",
               },
             ],
           },
@@ -120,13 +120,13 @@ export default function JiraAlternativePage() {
             Jira Alternative
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-            OrbisPM vs Jira:{" "}
+            Simplify Projects vs Jira:{" "}
             <span className="bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
               AI-Powered &amp; Lightning Fast
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
-            Tired of Jira&apos;s complexity, rising prices, and slow UI? OrbisPM
+            Tired of Jira&apos;s complexity, rising prices, and slow UI? Simplify Projects
             delivers the project management features engineering teams need —
             with AI-powered sprint planning, real-time collaboration, and a
             modern interface that doesn&apos;t feel like it was built in 2005.
@@ -136,7 +136,7 @@ export default function JiraAlternativePage() {
               href="/signup"
               className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
             >
-              Try OrbisPM Free <ArrowRight className="w-5 h-5" />
+              Try Simplify Projects Free <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/features" className="btn btn-ghost btn-lg">
               See All Features
@@ -149,29 +149,29 @@ export default function JiraAlternativePage() {
       <section className="py-16 bg-base-100 border-y border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">
-            Why Teams Switch from Jira to OrbisPM
+            Why Teams Switch from Jira to Simplify Projects
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             {[
               {
                 icon: Sparkles,
                 title: "AI-Powered Planning",
-                desc: "OrbisPM uses AI for task estimation, sprint planning, velocity prediction, and automatic task allocation. Jira has no native AI capabilities — you need expensive add-ons.",
+                desc: "Simplify Projects uses AI for task estimation, sprint planning, velocity prediction, and automatic task allocation. Jira has no native AI capabilities — you need expensive add-ons.",
               },
               {
                 icon: Zap,
                 title: "Real-Time, Not Polling",
-                desc: "Jira refreshes data on page load. OrbisPM uses WebSockets for instant sync — every task update, comment, and status change appears in real-time across all views.",
+                desc: "Jira refreshes data on page load. Simplify Projects uses WebSockets for instant sync — every task update, comment, and status change appears in real-time across all views.",
               },
               {
                 icon: Shield,
                 title: "Better Security Model",
-                desc: "OrbisPM uses PostgreSQL Row-Level Security for true tenant isolation at the database level. Jira relies on application-level checks that have had security vulnerabilities.",
+                desc: "Simplify Projects uses PostgreSQL Row-Level Security for true tenant isolation at the database level. Jira relies on application-level checks that have had security vulnerabilities.",
               },
               {
                 icon: DollarSign,
                 title: "Transparent Pricing",
-                desc: "Jira's pricing tiers hide essential features behind expensive plans. OrbisPM offers a generous free tier and straightforward $12/user/mo pricing with all features included.",
+                desc: "Jira's pricing tiers hide essential features behind expensive plans. Simplify Projects offers a generous free tier and straightforward $12/user/mo pricing with all features included.",
               },
             ].map((item) => (
               <article key={item.title} className="text-center">
@@ -196,7 +196,7 @@ export default function JiraAlternativePage() {
               Feature-by-Feature Comparison
             </h2>
             <p className="text-center text-base-content/60 mb-12">
-              See exactly how OrbisPM and Jira compare across key project
+              See exactly how Simplify Projects and Jira compare across key project
               management capabilities.
             </p>
 
@@ -206,7 +206,7 @@ export default function JiraAlternativePage() {
                   <tr className="border-b-2 border-base-200">
                     <th className="text-left py-3 w-1/2">Feature</th>
                     <th className="text-center py-3 text-primary font-bold">
-                      OrbisPM
+                      Simplify Projects
                     </th>
                     <th className="text-center py-3">Jira</th>
                   </tr>
@@ -251,7 +251,7 @@ export default function JiraAlternativePage() {
             <div className="grid md:grid-cols-2 gap-8">
               <div className="card bg-base-100 border-2 border-primary shadow-xl">
                 <div className="card-body text-center">
-                  <h3 className="text-2xl font-bold text-primary">OrbisPM</h3>
+                  <h3 className="text-2xl font-bold text-primary">Simplify Projects</h3>
                   <div className="mt-4">
                     <div className="text-sm text-base-content/50 mb-2">
                       Starter
@@ -339,7 +339,7 @@ export default function JiraAlternativePage() {
           </h2>
           <p className="mt-4 text-lg text-base-content/60 max-w-2xl mx-auto">
             Migrate your tasks in minutes with CSV import. Start with a free
-            account and see why teams love OrbisPM&apos;s modern, AI-powered
+            account and see why teams love Simplify Projects&apos;s modern, AI-powered
             approach to project management.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">

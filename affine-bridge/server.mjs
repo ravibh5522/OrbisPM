@@ -1,4 +1,4 @@
-// affine-bridge: creates AFFiNE docs on behalf of the OrbisPM API.
+// affine-bridge: creates AFFiNE docs on behalf of the Simplify Projects API.
 //
 // AFFiNE's GraphQL API has no createDoc mutation: a workspace's root doc and
 // every page doc are Yjs CRDTs that only its sync gateway (socket.io) accepts.

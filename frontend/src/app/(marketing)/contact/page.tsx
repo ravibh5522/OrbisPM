@@ -1,41 +1,41 @@
 import { JsonLd } from "@/components/marketing/json-ld";
 import { MarketingFooter } from "@/components/marketing/marketing-footer";
 import { MarketingHeader } from "@/components/marketing/marketing-header";
-import { Clock, Mail, MapPin, Phone } from "lucide-react";
+import { Mail, Globe } from "lucide-react";
 import type { Metadata } from "next";
 import { ContactForm } from "./contact-form";
 
 export const metadata: Metadata = {
-  title: "Contact Us – Get in Touch with the OrbisPM Team",
+  title: "Contact Us – Get in Touch with the Simplify Projects Team",
   description:
-    "Contact OrbisPM for demos, enterprise inquiries, technical support, or partnership opportunities. Our team responds within 24 hours. Email: hello@orbispm.in",
+    "Contact Simplify Projects for demos, enterprise inquiries, technical support, or partnership opportunities. Our team responds within 24 hours. Email: contact@simplifyai.id",
   alternates: { canonical: "/contact" },
   keywords: [
-    "contact OrbisPM",
-    "OrbisPM support",
+    "contact Simplify Projects",
+    "Simplify Projects support",
     "project management demo",
     "enterprise project management inquiry",
-    "OrbisPM sales team",
+    "Simplify Projects sales team",
   ],
   openGraph: {
-    title: "Contact OrbisPM – Sales, Support & Partnerships",
+    title: "Contact Simplify Projects – Sales, Support & Partnerships",
     description:
-      "Get in touch with the OrbisPM team. We respond within 24 hours.",
+      "Get in touch with the Simplify Projects team. We respond within 24 hours.",
     url: "/contact",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "Contact OrbisPM",
+        alt: "Contact Simplify Projects",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Contact OrbisPM – Sales, Support & Partnerships",
+    title: "Contact Simplify Projects – Sales, Support & Partnerships",
     description:
-      "Get in touch with the OrbisPM team for demos, enterprise inquiries, or support. We respond within 24 hours.",
+      "Get in touch with the Simplify Projects team for demos, enterprise inquiries, or support. We respond within 24 hours.",
     images: ["/og-image.png"],
   },
 };
@@ -47,14 +47,14 @@ export default function ContactPage() {
         data={{
           "@context": "https://schema.org",
           "@type": "ContactPage",
-          name: "Contact OrbisPM",
+          name: "Contact Simplify Projects",
           description:
-            "Contact the OrbisPM team for sales, support, and partnerships",
-          url: "https://orbisom.live/contact",
+            "Contact the Simplify Projects team for sales, support, and partnerships",
+          url: "https://simplifyai.id/contact",
           mainEntity: {
             "@type": "Organization",
-            name: "OrbisPM",
-            email: "hello@orbispm.in",
+            name: "Simplify Projects",
+            email: "contact@simplifyai.id",
             telephone: "+1-555-123-4567",
           },
         }}
@@ -94,40 +94,18 @@ export default function ContactPage() {
                   <div>
                     <div className="font-medium text-sm">Email</div>
                     <div className="text-base-content/60 text-sm">
-                      hello@orbispm.in
+                      contact@simplifyai.id
                     </div>
                   </div>
                 </div>
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <MapPin className="w-5 h-5 text-primary" />
+                    <Globe className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <div className="font-medium text-sm">Office</div>
+                    <div className="font-medium text-sm">Website</div>
                     <div className="text-base-content/60 text-sm">
-                      San Francisco, CA &amp; Bangalore, India
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Phone className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm">Phone</div>
-                    <div className="text-base-content/60 text-sm">
-                      +1 (555) 123-4567
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm">Business Hours</div>
-                    <div className="text-base-content/60 text-sm">
-                      Mon–Fri, 9:00 AM – 6:00 PM PST
+                      simplifyai.id
                     </div>
                   </div>
                 </div>
@@ -140,10 +118,10 @@ export default function ContactPage() {
                   Our enterprise team can help you plan and execute your
                   deployment.{" "}
                   <a
-                    href="mailto:enterprise@orbispm.in"
+                    href="mailto:contact@simplifyai.id"
                     className="text-primary hover:underline"
                   >
-                    enterprise@orbispm.in
+                    contact@simplifyai.id
                   </a>
                 </p>
               </div>

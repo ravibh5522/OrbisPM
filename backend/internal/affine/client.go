@@ -1,5 +1,5 @@
 // Package affine talks to a self-hosted AFFiNE instance's GraphQL API to
-// provision workspaces and docs for OrbisPM's Canvas tab. See
+// provision workspaces and docs for Simplify Projects's Canvas tab. See
 // backend/db/migrations/000031_affine_workspaces.up.sql for the mapping
 // tables this backs, and internal/service/affine_service.go for the
 // ensure-or-create logic built on top of this client.
@@ -209,7 +209,7 @@ func (c *Client) EnsureWorkspace(ctx context.Context) (string, error) {
 	return result.CreateWorkspace.ID, nil
 }
 
-// UserSession signs the given OrbisPM user into AFFiNE, creating their AFFiNE
+// UserSession signs the given Simplify Projects user into AFFiNE, creating their AFFiNE
 // account on first use. The account exists only to carry the session — the
 // password is derived by the caller and never shown to anyone — so there is
 // no separate AFFiNE login for the user to manage.

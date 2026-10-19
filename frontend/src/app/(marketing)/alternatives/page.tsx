@@ -7,9 +7,9 @@ import Link from "next/link";
 
 export const metadata: Metadata = {
   title:
-    "OrbisPM Alternatives – Best Jira, Asana & Trello Alternatives in 2026",
+    "Simplify Projects Alternatives – Best Jira, Asana & Trello Alternatives in 2026",
   description:
-    "Compare OrbisPM with Jira, Asana, and Trello. See why engineering teams choose OrbisPM for AI-powered project management, real-time collaboration, and enterprise RBAC.",
+    "Compare Simplify Projects with Jira, Asana, and Trello. See why engineering teams choose Simplify Projects for AI-powered project management, real-time collaboration, and enterprise RBAC.",
   alternates: { canonical: "/alternatives" },
   keywords: [
     "project management alternatives",
@@ -18,28 +18,28 @@ export const metadata: Metadata = {
     "Trello alternative",
     "best project management tool 2026",
     "AI project management comparison",
-    "OrbisPM vs competitors",
+    "Simplify Projects vs competitors",
   ],
   openGraph: {
     title:
-      "OrbisPM Alternatives – Best Jira, Asana & Trello Alternatives in 2026",
+      "Simplify Projects Alternatives – Best Jira, Asana & Trello Alternatives in 2026",
     description:
-      "Compare OrbisPM with Jira, Asana, and Trello. AI-powered features, real-time collaboration, and enterprise RBAC at a fraction of the cost.",
+      "Compare Simplify Projects with Jira, Asana, and Trello. AI-powered features, real-time collaboration, and enterprise RBAC at a fraction of the cost.",
     url: "/alternatives",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM Alternatives – Compare with Jira, Asana, Trello",
+        alt: "Simplify Projects Alternatives – Compare with Jira, Asana, Trello",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM Alternatives – Jira, Asana & Trello Comparisons",
+    title: "Simplify Projects Alternatives – Jira, Asana & Trello Comparisons",
     description:
-      "See why engineering teams switch from Jira, Asana, and Trello to OrbisPM. AI-powered, real-time, enterprise-ready.",
+      "See why engineering teams switch from Jira, Asana, and Trello to Simplify Projects. AI-powered, real-time, enterprise-ready.",
     images: ["/og-image.png"],
   },
 };
@@ -48,10 +48,10 @@ const alternatives = [
   {
     slug: "jira",
     name: "Jira",
-    headline: "OrbisPM vs Jira",
+    headline: "Simplify Projects vs Jira",
     tagline: "Modern AI-powered workflows without the Jira complexity tax",
     description:
-      "Jira is powerful but notoriously complex and expensive for modern teams. OrbisPM gives you AI sprint planning, real-time collaboration, and enterprise RBAC — with a setup that takes minutes, not days.",
+      "Jira is powerful but notoriously complex and expensive for modern teams. Simplify Projects gives you AI sprint planning, real-time collaboration, and enterprise RBAC — with a setup that takes minutes, not days.",
     highlights: [
       "AI sprint planning & smart estimation",
       "Real-time WebSocket sync (not polling)",
@@ -62,10 +62,10 @@ const alternatives = [
   {
     slug: "asana",
     name: "Asana",
-    headline: "OrbisPM vs Asana",
+    headline: "Simplify Projects vs Asana",
     tagline: "Engineering-first project management with AI built-in",
     description:
-      "Asana is great for marketing teams but leaves engineering teams wanting more. OrbisPM is built for developers: granular RBAC, change request workflows, API-first design, and AI-powered automation.",
+      "Asana is great for marketing teams but leaves engineering teams wanting more. Simplify Projects is built for developers: granular RBAC, change request workflows, API-first design, and AI-powered automation.",
     highlights: [
       "Custom roles & granular RBAC",
       "Change request approval workflows",
@@ -76,10 +76,10 @@ const alternatives = [
   {
     slug: "trello",
     name: "Trello",
-    headline: "OrbisPM vs Trello",
+    headline: "Simplify Projects vs Trello",
     tagline: "Kanban and much more — with AI, hierarchy, and real-time sync",
     description:
-      "Trello's simple kanban boards are great for small projects, but growing engineering teams hit limitations fast. OrbisPM adds subtask hierarchies, AI automation, enterprise security, and real-time sync while keeping the visual simplicity.",
+      "Trello's simple kanban boards are great for small projects, but growing engineering teams hit limitations fast. Simplify Projects adds subtask hierarchies, AI automation, enterprise security, and real-time sync while keeping the visual simplicity.",
     highlights: [
       "Subtask hierarchy (up to 4 levels)",
       "AI-powered task estimation",
@@ -96,10 +96,10 @@ export default function AlternativesPage() {
         data={{
           "@context": "https://schema.org",
           "@type": "CollectionPage",
-          name: "OrbisPM Alternatives – Compare with Jira, Asana & Trello",
+          name: "Simplify Projects Alternatives – Compare with Jira, Asana & Trello",
           description:
-            "Detailed comparisons of OrbisPM versus popular project management tools including Jira, Asana, and Trello.",
-          url: "https://orbisom.live/alternatives",
+            "Detailed comparisons of Simplify Projects versus popular project management tools including Jira, Asana, and Trello.",
+          url: "https://simplifyai.id/alternatives",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
@@ -107,13 +107,13 @@ export default function AlternativesPage() {
                 "@type": "ListItem",
                 position: 1,
                 name: "Home",
-                item: "https://orbisom.live",
+                item: "https://simplifyai.id",
               },
               {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives",
+                item: "https://simplifyai.id/alternatives",
               },
             ],
           },
@@ -132,7 +132,7 @@ export default function AlternativesPage() {
               <span className="text-primary">Alternatives</span> in 2026
             </h1>
             <p className="mt-4 text-lg text-base-content/60">
-              See how OrbisPM compares with the most popular project management
+              See how Simplify Projects compares with the most popular project management
               tools. AI-native, real-time, and built for engineering teams.
             </p>
           </div>

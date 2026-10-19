@@ -55,27 +55,27 @@ export default function ChangeRequestWorkflowsArticle() {
             "Change Request Workflows: How Engineering Teams Stay in Control",
           description:
             "How change request workflows prevent accountability gaps and keep projects on track.",
-          url: "https://orbisom.live/blog/change-request-workflows-compliance",
+          url: "https://simplifyai.id/blog/change-request-workflows-compliance",
           datePublished: "2026-02-15",
           dateModified: "2026-02-15",
           image: {
             "@type": "ImageObject",
-            url: "https://orbisom.live/og-image.png",
+            url: "https://simplifyai.id/og-image.png",
             width: 1200,
             height: 630,
           },
           author: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
           publisher: {
             "@type": "Organization",
-            name: "OrbisPM",
-            url: "https://orbisom.live",
+            name: "Simplify Projects",
+            url: "https://simplifyai.id",
           },
           mainEntityOfPage:
-            "https://orbisom.live/blog/change-request-workflows-compliance",
+            "https://simplifyai.id/blog/change-request-workflows-compliance",
         }}
       />
       <MarketingHeader />
@@ -111,7 +111,7 @@ export default function ChangeRequestWorkflowsArticle() {
                 OP
               </div>
               <div>
-                <div className="text-sm font-semibold">OrbisPM Team</div>
+                <div className="text-sm font-semibold">Simplify Projects Team</div>
                 <div className="text-xs text-base-content/50">
                   Engineering &amp; Product
                 </div>
@@ -195,11 +195,11 @@ export default function ChangeRequestWorkflowsArticle() {
               </ul>
 
               <h2 className="text-2xl font-bold text-base-content mt-12">
-                How OrbisPM Implements Change Request Workflows
+                How Simplify Projects Implements Change Request Workflows
               </h2>
               <p>
                 <Link href="/features" className="text-primary hover:underline">
-                  OrbisPM
+                  Simplify Projects
                 </Link>{" "}
                 is one of the few project management platforms with native
                 change request workflows. Here&apos;s how it works:
@@ -292,7 +292,7 @@ export default function ChangeRequestWorkflowsArticle() {
               </h2>
               <p>
                 The biggest concern with change request workflows is that
-                they&apos;ll slow teams down. OrbisPM addresses this with smart
+                they&apos;ll slow teams down. Simplify Projects addresses this with smart
                 defaults:
               </p>
               <ul className="list-disc pl-6 space-y-2">
@@ -322,7 +322,7 @@ export default function ChangeRequestWorkflowsArticle() {
                 Getting Started
               </h2>
               <p>
-                Change request workflows are available on OrbisPM&apos;s
+                Change request workflows are available on Simplify Projects&apos;s
                 Professional and Enterprise plans. Start by identifying which
                 task fields are sensitive in your organization, then configure
                 protection rules in Project Settings → Change Requests.
@@ -333,7 +333,7 @@ export default function ChangeRequestWorkflowsArticle() {
                   Give your team structured approval control
                 </h3>
                 <p className="text-sm text-base-content/60 mb-4">
-                  OrbisPM&apos;s change request workflows add accountability and
+                  Simplify Projects&apos;s change request workflows add accountability and
                   transparency to every project, with real-time approval
                   notifications. Start your free trial today.
                 </p>

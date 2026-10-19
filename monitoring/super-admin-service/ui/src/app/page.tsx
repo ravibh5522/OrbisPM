@@ -66,7 +66,7 @@ export default function SuperAdminDashboard() {
           <div className="flex items-center gap-3">
             <Shield className="h-8 w-8 text-primary" />
             <div>
-              <h1 className="text-xl font-bold">OrbisPM</h1>
+              <h1 className="text-xl font-bold">Simplify Projects</h1>
               <p className="text-xs text-base-content/70">Super Admin Console</p>
             </div>
           </div>

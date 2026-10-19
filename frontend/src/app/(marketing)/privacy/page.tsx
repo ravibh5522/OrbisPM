@@ -3,30 +3,30 @@ import { MarketingHeader } from "@/components/marketing/marketing-header";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy – OrbisPM",
+  title: "Privacy Policy – Simplify Projects",
   description:
-    "OrbisPM privacy policy. Learn how we collect, use, and protect your data. GDPR compliant, enterprise-grade data protection.",
+    "Simplify Projects privacy policy. Learn how we collect, use, and protect your data. GDPR compliant, enterprise-grade data protection.",
   alternates: { canonical: "/privacy" },
   robots: { index: true, follow: false },
   openGraph: {
-    title: "Privacy Policy – OrbisPM",
+    title: "Privacy Policy – Simplify Projects",
     description:
-      "OrbisPM privacy policy. GDPR compliant, enterprise-grade data protection.",
+      "Simplify Projects privacy policy. GDPR compliant, enterprise-grade data protection.",
     url: "/privacy",
     images: [
       {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM Privacy Policy",
+        alt: "Simplify Projects Privacy Policy",
       },
     ],
   },
   twitter: {
     card: "summary",
-    title: "Privacy Policy – OrbisPM",
+    title: "Privacy Policy – Simplify Projects",
     description:
-      "OrbisPM privacy policy. GDPR compliant, enterprise-grade data protection.",
+      "Simplify Projects privacy policy. GDPR compliant, enterprise-grade data protection.",
   },
 };
 
@@ -41,8 +41,8 @@ export default function PrivacyPage() {
 
           <h2>1. Introduction</h2>
           <p>
-            OrbisPM (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) operates
-            the orbisom.live website and the OrbisPM project management platform
+            Simplify Projects (&quot;we&quot;, &quot;our&quot;, &quot;us&quot;) operates
+            the simplifyai.id website and the Simplify Projects project management platform
             (the &quot;Service&quot;). This Privacy Policy explains how we
             collect, use, disclose, and protect your personal information when
             you use our Service.
@@ -72,7 +72,7 @@ export default function PrivacyPage() {
 
           <h3>2.3 Project Data</h3>
           <p>
-            Data you create within OrbisPM — tasks, comments, files, dashboards
+            Data you create within Simplify Projects — tasks, comments, files, dashboards
             — is stored securely and is only accessible by members of your
             organization. We use strict tenant isolation (PostgreSQL Row-Level
             Security) to ensure no other organization can access your data.
@@ -94,7 +94,7 @@ export default function PrivacyPage() {
 
           <h2>4. AI Features & Data Processing</h2>
           <p>
-            OrbisPM includes AI-powered features such as task estimation, sprint
+            Simplify Projects includes AI-powered features such as task estimation, sprint
             planning suggestions, and natural language task creation. When you
             use these features:
           </p>
@@ -177,7 +177,7 @@ export default function PrivacyPage() {
           </ul>
           <p>
             To exercise any of these rights, contact us at{" "}
-            <a href="mailto:privacy@orbispm.in">privacy@orbispm.in</a>.
+            <a href="mailto:contact@simplifyai.id">contact@simplifyai.id</a>.
           </p>
 
           <h2>9. Cookies</h2>
@@ -216,7 +216,7 @@ export default function PrivacyPage() {
           <h2>14. Contact Us</h2>
           <p>
             For privacy-related questions or concerns, contact us at:{" "}
-            <a href="mailto:privacy@orbispm.in">privacy@orbispm.in</a>
+            <a href="mailto:contact@simplifyai.id">contact@simplifyai.id</a>
           </p>
         </div>
       </div>

@@ -15,12 +15,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 export const metadata: Metadata = {
-  title: "OrbisPM vs Trello – Best AI-Powered Trello Alternative in 2026",
+  title: "Simplify Projects vs Trello – Best AI-Powered Trello Alternative in 2026",
   description:
-    "Compare OrbisPM vs Trello for project management. OrbisPM offers everything Trello does plus AI sprint planning, enterprise RBAC, change requests, WebSocket real-time sync, and subtask hierarchies. The best Trello alternative.",
+    "Compare Simplify Projects vs Trello for project management. Simplify Projects offers everything Trello does plus AI sprint planning, enterprise RBAC, change requests, WebSocket real-time sync, and subtask hierarchies. The best Trello alternative.",
   alternates: { canonical: "/alternatives/trello" },
   openGraph: {
-    title: "OrbisPM vs Trello – The AI-Powered Trello Alternative",
+    title: "Simplify Projects vs Trello – The AI-Powered Trello Alternative",
     description:
       "Everything Trello does, plus AI automation, enterprise RBAC, real-time sync, and subtasks. The best Trello alternative for growing teams.",
     url: "/alternatives/trello",
@@ -29,13 +29,13 @@ export const metadata: Metadata = {
         url: "/og-image.png",
         width: 1200,
         height: 630,
-        alt: "OrbisPM vs Trello Comparison",
+        alt: "Simplify Projects vs Trello Comparison",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "OrbisPM vs Trello – Best AI-Powered Trello Alternative in 2026",
+    title: "Simplify Projects vs Trello – Best AI-Powered Trello Alternative in 2026",
     description:
       "Everything Trello does, plus AI automation, enterprise RBAC, real-time sync, and subtasks.",
     images: ["/og-image.png"],
@@ -45,7 +45,7 @@ export const metadata: Metadata = {
     "Trello replacement",
     "AI Trello alternative",
     "best Trello alternative 2026",
-    "OrbisPM vs Trello",
+    "Simplify Projects vs Trello",
     "free Trello alternative",
     "Trello alternative for developers",
   ],
@@ -81,10 +81,10 @@ export default function TrelloAlternativePage() {
         data={{
           "@context": "https://schema.org",
           "@type": "WebPage",
-          name: "OrbisPM vs Trello – Best AI-Powered Trello Alternative",
+          name: "Simplify Projects vs Trello – Best AI-Powered Trello Alternative",
           description:
-            "Feature comparison of OrbisPM and Trello project management platforms",
-          url: "https://orbisom.live/alternatives/trello",
+            "Feature comparison of Simplify Projects and Trello project management platforms",
+          url: "https://simplifyai.id/alternatives/trello",
           breadcrumb: {
             "@type": "BreadcrumbList",
             itemListElement: [
@@ -92,19 +92,19 @@ export default function TrelloAlternativePage() {
                 "@type": "ListItem",
                 position: 1,
                 name: "Home",
-                item: "https://orbisom.live",
+                item: "https://simplifyai.id",
               },
               {
                 "@type": "ListItem",
                 position: 2,
                 name: "Alternatives",
-                item: "https://orbisom.live/alternatives",
+                item: "https://simplifyai.id/alternatives",
               },
               {
                 "@type": "ListItem",
                 position: 3,
-                name: "OrbisPM vs Trello",
-                item: "https://orbisom.live/alternatives/trello",
+                name: "Simplify Projects vs Trello",
+                item: "https://simplifyai.id/alternatives/trello",
               },
             ],
           },
@@ -120,14 +120,14 @@ export default function TrelloAlternativePage() {
             Trello Alternative
           </div>
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
-            OrbisPM vs Trello:{" "}
+            Simplify Projects vs Trello:{" "}
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               Kanban and Beyond
             </span>
           </h1>
           <p className="mt-6 text-lg md:text-xl text-base-content/60 max-w-3xl mx-auto leading-relaxed">
             Trello is great for simple kanban boards, but growing teams quickly
-            outgrow it. OrbisPM gives you Trello&apos;s simplicity with
+            outgrow it. Simplify Projects gives you Trello&apos;s simplicity with
             AI-powered intelligence: sprint planning, task estimation, RBAC,
             subtask hierarchies, real-time sync, and dashboards.
           </p>
@@ -136,7 +136,7 @@ export default function TrelloAlternativePage() {
               href="/signup"
               className="btn btn-primary btn-lg gap-2 shadow-lg shadow-primary/25"
             >
-              Try OrbisPM Free <ArrowRight className="w-5 h-5" />
+              Try Simplify Projects Free <ArrowRight className="w-5 h-5" />
             </Link>
             <Link href="/features" className="btn btn-ghost btn-lg">
               See All Features
@@ -149,19 +149,19 @@ export default function TrelloAlternativePage() {
       <section className="py-16 bg-base-100 border-y border-base-200">
         <div className="w-full px-4 sm:px-6 lg:px-8 xl:px-12">
           <h2 className="text-3xl font-bold text-center mb-12">
-            When Teams Outgrow Trello, They Choose OrbisPM
+            When Teams Outgrow Trello, They Choose Simplify Projects
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-6xl mx-auto">
             {[
               {
                 icon: Layers,
                 title: "Beyond Kanban",
-                desc: "OrbisPM offers kanban boards, list views, tree hierarchies, and column views. Switch between views without losing context. Trello is kanban-only.",
+                desc: "Simplify Projects offers kanban boards, list views, tree hierarchies, and column views. Switch between views without losing context. Trello is kanban-only.",
               },
               {
                 icon: Shield,
                 title: "Real Permissions",
-                desc: "Trello's free plan has minimal access control. OrbisPM offers granular RBAC with custom roles at organization, team, and project levels.",
+                desc: "Trello's free plan has minimal access control. Simplify Projects offers granular RBAC with custom roles at organization, team, and project levels.",
               },
               {
                 icon: Sparkles,
@@ -196,7 +196,7 @@ export default function TrelloAlternativePage() {
               Feature-by-Feature Comparison
             </h2>
             <p className="text-center text-base-content/60 mb-12">
-              OrbisPM vs Trello — a comprehensive comparison for teams ready to
+              Simplify Projects vs Trello — a comprehensive comparison for teams ready to
               level up.
             </p>
             <div className="overflow-x-auto">
@@ -205,7 +205,7 @@ export default function TrelloAlternativePage() {
                   <tr className="border-b-2 border-base-200">
                     <th className="text-left py-3 w-1/2">Feature</th>
                     <th className="text-center py-3 text-primary font-bold">
-                      OrbisPM
+                      Simplify Projects
                     </th>
                     <th className="text-center py-3">Trello</th>
                   </tr>

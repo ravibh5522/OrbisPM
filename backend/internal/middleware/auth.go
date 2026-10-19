@@ -18,7 +18,7 @@ func UserIDFromCtx(ctx context.Context) uuid.UUID {
 }
 
 // Auth middleware validates Zitadel-issued JWTs (RS256) or session tokens and sets user context.
-// pool resolves the Zitadel identity to OrbisPM's stable internal user ID —
+// pool resolves the Zitadel identity to Simplify Projects's stable internal user ID —
 // see auth.ResolveUserID for why this can no longer be a pure derivation.
 func Auth(zitadelClient *auth.ZitadelClient, pool *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

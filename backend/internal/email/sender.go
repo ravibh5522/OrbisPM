@@ -84,7 +84,7 @@ func FormatNotificationEmail(title, body, frontendURL string) string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>` + title + ` — OrbisPM</title>
+<title>` + title + ` — Simplify Projects</title>
 </head>
 <body style="margin:0;padding:0;background-color:#f4f4f6;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;-webkit-font-smoothing:antialiased;">
 
@@ -100,7 +100,7 @@ func FormatNotificationEmail(title, body, frontendURL string) string {
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
               <tr>
                 <td>
-                  <span style="font-size:18px;font-weight:700;color:#6366f1;letter-spacing:-0.3px;">OrbisPM</span>
+                  <span style="font-size:18px;font-weight:700;color:#d82638;letter-spacing:-0.3px;">Simplify Projects</span>
                 </td>
                 <td align="right">
                   <span style="font-size:12px;color:#9ca3af;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;">Notification</span>
@@ -117,7 +117,7 @@ func FormatNotificationEmail(title, body, frontendURL string) string {
             <!-- Top accent bar -->
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
               <tr>
-                <td style="background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);height:4px;font-size:0;line-height:0;">&nbsp;</td>
+                <td style="background:linear-gradient(135deg,#d82638 0%,#ef5b69 100%);height:4px;font-size:0;line-height:0;">&nbsp;</td>
               </tr>
             </table>
 
@@ -150,9 +150,9 @@ func FormatNotificationEmail(title, body, frontendURL string) string {
                   <!-- CTA Button -->
                   <table role="presentation" cellspacing="0" cellpadding="0" border="0">
                     <tr>
-                      <td style="border-radius:8px;background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);">
+                      <td style="border-radius:8px;background:linear-gradient(135deg,#d82638 0%,#ef5b69 100%);">
                         <a href="` + frontendURL + `" style="display:inline-block;padding:13px 28px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;letter-spacing:0.1px;">
-                          Open OrbisPM &#x2192;
+                          Open Simplify Projects &#x2192;
                         </a>
                       </td>
                     </tr>
@@ -168,7 +168,7 @@ func FormatNotificationEmail(title, body, frontendURL string) string {
         <!-- Footer -->
         <tr>
           <td style="padding-top:28px;text-align:center;">
-            <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;">You received this because of your notification preferences in <strong style="color:#6b7280;">OrbisPM</strong>.</p>
+            <p style="margin:0 0 6px;font-size:12px;color:#9ca3af;">You received this because of your notification preferences in <strong style="color:#6b7280;">Simplify Projects</strong>.</p>
             <p style="margin:0;font-size:12px;color:#d1d5db;">Manage your preferences in your account settings.</p>
           </td>
         </tr>

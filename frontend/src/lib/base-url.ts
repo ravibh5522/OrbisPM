@@ -5,7 +5,7 @@ import { headers } from "next/headers";
  * Priority:
  *  1. NEXT_PUBLIC_APP_URL env var (explicit deployment override)
  *  2. x-forwarded-host / host header (auto-detects which domain is being used)
- *  3. Falls back to https://orbisom.live
+ *  3. Falls back to https://simplifyai.id
  */
 export async function getBaseUrl(): Promise<string> {
   if (process.env.NEXT_PUBLIC_APP_URL) {
@@ -21,5 +21,5 @@ export async function getBaseUrl(): Promise<string> {
   } catch {
     // headers() unavailable during static generation — use fallback
   }
-  return "https://orbisom.live";
+  return "https://simplifyai.id";
 }

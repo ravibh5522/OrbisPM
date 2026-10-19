@@ -1,5 +1,5 @@
 /**
- * OrbisPM — Single source of truth for task status and priority colors.
+ * Simplify Projects — Single source of truth for task status and priority colors.
  *
  * Replaces all per-file STATUS_COLORS / PRIORITY_COLORS constant redefinitions.
  *

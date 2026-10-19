@@ -1,4 +1,4 @@
-/// OrbisPM Service Worker — static asset & API response caching
+/// Simplify Projects Service Worker — static asset & API response caching
 /// Provides offline support and instant page loads for returning users.
 
 // Bump these on every deploy that ships new frontend code — the activate

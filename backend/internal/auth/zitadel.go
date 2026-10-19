@@ -75,7 +75,7 @@ type ZitadelClient struct {
 }
 
 // NewZitadelClient creates a new Zitadel client with gRPC connections.
-// domain is the Zitadel instance domain (e.g. "zitadel.orbispm.in") used for
+// domain is the Zitadel instance domain (e.g. "zitadel.simplifyai.id") used for
 // instance routing; it may differ from the issuer hostname in local dev.
 // grpcDisabled=true skips gRPC entirely and forces REST-only mode (use when gRPC
 // is blocked by a proxy such as Cloudflare).
@@ -286,7 +286,7 @@ type IDPInfo struct {
 // If prompt is non-empty (e.g. "create"), it's passed straight through —
 // the centralized login UI reads prompt=create off the resulting auth
 // request to land on its /register screen instead of defaulting to /login,
-// which is how OrbisPM's own /signup page (distinct from /login) gets a new
+// which is how Simplify Projects's own /signup page (distinct from /login) gets a new
 // visitor there directly instead of showing them a sign-in form first.
 // If loginHint is non-empty it's passed as OIDC login_hint so the login UI
 // knows which account the caller wants (the demo-persona buttons use this).
@@ -336,9 +336,9 @@ func (c *ZitadelClient) GenerateAuthURL(redirectURI, state string, idpID string,
 // caller enough to honor an arbitrary post_logout_redirect_uri and instead
 // shows its own confirmation screen — the same reason revokeToken alone
 // (see ZitadelClient.Logout) leaves the browser's shared Zitadel session
-// alive: it only ever invalidated OrbisPM's own token, never signed the
+// alive: it only ever invalidated Simplify Projects's own token, never signed the
 // user out of Zitadel itself, so SSO into any other Crewsity app kept
-// working silently after an OrbisPM "logout". postLogoutRedirectURI must
+// working silently after an Simplify Projects "logout". postLogoutRedirectURI must
 // already be registered on this OIDC app (Zitadel enforces its own
 // allowlist server-side — same trust model as GenerateAuthURL's caller-
 // supplied redirectURI).

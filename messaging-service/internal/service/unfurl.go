@@ -139,7 +139,7 @@ func (s *UnfurlService) Unfurl(ctx context.Context, raw string) (*LinkPreview, e
 	if err != nil {
 		return nil, fmt.Errorf("invalid url")
 	}
-	req.Header.Set("User-Agent", "OrbisPM-LinkPreview/1.0 (+bot)")
+	req.Header.Set("User-Agent", "Simplify Projects-LinkPreview/1.0 (+bot)")
 	req.Header.Set("Accept", "text/html,application/xhtml+xml")
 
 	resp, err := s.client.Do(req)

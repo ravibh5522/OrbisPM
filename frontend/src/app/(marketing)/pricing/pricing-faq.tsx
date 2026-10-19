@@ -26,7 +26,7 @@ const faqs = [
   },
   {
     q: "Is on-premise deployment available?",
-    a: "Yes, Enterprise customers can deploy OrbisPM on their own infrastructure with Docker Compose. The entire stack runs in containers. Contact our sales team for on-premise pricing and deployment support.",
+    a: "Yes, Enterprise customers can deploy Simplify Projects on their own infrastructure with Docker Compose. The entire stack runs in containers. Contact our sales team for on-premise pricing and deployment support.",
   },
   {
     q: "Can I switch plans anytime?",

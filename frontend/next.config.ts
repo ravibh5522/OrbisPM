@@ -18,9 +18,9 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       { protocol: "http", hostname: "localhost" },
       { protocol: "http", hostname: "10.0.0.1" },
-      { protocol: "https", hostname: "*.orbispm.live" },
-      { protocol: "https", hostname: "*.orbispm.in" },
-      { protocol: "https", hostname: "minioapi.orbispm.in" },
+      { protocol: "https", hostname: "*.simplifyai.id" },
+      { protocol: "https", hostname: "*.simplifyai.id" },
+      { protocol: "https", hostname: "minioapi.simplifyai.id" },
     ],
   },
   async redirects() {

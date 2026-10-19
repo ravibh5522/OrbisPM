@@ -6,7 +6,7 @@ export const runtime = "edge";
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const title =
-    searchParams.get("title") ?? "OrbisPM – AI-Powered Project Management";
+    searchParams.get("title") ?? "Simplify Projects – AI-Powered Project Management";
   const subtitle = searchParams.get("subtitle") ?? "for Engineering Teams";
 
   return new ImageResponse(
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
             letterSpacing: "-0.5px",
           }}
         >
-          OrbisPM
+          Simplify Projects
         </span>
         <span
           style={{
@@ -107,7 +107,7 @@ export async function GET(req: NextRequest) {
             color: "#a5b4fc",
           }}
         >
-          orbispm.live
+          simplifyai.id
         </span>
       </div>
 
@@ -194,7 +194,7 @@ export async function GET(req: NextRequest) {
           The #1 Jira Alternative • Free Plan Available • Ship Faster with AI
         </span>
         <span style={{ color: "#6366f1", fontSize: "18px", fontWeight: "600" }}>
-          orbispm.live →
+          simplifyai.id →
         </span>
       </div>
     </div>,

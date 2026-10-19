@@ -1,5 +1,5 @@
 -- ============================================================
--- OrbisPM Messaging Service — Schema Migration
+-- Simplify Projects Messaging Service — Schema Migration
 -- ============================================================
 -- Uses the SAME PostgreSQL instance as the main backend.
 -- RLS policies enforce org-level tenant isolation.

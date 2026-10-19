@@ -12,7 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// resolveUserID maps a Zitadel identity to OrbisPM's stable internal user ID.
+// resolveUserID maps a Zitadel identity to Simplify Projects's stable internal user ID.
 // Mirrors backend/internal/auth.ResolveUserID exactly — this service can't
 // import that package (separate Go module), but the two must agree on the
 // same ID for the same Zitadel user, so keep this in lockstep with the
