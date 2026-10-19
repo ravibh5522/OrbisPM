@@ -95,15 +95,28 @@ function getStoredTheme(): Theme {
   return "orbis-light";
 }
 
-function getStoredCustomisation(): ThemeCustomisation | null {
+/** Color profile suffix (e.g. "ds-blue") applied when no customisation is
+ *  stored yet. Falls back to DEFAULT_PROFILE_ID when unset or invalid. */
+const ENV_DEFAULT_COLOR_PROFILE = process.env.NEXT_PUBLIC_DEFAULT_COLOR_PROFILE;
+
+function resolveDefaultProfileId(theme: Theme): string {
+  if (ENV_DEFAULT_COLOR_PROFILE) {
+    const candidate = `${theme}:${ENV_DEFAULT_COLOR_PROFILE}`;
+    if (findProfile(candidate)) return candidate;
+  }
+  return DEFAULT_PROFILE_ID[theme];
+}
+
+function getStoredCustomisation(theme: Theme): ThemeCustomisation | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem("theme_customisation");
-    if (!raw) return null;
-    return JSON.parse(raw) as ThemeCustomisation;
+    if (raw) return JSON.parse(raw) as ThemeCustomisation;
   } catch {
-    return null;
+    // fall through to env/default profile below
   }
+  const profileId = resolveDefaultProfileId(theme);
+  return profileId ? { profileId } : null;
 }
 
 function getStoredProjectViews(): {
@@ -191,8 +204,8 @@ function extractOklchL(value: string): number | null {
 
 export const useUIStore = create<UIState>((set, get) => {
   const stored = getStoredProjectViews();
-  const storedCustomisation = getStoredCustomisation();
   const storedTheme = getStoredTheme();
+  const storedCustomisation = getStoredCustomisation(storedTheme);
 
   if (typeof window !== "undefined") {
     applyThemeCustomisation(storedTheme, storedCustomisation);

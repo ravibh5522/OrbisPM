@@ -417,8 +417,8 @@ export const PROFILES_BY_THEME: Record<string, ThemeColorProfile[]> = {
 
 /** Default profile id per theme (the first in each list). */
 export const DEFAULT_PROFILE_ID: Record<string, string> = {
-  "orbis-light": "orbis-light:ds-red",
-  "orbis-dark": "orbis-dark:ds-red",
+  "orbis-light": "orbis-light:ds-blue",
+  "orbis-dark": "orbis-dark:ds-blue",
   "glass-light": "glass-light:iris",
   "glass-dark": "glass-dark:nebula",
 };
