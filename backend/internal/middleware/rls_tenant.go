@@ -32,6 +32,12 @@ func RLSTenant() func(http.Handler) http.Handler {
 				return
 			}
 
+			// An API key is bound to a single org and may not reach others.
+			if keyOrg := APIKeyOrgFromCtx(r.Context()); keyOrg != uuid.Nil && keyOrg != orgID {
+				http.Error(w, `{"message":"API key is not valid for this org"}`, http.StatusForbidden)
+				return
+			}
+
 			ctx := tenant.SetOrgID(r.Context(), orgID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

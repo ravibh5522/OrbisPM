@@ -1267,6 +1267,11 @@ export const api = {
     ) => post<APIKey>(`${V1}/orgs/${orgId}/api-keys`, data),
     revoke: (orgId: string, id: string) =>
       del(`${V1}/orgs/${orgId}/api-keys/${id}`),
+    // Org-wide management (api_keys:manage — owners/admins)
+    listAll: (orgId: string) =>
+      get<ListResponse<APIKey>>(`${V1}/orgs/${orgId}/api-keys/all`),
+    revokeAny: (orgId: string, id: string) =>
+      del(`${V1}/orgs/${orgId}/api-keys/all/${id}`),
   },
 
   // Attachments

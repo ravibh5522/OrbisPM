@@ -689,6 +689,11 @@ func (s *TaskService) BulkUpdate(ctx context.Context, params BulkUpdateParams) (
 	return updated, nil
 }
 
+// ValidateAssignees checks that the given users are effective members of the project.
+func (s *TaskService) ValidateAssignees(ctx context.Context, projectID uuid.UUID, ids []uuid.UUID) error {
+	return s.validateAssignees(ctx, projectID, ids)
+}
+
 func (s *TaskService) Update(ctx context.Context, id uuid.UUID, params UpdateTaskParams) (*domain.TaskUpdateResult, error) {
 	task, err := s.taskRepo.GetByID(ctx, id)
 	if err != nil {

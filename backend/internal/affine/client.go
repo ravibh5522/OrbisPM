@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -27,6 +28,24 @@ type Client struct {
 
 	mu           sync.Mutex
 	sessionToken string
+
+	// AFFiNE rate-limits invites per (admin) account. inviteBlockedUntil makes
+	// every caller back off together instead of retries keeping the limit hot;
+	// memberLocks serialises provisioning of the same user+workspace.
+	inviteMu           sync.Mutex
+	inviteBlockedUntil time.Time
+	memberLocks        sync.Map // "workspace/email" -> *sync.Mutex
+}
+
+// rateLimitCooldown is how long invites are paused after AFFiNE says
+// "Too many requests". Failing fast during it lets the limit window drain.
+const rateLimitCooldown = 60 * time.Second
+
+// ErrRateLimited means AFFiNE throttled us; retry after the cooldown.
+var ErrRateLimited = fmt.Errorf("affine is rate-limiting canvas setup, retry in a minute")
+
+func isRateLimited(err error) bool {
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "too many requests")
 }
 
 func NewClient(internalURL, bridgeURL, adminEmail, adminPassword string) *Client {
@@ -119,6 +138,45 @@ func (c *Client) currentSession(ctx context.Context) (string, error) {
 	}
 	c.sessionToken = token
 	return token, nil
+}
+
+// createFirstAdmin uses AFFiNE's one-time setup endpoint, which only works
+// while the instance has no users, so it is safe to attempt on any sign-in
+// failure: on an initialised instance it simply fails.
+func (c *Client) createFirstAdmin(ctx context.Context) error {
+	body, _ := json.Marshal(map[string]string{"email": c.adminEmail, "password": c.adminPass})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.internalURL+"/api/setup/create-admin-user", bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	if resp.StatusCode >= 300 {
+		return fmt.Errorf("create admin returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// Bootstrap signs in as admin (creating it on a fresh instance), retrying
+// until AFFiNE is reachable. Run it in the background at API startup.
+func (c *Client) Bootstrap(ctx context.Context) error {
+	var err error
+	for i := 0; i < 30; i++ {
+		if _, err = c.currentSession(ctx); err == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(10 * time.Second):
+		}
+	}
+	return err
 }
 
 func (c *Client) invalidateSession() {
@@ -214,6 +272,9 @@ func (c *Client) EnsureWorkspace(ctx context.Context) (string, error) {
 // password is derived by the caller and never shown to anyone — so there is
 // no separate AFFiNE login for the user to manage.
 func (c *Client) UserSession(ctx context.Context, email, name, password string) ([]SessionCookie, error) {
+	if strings.TrimSpace(email) == "" {
+		return nil, fmt.Errorf("refusing to create an AFFiNE account with an empty email")
+	}
 	cookies, signInErr := c.signIn(ctx, email, password)
 	if signInErr == nil {
 		return cookies, nil
@@ -249,15 +310,49 @@ func (c *Client) EnsureMember(ctx context.Context, workspaceID, email string, us
 		}
 	}
 
+	lockV, _ := c.memberLocks.LoadOrStore(workspaceID+"/"+email, &sync.Mutex{})
+	lock := lockV.(*sync.Mutex)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// A concurrent request may have finished the join while we waited.
+	if c.isMember(ctx, token, workspaceID) {
+		return nil
+	}
+
+	c.inviteMu.Lock()
+	blocked := time.Now().Before(c.inviteBlockedUntil)
+	c.inviteMu.Unlock()
+	if blocked {
+		return ErrRateLimited
+	}
+
 	var invited struct {
 		InviteMembers []struct {
 			InviteID string  `json:"inviteId"`
 			Error    *string `json:"error"`
 		} `json:"inviteMembers"`
 	}
-	err := c.doGraphQL(ctx,
-		`mutation($ws: String!, $emails: [String!]!) { inviteMembers(workspaceId: $ws, emails: $emails) { inviteId error } }`,
-		map[string]any{"ws": workspaceID, "emails": []string{email}}, &invited)
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		err = c.doGraphQL(ctx,
+			`mutation($ws: String!, $emails: [String!]!) { inviteMembers(workspaceId: $ws, emails: $emails) { inviteId error } }`,
+			map[string]any{"ws": workspaceID, "emails": []string{email}}, &invited)
+		if !isRateLimited(err) {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(time.Duration(attempt+1) * time.Second):
+		}
+	}
+	if isRateLimited(err) {
+		c.inviteMu.Lock()
+		c.inviteBlockedUntil = time.Now().Add(rateLimitCooldown)
+		c.inviteMu.Unlock()
+		return ErrRateLimited
+	}
 	if err != nil {
 		return fmt.Errorf("invite member: %w", err)
 	}
@@ -306,4 +401,21 @@ func (c *Client) EnsureDoc(ctx context.Context, workspaceID, docID, title, works
 		return fmt.Errorf("affine-bridge returned status %d: %s", resp.StatusCode, msg)
 	}
 	return nil
+}
+
+func (c *Client) isMember(ctx context.Context, token, workspaceID string) bool {
+	var memberOf struct {
+		Workspaces []struct {
+			ID string `json:"id"`
+		} `json:"workspaces"`
+	}
+	if _, err := c.postGraphQL(ctx, token, `query { workspaces { id } }`, nil, &memberOf); err != nil {
+		return false
+	}
+	for _, w := range memberOf.Workspaces {
+		if w.ID == workspaceID {
+			return true
+		}
+	}
+	return false
 }

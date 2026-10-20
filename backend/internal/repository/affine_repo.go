@@ -22,6 +22,11 @@ type AffineRepository interface {
 	// GetUserIdentity returns the email and display name the user's AFFiNE
 	// account is created under.
 	GetUserIdentity(ctx context.Context, userID uuid.UUID) (email, name string, err error)
+	// GetZitadelUserID returns the user's Zitadel subject, used to heal a
+	// missing email from the identity provider.
+	GetZitadelUserID(ctx context.Context, userID uuid.UUID) (string, error)
+	// SetUserEmail fills in an email only if the row's email is still empty.
+	SetUserEmail(ctx context.Context, userID uuid.UUID, email string) error
 }
 
 type affineRepo struct {
@@ -114,4 +119,20 @@ func (r *affineRepo) GetUserIdentity(ctx context.Context, userID uuid.UUID) (str
 		return "", "", domain.ErrNotFound
 	}
 	return email, name, err
+}
+
+func (r *affineRepo) GetZitadelUserID(ctx context.Context, userID uuid.UUID) (string, error) {
+	var zid string
+	err := r.pool.QueryRow(ctx, `SELECT COALESCE(zitadel_user_id, '') FROM users WHERE id = $1`, userID).Scan(&zid)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", domain.ErrNotFound
+	}
+	return zid, err
+}
+
+func (r *affineRepo) SetUserEmail(ctx context.Context, userID uuid.UUID, email string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1 AND (email IS NULL OR email = '')`,
+		userID, email)
+	return err
 }

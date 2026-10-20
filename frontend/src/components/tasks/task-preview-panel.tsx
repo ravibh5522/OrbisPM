@@ -1,5 +1,6 @@
 "use client";
 
+import { DatePicker } from "@/components/ui/date-picker";
 import {
   RichTextEditor,
   RichTextViewer,
@@ -877,15 +878,12 @@ function DetailsTab({
       <div className="grid grid-cols-2 gap-2">
         <div>
           {fieldLabel("Start Date", "start_date")}
-          <Input
-            type="date"
+          <DatePicker
             className="input-xs w-full"
             value={task.start_date ? task.start_date.split("T")[0] : ""}
-            onChange={(e) =>
+            onChange={(v) =>
               handleFieldUpdate("start_date", {
-                start_date: e.target.value
-                  ? new Date(e.target.value).toISOString()
-                  : null,
+                start_date: v ? new Date(`${v}T00:00:00Z`).toISOString() : null,
               })
             }
             disabled={fieldAccess("start_date") === "disabled"}
@@ -893,15 +891,12 @@ function DetailsTab({
         </div>
         <div>
           {fieldLabel("Due Date", "due_date")}
-          <Input
-            type="date"
+          <DatePicker
             className="input-xs w-full"
             value={task.due_date ? task.due_date.split("T")[0] : ""}
-            onChange={(e) =>
+            onChange={(v) =>
               handleFieldUpdate("due_date", {
-                due_date: e.target.value
-                  ? new Date(e.target.value).toISOString()
-                  : null,
+                due_date: v ? new Date(`${v}T00:00:00Z`).toISOString() : null,
               })
             }
             disabled={fieldAccess("due_date") === "disabled"}

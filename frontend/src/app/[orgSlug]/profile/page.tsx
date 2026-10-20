@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input, Select, Textarea } from "@/components/ui/form-fields";
 import { Avatar, Card, PageHeader } from "@/components/ui/shared";
 import { Tabs } from "@/components/ui/tabs";
+import ApiKeysTab from "../settings/_components/api-keys-tab";
 import { ThemeCustomizerModal } from "@/components/ui/theme-customizer-modal";
 import { api, ApiError } from "@/lib/api";
 import { THEME_PREVIEWS } from "@/lib/theme-previews";
@@ -28,6 +29,7 @@ import {
   Paintbrush,
   Palette,
   RefreshCw,
+  KeyRound,
   Shield,
   Smartphone,
   Sun,
@@ -575,7 +577,7 @@ export default function ProfilePage() {
   const { user, orgs, currentOrg, updateUser } = useAuthStore();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState<
-    "profile" | "appearance" | "notifications" | "security"
+    "profile" | "appearance" | "notifications" | "security" | "api-keys"
   >("profile");
 
   // ── Profile state ───────────────────────────────────────────────────────────
@@ -908,6 +910,11 @@ export default function ProfilePage() {
             label: "Security",
             icon: <Shield className="w-4 h-4" />,
           },
+          {
+            id: "api-keys",
+            label: "API Keys",
+            icon: <KeyRound className="w-4 h-4" />,
+          },
         ]}
         activeTab={activeTab}
         onChange={setActiveTab}
@@ -1140,6 +1147,9 @@ export default function ProfilePage() {
 
       {/* ── Notifications Tab ── */}
       {activeTab === "notifications" && <NotificationsTab />}
+
+      {/* ── API Keys Tab (own keys, scoped to the member's role) ── */}
+      {activeTab === "api-keys" && <ApiKeysTab mode="mine" />}
 
       {/* ── Security Tab ── */}
       {activeTab === "security" && (

@@ -25,7 +25,12 @@ interface ApiKeyForm {
   scopes: string;
 }
 
-export default function ApiKeysTab() {
+/**
+ * mode "org"  — Organisation settings (owners/admins): every key in the org.
+ * mode "mine" — Profile (any member): only the caller's own keys. A key acts as
+ *               its owner, so it can never do more than that member's role allows.
+ */
+export default function ApiKeysTab({ mode = "org" }: { mode?: "org" | "mine" }) {
   const currentOrg = useAuthStore((s) => s.currentOrg);
   const qc = useQueryClient();
   const [showCreate, setShowCreate] = useState(false);
@@ -34,8 +39,11 @@ export default function ApiKeysTab() {
   const [error, setError] = useState("");
 
   const { data: keys, isLoading } = useQuery({
-    queryKey: ["api-keys", currentOrg?.id],
-    queryFn: () => api.apiKeys.list(currentOrg!.id),
+    queryKey: ["api-keys", mode, currentOrg?.id],
+    queryFn: () =>
+      mode === "org"
+        ? api.apiKeys.listAll(currentOrg!.id)
+        : api.apiKeys.list(currentOrg!.id),
     enabled: !!currentOrg,
   });
 
@@ -68,7 +76,10 @@ export default function ApiKeysTab() {
   });
 
   const revokeMutation = useMutation({
-    mutationFn: (id: string) => api.apiKeys.revoke(currentOrg!.id, id),
+    mutationFn: (id: string) =>
+      mode === "org"
+        ? api.apiKeys.revokeAny(currentOrg!.id, id)
+        : api.apiKeys.revoke(currentOrg!.id, id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["api-keys"] });
       setDeleteTarget(null);
@@ -85,7 +96,9 @@ export default function ApiKeysTab() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <p className="text-sm text-base-content/60">
-          Manage programmatic access to your organization
+          {mode === "org"
+            ? "All API keys in this organization"
+            : "Keys for AI agents and scripts. A key acts as you and can only do what your role allows."}
         </p>
         <Button size="sm" onClick={() => setShowCreate(true)}>
           <Plus className="w-4 h-4" /> New Key
@@ -213,7 +226,11 @@ export default function ApiKeysTab() {
           <Input
             label="Scopes"
             placeholder="read, write"
-            helperText="Comma-separated scopes"
+            helperText={
+              mode === "org"
+                ? "Comma-separated: read, write"
+                : "read = view only · read, write = also make changes. Always limited by your role."
+            }
             {...register("scopes", { required: "At least one scope required" })}
             error={formErrors.scopes?.message}
           />

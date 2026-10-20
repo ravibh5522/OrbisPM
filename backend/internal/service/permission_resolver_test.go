@@ -675,3 +675,7 @@ func TestEffectiveRole_FallsBackToOrgRole(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "", role) // no direct/team membership → no project role (owner/admin only get org fallback)
 }
+
+func (m *mockProjectMemberRepo) UserDisplayName(_ context.Context, userID uuid.UUID) (string, error) {
+	return userID.String(), nil
+}

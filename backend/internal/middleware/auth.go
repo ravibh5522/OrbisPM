@@ -23,6 +23,17 @@ func UserIDFromCtx(ctx context.Context) uuid.UUID {
 func Auth(zitadelClient *auth.ZitadelClient, pool *pgxpool.Pool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// API-key auth (agents, MCP, scripts): scoped to one org, acts as the key's owner.
+			if apiKey := r.Header.Get("X-API-Key"); apiKey != "" {
+				ctx, status, msg := authenticateAPIKey(pool, r, apiKey)
+				if ctx == nil {
+					http.Error(w, `{"message":"`+msg+`"}`, status)
+					return
+				}
+				next.ServeHTTP(w, r.WithContext(ctx))
+				return
+			}
+
 			// First check Authorization header
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" {
@@ -49,6 +60,14 @@ func Auth(zitadelClient *auth.ZitadelClient, pool *pgxpool.Pool) func(http.Handl
 			if err != nil {
 				http.Error(w, `{"message":"invalid token"}`, http.StatusUnauthorized)
 				return
+			}
+
+			// Some tokens carry no email claim; fall back to the user record so
+			// we never persist an empty email.
+			if claims.Email == "" {
+				if u, uerr := zitadelClient.GetUser(r.Context(), claims.Subject); uerr == nil {
+					claims.Email = u.Email
+				}
 			}
 
 			userID, err := auth.ResolveUserID(r.Context(), pool, claims.Subject, claims.Email)

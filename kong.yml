@@ -33,6 +33,30 @@ services:
           fault_tolerant: true
           hide_client_headers: false
 
+  # Hosted MCP server (Streamable HTTP) — AI agents connect here with an API key
+  - name: mcp-server
+    url: http://mcp-server:8090
+    read_timeout: 120000
+    routes:
+      - name: mcp-route
+        paths:
+          - /mcp
+        strip_path: false
+        preserve_host: false
+    plugins:
+      - name: rate-limiting
+        config:
+          minute: 300
+          policy: local
+          fault_tolerant: true
+          hide_client_headers: false
+      - name: cors
+        config:
+          origins: ["*"]
+          methods: [POST, OPTIONS]
+          headers: [Authorization, X-API-Key, Content-Type, Accept, Mcp-Session-Id, Mcp-Protocol-Version]
+          max_age: 3600
+
   # Go Backend API
   - name: backend-api
     url: http://api:8080

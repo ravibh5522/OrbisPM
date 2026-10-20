@@ -280,7 +280,7 @@ export default function ProjectDetailPage({
   return (
     <div className="h-full flex flex-col">
       {/* Single consolidated toolbar row — outside the card */}
-      <div className="flex items-center justify-between gap-2 py-1.5 px-3 mb-3 flex-wrap">
+      <div className="flex items-center justify-between gap-2 py-0 px-1 mb-1.5 flex-wrap">
         {/* Tabs */}
         <Tabs
           tabs={[
@@ -346,7 +346,7 @@ export default function ProjectDetailPage({
           onChange={(id) => setActiveTab(id as typeof activeTab)}
           variant="boxed"
           size="sm"
-          className="project-tabs-shell flex-shrink-0 rounded-2xl p-1"
+          className="project-tabs-shell flex-shrink-0 rounded-xl p-0.5"
         />
 
         <div className="ml-auto flex items-center gap-2 flex-shrink-0">

@@ -170,6 +170,33 @@ func (s *APIKeyService) ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*doma
 	return s.apikeyRepo.ListByOrg(ctx, orgID)
 }
 
+// ListByUser returns the API keys a user created in an org.
+func (s *APIKeyService) ListByUser(ctx context.Context, orgID, userID uuid.UUID) ([]*domain.APIKey, error) {
+	return s.apikeyRepo.ListByUser(ctx, orgID, userID)
+}
+
+// DeleteOwned revokes a key only when it belongs to the caller; it reports whether one was removed.
+func (s *APIKeyService) DeleteOwned(ctx context.Context, orgID, userID, id uuid.UUID) (bool, error) {
+	var removed bool
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		var e error
+		removed, e = s.apikeyRepo.DeleteOwned(ctx, tx, orgID, userID, id)
+		return e
+	})
+	return removed, err
+}
+
+// DeleteInOrg revokes any key in the org (admin); it reports whether one was removed.
+func (s *APIKeyService) DeleteInOrg(ctx context.Context, orgID, id uuid.UUID) (bool, error) {
+	var removed bool
+	err := s.txm.WithTx(ctx, func(tx pgx.Tx) error {
+		var e error
+		removed, e = s.apikeyRepo.DeleteInOrg(ctx, tx, orgID, id)
+		return e
+	})
+	return removed, err
+}
+
 func generateSecret(n int) string {
 	b := make([]byte, n)
 	_, _ = rand.Read(b)

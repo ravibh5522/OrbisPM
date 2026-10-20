@@ -2129,8 +2129,8 @@
 }
 
 .project-tab-btn {
-  min-height: 2rem !important;
-  height: 2rem !important;
+  min-height: 1.75rem !important;
+  height: 1.75rem !important;
   font-weight: 600;
   border: 1px solid transparent;
   transition: all 140ms ease;

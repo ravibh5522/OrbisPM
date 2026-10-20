@@ -310,6 +310,9 @@ type APIKeyRepository interface {
 	GetByHash(ctx context.Context, keyHash string) (*domain.APIKey, error)
 	Delete(ctx context.Context, tx pgx.Tx, id uuid.UUID) error
 	ListByOrg(ctx context.Context, orgID uuid.UUID) ([]*domain.APIKey, error)
+	ListByUser(ctx context.Context, orgID, userID uuid.UUID) ([]*domain.APIKey, error)
+	DeleteOwned(ctx context.Context, tx pgx.Tx, orgID, userID, id uuid.UUID) (bool, error)
+	DeleteInOrg(ctx context.Context, tx pgx.Tx, orgID, id uuid.UUID) (bool, error)
 }
 
 // --- Import Job ---

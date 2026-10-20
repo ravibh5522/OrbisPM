@@ -50,6 +50,12 @@ func resolveUserID(ctx context.Context, pool *pgxpool.Pool, zitadelID, email str
 		`SELECT id FROM users WHERE zitadel_user_id = $1`, zitadelID,
 	).Scan(&id)
 	if err == nil {
+		// Self-heal rows created before the token carried an email.
+		if email != "" {
+			_, _ = pool.Exec(ctx,
+				`UPDATE users SET email = $2, updated_at = NOW() WHERE id = $1 AND (email IS NULL OR email = '')`,
+				id, email)
+		}
 		return id, nil
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {

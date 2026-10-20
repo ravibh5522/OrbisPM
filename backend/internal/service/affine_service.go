@@ -34,6 +34,9 @@ type AffineService struct {
 	orgs       repository.OrgRepository
 	publicURL  string
 	userSecret []byte
+	// emailLookup fetches a user's email from the identity provider when the
+	// local row has none (token without an email claim).
+	emailLookup func(ctx context.Context, zitadelID string) (string, error)
 
 	mu    sync.Mutex
 	cache map[string]cachedProjectDoc // key: userID/projectID
@@ -50,6 +53,31 @@ func NewAffineService(repo repository.AffineRepository, client *affine.Client, p
 		publicURL: publicURL, userSecret: []byte(userSecret),
 		cache: make(map[string]cachedProjectDoc),
 	}
+}
+
+// SetEmailLookup wires the identity-provider fallback used to heal users whose
+// local email is empty.
+func (s *AffineService) SetEmailLookup(f func(ctx context.Context, zitadelID string) (string, error)) {
+	s.emailLookup = f
+}
+
+// resolveEmail returns the user's email, healing an empty local value from the
+// identity provider. AFFiNE accounts must never be created with an empty email.
+func (s *AffineService) resolveEmail(ctx context.Context, userID uuid.UUID, email string) (string, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if email != "" {
+		return email, nil
+	}
+	if s.emailLookup != nil {
+		if zid, err := s.repo.GetZitadelUserID(ctx, userID); err == nil && zid != "" {
+			if e, err := s.emailLookup(ctx, zid); err == nil && strings.TrimSpace(e) != "" {
+				e = strings.ToLower(strings.TrimSpace(e))
+				_ = s.repo.SetUserEmail(ctx, userID, e)
+				return e, nil
+			}
+		}
+	}
+	return "", errors.New("user has no email on record; cannot create canvas account")
 }
 
 // ProjectDocResult is what the frontend needs to render the embed.
@@ -127,7 +155,10 @@ func (s *AffineService) EnsureProjectDoc(ctx context.Context, orgID, projectID, 
 	if err != nil {
 		return nil, fmt.Errorf("get user identity: %w", err)
 	}
-	email = strings.ToLower(email)
+	email, err = s.resolveEmail(ctx, userID, email)
+	if err != nil {
+		return nil, err
+	}
 	cookies, err := s.client.UserSession(ctx, email, name, s.userPassword(userID))
 	if err != nil {
 		return nil, fmt.Errorf("affine session: %w", err)

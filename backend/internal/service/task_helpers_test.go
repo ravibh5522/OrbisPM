@@ -1,6 +1,7 @@
 package service_test
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -240,4 +241,91 @@ func TestApplyChangesToTask_WrongTypeIgnored(t *testing.T) {
 	task := &domain.Task{Priority: "low"}
 	service.ExportApplyChangesToTask(task, map[string]any{"priority": 999})
 	assert.Equal(t, "low", task.Priority) // unchanged
+}
+
+// --- change-request apply: regression tests for silently-dropped changes ---
+
+func TestApplyChangesToTask_DateOnlyAccepted(t *testing.T) {
+	task := &domain.Task{}
+	require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{"due_date": "2026-10-25"}))
+	require.NotNil(t, task.DueDate)
+	assert.Equal(t, time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC), *task.DueDate)
+}
+
+func TestApplyChangesToTask_ISOWithMillisAccepted(t *testing.T) {
+	task := &domain.Task{}
+	require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{"start_date": "2026-10-10T00:00:00.000Z"}))
+	require.NotNil(t, task.StartDate)
+}
+
+func TestApplyChangesToTask_NullClearsDatesAndHours(t *testing.T) {
+	d := time.Now()
+	h := 5.0
+	task := &domain.Task{DueDate: &d, StartDate: &d, EstimatedHours: &h, ActualHours: &h}
+	require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{
+		"due_date": nil, "start_date": nil, "estimated_hours": nil, "actual_hours": nil,
+	}))
+	assert.Nil(t, task.DueDate)
+	assert.Nil(t, task.StartDate)
+	assert.Nil(t, task.EstimatedHours)
+	assert.Nil(t, task.ActualHours)
+}
+
+func TestApplyChangesToTask_AssigneeIDsListWithPrimary(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	task := &domain.Task{}
+	require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{
+		"assignee_ids": []any{a.String(), b.String(), a.String()}, // duplicate collapsed
+		"assignee_id":  b.String(),                                // list wins; primary = first
+	}))
+	assert.Equal(t, []uuid.UUID{a, b}, task.AssigneeIDs)
+	require.NotNil(t, task.AssigneeID)
+	assert.Equal(t, a, *task.AssigneeID)
+}
+
+func TestApplyChangesToTask_UnassignAll(t *testing.T) {
+	a := uuid.New()
+	task := &domain.Task{AssigneeID: &a, AssigneeIDs: []uuid.UUID{a}}
+	require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{"assignee_ids": []any{}, "assignee_id": nil}))
+	assert.Empty(t, task.AssigneeIDs)
+	assert.Nil(t, task.AssigneeID)
+}
+
+func TestApplyChangesToTask_SingleAssigneeKeepsListInSync(t *testing.T) {
+	a, b := uuid.New(), uuid.New()
+	task := &domain.Task{AssigneeID: &a, AssigneeIDs: []uuid.UUID{a}}
+	require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{"assignee_id": b.String()}))
+	require.NotNil(t, task.AssigneeID)
+	assert.Equal(t, b, *task.AssigneeID)
+	assert.Equal(t, []uuid.UUID{b, a}, task.AssigneeIDs)
+}
+
+func TestApplyChangesToTask_EstimatedHoursNumericForms(t *testing.T) {
+	for _, v := range []any{12.5, "12.5", json.Number("12.5")} {
+		task := &domain.Task{}
+		require.NoError(t, service.ExportApplyChangesToTask(task, map[string]any{"estimated_hours": v}))
+		require.NotNil(t, task.EstimatedHours)
+		assert.Equal(t, 12.5, *task.EstimatedHours)
+	}
+}
+
+func TestApplyChangesToTask_RejectsInvalidValuesAtomically(t *testing.T) {
+	cases := map[string]map[string]any{
+		"bad date":         {"due_date": "not-a-date"},
+		"bad priority":     {"priority": "urgent!!"},
+		"unknown field":    {"nonexistent": "x"},
+		"negative hours":   {"estimated_hours": -1.0},
+		"bad assignee":     {"assignee_ids": []any{"nope"}},
+		"empty title":      {"title": "  "},
+		"due before start": {"start_date": "2026-11-10", "due_date": "2026-11-01"},
+	}
+	for name, ch := range cases {
+		task := &domain.Task{Title: "keep", Priority: "low"}
+		// include a valid field too, to prove nothing is partially applied
+		ch["status"] = "done"
+		err := service.ExportApplyChangesToTask(task, ch)
+		assert.Error(t, err, name)
+		assert.Equal(t, "keep", task.Title, name)
+		assert.Equal(t, "", task.Status, name+": valid field must not be partially applied")
+	}
 }

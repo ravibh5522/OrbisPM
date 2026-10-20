@@ -418,6 +418,21 @@ services:
       messaging-service:
         condition: service_started
 
+  mcp-server:
+    build:
+      context: ./mcp-server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    expose:
+      - "8090"
+    environment:
+      SIMPLIFY_API_URL: http://api:8080
+      PORT: "8090"
+    depends_on:
+      - api
+    networks:
+      - default
+
   email-service:
     build:
       context: ./email-service
@@ -536,6 +551,9 @@ services:
     volumes:
       - affineuploads:/root/.affine/storage
       - affineconfig:/root/.affine/config
+      # Per-user AFFiNE accounts are provisioned on demand; AFFiNE's anti-abuse delay and
+      # invite throttle would block that (see affine-config/config.json).
+      - ./affine-config/config.json:/root/.affine/config/config.json:ro
     depends_on:
       affine-postgres:
         condition: service_healthy
@@ -563,6 +581,9 @@ services:
     volumes:
       - affineuploads:/root/.affine/storage
       - affineconfig:/root/.affine/config
+      # Per-user AFFiNE accounts are provisioned on demand; AFFiNE's anti-abuse delay and
+      # invite throttle would block that (see affine-config/config.json).
+      - ./affine-config/config.json:/root/.affine/config/config.json:ro
     depends_on:
       affine-postgres:
         condition: service_healthy
@@ -614,7 +635,7 @@ services:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
         NEXT_PUBLIC_WS_URL: ${NEXT_PUBLIC_WS_URL:-ws://localhost:8000}
-        NEXT_PUBLIC_APP_NAME: ${APP_NAME:-OrbisPM}
+        NEXT_PUBLIC_APP_NAME: ${APP_NAME:-Simplify Projects}
         NEXT_PUBLIC_GOOGLE_IDP_ID: ${GOOGLE_IDP_ID:-371632718112358914}
         NEXT_PUBLIC_GITHUB_IDP_ID: ${GITHUB_IDP_ID:-371633241645384194}
     restart: unless-stopped

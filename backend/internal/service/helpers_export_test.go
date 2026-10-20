@@ -21,8 +21,8 @@ func ExportApplyParamsToTask(task *domain.Task, changes map[string]any) {
 }
 
 // ExportApplyChangesToTask exposes applyChangesToTask for testing.
-func ExportApplyChangesToTask(task *domain.Task, changes map[string]any) {
-	applyChangesToTask(task, changes)
+func ExportApplyChangesToTask(task *domain.Task, changes map[string]any) error {
+	return applyChangesToTask(task, changes)
 }
 
 // --- Drive helpers ---

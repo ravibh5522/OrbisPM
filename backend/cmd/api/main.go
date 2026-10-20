@@ -70,6 +70,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"github.com/google/uuid"
 	"os"
 	"os/signal"
 	"syscall"
@@ -329,7 +330,21 @@ func main() {
 	stickyNoteSvc := service.NewStickyNoteService(stickyNoteRepo, txm)
 	projectCanvasSvc := service.NewProjectCanvasService(projectCanvasRepo, txm, publisher)
 	affineClient := affine.NewClient(cfg.AffineInternalURL, cfg.AffineBridgeURL, cfg.AffineAdminEmail, cfg.AffineAdminPassword)
+	if cfg.AffineAdminEmail != "" && cfg.AffineAdminPassword != "" {
+		go func() {
+			if err := affineClient.Bootstrap(ctx); err != nil {
+				log.Warn().Err(err).Msg("affine admin bootstrap failed; will retry lazily on first canvas open")
+			}
+		}()
+	}
 	affineSvc := service.NewAffineService(affineRepo, affineClient, projectRepo, orgRepo, cfg.AffinePublicURL, cfg.AffineUserSecret)
+	affineSvc.SetEmailLookup(func(ctx context.Context, zitadelID string) (string, error) {
+		u, err := zitadelClient.GetUser(ctx, zitadelID)
+		if err != nil {
+			return "", err
+		}
+		return u.Email, nil
+	})
 
 	// --- Services (new) ---
 	attachmentSvc := service.NewAttachmentService(attachmentRepo, storageClient, txm)
@@ -367,6 +382,8 @@ func main() {
 	// Inject review deps into task service + project service
 	taskSvc.SetReviewDeps(projectRepo, changeReqRepo, permResolver)
 	taskSvc.SetCache(cacheManager)
+	changeReqSvc.SetCache(cacheManager)
+	changeReqSvc.SetAssigneeValidator(taskSvc.ValidateAssignees)
 	taskSvc.SetMembershipRepo(projectMemberRepo)
 	projectSvc.SetProjectTeamRepo(projectTeamRepo)
 	projectSvc.SetTaskRepo(taskRepo)
@@ -535,6 +552,21 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(middleware.Auth(zitadelClient, pool))
 
+		// Lets an API-key client discover which org/user/scopes its key carries
+		// (used by the hosted MCP server so users only need to supply the key).
+		r.Get("/key-info", func(w http.ResponseWriter, req *http.Request) {
+			orgID := middleware.APIKeyOrgFromCtx(req.Context())
+			if orgID == uuid.Nil {
+				handler.JSON(w, http.StatusBadRequest, handler.ErrorResponse{Message: "not an API key request"})
+				return
+			}
+			handler.JSON(w, http.StatusOK, map[string]any{
+				"org_id":  orgID,
+				"user_id": middleware.UserIDFromCtx(req.Context()),
+				"scopes":  middleware.APIKeyScopesFromCtx(req.Context()),
+			})
+		})
+
 		// Orgs
 		r.Route("/orgs", func(r chi.Router) {
 			r.Post("/", orgHandler.Create)
@@ -568,7 +600,10 @@ func main() {
 
 					// Settings (admin+)
 					r.With(prm("org", "", "webhooks", "manage")).Mount("/webhooks", webhookHandler.Routes())
-					r.With(prm("org", "", "api_keys", "manage")).Mount("/api-keys", apikeyHandler.Routes())
+					// API keys: any org member manages their OWN keys (a key acts as its owner,
+					// so RBAC still bounds what it can do). Admins (api_keys:manage) can list/revoke all.
+					r.With(prm("org", "", "api_keys", "manage")).Mount("/api-keys/all", apikeyHandler.AdminRoutes())
+					r.Mount("/api-keys", apikeyHandler.Routes())
 					r.With(prm("org", "", "roles", "update")).Mount("/roles", customRoleHandler.Routes())
 					r.With(prm("org", "", "billing", "manage")).Mount("/billing", billingHandler.Routes())
 					r.With(prm("org", "", "org", "update")).Put("/theme", themeHandler.UpdateOrgTheme)

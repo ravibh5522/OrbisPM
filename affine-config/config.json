@@ -1,0 +1,4 @@
+{
+  "auth": { "newAccountShareActionDelay": 0, "inviteQuotaShadowMode": true },
+  "throttle": { "enabled": false }
+}

@@ -22,6 +22,7 @@ require (
 	github.com/stripe/stripe-go/v82 v82.5.1
 	github.com/swaggo/http-swagger/v2 v2.0.2
 	github.com/swaggo/swag v1.16.6
+	github.com/xuri/excelize/v2 v2.10.1
 	github.com/zitadel/zitadel-go/v3 v3.26.1
 	golang.org/x/crypto v0.48.0
 	golang.org/x/time v0.14.0
@@ -83,7 +84,6 @@ require (
 	github.com/tiendc/go-deepcopy v1.7.2 // indirect
 	github.com/tinylib/msgp v1.6.1 // indirect
 	github.com/xuri/efp v0.0.1 // indirect
-	github.com/xuri/excelize/v2 v2.10.1 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/zitadel/logging v0.6.2 // indirect

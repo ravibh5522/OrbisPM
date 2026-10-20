@@ -181,9 +181,64 @@ func NewAPIKeyHandler(akSvc *service.APIKeyService) *APIKeyHandler {
 func (h *APIKeyHandler) Routes() chi.Router {
 	r := chi.NewRouter()
 	r.Post("/", h.Create)
+	r.Get("/", h.ListMine)
+	r.Delete("/{keyId}", h.DeleteMine)
+	return r
+}
+
+// AdminRoutes registers org-wide key management (gated by api_keys:manage at the router).
+func (h *APIKeyHandler) AdminRoutes() chi.Router {
+	r := chi.NewRouter()
 	r.Get("/", h.List)
 	r.Delete("/{keyId}", h.Delete)
 	return r
+}
+
+// ListMine lists the caller's own API keys in the org.
+// @Summary List my API keys
+// @Tags APIKeys
+// @Produce json
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Success 200 {array} swaggerAPIKey
+// @Router /orgs/{orgId}/api-keys [get]
+func (h *APIKeyHandler) ListMine(w http.ResponseWriter, r *http.Request) {
+	keys, err := h.akSvc.ListByUser(r.Context(), middleware.OrgIDFromCtx(r.Context()), middleware.UserIDFromCtx(r.Context()))
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if keys == nil {
+		keys = []*domain.APIKey{}
+	}
+	JSON(w, http.StatusOK, ListResponse{Data: keys, Total: len(keys), Limit: len(keys), Offset: 0})
+}
+
+// DeleteMine revokes one of the caller's own API keys.
+// @Summary Revoke my API key
+// @Tags APIKeys
+// @Security BearerAuth
+// @Param orgId path string true "Organization ID" format(uuid)
+// @Param keyId path string true "API Key ID" format(uuid)
+// @Success 204 "No Content"
+// @Failure 404 {object} ErrorResponse
+// @Router /orgs/{orgId}/api-keys/{keyId} [delete]
+func (h *APIKeyHandler) DeleteMine(w http.ResponseWriter, r *http.Request) {
+	id, err := uuidParam(r, "keyId")
+	if err != nil {
+		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid key id"})
+		return
+	}
+	removed, err := h.akSvc.DeleteOwned(r.Context(), middleware.OrgIDFromCtx(r.Context()), middleware.UserIDFromCtx(r.Context()), id)
+	if err != nil {
+		Error(w, r, err)
+		return
+	}
+	if !removed {
+		JSON(w, http.StatusNotFound, ErrorResponse{Message: "api key not found"})
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // Create godoc
@@ -254,8 +309,13 @@ func (h *APIKeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusBadRequest, ErrorResponse{Message: "invalid key id"})
 		return
 	}
-	if err := h.akSvc.Delete(r.Context(), id); err != nil {
+	removed, err := h.akSvc.DeleteInOrg(r.Context(), middleware.OrgIDFromCtx(r.Context()), id)
+	if err != nil {
 		Error(w, r, err)
+		return
+	}
+	if !removed {
+		JSON(w, http.StatusNotFound, ErrorResponse{Message: "api key not found"})
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
